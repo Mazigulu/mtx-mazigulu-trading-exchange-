@@ -100,37 +100,83 @@ function calculateATR(highs: number[], lows: number[], closes: number[], period 
   return atr;
 }
 
+function getDecimals(symbol: string): number {
+  if (symbol.includes('JPY') || symbol.includes('GOLD') || symbol.includes('SILVER') || symbol === 'SOL/USDT' || symbol === 'US30' || symbol === 'NAS100' || symbol === 'GER40' || symbol === 'SPX500') {
+    return 2;
+  }
+  if (symbol === 'BTC/USDT' || symbol === 'ETH/USDT') {
+    return 1;
+  }
+  return 5;
+}
+
 export class MarketSimulator {
   private candles: Record<MarketSymbol, Candlestick[]> = {
     'EUR/USD': [],
     'GBP/USD': [],
     'USD/JPY': [],
+    'AUD/USD': [],
+    'EUR/GBP': [],
+    'GOLD/USD': [],
+    'SILVER/USD': [],
     'BTC/USDT': [],
-    'GOLD/USD': []
+    'ETH/USDT': [],
+    'SOL/USDT': [],
+    'US30': [],
+    'NAS100': [],
+    'GER40': [],
+    'SPX500': []
   };
 
   private mt5Active: Record<MarketSymbol, boolean> = {
     'EUR/USD': false,
     'GBP/USD': false,
     'USD/JPY': false,
+    'AUD/USD': false,
+    'EUR/GBP': false,
+    'GOLD/USD': false,
+    'SILVER/USD': false,
     'BTC/USDT': false,
-    'GOLD/USD': false
+    'ETH/USDT': false,
+    'SOL/USDT': false,
+    'US30': false,
+    'NAS100': false,
+    'GER40': false,
+    'SPX500': false
   };
 
   private basePrices: Record<MarketSymbol, number> = {
     'EUR/USD': 1.1645,
     'GBP/USD': 1.2680,
     'USD/JPY': 155.40,
+    'AUD/USD': 0.6650,
+    'EUR/GBP': 0.8520,
+    'GOLD/USD': 2355.50,
+    'SILVER/USD': 29.50,
     'BTC/USDT': 67500.0,
-    'GOLD/USD': 2355.50
+    'ETH/USDT': 3450.0,
+    'SOL/USDT': 148.50,
+    'US30': 38850.0,
+    'NAS100': 18550.0,
+    'GER40': 18200.0,
+    'SPX500': 5300.0
   };
 
   private tickSizes: Record<MarketSymbol, number> = {
     'EUR/USD': 0.0001,
     'GBP/USD': 0.0001,
     'USD/JPY': 0.01,
+    'AUD/USD': 0.0001,
+    'EUR/GBP': 0.0001,
+    'GOLD/USD': 0.10,
+    'SILVER/USD': 0.01,
     'BTC/USDT': 10.0,
-    'GOLD/USD': 0.10
+    'ETH/USDT': 1.0,
+    'SOL/USDT': 0.05,
+    'US30': 1.0,
+    'NAS100': 1.0,
+    'GER40': 1.0,
+    'SPX500': 0.10
   };
 
   constructor() {
@@ -140,7 +186,7 @@ export class MarketSimulator {
   }
 
   private initializeAll() {
-    const symbols: MarketSymbol[] = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+    const symbols = Object.keys(this.basePrices) as MarketSymbol[];
     for (const sym of symbols) {
       this.candles[sym] = this.generateHistory(sym);
     }
@@ -152,27 +198,28 @@ export class MarketSimulator {
     const tick = this.tickSizes[symbol];
     let currentPrice = base;
 
-    // We generate 50 candles representing 4H units
+    // We generate 240 candles representing 4H units
     const now = new Date();
-    for (let i = 50; i >= 1; i--) {
+    for (let i = 240; i >= 1; i--) {
       const time = new Date(now.getTime() - i * 4 * 60 * 60 * 1000);
       const isUp = Math.random() > 0.45; // slight bullish tint
-      const bodySize = (Math.random() * 5 + 1) * tick * (symbol === 'BTC/USDT' ? 20 : 5);
-      const wickHigh = Math.random() * 3 * tick * (symbol === 'BTC/USDT' ? 10 : 3);
-      const wickLow = Math.random() * 3 * tick * (symbol === 'BTC/USDT' ? 10 : 3);
+      const bodySize = (Math.random() * 5 + 1) * tick * (symbol.startsWith('BTC') ? 20 : 5);
+      const wickHigh = Math.random() * 3 * tick * (symbol.startsWith('BTC') ? 10 : 3);
+      const wickLow = Math.random() * 3 * tick * (symbol.startsWith('BTC') ? 10 : 3);
 
       const open = currentPrice;
       const close = isUp ? open + bodySize : open - bodySize;
       const high = Math.max(open, close) + wickHigh;
       const low = Math.min(open, close) - wickLow;
       const volume = Math.floor(Math.random() * 10000) + 5000;
+      const dec = getDecimals(symbol);
 
       list.push({
         timestamp: time.toISOString(),
-        open: parseFloat(open.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)),
-        high: parseFloat(high.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)),
-        low: parseFloat(low.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)),
-        close: parseFloat(close.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)),
+        open: parseFloat(open.toFixed(dec)),
+        high: parseFloat(high.toFixed(dec)),
+        low: parseFloat(low.toFixed(dec)),
+        close: parseFloat(close.toFixed(dec)),
         volume
       });
 
@@ -202,18 +249,19 @@ export class MarketSimulator {
   }
 
   private tickAll() {
-    const symbols: MarketSymbol[] = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+    const symbols = Object.keys(this.basePrices) as MarketSymbol[];
     for (const sym of symbols) {
       const list = this.candles[sym];
       if (list.length === 0) continue;
 
       const last = list[list.length - 1];
       const tick = this.tickSizes[sym];
-      const drift = (Math.random() - 0.495) * tick * (sym === 'BTC/USDT' ? 8 : 4);
+      const drift = (Math.random() - 0.495) * tick * (sym.startsWith('BTC') ? 8 : 4);
 
       // Mutate current (last) candle's close
       const newClose = last.close + drift;
-      last.close = parseFloat(newClose.toFixed(sym === 'USD/JPY' || sym === 'GOLD/USD' ? 2 : sym === 'BTC/USDT' ? 1 : 5));
+      const dec = getDecimals(sym);
+      last.close = parseFloat(newClose.toFixed(dec));
       if (last.close > last.high) last.high = last.close;
       if (last.close < last.low) last.low = last.close;
 
@@ -447,8 +495,9 @@ export class MarketSimulator {
       totalBidVol += bidAmt;
       totalAskVol += askAmt;
 
-      bids.push({ price: parseFloat(bPrice.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)), amount: bidAmt });
-      asks.push({ price: parseFloat(aPrice.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)), amount: askAmt });
+      const dec = getDecimals(symbol);
+      bids.push({ price: parseFloat(bPrice.toFixed(dec)), amount: bidAmt });
+      asks.push({ price: parseFloat(aPrice.toFixed(dec)), amount: askAmt });
     }
 
     const imbalance = Math.round(((totalBidVol - totalAskVol) / (totalBidVol + totalAskVol)) * 100);

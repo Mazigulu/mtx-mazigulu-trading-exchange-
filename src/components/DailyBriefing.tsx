@@ -334,7 +334,16 @@ export default function DailyBriefing() {
           <div className="flex items-center justify-between text-[10px] font-mono text-white/30 pt-1">
             <div className="flex items-center space-x-1">
               <Clock className="w-3 h-3" />
-              <span>Snapshot Sync: {new Date(briefing.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+              <span>Snapshot Sync: {(() => {
+                if (!briefing.lastUpdated) return '—';
+                const d = new Date(briefing.lastUpdated);
+                if (isNaN(d.getTime())) return briefing.lastUpdated;
+                try {
+                  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                } catch {
+                  return briefing.lastUpdated;
+                }
+              })()}</span>
             </div>
             <span>Status: Operational (100% Core Alignment)</span>
           </div>

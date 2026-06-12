@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Trade, MarketSymbol } from '../types';
 import { 
   TrendingUp, 
@@ -266,6 +266,12 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
   const [symbolFilter, setSymbolFilter] = useState<'ALL' | MarketSymbol>('ALL');
   const [sideFilter, setSideFilter] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
   const [strategyFilter, setStrategyFilter] = useState<'ALL' | 'FVG' | 'OB' | 'SWEEP' | 'DISCRETIONARY'>('ALL');
+
+  const [ledgerPage, setLedgerPage] = useState(0);
+
+  useEffect(() => {
+    setLedgerPage(0);
+  }, [searchQuery, symbolFilter, sideFilter, strategyFilter]);
 
   const getTradeStrategyClass = (t: Trade): 'FVG' | 'OB' | 'SWEEP' | 'DISCRETIONARY' => {
     const text = `${t.reason || ''} ${t.annotation || ''}`.toLowerCase();
@@ -631,6 +637,16 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
       return matchesSearch && matchesSymbol && matchesSide && matchesStrategy;
     }).slice().reverse(); // Show last first as standard auditor list
   }, [allClosedTradesSorted, searchQuery, symbolFilter, sideFilter, strategyFilter]);
+
+  // Ledger Pagination Parameters
+  const ledgerPageSize = 5;
+  const totalLedgerTrades = filteredTrades.length;
+  const totalLedgerPages = Math.ceil(totalLedgerTrades / ledgerPageSize);
+  const ledgerStartIndex = ledgerPage * ledgerPageSize;
+  const ledgerEndIndex = Math.min(ledgerStartIndex + ledgerPageSize, totalLedgerTrades);
+  const displayedLedgerTrades = useMemo(() => {
+    return filteredTrades.slice(ledgerStartIndex, ledgerEndIndex);
+  }, [filteredTrades, ledgerStartIndex, ledgerEndIndex]);
 
   // Export audited ledger report as CSV directly in client
   const handleExportCSV = () => {
@@ -1021,14 +1037,14 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.03] font-mono">
-              {filteredTrades.length === 0 ? (
+              {displayedLedgerTrades.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="py-8 text-center text-white/30 italic">
                     No verified audited trades match those specific filter options.
                   </td>
                 </tr>
               ) : (
-                filteredTrades.map((t) => {
+                displayedLedgerTrades.map((t) => {
                   const isWin = t.pnl > 0;
                   const displayFormat = t.symbol === 'USD/JPY' ? 2 : t.symbol === 'BTC/USDT' ? 0 : 5;
                   
@@ -1069,7 +1085,16 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
                           </span>
                         </td>
                         <td className="text-white/40 text-[10.5px]">
-                          {t.exitTimestamp ? new Date(t.exitTimestamp).toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Pending'}
+                          {(() => {
+                            if (!t.exitTimestamp) return 'Pending';
+                            const d = new Date(t.exitTimestamp);
+                            if (isNaN(d.getTime())) return t.exitTimestamp;
+                            try {
+                              return d.toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                            } catch {
+                              return t.exitTimestamp;
+                            }
+                          })()}
                         </td>
                         <td className="hidden lg:table-cell text-[10px] text-white/45 max-w-[320px] group-hover:text-white/80 transition-colors" title={t.reason}>
                           <div className="truncate max-w-[320px]">{t.reason}</div>
@@ -1267,6 +1292,41 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
             </tbody>
           </table>
         </div>
+
+        {/* Dynamic Pagination Footer for Institutional Ledger */}
+        {totalLedgerPages > 1 && (
+          <div className="flex items-center justify-between border-t border-white/5 pt-3.5 mt-3 my-1 font-mono text-[10.5px] text-white/50 select-none">
+            <span className="text-[10px] text-white/30 font-sans">
+              Showing <span className="font-bold font-mono text-indigo-400">{ledgerStartIndex + 1}</span>-
+              <span className="font-bold font-mono text-indigo-400">{ledgerEndIndex}</span> of{' '}
+              <span className="font-bold font-mono text-indigo-200">{totalLedgerTrades}</span> recorded setups
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setLedgerPage(prev => Math.max(0, prev - 1))}
+                disabled={ledgerPage === 0}
+                className={`px-2.5 py-1 rounded border text-[10px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer select-none ${
+                  ledgerPage === 0
+                    ? 'border-white/5 text-white/20 bg-transparent cursor-not-allowed'
+                    : 'border-white/10 text-white/75 bg-white/5 hover:border-indigo-500/40 hover:text-indigo-300'
+                }`}
+              >
+                ◀ Prev
+              </button>
+              <button
+                onClick={() => setLedgerPage(prev => Math.min(totalLedgerPages - 1, prev + 1))}
+                disabled={ledgerPage === totalLedgerPages - 1}
+                className={`px-2.5 py-1 rounded border text-[10px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer select-none ${
+                  ledgerPage === totalLedgerPages - 1
+                    ? 'border-white/5 text-white/20 bg-transparent cursor-not-allowed'
+                    : 'border-white/10 text-white/75 bg-white/5 hover:border-indigo-500/40 hover:text-indigo-300'
+                }`}
+              >
+                Next ▶
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
 

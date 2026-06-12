@@ -362,7 +362,12 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
   }, [openTrades]);
 
   // Net Symbol Exposure aggregation (For summary block)
-  const symbolsList: MarketSymbol[] = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+  const symbolsList: MarketSymbol[] = [
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+    'GOLD/USD', 'SILVER/USD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'US30', 'NAS100', 'GER40', 'SPX500'
+  ];
   
   const netSymbolExposure = useMemo(() => {
     return symbolsList.map((sym) => {

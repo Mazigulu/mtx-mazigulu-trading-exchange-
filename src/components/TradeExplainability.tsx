@@ -4,24 +4,32 @@
  */
 
 import React, { useMemo } from 'react';
-import { MarketSymbol, MarketMetrics } from '../types';
+import { MarketSymbol, MarketMetrics, Trade } from '../types';
 import { 
   Bot, 
   CheckCircle2, 
-  HelpCircle, 
   Zap, 
   TrendingUp, 
+  TrendingDown,
   Percent, 
   Scale, 
   Gauge, 
   HelpCircle as QuestionIcon,
   ShieldCheck,
-  Award
+  Award,
+  RefreshCw,
+  Layers
 } from 'lucide-react';
 
 interface TradeExplainabilityProps {
   symbol: MarketSymbol;
   metrics: MarketMetrics;
+  trades?: Trade[];
+  highlightOrderBlocks?: boolean;
+  onToggleHighlightOrderBlocks?: () => void;
+  onResetChartView?: () => void;
+  showTWVP?: boolean;
+  onToggleTWVP?: () => void;
 }
 
 export function getSignalInsights(symbol: MarketSymbol, dailyBias: 'BULLISH' | 'BEARISH') {
@@ -91,24 +99,178 @@ export function getSignalInsights(symbol: MarketSymbol, dailyBias: 'BULLISH' | '
       volatility: true,
       risk: true,
       rationale: 'Safe haven gold inflow off the h4 demand zone. Liquidity sweep of prior swing low confirmed on high volume, indicating major institutional position accumulation.'
+    },
+    'AUD/USD': {
+      confidence: isBullish ? 72 : 62,
+      action: isBullish ? 'BUY' : 'SELL',
+      expectedRR: 2.4,
+      fvg: true,
+      bos: true,
+      ema: isBullish,
+      volatility: true,
+      risk: true,
+      rationale: 'Commodity block demand drives premium accumulation off the minor structural range lows.'
+    },
+    'EUR/GBP': {
+      confidence: isBullish ? 68 : 58,
+      action: isBullish ? 'BUY' : 'SELL',
+      expectedRR: 2.2,
+      fvg: true,
+      bos: isBullish,
+      ema: true,
+      volatility: false,
+      risk: true,
+      rationale: 'Range bound accumulation with low cross-currency liquidity volatility. Price consolidates around daily mean.'
+    },
+    'SILVER/USD': {
+      confidence: isBullish ? 75 : 65,
+      action: isBullish ? 'BUY' : 'SELL',
+      expectedRR: 3.0,
+      fvg: true,
+      bos: true,
+      ema: isBullish,
+      volatility: true,
+      risk: true,
+      rationale: 'High beta silver demand mimics precious metal accumulation off major baseline zones.'
+    },
+    'ETH/USDT': {
+      confidence: isBullish ? 83 : 66,
+      action: isBullish ? 'BUY' : 'SELL',
+      expectedRR: 3.2,
+      fvg: true,
+      bos: true,
+      ema: true,
+      volatility: true,
+      risk: true,
+      rationale: 'Smart contract platform volume expands, indicating bullish confluence on the lower-timeframe discount zones.'
+    },
+    'SOL/USDT': {
+      confidence: isBullish ? 85 : 63,
+      action: isBullish ? 'BUY' : 'SELL',
+      expectedRR: 3.4,
+      fvg: true,
+      bos: true,
+      ema: true,
+      volatility: true,
+      risk: true,
+      rationale: 'High-throughput volume breakout drives rapid momentum. Strong buy side orderbook depth supports continuous expansion.'
+    },
+    'US30': {
+      confidence: isBullish ? 79 : 65,
+      action: isBullish ? 'BUY' : 'SELL',
+      expectedRR: 2.7,
+      fvg: true,
+      bos: true,
+      ema: true,
+      volatility: true,
+      risk: true,
+      rationale: 'Industrial equity index recovers off technical demand zone. Earnings season support drives accumulation flows.'
+    },
+    'NAS100': {
+      confidence: isBullish ? 84 : 68,
+      action: isBullish ? 'BUY' : 'SELL',
+      expectedRR: 3.3,
+      fvg: true,
+      bos: true,
+      ema: true,
+      volatility: true,
+      risk: true,
+      rationale: 'Tech index growth momentum leads market recovery. Expansion moves out of key H1 fair value gap intervals.'
+    },
+    'GER40': {
+      confidence: isBullish ? 76 : 60,
+      action: isBullish ? 'BUY' : 'SELL',
+      expectedRR: 2.5,
+      fvg: true,
+      bos: true,
+      ema: isBullish,
+      volatility: true,
+      risk: true,
+      rationale: 'European benchmark matches global index demand off structural lows. Range expansion confirms continuous recovery.'
+    },
+    'SPX500': {
+      confidence: isBullish ? 81 : 64,
+      action: isBullish ? 'BUY' : 'SELL',
+      expectedRR: 2.9,
+      fvg: true,
+      bos: true,
+      ema: true,
+      volatility: true,
+      risk: true,
+      rationale: 'Broad market equity demand peaks on positive sentiment confluence. Price maintains above moving average lines.'
     }
   };
 
   return stats[symbol] || stats['EUR/USD'];
 }
 
-export default function TradeExplainability({ symbol, metrics }: TradeExplainabilityProps) {
+export default function TradeExplainability({ 
+  symbol, 
+  metrics,
+  trades = [],
+  highlightOrderBlocks = false,
+  onToggleHighlightOrderBlocks,
+  onResetChartView,
+  showTWVP = false,
+  onToggleTWVP
+}: TradeExplainabilityProps) {
   
+  const openPositions = useMemo(() => {
+    return trades.filter((t) => t.status === 'OPEN');
+  }, [trades]);
+
   // Dynamic confluences based on actual live pair metrics and daily bias
   const signalInsights = useMemo(() => {
     return getSignalInsights(symbol, metrics.dailyBias);
   }, [symbol, metrics.dailyBias]);
 
+  // Compute number of confirmed confluences
+  const confluencesCount = useMemo(() => {
+    if (!signalInsights) return 0;
+    return [
+      signalInsights.fvg,
+      signalInsights.bos,
+      signalInsights.ema,
+      signalInsights.volatility,
+      signalInsights.risk
+    ].filter(Boolean).length;
+  }, [signalInsights]);
+
+  // Map confluences count to an elegant confidence status pill
+  const confidenceLevel = useMemo(() => {
+    if (metrics.trend === 'NEUTRAL') {
+      return {
+        label: 'Low',
+        color: 'bg-[#a855f7]/10 text-[#c084fc] border-[#a855f7]/20',
+        text: 'Muted Vector'
+      };
+    }
+    if (confluencesCount >= 4) {
+      return {
+        label: 'High',
+        color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+        text: `${confluencesCount}/5 Confluences`
+      };
+    } else if (confluencesCount === 3) {
+      return {
+        label: 'Medium',
+        color: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+        text: `${confluencesCount}/5 Confluences`
+      };
+    } else {
+      return {
+        label: 'Low',
+        color: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+        text: `${confluencesCount}/5 Confluences`
+      };
+    }
+  }, [confluencesCount, metrics.trend]);
+
   return (
     <div id="explainability-panel-root" className="bg-[#0a0a0b] border border-white/5 p-5 rounded-lg select-none">
       
       {/* Header and explanation of explainability */}
-      <div className="flex items-center justify-between border-b border-white/5 pb-3.5 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3.5 mb-4">
         <div className="flex items-center space-x-2.5">
           <div className="h-8 w-8 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
             <Bot className="w-4.5 h-4.5 text-indigo-400" />
@@ -119,6 +281,46 @@ export default function TradeExplainability({ symbol, metrics }: TradeExplainabi
             </h3>
             <p className="text-[10px] text-white/40 mt-0.5">Demystifying black-box models. Fully auditable institutional reasoning matrix.</p>
           </div>
+        </div>
+
+        {/* Highlight Order Blocks and Reset Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            id="highlight-order-blocks-toggle"
+            onClick={onToggleHighlightOrderBlocks}
+            className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
+              highlightOrderBlocks
+                ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-[0_0_12px_rgba(99,102,241,0.25)]'
+                : 'bg-[#050505] text-white/50 border-white/5 hover:text-white hover:border-white/20'
+            }`}
+          >
+            <Zap className={`w-3.5 h-3.5 ${highlightOrderBlocks ? 'text-indigo-400 animate-pulse' : 'text-white/30'}`} />
+            <span>Highlight Order Blocks (D3)</span>
+          </button>
+
+          <button
+            id="toggle-twvp-overlay"
+            onClick={onToggleTWVP}
+            className={`px-3 py-1.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
+              showTWVP
+                ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-[0_0_12px_rgba(99,102,241,0.25)]'
+                : 'bg-[#050505] text-white/50 border-white/5 hover:text-white hover:border-white/20'
+            }`}
+            title="Enable/Disable Time-Weighted Volume Profile on the DOM Price Ladder"
+          >
+            <Layers className={`w-3.5 h-3.5 ${showTWVP ? 'text-indigo-400 animate-pulse' : 'text-white/30'}`} />
+            <span>Overlay TWVP</span>
+          </button>
+
+          <button
+            id="reset-chart-view-btn"
+            onClick={onResetChartView}
+            className="px-3 py-1.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border bg-[#050505] text-rose-400/80 border-rose-500/10 hover:bg-rose-500/10 hover:border-rose-500/30 hover:text-rose-400 transition-all duration-300 flex items-center gap-1.5 cursor-pointer font-bold"
+            title="Deactivate overlays and restore default chart scale/zoom/toggles"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reset Chart View</span>
+          </button>
         </div>
 
         {/* Signal state indicator */}
@@ -159,6 +361,66 @@ export default function TradeExplainability({ symbol, metrics }: TradeExplainabi
               </span>
               <span className="text-xs font-bold text-white">1:{signalInsights.expectedRR} Ratio</span>
             </div>
+          </div>
+
+          {/* AI Predictive Directional Forecast Card */}
+          <div id="ai-directional-forecast-card" className="bg-[#050505] border border-white/5 p-4 rounded-lg space-y-3 font-mono">
+            <div className="flex items-center justify-between border-b border-white/[0.04] pb-2">
+              <span className="text-white/40 text-[10px] uppercase font-bold flex items-center gap-1">
+                <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
+                AI Directional Forecast
+              </span>
+              <div 
+                id="predicted-signal-confidence-pill"
+                className={`px-2 py-0.5 rounded text-[8px] font-bold border select-none uppercase tracking-wider ${confidenceLevel.color}`}
+              >
+                {confidenceLevel.label} ({confidenceLevel.text})
+              </div>
+            </div>
+            
+            {metrics.trend === 'BULLISH' ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-emerald-400">
+                  <TrendingUp className="w-4 h-4 text-emerald-400 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-wider">Bullish Vector Confirmed</span>
+                </div>
+                <p className="text-[10px] text-white/60 leading-normal font-sans font-medium">
+                  Apex models predict price expansion towards major premium liquidity pools. Upward movement conforms to prevailing structure.
+                </p>
+                <div className="bg-emerald-500/5 border border-emerald-500/10 p-2 rounded text-[9px] text-emerald-300 flex justify-between items-center">
+                  <span>Target Zone:</span>
+                  <span className="font-bold">Liquidity Premium (+{(metrics.atr * 2).toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 4)} pips)</span>
+                </div>
+              </div>
+            ) : metrics.trend === 'BEARISH' ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-rose-400">
+                  <TrendingDown className="w-4 h-4 text-rose-400 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-wider">Bearish Vector Confirmed</span>
+                </div>
+                <p className="text-[10px] text-white/60 leading-normal font-sans font-medium">
+                  Apex models predict price displacement targeting discount stop-loss levels. Downward movement aligns with structural supply.
+                </p>
+                <div className="bg-rose-500/5 border border-rose-500/10 p-2 rounded text-[9px] text-rose-300 flex justify-between items-center">
+                  <span>Target Zone:</span>
+                  <span className="font-bold">Stop-Loss Sweep (-{(metrics.atr * 2).toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 4)} pips)</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-purple-400 block-inline flex">
+                  <QuestionIcon className="w-4 h-4 text-purple-400 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-purple-300">No Clear Signal (Sideways)</span>
+                </div>
+                <p className="text-[10px] text-white/60 leading-normal font-sans font-medium">
+                  Apex models identify range-bound consolidation with high consolidation entropy. Refrain from active position loading.
+                </p>
+                <div className="bg-purple-500/5 border border-purple-500/10 p-2 rounded text-[9px] text-purple-300 flex justify-between items-center">
+                  <span>System Bias:</span>
+                  <span className="font-bold">Muted Vector (Consolidation)</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Quick technical confluences checks */}
@@ -211,7 +473,7 @@ export default function TradeExplainability({ symbol, metrics }: TradeExplainabi
         </div>
 
         {/* Dynamic Written Rationale (Right col) */}
-        <div className="lg:col-span-8 bg-[#050505]/40 border border-white/5 p-4 rounded-lg flex flex-col justify-between self-stretch">
+        <div id="institutional-analysis-container" className="lg:col-span-8 bg-[#050505]/40 border border-white/5 p-4 rounded-lg flex flex-col justify-between self-stretch">
           <div className="space-y-3">
             <div className="flex items-center space-x-1.5 text-xs font-bold font-mono text-white">
               <Zap className="w-4 h-4 text-indigo-400 animate-pulse" />
@@ -221,6 +483,63 @@ export default function TradeExplainability({ symbol, metrics }: TradeExplainabi
             <p className="text-white/70 text-xs leading-relaxed font-sans font-medium">
               {signalInsights.rationale}
             </p>
+          </div>
+
+          {/* Active Strategic Portfolio Placements */}
+          <div className="mt-4 pt-3.5 border-t border-white/[0.04] space-y-2.5">
+            <div className="flex items-center justify-between text-[10px] font-mono uppercase font-bold tracking-wider text-indigo-400">
+              <span className="flex items-center gap-1.5 text-indigo-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                Active Strategic Placements ({openPositions.length})
+              </span>
+              <span className="text-[9px] text-[#e5e5e5]/30 font-normal normal-case">Delta-Hedged exposure</span>
+            </div>
+
+            {openPositions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 border border-dashed border-white/5 rounded-lg bg-[#030303]/40">
+                <span className="text-[10px] text-white/30 font-mono">No active strategic positions held in current session</span>
+              </div>
+            ) : (
+              <div className="border border-white/5 rounded-lg overflow-hidden max-h-[110px] overflow-y-auto pr-0.5">
+                <table className="w-full text-left border-collapse text-[9.5px] font-mono leading-tight">
+                  <thead>
+                    <tr className="bg-white/[0.02] border-b border-white/5 text-white/30 font-bold">
+                      <th className="py-1.5 px-2">Asset</th>
+                      <th className="py-1.5 px-2 text-center">Type</th>
+                      <th className="py-1.5 px-2 text-right">Size</th>
+                      <th className="py-1.5 px-2 text-right">Entry</th>
+                      <th className="py-1.5 px-2 text-right">Mkt PnL</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.02]">
+                    {openPositions.slice(0, 4).map((t) => {
+                      const isWin = t.pnl >= 0;
+                      const isCurrent = t.symbol === symbol;
+                      return (
+                        <tr key={t.id} className={`hover:bg-white/[0.02] transition-colors ${isCurrent ? 'bg-indigo-500/[0.03] text-white' : 'text-white/70'}`}>
+                          <td className="py-1.5 px-2 font-bold flex items-center gap-1">
+                            {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>}
+                            {t.symbol}
+                          </td>
+                          <td className="py-1.5 px-2 text-center">
+                            <span className={`px-1 py-0.5 rounded font-bold text-[8px] ${
+                              t.side === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                            }`}>
+                              {t.side}
+                            </span>
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-white/50">{t.size.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                          <td className="py-1.5 px-2 text-right text-white/50">{t.entryPrice.toFixed(t.symbol === 'USD/JPY' ? 2 : t.symbol === 'BTC/USDT' ? 0 : 4)}</td>
+                          <td className={`py-1.5 px-2 text-right font-bold ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {isWin ? '+' : ''}${t.pnl.toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <div className="mt-4 pt-4 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-2 gap-4 text-[10px] text-white/40">

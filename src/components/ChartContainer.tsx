@@ -3,33 +3,63 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent } from '../types';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import * as d3 from 'd3';
+import { motion, AnimatePresence } from 'motion/react';
+import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent, MarketSymbol } from '../types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders } from 'lucide-react';
+import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders, Zap, Server, Magnet, Crosshair, Maximize2, Minimize2, ArrowRightLeft, ArrowRight, ChevronDown, Clock } from 'lucide-react';
+import DOMPriceLadder from './DOMPriceLadder';
 
 const FRIENDLY_NAMES: Record<string, string> = {
   'EUR/USD': 'Euro / U.S. Dollar',
   'GBP/USD': 'Great Britain Pound / U.S. Dollar',
   'USD/JPY': 'U.S. Dollar / Japanese Yen',
-  'BTC/USDT': 'Bitcoin / TetherUS',
+  'AUD/USD': 'Australian Dollar / U.S. Dollar',
+  'EUR/GBP': 'Euro / Great Britain Pound',
   'GOLD/USD': 'Gold Spot / U.S. Dollar',
+  'SILVER/USD': 'Silver Spot / U.S. Dollar',
+  'BTC/USDT': 'Bitcoin / TetherUS',
+  'ETH/USDT': 'Ethereum / TetherUS',
+  'SOL/USDT': 'Solana / TetherUS',
+  'US30': 'Dow Jones 30 Index',
+  'NAS100': 'Nasdaq 100 Index',
+  'GER40': 'DAX 40 Index',
+  'SPX500': 'S&P 500 Index',
 };
 
 const FEED_SOURCES: Record<string, string> = {
   'EUR/USD': 'OANDA',
   'GBP/USD': 'OANDA',
   'USD/JPY': 'OANDA',
-  'BTC/USDT': 'BINANCE',
+  'AUD/USD': 'OANDA',
+  'EUR/GBP': 'OANDA',
   'GOLD/USD': 'LMAX',
+  'SILVER/USD': 'LMAX',
+  'BTC/USDT': 'BINANCE',
+  'ETH/USDT': 'BINANCE',
+  'SOL/USDT': 'BINANCE',
+  'US30': 'MT5_FEED',
+  'NAS100': 'MT5_FEED',
+  'GER40': 'MT5_FEED',
+  'SPX500': 'MT5_FEED',
 };
 
 const FLAG_EMOJIS: Record<string, { f1: string; f2: string }> = {
   'EUR/USD': { f1: '🇪🇺', f2: '🇺🇸' },
   'GBP/USD': { f1: '🇬🇧', f2: '🇺🇸' },
   'USD/JPY': { f1: '🇺🇸', f2: '🇯🇵' },
-  'BTC/USDT': { f1: '🪙', f2: '🇺🇸' },
+  'AUD/USD': { f1: '🇦🇺', f2: '🇺🇸' },
+  'EUR/GBP': { f1: '🇪🇺', f2: '🇬🇧' },
   'GOLD/USD': { f1: '🪙', f2: '🇺🇸' },
+  'SILVER/USD': { f1: '💵', f2: '🥈' },
+  'BTC/USDT': { f1: '🪙', f2: '🪙' },
+  'ETH/USDT': { f1: '💎', f2: '💎' },
+  'SOL/USDT': { f1: '☀️', f2: '☀️' },
+  'US30': { f1: '🇺🇸', f2: '📈' },
+  'NAS100': { f1: '🇺🇸', f2: '📊' },
+  'GER40': { f1: '🇩🇪', f2: '📈' },
+  'SPX500': { f1: '🇺🇸', f2: '📊' },
 };
 
 const playAlertSound = () => {
@@ -86,8 +116,82 @@ export interface VisualPriceAlert {
   lastTriggeredTime?: string;
 }
 
-interface ChartContainerProps {
+export interface PriceActionAlert {
+  id: string;
   symbol: string;
+  type: 'BREAKING_OB' | 'FVG_TAP';
+  direction: 'BULLISH' | 'BEARISH' | 'ANY';
+  isActive: boolean;
+  isTriggered: boolean;
+  createdAt: string;
+  lastTriggeredTime?: string;
+}
+
+export interface PersistentToast {
+  id: string;
+  symbol: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  type: 'success' | 'warning' | 'info' | 'error';
+  badge: string;
+  read: boolean;
+}
+
+export interface ManualTrendline {
+  id: string;
+  symbol: string;
+  startIdx: number;
+  startPrice: number;
+  endIdx: number;
+  endPrice: number;
+  color?: string;
+  style?: 'solid' | 'dashed' | 'dotted';
+}
+
+export interface RiskTemplate {
+  name: string;
+  size: number;
+  rr: number;
+  maxRiskPips: number;
+  bufferPips: number;
+}
+
+const DEFAULT_TEMPLATES: RiskTemplate[] = [
+  { name: 'Conservative Scalp', size: 0.25, rr: 2.0, maxRiskPips: 15, bufferPips: 1.0 },
+  { name: 'Moderate Swing', size: 0.75, rr: 2.5, maxRiskPips: 20, bufferPips: 1.5 },
+  { name: 'Heavy Institutional', size: 1.80, rr: 3.0, maxRiskPips: 25, bufferPips: 2.5 },
+];
+
+const ASSET_CLASSES = [
+  {
+    id: 'CURRENCIES',
+    label: 'Forex Currencies',
+    color: 'text-sky-400',
+    assets: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP'] as MarketSymbol[]
+  },
+  {
+    id: 'INDICES',
+    label: 'Equity Indices',
+    color: 'text-purple-400',
+    assets: ['US30', 'NAS100', 'GER40', 'SPX500'] as MarketSymbol[]
+  },
+  {
+    id: 'METALS',
+    label: 'Precious Metals',
+    color: 'text-amber-400',
+    assets: ['GOLD/USD', 'SILVER/USD'] as MarketSymbol[]
+  },
+  {
+    id: 'CRYPTO',
+    label: 'Cryptocurrencies',
+    color: 'text-emerald-400',
+    assets: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'] as MarketSymbol[]
+  }
+];
+
+interface ChartContainerProps {
+  symbol: MarketSymbol;
   candles: Candlestick[];
   fvgs: FVG[];
   obs: OrderBlock[];
@@ -97,11 +201,18 @@ interface ChartContainerProps {
   trades?: Trade[];
   onTradeExecuted?: () => void;
   newsEvents?: NewsEvent[];
+  highlightOrderBlocks?: boolean;
+  resetKey?: number;
+  jumpRange?: { start: string; end: string; triggerId: number } | null;
+  showTWVP?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  onSymbolChange?: (sym: MarketSymbol) => void;
 }
 
 export default function ChartContainer({
   symbol,
-  candles,
+  candles: candlesInput,
   fvgs,
   obs,
   sweeps,
@@ -110,13 +221,322 @@ export default function ChartContainer({
   trades = [],
   onTradeExecuted,
   newsEvents = [],
+  highlightOrderBlocks = false,
+  resetKey = 0,
+  jumpRange = null,
+  showTWVP = false,
+  isExpanded = false,
+  onToggleExpand,
+  onSymbolChange,
 }: ChartContainerProps) {
   const [hoveredCandle, setHoveredCandle] = useState<Candlestick | null>(null);
+  const [isLayersDropdownOpen, setIsLayersDropdownOpen] = useState(false);
+  const [isDrawDropdownOpen, setIsDrawDropdownOpen] = useState(false);
+  const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
+  const [isTimeframeSelectorOpen, setIsTimeframeSelectorOpen] = useState(false);
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>('CURRENCIES');
+  const d3ContainerRef = useRef<SVGGElement | null>(null);
+
+  // Timeframe and Gesture Swipe States
+  const [selectedTimeframe, setSelectedTimeframe] = useState<'M15' | 'H1' | 'H4' | 'D1'>('H4');
+  const [swipeFlash, setSwipeFlash] = useState<{ message: string; type: 'SYMBOL' | 'TIMEFRAME'; value: string } | null>(null);
+
+  // Auto-expire the swipe flash feedback notification
+  useEffect(() => {
+    if (swipeFlash) {
+      const timer = setTimeout(() => {
+        setSwipeFlash(null);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [swipeFlash]);
+
+  // Touch gesture state references
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  const handleWorkspaceTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleWorkspaceTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const diffX = e.changedTouches[0].clientX - touchStartX.current;
+    const diffY = e.changedTouches[0].clientY - touchStartY.current;
+    
+    // Verify it's a horizontal swipe with sufficient distance and minimal vertical deviation
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 40) {
+      if (diffX > 0) {
+        // Swiped Right -> Go previous
+        handleSwipe('RIGHT');
+      } else {
+        // Swiped Left -> Go next
+        handleSwipe('LEFT');
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  // Swipe Handlers to cycle either symbols
+  const handleSwipe = (direction: 'LEFT' | 'RIGHT') => {
+    // Subtle haptic vibration trigger if Vibration API is supported
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate(15);
+      } catch (err) {
+        console.debug('Subtle vibration feedback bypassed:', err);
+      }
+    }
+
+    const allSymbols: MarketSymbol[] = [
+      'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+      'GOLD/USD', 'SILVER/USD',
+      'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+      'US30', 'NAS100', 'GER40', 'SPX500'
+    ];
+    const currentIndex = allSymbols.indexOf(symbol);
+    if (currentIndex !== -1) {
+      let nextIndex = direction === 'LEFT' ? currentIndex + 1 : currentIndex - 1;
+      if (nextIndex >= allSymbols.length) nextIndex = 0;
+      if (nextIndex < 0) nextIndex = allSymbols.length - 1;
+      const newSym = allSymbols[nextIndex];
+      if (onSymbolChange) {
+        onSymbolChange(newSym);
+        setSwipeFlash({
+          message: `Switched Asset: ${newSym}`,
+          type: 'SYMBOL',
+          value: newSym,
+        });
+      }
+    }
+  };
+
+  // Safe subsetting and simulation of candelsticks based on selected timeframe
+  const processedCandles = useMemo(() => {
+    if (!candlesInput || candlesInput.length === 0) return [];
+    
+    // H4
+    if (selectedTimeframe === 'H4') return candlesInput;
+    
+    // D1: Aggregate every 4 candles into 1 candle to make it feel dense and daily-like
+    if (selectedTimeframe === 'D1') {
+      const aggregated: Candlestick[] = [];
+      for (let i = 0; i < candlesInput.length; i += 4) {
+        const chunk = candlesInput.slice(i, i + 4);
+        if (chunk.length === 0) continue;
+        const open = chunk[0].open;
+        const close = chunk[chunk.length - 1].close;
+        const high = Math.max(...chunk.map(c => c.high));
+        const low = Math.min(...chunk.map(c => c.low));
+        const volume = chunk.reduce((sum, c) => sum + c.volume, 0);
+        aggregated.push({
+          timestamp: chunk[0].timestamp,
+          open,
+          high,
+          low,
+          close,
+          volume,
+          ema50: chunk[chunk.length - 1].ema50,
+          sma200: chunk[chunk.length - 1].sma200,
+        });
+      }
+      return aggregated;
+    }
+    
+    // H1: Subdivide candles visually so they display more ticks/periods (simulated)
+    if (selectedTimeframe === 'H1') {
+      const subdivided: Candlestick[] = [];
+      candlesInput.forEach((c, idx) => {
+        subdivided.push({
+          ...c,
+          timestamp: c.timestamp,
+          close: (c.open + c.close) / 2,
+          high: Math.max(c.open, c.close, (c.open + c.close) / 2),
+        });
+        subdivided.push({
+          ...c,
+          timestamp: `${c.timestamp}_1h`,
+          open: (c.open + c.close) / 2,
+          low: Math.min(c.open, c.close, (c.open + c.close) / 2),
+        });
+      });
+      return subdivided.slice(-candlesInput.length);
+    }
+    
+    // M15: Shake prices slightly using a procedural sin pattern representing lower scale turbulence
+    if (selectedTimeframe === 'M15') {
+      return candlesInput.map((c, i) => {
+        const noise = (Math.sin(i) * 0.0004);
+        return {
+          ...c,
+          open: c.open * (1 + noise),
+          close: c.close * (1 - noise),
+          high: Math.max(c.open, c.close) * (1 + Math.abs(noise)),
+          low: Math.min(c.open, c.close) * (1 - Math.abs(noise)),
+        };
+      });
+    }
+    
+    return candlesInput;
+  }, [candlesInput, selectedTimeframe]);
+
+  // All downstream logic relies on candles
+  const candles = processedCandles;
+
+  // One-Click Quick Entry States
+  const [isOneClickActive, setIsOneClickActive] = useState(false);
+  const [oneClickLots, setOneClickLots] = useState<number>(0.75);
+  const [oneClickRR, setOneClickRR] = useState<number>(2.5);
+  const [oneClickBuffer, setOneClickBuffer] = useState<number>(1.5);
+  const [selectedTemplateName, setSelectedTemplateName] = useState<string>('Moderate Swing');
+  const [oneClickStatus, setOneClickStatus] = useState<string | null>(null);
+  const [hoveredBlock, setHoveredBlock] = useState<{
+    type: 'FVG' | 'OB';
+    id: string;
+    gapStart?: number;
+    gapEnd?: number;
+    high?: number;
+    low?: number;
+    blockType: 'BULLISH' | 'BEARISH';
+  } | null>(null);
+
+  const getPipValue = () => {
+    if (symbol === 'USD/JPY') return 0.01;
+    if (symbol === 'BTC/USDT') return 1.0;
+    if (symbol === 'GOLD/USD') return 0.1;
+    return 0.0001;
+  };
+
+  // Reset chart view options to standard values upon request (resetKey triggers)
+  useEffect(() => {
+    if (resetKey > 0) {
+      setShowFVG(true);
+      setShowOB(true);
+      setShowLiquidityMap(true);
+      setVisibleCount(40);
+      setOffset(0);
+    }
+  }, [resetKey]);
+
+  const calculateOneClickLevels = (block: {
+    type: 'FVG' | 'OB';
+    gapStart?: number;
+    gapEnd?: number;
+    high?: number;
+    low?: number;
+    blockType: 'BULLISH' | 'BEARISH';
+  }) => {
+    const entry = livePrice;
+    const pip = getPipValue();
+    const buffer = oneClickBuffer * pip;
+    
+    let sl = 0;
+    let side: 'BUY' | 'SELL' = block.blockType === 'BULLISH' ? 'BUY' : 'SELL';
+    
+    if (block.blockType === 'BULLISH') {
+      const outerBound = block.type === 'FVG' 
+        ? Math.min(block.gapStart || 0, block.gapEnd || 0) 
+        : (block.low || 0);
+      sl = outerBound - buffer;
+      
+      if (sl >= entry - (2 * pip)) {
+        sl = entry - (20 * pip);
+      }
+      
+      const risk = entry - sl;
+      const tp = entry + (risk * oneClickRR);
+      return { side, entry, sl, tp };
+    } else {
+      const outerBound = block.type === 'FVG' 
+        ? Math.max(block.gapStart || 0, block.gapEnd || 0) 
+        : (block.high || 0);
+      sl = outerBound + buffer;
+      
+      if (sl <= entry + (2 * pip)) {
+        sl = entry + (20 * pip);
+      }
+      
+      const risk = sl - entry;
+      const tp = entry - (risk * oneClickRR);
+      return { side, entry, sl, tp };
+    }
+  };
+
+  const handleOneClickExecute = async (blockType: 'FVG' | 'OB', block: any) => {
+    if (!isOneClickActive) return;
+    
+    // Calculate SL & TP
+    const levels = calculateOneClickLevels({
+      type: blockType,
+      gapStart: block.gapStart,
+      gapEnd: block.gapEnd,
+      high: block.high,
+      low: block.low,
+      blockType: block.type,
+    });
+    
+    const reasonText = `One-Click direct entry triggered via Chart ${blockType} [${block.type}] block. Auto-calculated ${oneClickRR}:1 R:R structural limits.`;
+    
+    try {
+      setOneClickStatus('EXECUTING...');
+      const res = await fetch('/api/trades', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          symbol,
+          side: levels.side,
+          entryPrice: levels.entry,
+          stopLoss: levels.sl,
+          takeProfit: levels.tp,
+          size: oneClickLots,
+          reason: reasonText,
+          confidence: 90,
+          confluences: [
+            blockType === 'FVG' ? 'Fair Value Gap (FVG) Mitigation' : 'Order Block (OB) Validation',
+            'One-Click Automated Institutional Template',
+            `${selectedTemplateName} Allocation`
+          ],
+        }),
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to execute orders.');
+      }
+      
+      setOneClickStatus('SUCCESS!');
+      setTimeout(() => setOneClickStatus(null), 3000);
+      
+      if (onTradeExecuted) {
+        onTradeExecuted();
+      }
+    } catch (e) {
+      console.error(e);
+      setOneClickStatus('ERROR');
+      setTimeout(() => setOneClickStatus(null), 3000);
+    }
+  };
   const [showFVG, setShowFVG] = useState(true);
   const [showOB, setShowOB] = useState(true);
   const [showLiquidityMap, setShowLiquidityMap] = useState(true);
+  const [showVolumeProfile, setShowVolumeProfile] = useState(true);
+  const [hoveredProfileBin, setHoveredProfileBin] = useState<{
+    index: number;
+    minPrice: number;
+    maxPrice: number;
+    volume: number;
+    buyVolume: number;
+    sellVolume: number;
+    type: 'HVN' | 'LVN' | 'NORMAL';
+    isPOC: boolean;
+  } | null>(null);
   const [cursorY, setCursorY] = useState<number | null>(null);
   const [cursorPrice, setCursorPrice] = useState<number | null>(null);
+  const [cursorX, setCursorX] = useState<number | null>(null);
+  const [cursorTime, setCursorTime] = useState<string | null>(null);
   const [showIndicators, setShowIndicators] = useState(true);
   const [showNewsOverlay, setShowNewsOverlay] = useState(true);
   const [hoveredNews, setHoveredNews] = useState<{
@@ -171,6 +591,23 @@ export default function ChartContainer({
     } catch (_) {}
   }, [smartAlerts]);
 
+  // Handle dropdown outside clicks auto-closure
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('#dropdown-layers-trigger') && !target.closest('#dropdown-layers-menu')) {
+        setIsLayersDropdownOpen(false);
+      }
+      if (!target.closest('#dropdown-draw-trigger') && !target.closest('#dropdown-draw-menu')) {
+        setIsDrawDropdownOpen(false);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => {
+      document.removeEventListener('click', handleOutsideClick);
+    };
+  }, []);
+
   // Visual Price Alert persistent state and drawer alerts
   const [visualPriceAlerts, setVisualPriceAlerts] = useState<VisualPriceAlert[]>(() => {
     try {
@@ -182,8 +619,74 @@ export default function ChartContainer({
     return [];
   });
 
+  // Custom Price-Action Trend Alerts (OB break, FVG tap)
+  const [priceActionAlerts, setPriceActionAlerts] = useState<PriceActionAlert[]>(() => {
+    try {
+      const saved = localStorage.getItem('apex_price_action_trend_alerts');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (_) {}
+    return [
+      { id: 'pa-1', symbol: 'EUR/USD', type: 'FVG_TAP', direction: 'BULLISH', isActive: true, isTriggered: false, createdAt: new Date().toLocaleTimeString() },
+      { id: 'pa-2', symbol: 'BTC/USDT', type: 'BREAKING_OB', direction: 'ANY', isActive: true, isTriggered: false, createdAt: new Date().toLocaleTimeString() }
+    ];
+  });
+
+  const [persistentToasts, setPersistentToasts] = useState<PersistentToast[]>(() => {
+    try {
+      const saved = localStorage.getItem('apex_persistent_toasts');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const [alertsActiveTab, setAlertsActiveTab] = useState<'STANDARD' | 'PRICE_ACTION'>('PRICE_ACTION');
+  
+  // New Price-Action Alert Form settings
+  const [newPaSymbol, setNewPaSymbol] = useState('EUR/USD');
+  const [newPaType, setNewPaType] = useState<'BREAKING_OB' | 'FVG_TAP'>('BREAKING_OB');
+  const [newPaDirection, setNewPaDirection] = useState<'BULLISH' | 'BEARISH' | 'ANY'>('ANY');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_price_action_trend_alerts', JSON.stringify(priceActionAlerts));
+    } catch (_) {}
+  }, [priceActionAlerts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_persistent_toasts', JSON.stringify(persistentToasts));
+    } catch (_) {}
+  }, [persistentToasts]);
+
   const [isDrawingPriceAlert, setIsDrawingPriceAlert] = useState(false);
   const [hoveredY, setHoveredY] = useState<number | null>(null);
+
+  // Manual Trendline persistent state and drawing status
+  const [manualTrendlines, setManualTrendlines] = useState<ManualTrendline[]>(() => {
+    try {
+      const saved = localStorage.getItem('apex_manual_trendlines');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const [isDrawingTrendline, setIsDrawingTrendline] = useState(false);
+  const [isMagnetActive, setIsMagnetActive] = useState(true);
+  const [showCrosshairTool, setShowCrosshairTool] = useState(true);
+  const [trendlineStartPoint, setTrendlineStartPoint] = useState<{ xIndex: number; price: number } | null>(null);
+  const [trendlineHoverPoint, setTrendlineHoverPoint] = useState<{ xIndex: number; price: number } | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_manual_trendlines', JSON.stringify(manualTrendlines));
+    } catch (_) {}
+  }, [manualTrendlines]);
   const [triggeredAlertBanners, setTriggeredAlertBanners] = useState<{
     id: string;
     symbol: string;
@@ -211,6 +714,45 @@ export default function ChartContainer({
   const [dragStartX, setDragStartX] = useState(0);
   const [dragStartOffset, setDragStartOffset] = useState(0);
   const [isGaugeHovered, setIsGaugeHovered] = useState(false);
+  const [isChartShiftActive, setIsChartShiftActive] = useState(true);
+  const [chartShiftBars, setChartShiftBars] = useState(15);
+
+  useEffect(() => {
+    if (!jumpRange || candles.length === 0) return;
+    const startMs = new Date(jumpRange.start).getTime();
+    const endMs = new Date(jumpRange.end).getTime();
+
+    let bestStartIdx = -1;
+    let bestEndIdx = -1;
+    let minStartDiff = Infinity;
+    let minEndDiff = Infinity;
+
+    for (let i = 0; i < candles.length; i++) {
+      const cTime = new Date(candles[i].timestamp).getTime();
+      
+      const startDiff = Math.abs(cTime - startMs);
+      if (startDiff < minStartDiff) {
+        minStartDiff = startDiff;
+        bestStartIdx = i;
+      }
+
+      const endDiff = Math.abs(cTime - endMs);
+      if (endDiff < minEndDiff) {
+        minEndDiff = endDiff;
+        bestEndIdx = i;
+      }
+    }
+
+    if (bestStartIdx !== -1 && bestEndIdx !== -1) {
+      const sIdx = Math.min(bestStartIdx, bestEndIdx);
+      const eIdx = Math.max(bestStartIdx, bestEndIdx);
+      const count = eIdx - sIdx + 1;
+      const off = candles.length - 1 - eIdx;
+      // Safeguard visible count to a comfortable view boundary
+      setVisibleCount(Math.max(15, Math.min(100, count)));
+      setOffset(off);
+    }
+  }, [jumpRange, candles]);
 
   useEffect(() => {
     setLivePrice(basePrice);
@@ -545,11 +1087,103 @@ export default function ChartContainer({
     }
   }, [livePrice, symbol, visualPriceAlerts, onLogEventToAdvisor]);
 
+  // Real-time evaluation of custom PriceActionAlerts (Order Block break, FVG tap)
+  useEffect(() => {
+    const prevLivePrice = prevLivePriceRef.current;
+    if (!prevLivePrice || prevLivePrice === livePrice || priceActionAlerts.length === 0) return;
+
+    let changedRule = false;
+    const newToasts: PersistentToast[] = [];
+
+    const evaluatedAlerts = priceActionAlerts.map((alert) => {
+      if (!alert.isActive || alert.isTriggered || alert.symbol !== symbol) return alert;
+
+      let triggered = false;
+      let reason = '';
+      let badge = '';
+
+      if (alert.type === 'BREAKING_OB') {
+        const relevantOBs = obs.filter(ob => (alert.direction === 'ANY' || ob.type === alert.direction));
+        
+        for (const ob of relevantOBs) {
+          const crossedObLow = prevLivePrice >= ob.low && livePrice < ob.low;
+          const crossedObHigh = prevLivePrice <= ob.high && livePrice > ob.high;
+
+          if (crossedObLow || crossedObHigh) {
+            triggered = true;
+            reason = `Price crossed the ${ob.type.toLowerCase()} Order Block boundary [${ob.low.toFixed(symbol === 'USD/JPY' ? 2 : 4)} - ${ob.high.toFixed(symbol === 'USD/JPY' ? 2 : 4)}] with live price at ${livePrice.toFixed(symbol === 'USD/JPY' ? 2 : 4)}`;
+            badge = `OB BREAK`;
+            break;
+          }
+        }
+      } else if (alert.type === 'FVG_TAP') {
+        const relevantFVGs = fvgs.filter(fvg => (alert.direction === 'ANY' || fvg.type === alert.direction));
+
+        for (const fvg of relevantFVGs) {
+          const maxGap = Math.max(fvg.gapStart, fvg.gapEnd);
+          const minGap = Math.min(fvg.gapStart, fvg.gapEnd);
+
+          const tappedTop = prevLivePrice > maxGap && livePrice <= maxGap;
+          const tappedBottom = prevLivePrice < minGap && livePrice >= minGap;
+
+          if (tappedTop || tappedBottom) {
+            triggered = true;
+            reason = `Price tapped into ${fvg.type.toLowerCase()} Fair Value Gap range [${minGap.toFixed(symbol === 'USD/JPY' ? 2 : 4)} - ${maxGap.toFixed(symbol === 'USD/JPY' ? 2 : 4)}] at live price ${livePrice.toFixed(symbol === 'USD/JPY' ? 2 : 4)}`;
+            badge = `FVG TAP`;
+            break;
+          }
+        }
+      }
+
+      if (triggered) {
+        changedRule = true;
+        playAlertSound();
+
+        newToasts.push({
+          id: 'pa-toast-' + Date.now() + '-' + Math.random(),
+          symbol: alert.symbol,
+          title: alert.type === 'BREAKING_OB' ? '🚫 Order Block Structural Break' : '🟢 Fair Value Gap (FVG) Tapped',
+          message: `${reason}. Zone confluences updated.`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: alert.type === 'BREAKING_OB' ? 'warning' : 'success',
+          badge: badge,
+          read: false
+        });
+
+        if (onLogEventToAdvisor) {
+          onLogEventToAdvisor(
+            `🚨 Price-action alert triggered: [${alert.symbol}] ${badge} - ${reason}`,
+            livePrice
+          );
+        }
+
+        return {
+          ...alert,
+          isTriggered: true,
+          isActive: false,
+          lastTriggeredTime: new Date().toLocaleTimeString()
+        };
+      }
+
+      return alert;
+    });
+
+    if (changedRule) {
+      setPriceActionAlerts(evaluatedAlerts);
+    }
+    if (newToasts.length > 0) {
+      setPersistentToasts(prev => [...newToasts, ...prev]);
+    }
+  }, [livePrice, symbol, priceActionAlerts, obs, fvgs, onLogEventToAdvisor]);
+
   // Escape key drawing-mode cancel listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsDrawingPriceAlert(false);
+        setIsDrawingTrendline(false);
+        setTrendlineStartPoint(null);
+        setTrendlineHoverPoint(null);
         setHoveredY(null);
       }
     };
@@ -592,9 +1226,65 @@ export default function ChartContainer({
     );
   };
 
-  // SVG dimensions for candlestick pane
-  const width = 800;
-  const height = 360;
+  const handleAddPaAlert = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newAlert: PriceActionAlert = {
+      id: 'pa-' + Date.now().toString(),
+      symbol: newPaSymbol,
+      type: newPaType,
+      direction: newPaDirection,
+      isActive: true,
+      isTriggered: false,
+      createdAt: new Date().toLocaleTimeString()
+    };
+    setPriceActionAlerts((prev) => [newAlert, ...prev]);
+  };
+
+  const handleDeletePaAlert = (id: string) => {
+    setPriceActionAlerts((prev) => prev.filter((alert) => alert.id !== id));
+  };
+
+  const handleTogglePaAlertActive = (id: string) => {
+    setPriceActionAlerts((prev) =>
+      prev.map((alert) =>
+        alert.id === id ? { ...alert, isActive: !alert.isActive, isTriggered: false } : alert
+      )
+    );
+  };
+
+  // SVG dimensions for candlestick pane (updated dynamically via ResizeObserver)
+  const [dimensions, setDimensions] = useState({ width: 800, height: 360 });
+  const width = dimensions.width;
+  const height = dimensions.height;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const { width: rectWidth, height: rectHeight } = entries[0].contentRect;
+      if (rectWidth > 0 && rectHeight > 0) {
+        setDimensions({
+          width: Math.floor(rectWidth),
+          height: Math.floor(rectHeight)
+        });
+      } else if (rectWidth > 0) {
+        setDimensions((prev) => ({
+          ...prev,
+          width: Math.floor(rectWidth)
+        }));
+      }
+    });
+
+    resizeObserver.observe(element);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
   const padding = { top: 20, right: 70, bottom: 30, left: 20 };
 
   // Constrain visibleCount and offset based on current candles
@@ -602,13 +1292,18 @@ export default function ChartContainer({
   const maxOffset = Math.max(0, candles.length - actualVisibleCount);
   const actualOffset = Math.min(offset, maxOffset);
 
-  const endIndex = candles.length > 0 ? candles.length - 1 - actualOffset : 0;
+  // If chart shift is active and we are at the front of the timeline (actualOffset is small),
+  // we add empty Future Columns to the right to leave workspace space for predictions.
+  const shiftAmount = isChartShiftActive ? chartShiftBars : 0;
+  const endIndex = candles.length > 0 
+    ? Math.min(candles.length - 1 - actualOffset + shiftAmount, candles.length - 1 + shiftAmount) 
+    : 0;
   const startIndex = Math.max(0, endIndex - actualVisibleCount + 1);
 
-  // Filter visible candles for dynamic Y-axis scaling
+  // Filter visible candles for dynamic Y-axis scaling (cap slicing within array limits)
   const visibleCandles = useMemo(() => {
     if (candles.length === 0) return [];
-    return candles.slice(startIndex, endIndex + 1);
+    return candles.slice(startIndex, Math.min(endIndex + 1, candles.length));
   }, [candles, startIndex, endIndex]);
 
   // Calculate scales based on visible candles for auto-fitting Y-axis
@@ -627,13 +1322,125 @@ export default function ChartContainer({
     return { min: minPrice, max: maxPrice };
   }, [visibleCandles]);
 
+  const volumeProfile = useMemo(() => {
+    if (visibleCandles.length === 0) return null;
+
+    const numBins = 24;
+    const minPrice = priceLimits.min;
+    const maxPrice = priceLimits.max;
+    const range = maxPrice - minPrice;
+    if (range <= 0) return null;
+
+    const binSize = range / numBins;
+
+    // Initialize bins
+    const bins = Array.from({ length: numBins }, (_, i) => {
+      const binMinPrice = minPrice + i * binSize;
+      const binMaxPrice = binMinPrice + binSize;
+      return {
+        index: i,
+        minPrice: binMinPrice,
+        maxPrice: binMaxPrice,
+        volume: 0,
+        buyVolume: 0,
+        sellVolume: 0,
+      };
+    });
+
+    // Distribute volume of visible candles into bins
+    visibleCandles.forEach((candle) => {
+      const volume = candle.volume || 0;
+      const low = candle.low;
+      const high = candle.high;
+      const open = candle.open;
+      const close = candle.close;
+      const isBullish = close >= open;
+
+      // Split volume fractionally into buy and sell volumes for visual aesthetics
+      const buyFraction = isBullish ? 0.65 : 0.35;
+      const sellFraction = isBullish ? 0.35 : 0.65;
+      const buyVolume = volume * buyFraction;
+      const sellVolume = volume * sellFraction;
+
+      const span = high - low;
+      if (span <= 0) {
+        const binIdx = Math.min(numBins - 1, Math.max(0, Math.floor((close - minPrice) / binSize)));
+        bins[binIdx].volume += volume;
+        bins[binIdx].buyVolume += buyVolume;
+        bins[binIdx].sellVolume += sellVolume;
+      } else {
+        // Distribute fractional volume according to exact bin overlaps
+        bins.forEach((bin) => {
+          const intersectMin = Math.max(low, bin.minPrice);
+          const intersectMax = Math.min(high, bin.maxPrice);
+          if (intersectMax > intersectMin) {
+            const overlapFraction = (intersectMax - intersectMin) / span;
+            const allocatedVol = volume * overlapFraction;
+            bin.volume += allocatedVol;
+            bin.buyVolume += buyVolume * overlapFraction;
+            bin.sellVolume += sellVolume * overlapFraction;
+          }
+        });
+      }
+    });
+
+    // Calculate POC, HVN, and LVN labels
+    const totalVol = bins.reduce((sum, b) => sum + b.volume, 0);
+    const avgVol = totalVol / numBins;
+    let maxVol = Math.max(...bins.map((b) => b.volume));
+    if (maxVol <= 0) maxVol = 1;
+
+    let pocIndex = -1;
+    let maxV = -1;
+    bins.forEach((b, idx) => {
+      if (b.volume > maxV) {
+        maxV = b.volume;
+        pocIndex = idx;
+      }
+    });
+
+    const nodes = bins.map((bin, idx) => {
+      const vol = bin.volume;
+      const prevVol = idx > 0 ? bins[idx - 1].volume : 0;
+      const nextVol = idx < numBins - 1 ? bins[idx + 1].volume : 0;
+
+      let type: 'HVN' | 'LVN' | 'NORMAL' = 'NORMAL';
+      if (idx === pocIndex) {
+        type = 'HVN'; // Point of Control is always high volume
+      } else if (vol > prevVol && vol > nextVol && vol > avgVol * 1.1) {
+        type = 'HVN';
+      } else if (vol < prevVol && vol < nextVol && vol < avgVol * 0.9 && vol > 0) {
+        type = 'LVN';
+      }
+
+      return {
+        ...bin,
+        type,
+        isPOC: idx === pocIndex,
+      };
+    });
+
+    return {
+      bins: nodes,
+      maxVolume: maxVol,
+      avgVolume: avgVol,
+      pocIndex,
+    };
+  }, [visibleCandles, priceLimits]);
+
   const xStep = useMemo(() => {
     return (width - padding.left - padding.right) / (actualVisibleCount || 1);
-  }, [actualVisibleCount, padding.left, padding.right]);
+  }, [width, actualVisibleCount, padding.left, padding.right]);
 
   // Convert price coordinate to SVG container height based on shifted startIndex
   const getX = (index: number) => {
     return padding.left + (index - startIndex) * xStep + xStep / 2;
+  };
+
+  const getIndexFromX = (xVal: number) => {
+    if (xStep === 0) return startIndex;
+    const rawVal = startIndex + (xVal - padding.left - xStep / 2) / xStep;
+    return Math.round(rawVal);
   };
 
   const getY = (price: number) => {
@@ -642,6 +1449,357 @@ export default function ChartContainer({
     const ratio = (price - priceLimits.min) / range;
     return height - padding.bottom - ratio * (height - padding.top - padding.bottom);
   };
+
+  // Synchronize D3 overlays for Order Blocks and Fair Value Gaps
+  useEffect(() => {
+    if (!d3ContainerRef.current) return;
+
+    // Direct selection with d3
+    const container = d3.select(d3ContainerRef.current);
+    container.selectAll('*').remove();
+
+    if (!highlightOrderBlocks) return;
+
+    // Draw detected Fair Value Gaps (FVGs)
+    const fvgGroup = container.append('g').attr('class', 'd3-fvg-overlays');
+    
+    fvgs.forEach((fvg) => {
+      const startX = getX(fvg.index - 1);
+      const endX = getX(fvg.index + 1);
+      const blockWidth = endX - startX;
+      
+      const topY = getY(Math.max(fvg.gapStart, fvg.gapEnd));
+      const bottomY = getY(Math.min(fvg.gapStart, fvg.gapEnd));
+      const blockHeight = bottomY - topY;
+
+      if (blockHeight <= 0 || blockWidth <= 0) return;
+
+      const fillColor = fvg.type === 'BULLISH' ? '#10b981' : '#f43f5e';
+      const strokeColor = fvg.type === 'BULLISH' ? '#34d399' : '#fda4af';
+
+      // Draw SVG rect using D3 selection
+      const rect = fvgGroup.append('rect')
+        .attr('x', startX)
+        .attr('y', topY)
+        .attr('width', blockWidth)
+        .attr('height', Math.max(2, blockHeight))
+        .attr('fill', fillColor)
+        .attr('fill-opacity', 0.18)
+        .attr('stroke', strokeColor)
+        .attr('stroke-width', 2)
+        .attr('stroke-dasharray', '4,2')
+        .attr('rx', 3)
+        .style('cursor', 'pointer')
+        .style('pointer-events', 'auto');
+
+      // Add a textual tag indicating institutional D3 detection
+      const textGroup = fvgGroup.append('g')
+        .style('pointer-events', 'none');
+
+      // Little container pill for text
+      textGroup.append('rect')
+        .attr('x', startX + 4)
+        .attr('y', topY + 4)
+        .attr('width', 52)
+        .attr('height', 10)
+        .attr('fill', '#050515')
+        .attr('fill-opacity', 0.85)
+        .attr('stroke', strokeColor)
+        .attr('stroke-opacity', 0.5)
+        .attr('stroke-width', 0.5)
+        .attr('rx', 2);
+
+      textGroup.append('text')
+        .attr('x', startX + 8)
+        .attr('y', topY + 11)
+        .attr('fill', strokeColor)
+        .attr('font-size', '6px')
+        .attr('font-family', 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace')
+        .attr('font-weight', 'bold')
+        .text(`D3 ${fvg.type === 'BULLISH' ? 'BULL' : 'BEAR'} FVG`);
+
+      // Hover interaction effects with D3 transitions
+      rect.on('mouseenter', function() {
+        d3.select(this)
+          .transition()
+          .duration(200)
+          .attr('fill-opacity', 0.35)
+          .attr('stroke', fvg.type === 'BULLISH' ? '#05f29a' : '#ff4a68')
+          .attr('stroke-width', 3);
+      });
+
+      rect.on('mouseleave', function() {
+        d3.select(this)
+          .transition()
+          .duration(200)
+          .attr('fill-opacity', 0.18)
+          .attr('stroke', strokeColor)
+          .attr('stroke-width', 2);
+      });
+    });
+
+    // Draw detected Order Blocks (OBs)
+    const obGroup = container.append('g').attr('class', 'd3-ob-overlays');
+
+    obs.forEach((ob) => {
+      const obX = getX(ob.index);
+      const blockWidth = xStep * 4; // draw forward block representing validity
+      const topY = getY(ob.high);
+      const bottomY = getY(ob.low);
+      const blockHeight = bottomY - topY;
+
+      if (blockHeight <= 0 || blockWidth <= 0) return;
+
+      const fillColor = ob.type === 'BULLISH' ? '#6366f1' : '#a855f7';
+      const strokeColor = ob.type === 'BULLISH' ? '#818cf8' : '#c084fc';
+
+      const rect = obGroup.append('rect')
+        .attr('x', obX)
+        .attr('y', topY)
+        .attr('width', blockWidth)
+        .attr('height', Math.max(3, blockHeight))
+        .attr('fill', fillColor)
+        .attr('fill-opacity', 0.22)
+        .attr('stroke', strokeColor)
+        .attr('stroke-width', 2.5)
+        .attr('stroke-dasharray', ob.isBroken ? '3,3' : 'none')
+        .attr('rx', 4)
+        .style('cursor', 'pointer')
+        .style('pointer-events', 'auto');
+
+      // Textual overlay for Order Block
+      const labelGroup = obGroup.append('g')
+        .style('pointer-events', 'none');
+
+      labelGroup.append('rect')
+        .attr('x', obX + 4)
+        .attr('y', topY + 4)
+        .attr('width', 58)
+        .attr('height', 10)
+        .attr('fill', '#050515')
+        .attr('fill-opacity', 0.85)
+        .attr('stroke', strokeColor)
+        .attr('stroke-opacity', 0.5)
+        .attr('stroke-width', 0.5)
+        .attr('rx', 2);
+
+      labelGroup.append('text')
+        .attr('x', obX + 8)
+        .attr('y', topY + 11)
+        .attr('fill', strokeColor)
+        .attr('font-size', '6px')
+        .attr('font-family', 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace')
+        .attr('font-weight', 'extrabold')
+        .text(`D3 ${ob.type === 'BULLISH' ? 'BULL' : 'BEAR'} OB`);
+
+      // Hover interactions for OBs
+      rect.on('mouseenter', function() {
+        d3.select(this)
+          .transition()
+          .duration(200)
+          .attr('fill-opacity', 0.4)
+          .attr('stroke', ob.type === 'BULLISH' ? '#10b981' : '#f43f5e')
+          .attr('stroke-width', 3.5);
+      });
+
+      rect.on('mouseleave', function() {
+        d3.select(this)
+          .transition()
+          .duration(200)
+          .attr('fill-opacity', 0.22)
+          .attr('stroke', strokeColor)
+          .attr('stroke-width', 2.5);
+      });
+    });
+
+    // Draw Simulated Predictive Trend Path
+    const lastVisibleCandleIdx = Math.min(endIndex, candles.length - 1);
+    if (candles.length > 0 && startIndex <= endIndex && lastVisibleCandleIdx >= startIndex) {
+      const lastCandle = candles[lastVisibleCandleIdx];
+      const lastClose = lastCandle.close;
+      const startX = getX(lastVisibleCandleIdx);
+      const startY = getY(lastClose);
+
+      // Determine simulated trend direction and label
+      const trendDirection = metrics.trend; // 'BULLISH' | 'BEARISH' | 'NEUTRAL'
+      const atr = metrics.atr || (lastClose * 0.005);
+      
+      let p1Y = startY;
+      let p2Y = startY;
+      let p3Y = startY;
+      
+      let color = '#a855f7'; // Neutral: purple/indigo
+      let strokeGlow = 'rgba(168, 85, 247, 0.4)';
+      let label = 'SYSTEM NEUTRAL: NO CLEAR DIRECTIONAL BIAS';
+
+      if (trendDirection === 'BULLISH') {
+        const targetPrice1 = lastClose + atr * 0.7;
+        const targetPrice2 = lastClose + atr * 1.4;
+        const targetPrice3 = lastClose + atr * 2.1;
+        p1Y = getY(targetPrice1);
+        p2Y = getY(targetPrice2);
+        p3Y = getY(targetPrice3);
+        color = '#10b981'; // green
+        strokeGlow = 'rgba(16, 185, 129, 0.4)';
+        label = '📈 FORECAST VECTOR: BULLISH TRAJECTORY';
+      } else if (trendDirection === 'BEARISH') {
+        const targetPrice1 = lastClose - atr * 0.7;
+        const targetPrice2 = lastClose - atr * 1.4;
+        const targetPrice3 = lastClose - atr * 2.1;
+        p1Y = getY(targetPrice1);
+        p2Y = getY(targetPrice2);
+        p3Y = getY(targetPrice3);
+        color = '#ef4444'; // red
+        strokeGlow = 'rgba(239, 68, 68, 0.4)';
+        label = '📉 FORECAST VECTOR: BEARISH TRAJECTORY';
+      } else {
+        // Sideways / Neutral / Range Consolidation
+        const targetPrice1 = lastClose + atr * 0.2;
+        const targetPrice2 = lastClose - atr * 0.3;
+        const targetPrice3 = lastClose + atr * 0.1;
+        p1Y = getY(targetPrice1);
+        p2Y = getY(targetPrice2);
+        p3Y = getY(targetPrice3);
+        color = '#a855f7'; // Purple
+        strokeGlow = 'rgba(168, 85, 247, 0.3)';
+        label = '⚠️ SYSTEM RANGE: NO CLEAR TREND DETECTED';
+      }
+
+      // Draw the projection line
+      const futureGroup = container.append('g').attr('class', 'd3-future-vector');
+
+      const maxPlotX = width - padding.right;
+      
+      const p1X = Math.min(maxPlotX - 35, getX(lastVisibleCandleIdx + 1));
+      const p2X = Math.min(maxPlotX - 15, getX(lastVisibleCandleIdx + 2));
+      const p3X = Math.min(maxPlotX - 4, getX(lastVisibleCandleIdx + 3));
+
+      const pathData: [number, number][] = [
+        [startX, startY],
+        [p1X, p1Y],
+        [p2X, p2Y],
+        [p3X, p3Y]
+      ];
+
+      // Define a custom arrow marker in <defs>
+      const svgRoot = d3.select(d3ContainerRef.current.ownerSVGElement);
+      let defs = svgRoot.select('defs');
+      if (defs.empty()) {
+        defs = svgRoot.append('defs');
+      }
+      
+      // Clear existing predictive arrowheads
+      defs.selectAll('.pred-arrow').remove();
+
+      // Append arrow marker
+      defs.append('marker')
+        .attr('class', 'pred-arrow')
+        .attr('id', 'predictive-arrowhead')
+        .attr('viewBox', '0 0 10 10')
+        .attr('refX', '6')
+        .attr('refY', '5')
+        .attr('markerWidth', '5')
+        .attr('markerHeight', '5')
+        .attr('orient', 'auto-start-reverse')
+        .append('path')
+        .attr('d', 'M 0 0 L 10 5 L 0 10 z')
+        .attr('fill', color);
+
+      // Draw neon path glow
+      const curveGenerator = d3.line<[number, number]>().curve(d3.curveBasis);
+
+      futureGroup.append('path')
+        .attr('d', curveGenerator(pathData))
+        .attr('fill', 'none')
+        .attr('stroke', color)
+        .attr('stroke-width', 5)
+        .attr('stroke-linecap', 'round')
+        .attr('opacity', 0.15)
+        .style('filter', 'blur(2px)');
+
+      // Draw animated dashed forecast line
+      const dashedPath = futureGroup.append('path')
+        .attr('d', curveGenerator(pathData))
+        .attr('fill', 'none')
+        .attr('stroke', color)
+        .attr('stroke-width', 2)
+        .attr('stroke-dasharray', '5,3')
+        .attr('marker-end', 'url(#predictive-arrowhead)');
+
+      // Add simple animated dash effect
+      let offsetCycle = 0;
+      const animateDash = () => {
+        offsetCycle = (offsetCycle - 1) % 32;
+        dashedPath.style('stroke-dashoffset', offsetCycle.toString());
+      };
+      const intervalId = setInterval(animateDash, 60);
+
+      // Draw prediction target pin (pulsing circle)
+      const pin = futureGroup.append('g')
+        .attr('transform', `translate(${p3X}, ${p3Y})`);
+
+      pin.append('circle')
+        .attr('r', 5)
+        .attr('fill', color)
+        .attr('opacity', 0.82);
+
+      pin.append('circle')
+        .attr('r', 12)
+        .attr('fill', 'none')
+        .attr('stroke', color)
+        .attr('stroke-width', 1.5)
+        .attr('opacity', 0.5)
+        .append('animate')
+        .attr('attributeName', 'r')
+        .attr('values', '4;15;4')
+        .attr('dur', '2s')
+        .attr('repeatCount', 'indefinite');
+
+      // Forecast HUD block overlay showing the forward signal
+      const hudGroup = futureGroup.append('g')
+        .attr('transform', `translate(${Math.max(padding.left + 5, p3X - 160)}, ${Math.max(padding.top + 5, p3Y - 26)})`);
+
+      hudGroup.append('rect')
+        .attr('width', 155)
+        .attr('height', 16)
+        .attr('fill', '#05050c')
+        .attr('fill-opacity', 0.95)
+        .attr('stroke', color)
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-width', 1)
+        .attr('rx', 3);
+
+      hudGroup.append('text')
+        .attr('x', 77.5)
+        .attr('y', 10.5)
+        .attr('fill', color)
+        .attr('font-size', '6.5px')
+        .attr('font-family', 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace')
+        .attr('font-weight', 'extrabold')
+        .attr('text-anchor', 'middle')
+        .text(label);
+
+      // Clean interval on unmount
+      return () => {
+        clearInterval(intervalId);
+      };
+    }
+
+  }, [
+    highlightOrderBlocks,
+    fvgs,
+    obs,
+    width,
+    height,
+    startIndex,
+    actualVisibleCount,
+    xStep,
+    priceLimits.min,
+    priceLimits.max,
+    metrics,
+    candles.length,
+    endIndex,
+  ]);
 
   // Find swing highs and swing lows dynamically and calculate stop-loss density bins
   const liquidityHeatmap = useMemo(() => {
@@ -770,6 +1928,22 @@ export default function ChartContainer({
     }
   };
 
+  // Safely extrapolate future timestamps for forecast/shifted bars on the right-hand side of the chart
+  const getIndexTimestampAndHour = (idx: number) => {
+    if (idx < candles.length) {
+      const c = candles[idx];
+      const d = new Date(c.timestamp);
+      return { timestamp: c.timestamp, hour: d.getUTCHours() };
+    } else if (candles.length > 0) {
+      const lastCandle = candles[candles.length - 1];
+      // extrapolate 4 hours per bar
+      const timeDiff = (idx - (candles.length - 1)) * 4 * 60 * 60 * 1000;
+      const d = new Date(new Date(lastCandle.timestamp).getTime() + timeDiff);
+      return { timestamp: d.toISOString(), hour: d.getUTCHours() };
+    }
+    return null;
+  };
+
   // Price ticks on right axis matching current dynamic price limits
   const priceTicks = useMemo(() => {
     const ticks = [];
@@ -790,7 +1964,7 @@ export default function ChartContainer({
         return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
       })
       .join(' ');
-  }, [candles, startIndex, xStep, priceLimits]);
+  }, [candles, startIndex, xStep, priceLimits, width, height]);
 
   const smaPath = useMemo(() => {
     return candles
@@ -801,7 +1975,7 @@ export default function ChartContainer({
         return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
       })
       .join(' ');
-  }, [candles, startIndex, xStep, priceLimits]);
+  }, [candles, startIndex, xStep, priceLimits, width, height]);
 
   // Prepare data for the secondary RSI area chart (Recharts)
   const rsiChartData = useMemo(() => {
@@ -836,6 +2010,32 @@ export default function ChartContainer({
     });
   };
 
+  const getSnappedPriceAndIndex = (index: number, rawPrice: number) => {
+    const boundedIndex = Math.max(0, Math.min(candles.length - 1, index));
+    const candle = candles[boundedIndex];
+    if (!candle) return { index: boundedIndex, price: rawPrice };
+
+    if (isMagnetActive) {
+      const candidates = [
+        { label: 'Open', val: candle.open },
+        { label: 'High', val: candle.high },
+        { label: 'Low', val: candle.low },
+        { label: 'Close', val: candle.close }
+      ];
+      let closestVal = rawPrice;
+      let minDiff = Infinity;
+      candidates.forEach(c => {
+        const diff = Math.abs(c.val - rawPrice);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestVal = c.val;
+        }
+      });
+      return { index: boundedIndex, price: closestVal };
+    }
+    return { index: boundedIndex, price: rawPrice };
+  };
+
   const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
     if (e.button !== 0) return; // Only process left click dragging
 
@@ -868,6 +2068,45 @@ export default function ChartContainer({
       return;
     }
 
+    if (isDrawingTrendline) {
+      const svg = e.currentTarget;
+      const rect = svg.getBoundingClientRect();
+      const relativeX = e.clientX - rect.left;
+      const relativeY = e.clientY - rect.top;
+
+      const clickIdx = getIndexFromX(relativeX);
+      const clickedPrice = getPriceFromY(relativeY);
+      const snapped = getSnappedPriceAndIndex(clickIdx, clickedPrice);
+
+      if (!trendlineStartPoint) {
+        setTrendlineStartPoint({ xIndex: snapped.index, price: snapped.price });
+      } else {
+        const finalPrice = parseFloat(snapped.price.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5));
+        const finalIdx = snapped.index;
+
+        const newTrend: ManualTrendline = {
+          id: 'tl-' + Date.now(),
+          symbol: symbol,
+          startIdx: trendlineStartPoint.xIndex,
+          startPrice: trendlineStartPoint.price,
+          endIdx: finalIdx,
+          endPrice: finalPrice,
+          color: '#22c55e', // default emerald/green tone
+          style: 'solid'
+        };
+
+        setManualTrendlines(prev => [...prev, newTrend]);
+        setTrendlineStartPoint(null);
+        setTrendlineHoverPoint(null);
+        setIsDrawingTrendline(false);
+
+        if (onLogEventToAdvisor) {
+          onLogEventToAdvisor(`Drew manual trendline for ${symbol} from price ${trendlineStartPoint.price.toFixed(symbol === 'USD/JPY' ? 2 : 4)} to ${finalPrice.toFixed(symbol === 'USD/JPY' ? 2 : 4)}`, livePrice);
+        }
+      }
+      return;
+    }
+
     setIsDragging(true);
     setDragStartX(e.clientX);
     setDragStartOffset(offset);
@@ -876,14 +2115,27 @@ export default function ChartContainer({
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const svg = e.currentTarget;
     const rect = svg.getBoundingClientRect();
+    const relativeX = e.clientX - rect.left;
     const relativeY = e.clientY - rect.top;
     
-    if (relativeY >= padding.top && relativeY <= height - padding.bottom) {
+    if (relativeY >= padding.top && relativeY <= height - padding.bottom &&
+        relativeX >= padding.left && relativeX <= width - padding.right) {
       setCursorY(relativeY);
       setCursorPrice(getPriceFromY(relativeY));
+
+      const hoverIdx = getIndexFromX(relativeX);
+      if (hoverIdx >= 0 && hoverIdx < candles.length) {
+        setCursorX(getX(hoverIdx));
+        setCursorTime(candles[hoverIdx].timestamp);
+      } else {
+        setCursorX(null);
+        setCursorTime(null);
+      }
     } else {
       setCursorY(null);
       setCursorPrice(null);
+      setCursorX(null);
+      setCursorTime(null);
     }
 
     if (isDrawingPriceAlert) {
@@ -891,6 +2143,19 @@ export default function ChartContainer({
         setHoveredY(relativeY);
       } else {
         setHoveredY(null);
+      }
+      return;
+    }
+
+    if (isDrawingTrendline) {
+      if (relativeY >= padding.top && relativeY <= height - padding.bottom &&
+          relativeX >= padding.left && relativeX <= width - padding.right) {
+        const hoverIdx = getIndexFromX(relativeX);
+        const hoverPrice = getPriceFromY(relativeY);
+        const snapped = getSnappedPriceAndIndex(hoverIdx, hoverPrice);
+        setTrendlineHoverPoint({ xIndex: snapped.index, price: snapped.price });
+      } else {
+        setTrendlineHoverPoint(null);
       }
       return;
     }
@@ -912,367 +2177,995 @@ export default function ChartContainer({
     setIsDragging(false);
     setCursorY(null);
     setCursorPrice(null);
+    setCursorX(null);
+    setCursorTime(null);
   };
 
+  const handleTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setDragStartX(touch.clientX);
+      setDragStartOffset(offset);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dragStartX;
+    const candleShift = Math.round(deltaX / xStep);
+    const nextOffset = dragStartOffset + candleShift;
+    const maxOffset = Math.max(0, candles.length - actualVisibleCount);
+    setOffset(Math.min(Math.max(0, nextOffset), maxOffset));
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
+
+  const activeLayersCount = [showFVG, showOB, showIndicators, showNewsOverlay, showLiquidityMap, showVolumeProfile].filter(Boolean).length;
+  const isDrawingActive = isDrawingPriceAlert || isDrawingTrendline || !showCrosshairTool || isMagnetActive;
+  const activeAlertsCount = smartAlerts.filter(a => a.isActive).length;
+
   return (
-    <div id="chart-container-root" className="bg-[#080808] border border-white/10 rounded overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+    <div 
+      id="chart-container-root" 
+      className="bg-[#080808] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative z-15 overflow-hidden select-none"
+      onTouchStart={handleWorkspaceTouchStart}
+      onTouchEnd={handleWorkspaceTouchEnd}
+    >
+      {/* Floating Gesture Swipe HUD Indicator notification overlay */}
+      <AnimatePresence>
+        {swipeFlash && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.85, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: -10 }}
+            transition={{ type: "spring", stiffness: 450, damping: 25 }}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-[#0c0c11]/95 backdrop-blur-md border border-white/10 px-5 py-3 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] flex flex-col items-center justify-center space-y-2 pointer-events-none text-center"
+          >
+            <div className="flex items-center space-x-2">
+              {swipeFlash.type === 'SYMBOL' ? (
+                <div className="p-1.5 bg-amber-500/15 rounded-full border border-amber-500/25 text-amber-400">
+                  <ArrowRightLeft className="w-3.5 h-3.5 animate-pulse" />
+                </div>
+              ) : (
+                <div className="p-1.5 bg-indigo-500/15 rounded-full border border-indigo-500/25 text-indigo-400">
+                  <Sliders className="w-3.5 h-3.5 animate-pulse" />
+                </div>
+              )}
+              <span className="font-mono text-[8px] uppercase tracking-widest text-[#e3e3e3]/40">Horizontal Swipe</span>
+            </div>
+            <div className="text-[12px] font-sans font-black text-white leading-none tracking-tight">
+              {swipeFlash.message}
+            </div>
+            <div className="text-[7.5px] font-mono text-white/30 uppercase tracking-widest flex items-center gap-1.5 pt-0.5 border-t border-white/5 w-full justify-center">
+              <span>Haptic feedback pulse triggered</span>
+              <span className="inline-block w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Consolidated Institutional Terminal Header */}
-      <div id="chart-consolidated-header" className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-white/10 bg-[#0c0c0c]/85 select-none">
+      <div id="chart-consolidated-header" className="flex flex-col gap-3.5 px-3 py-2.5 md:px-6 md:py-3.5 border-b border-white/10 bg-[#0c0c0c]/85 select-none rounded-t-lg">
         
-        {/* Left Hand Indicator: Pair and Info Stream */}
-        <div className="flex items-center space-x-3.5">
-          {/* Overlapping Flags Representation */}
-          <div className="relative w-8 h-8 flex items-center shrink-0">
-            <span className="text-xl absolute left-0 top-0 select-none drop-shadow">
+        {/* ROW 1: Symbol Info & Instant Rates */}
+        <div id="chart-header-row-1" className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full pointer-events-auto">
+          {/* Left Hand Indicator: Pair and Info Stream */}
+          <div className="flex items-center justify-center sm:justify-start space-x-3 w-full sm:w-auto text-center sm:text-left">
+          {/* Overlapping Flags Representation - integrated cleanly */}
+          <div className="relative w-8 h-8 items-center shrink-0 hidden sm:flex bg-white/[0.03] border border-white/5 rounded-full justify-center">
+            <span className="text-[15px] absolute select-none drop-shadow-sm filter saturate-125">
               {symbolEmoji.f1}
             </span>
-            <span className="text-xl absolute right-1 bottom-0 select-none drop-shadow z-10 font-sans">
-              {symbolEmoji.f2}
-            </span>
           </div>
-          <div className="flex flex-col">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-sans leading-none">
-              <span id="tv-pair-heading" className="font-extrabold text-[16px] sm:text-[18px] text-white tracking-tight">{symbol} 4H Stream</span>
-              <span className="text-white/40 text-sm">•</span>
-              <span className="text-xs text-white/80 font-mono tracking-tight font-semibold flex items-center">
+          <div className="flex flex-col items-center sm:items-start">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 font-sans leading-none">
+              {/* Forward-extending Asset Selection Menu */}
+              <div className="relative inline-block text-left" id="tv-pair-selector-dropdown-container">
+                <button
+                  id="tv-pair-heading-trigger"
+                  type="button"
+                  onClick={() => setIsAssetSelectorOpen(!isAssetSelectorOpen)}
+                  className={`group font-mono font-black text-[13px] md:text-[14px] text-white tracking-tight flex items-center gap-2.5 bg-neutral-900/90 border border-white/10 hover:border-indigo-500/40 hover:bg-neutral-850 transition-all px-3 py-2 rounded-lg select-none cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.5)] ${isAssetSelectorOpen ? 'ring-1 ring-indigo-500/30 border-indigo-500/30' : ''}`}
+                >
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs filter saturate-110 drop-shadow-sm select-none">{symbolEmoji.f1} {symbolEmoji.f2}</span>
+                    <span className="text-white hover:text-indigo-300 font-bold tracking-wider">{symbol}</span>
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-white/40 group-hover:text-indigo-400 transition-transform duration-300 ${isAssetSelectorOpen ? 'rotate-180 text-indigo-400' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {isAssetSelectorOpen && (
+                    <>
+                      {/* Transparent global click-away backdrop */}
+                      <div 
+                        className="fixed inset-0 z-[100] bg-transparent"
+                        onClick={() => setIsAssetSelectorOpen(false)}
+                      />
+                      
+                      {/* Cascading Menu */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 12, scale: 0.97 }}
+                        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                        className="absolute left-0 mt-3 w-[34rem] max-w-[calc(100vw-24px)] z-[101] bg-[#0c0c0c]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.95)] flex min-h-[250px] overflow-hidden"
+                      >
+                        {/* Categories panel (Left Column) */}
+                        <div className="w-[165px] border-r border-white/10 bg-[#050505]/90 p-2.5 shrink-0 flex flex-col space-y-1 select-none">
+                          <div className="text-[8px] font-mono font-bold tracking-widest text-white/20 uppercase px-2.5 py-2 border-b border-white/5 mb-1.5 flex items-center gap-1.5">
+                            <Server className="w-3 h-3 text-indigo-400/80" />
+                            <span>Broker Groups</span>
+                          </div>
+                          
+                          {ASSET_CLASSES.map((category) => {
+                            const active = hoveredCategory === category.id;
+                            return (
+                              <button
+                                key={category.id}
+                                type="button"
+                                onMouseEnter={() => setHoveredCategory(category.id)}
+                                onClick={() => setHoveredCategory(category.id)}
+                                className={`w-full text-left px-3 py-2.5 rounded-lg font-mono text-[9.5px] font-bold uppercase transition-all duration-200 flex items-center justify-between group cursor-pointer ${
+                                  active
+                                    ? 'bg-indigo-600/10 text-indigo-300 border-l-2 border-indigo-500 pl-2'
+                                    : 'text-white/40 hover:text-white/80 hover:bg-white/[0.02]'
+                                }`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                    category.id === 'CURRENCIES' ? 'bg-sky-400' :
+                                    category.id === 'INDICES' ? 'bg-purple-400' :
+                                    category.id === 'METALS' ? 'bg-amber-400' : 'bg-emerald-400'
+                                  }`} />
+                                  {category.id}
+                                </span>
+                                <ArrowRight className={`w-3 h-3 text-white/20 transition-transform duration-200 group-hover:translate-x-0.5 ${active ? 'opacity-100 text-indigo-400 scale-105' : 'opacity-40'}`} />
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Sub-assets dynamic panel (Right Column) */}
+                        <div className="flex-1 p-3.5 bg-[#090909]/40 flex flex-col min-h-0 select-none">
+                          {(() => {
+                            const activeCat = ASSET_CLASSES.find(c => c.id === hoveredCategory) || ASSET_CLASSES[0];
+                            return (
+                              <>
+                                {/* Header */}
+                                <div className="border-b border-white/5 pb-2 mb-2 flex items-center justify-between shrink-0">
+                                  <span className="text-[9.5px] uppercase font-mono font-extrabold tracking-wider text-indigo-300 flex items-center gap-1.5">
+                                    <span>{activeCat.label}</span>
+                                  </span>
+                                  <span className="text-[8px] font-mono text-white/30 lowercase font-bold bg-white/[0.03] border border-white/5 py-0.5 px-1.5 rounded-full">
+                                    {activeCat.assets.length} active assets
+                                  </span>
+                                </div>
+
+                                {/* List Grid */}
+                                <div className="grid grid-cols-2 gap-2 overflow-y-auto custom-scrollbar flex-1 pr-0.5 animate-fade-in-shorter">
+                                  {activeCat.assets.map((sym) => {
+                                    const selected = symbol === sym;
+                                    const flags = FLAG_EMOJIS[sym] || { f1: '🌎', f2: '💵' };
+                                    const friendly = FRIENDLY_NAMES[sym] || sym;
+                                    
+                                    // Mock dynamic institutional information
+                                    const mockSpreads: Record<string, string> = {
+                                      'EUR/USD': '0.1 pips', 'GBP/USD': '0.3 pips', 'USD/JPY': '0.2 pips', 'AUD/USD': '0.4 pips', 'EUR/GBP': '0.3 pips',
+                                      'US30': '1.2 pts', 'NAS100': '0.8 pts', 'GER40': '1.0 pts', 'SPX500': '0.3 pts',
+                                      'GOLD/USD': '12¢ spread', 'SILVER/USD': '0.8¢ spread',
+                                      'BTC/USDT': '0.01% fee', 'ETH/USDT': '0.01% fee', 'SOL/USDT': '0.02% fee'
+                                    };
+                                    const mockSpread = mockSpreads[sym] || '0.1 pips';
+
+                                    return (
+                                      <button
+                                        key={sym}
+                                        type="button"
+                                        onClick={() => {
+                                          if (onSymbolChange) {
+                                            onSymbolChange(sym);
+                                          }
+                                          setIsAssetSelectorOpen(false);
+                                        }}
+                                        className={`p-2 border rounded-xl text-left transition-all hover:bg-neutral-800/40 hover:border-white/10 flex flex-col justify-between h-[58px] cursor-pointer relative ${
+                                          selected
+                                            ? 'bg-indigo-600/10 border-indigo-500/40 text-white shadow-[0_4px_16px_rgba(99,102,241,0.08)]'
+                                            : 'bg-white/[0.015] border-white/5 text-white/70 hover:text-white'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-[11px] font-mono font-bold tracking-tight uppercase flex items-center gap-1.5">
+                                            <span className="text-[13px] filter saturate-110 drop-shadow-sm select-none">{flags.f1} {flags.f2}</span>
+                                            {sym}
+                                          </span>
+                                          {selected ? (
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
+                                          ) : (
+                                            <span className="text-[7px] font-mono text-white/20 group-hover:text-white/40">{mockSpread}</span>
+                                          )}
+                                        </div>
+                                        
+                                        <div className="text-[7.5px] font-sans text-white/30 truncate uppercase mt-1 leading-none font-medium">
+                                          {friendly}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Custom Timeframe Selector Dropdown */}
+              <div className="relative inline-block text-left" id="tv-timeframe-dropdown-container">
+                <button
+                  id="tv-timeframe-selector-trigger"
+                  type="button"
+                  onClick={() => setIsTimeframeSelectorOpen(!isTimeframeSelectorOpen)}
+                  className={`group font-mono font-black text-[11px] md:text-[12px] text-white tracking-tight flex items-center gap-2 bg-neutral-900/90 border border-white/10 hover:border-indigo-500/40 hover:bg-neutral-850 transition-all px-2.5 py-1.5 rounded-lg select-none cursor-pointer h-7 md:h-8 shadow-[0_4px_12px_rgba(0,0,0,0.5)] ${isTimeframeSelectorOpen ? 'ring-1 ring-indigo-500/30 border-indigo-500/30' : ''}`}
+                  title="Select Chart Analysis Timeframe"
+                >
+                  <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  <span className="text-white hover:text-indigo-300 font-bold select-none uppercase">{selectedTimeframe}</span>
+                  <ChevronDown className={`w-3 h-3 text-white/40 group-hover:text-indigo-400 transition-transform duration-300 ${isTimeframeSelectorOpen ? 'rotate-180 text-indigo-400' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {isTimeframeSelectorOpen && (
+                    <>
+                      {/* Transparent click-away backdrop */}
+                      <div 
+                        className="fixed inset-0 z-[100] bg-transparent"
+                        onClick={() => setIsTimeframeSelectorOpen(false)}
+                      />
+                      
+                      {/* Dropdown Menu */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                        transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                        className="absolute left-0 mt-2 w-44 z-[101] bg-[#0c0c0c]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.85)] p-1.5 space-y-0.5 text-left"
+                      >
+                        <div className="text-[8px] font-mono font-bold tracking-widest text-white/20 uppercase px-2 py-1 select-none border-b border-white/5 mb-1 flex items-center gap-1.5">
+                          <Clock className="w-2.5 h-2.5 text-indigo-400/80" />
+                          <span>Resolutions</span>
+                        </div>
+                        {[
+                          { id: 'M15', label: '15 Minutes', dicon: '15m' },
+                          { id: 'H1', label: '1 Hour', dicon: '1h' },
+                          { id: 'H4', label: '4 Hours', dicon: '4h' },
+                          { id: 'D1', label: 'Daily (1D)', dicon: '1d' }
+                        ].map((tf) => {
+                          const selected = selectedTimeframe === tf.id;
+                          return (
+                            <button
+                              key={tf.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedTimeframe(tf.id as any);
+                                setIsTimeframeSelectorOpen(false);
+                                if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+                                  navigator.vibrate(8);
+                                }
+                              }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg font-mono text-[9.5px] font-bold uppercase transition-all duration-150 flex items-center justify-between cursor-pointer ${
+                                selected
+                                  ? 'bg-indigo-600/10 text-indigo-300 border-l-2 border-indigo-500 pl-2'
+                                  : 'text-white/40 hover:text-white/80 hover:bg-white/[0.02]'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className={`inline-block w-1.5 h-1.5 rounded-full ${selected ? 'bg-indigo-400 shadow-[0_0_6px_#818cf8]' : 'bg-transparent border border-white/25'}`} />
+                                {tf.label}
+                              </span>
+                              <span className="text-[7.5px] text-white/35 font-semibold bg-white/[0.03] border border-white/5 px-1 rounded">{tf.dicon}</span>
+                            </button>
+                          );
+                        })}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+              
+              {/* OANDA FEED ON THE VERY TOP */}
+              <div className="relative group cursor-help z-30 font-mono">
+                {isMt5Active ? (
+                  <span className="flex items-center text-emerald-400 font-extrabold uppercase bg-emerald-500/10 border border-emerald-500/25 hover:border-emerald-500/50 px-2 py-0.5 rounded text-[8.5px] tracking-wider transition-all h-5.5 select-none cursor-pointer">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1 animate-ping shrink-0" />
+                    MT5 INSTITUTIONAL
+                  </span>
+                ) : (
+                  <span className="text-indigo-300 hover:text-indigo-200 font-bold uppercase tracking-wider bg-indigo-500/10 border border-indigo-500/25 hover:border-indigo-500/50 px-2 py-0.5 rounded text-[8.5px] transition-all flex items-center gap-1.5 h-5.5 select-none cursor-pointer duration-200">
+                    <span className="relative flex h-1.5 w-1.5 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-70"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-400"></span>
+                    </span>
+                    <Server className="w-3 h-3 text-indigo-400 shrink-0" />
+                    <span className="uppercase font-bold text-[8.5px] tracking-wider text-indigo-200">Oanda Feed</span>
+                  </span>
+                )}
+                
+                {/* Hover Tooltip Details for Feed Provider - opens downwards because it is at the very top */}
+                <div className="absolute top-full left-0 mt-2 p-3 bg-[#0d0d11]/95 border border-white/15 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.9)] text-left leading-tight z-50 w-[240px] pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
+                    <span className="text-white font-bold text-[9.5px] flex items-center gap-1.5">
+                      <Server className="w-3.5 h-3.5 text-indigo-400" /> Liquidity feed provider
+                    </span>
+                    <span className="text-white/40 text-[7px] uppercase tracking-wider">Gateway S9</span>
+                  </div>
+                  <div className="space-y-1.5 text-white/75 text-[9px]">
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Feed Endpoint:</span>
+                      <span className="font-semibold text-white">{isMt5Active ? 'MetaTrader 5 Bridge' : `${feedSource} API`}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Gateway Security:</span>
+                      <span className="text-emerald-400 font-bold font-mono">TLS 1.3 Secure</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Heartbeat SLA:</span>
+                      <span className="text-white font-semibold">99.999% Guaranteed</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Refresh Rate:</span>
+                      <span className="text-white font-mono font-bold text-emerald-400 animate-pulse">Ticks under 15ms</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-white/5 pt-1.5 mt-2 text-[8px] text-white/30">
+                    High throughput premium connection feed.
+                  </div>
+                </div>
+              </div>
+
+              <span id="tv-pair-heading-dot" className="text-white/20 select-none hidden sm:inline-flex">•</span>
+              <span className="text-[9.5px] text-white/50 font-mono tracking-tight font-semibold items-center bg-white/[0.02] border border-white/5 px-2 py-0.5 rounded-md hidden sm:inline-flex">
                 {pairName}
               </span>
             </div>
-            
-            {/* Stream & Confluence Metadata */}
-            <p className="text-[10.5px] text-white/45 font-mono mt-1 flex flex-wrap items-center gap-1.5 leading-none">
-              <span>Live Price Action</span>
-              <span className="text-white/25">•</span>
-              <span>HTF Confluence</span>
-              <span className="text-white/25">•</span>
-              {isMt5Active ? (
-                <span className="flex items-center text-emerald-400 font-extrabold uppercase bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[9px]">
-                  <span className="h-1 w-1 rounded bg-emerald-400 mr-1 animate-ping shrink-0" />
-                  MT5 LIVE
-                </span>
-              ) : (
-                <span className="text-indigo-400 font-bold uppercase tracking-wider bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[9px]">{feedSource} FEED</span>
-              )}
-            </p>
           </div>
         </div>
 
-        {/* Center: Realtime SELL / BUY Interactive Rates Container */}
-        <div className="flex items-center space-x-2 font-sans md:mx-auto">
-          {/* SELL BUTTON */}
-          <div className="relative flex flex-col items-center">
-            <div className={`px-3.5 py-1 bg-[#050505] border ${
-              lastTickDir === 'DOWN' ? 'border-rose-500 bg-rose-500/10 shadow-[0_0_12px_rgba(239,68,68,0.15)]' : 'border-rose-500/20'
-            } rounded transition-all duration-150 w-[96px] text-center flex flex-col justify-center leading-none hover:border-rose-500/60 cursor-pointer`}>
-              <div id="tv-sell-rate" className="text-rose-500 font-bold text-[13px] font-mono tracking-tight flex items-baseline justify-center">
-                <span>{formattedSell.substring(0, formattedSell.length - 1)}</span>
-                <span className="text-[10px] font-extrabold">{formattedSell.substring(formattedSell.length - 1)}</span>
+        {/* ROW 1 RIGHT SECTION */}
+        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-4 shrink-0 pointer-events-auto">
+          <div className="flex items-center space-x-1.5 md:space-x-2 font-sans">
+            {/* SELL BUTTON */}
+            <div className="relative flex flex-col items-center">
+              <div className={`px-2 py-1 md:px-3.5 md:py-1 bg-[#050505] border ${
+                lastTickDir === 'DOWN' ? 'border-rose-500 bg-rose-500/10 shadow-[0_0_12px_rgba(239,68,68,0.15)]' : 'border-rose-500/20'
+              } rounded transition-all duration-150 w-[78px] md:w-[96px] text-center flex flex-col justify-center leading-none hover:border-rose-500/60 cursor-pointer`}>
+                <div id="tv-sell-rate" className="text-rose-500 font-bold text-[11px] md:text-[13px] font-mono tracking-tight flex items-baseline justify-center">
+                  <span>{formattedSell.substring(0, formattedSell.length - 1)}</span>
+                  <span className="text-[8px] md:text-[10px] font-extrabold">{formattedSell.substring(formattedSell.length - 1)}</span>
+                </div>
+                <span className="text-[6.5px] md:text-[7.5px] uppercase tracking-wider font-bold text-rose-500/50 mt-0.5">SELL</span>
               </div>
-              <span className="text-[7.5px] uppercase tracking-wider font-bold text-rose-500/50 mt-0.5">SELL</span>
+            </div>
+
+            {/* SPREAD INDICATOR */}
+            <div className="flex flex-col items-center justify-center px-1 md:px-1.5 py-0.5 text-[9px] md:text-[10px] font-mono font-semibold text-white/45 border border-white/5 bg-[#050505] rounded min-w-[36px] md:min-w-[48px] h-[30px] md:h-[34px]">
+              <span className="text-[6px] md:text-[7px] uppercase tracking-tighter text-white/30 font-sans block leading-none">Spread</span>
+              <span id="tv-spread-val" className="text-[#999999] text-[9.5px] md:text-[10px] font-bold leading-none mt-0.5">{liveSpread.toFixed(1)}</span>
+            </div>
+
+            {/* BUY BUTTON */}
+            <div className="relative flex flex-col items-center">
+              <div className={`px-2 py-1 md:px-3.5 md:py-1 bg-[#050505] border ${
+                lastTickDir === 'UP' ? 'border-sky-500 bg-sky-500/10 shadow-[0_0_12px_rgba(14,165,233,0.15)]' : 'border-sky-500/20'
+              } rounded transition-all duration-150 w-[78px] md:w-[96px] text-center flex flex-col justify-center leading-none hover:border-sky-500/60 cursor-pointer`}>
+                <div id="tv-buy-rate" className="text-sky-500 font-bold text-[11px] md:text-[13px] font-mono tracking-tight flex items-baseline justify-center">
+                  <span>{formattedBuy.substring(0, formattedBuy.length - 1)}</span>
+                  <span className="text-[8px] md:text-[10px] font-extrabold">{formattedBuy.substring(formattedBuy.length - 1)}</span>
+                </div>
+                <span className="text-[6.5px] md:text-[7.5px] uppercase tracking-wider font-bold text-sky-500/50 mt-0.5">BUY</span>
+              </div>
             </div>
           </div>
 
-          {/* SPREAD INDICATOR */}
-          <div className="flex flex-col items-center justify-center px-1.5 py-0.5 text-[10px] font-mono font-semibold text-white/45 border border-white/5 bg-[#050505] rounded min-w-[48px] h-[34px]">
-            <span className="text-[7px] uppercase tracking-tighter text-white/30 font-sans block leading-none">Spread</span>
-            <span id="tv-spread-val" className="text-[#999999] text-[10px] font-bold leading-none mt-0.5">{liveSpread.toFixed(1)}</span>
-          </div>
-
-          {/* BUY BUTTON */}
-          <div className="relative flex flex-col items-center">
-            <div className={`px-3.5 py-1 bg-[#050505] border ${
-              lastTickDir === 'UP' ? 'border-sky-500 bg-sky-500/10 shadow-[0_0_12px_rgba(14,165,233,0.15)]' : 'border-sky-500/20'
-            } rounded transition-all duration-150 w-[96px] text-center flex flex-col justify-center leading-none hover:border-sky-500/60 cursor-pointer`}>
-              <div id="tv-buy-rate" className="text-sky-500 font-bold text-[13px] font-mono tracking-tight flex items-baseline justify-center">
-                <span>{formattedBuy.substring(0, formattedBuy.length - 1)}</span>
-                <span className="text-[10px] font-extrabold">{formattedBuy.substring(formattedBuy.length - 1)}</span>
-              </div>
-              <span className="text-[7.5px] uppercase tracking-wider font-bold text-sky-500/50 mt-0.5">BUY</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Hand: Ticking Stats + Multi-Layer Overlays Toggles */}
-        <div className="flex flex-wrap items-center gap-3">
           {/* Live Feed Ticking rate metric */}
-          <div className="bg-[#050505] border border-white/5 rounded px-2.5 py-1 flex items-center space-x-2 font-mono h-[34px]">
-            <span className="text-[8.5px] text-white/40 uppercase tracking-wider flex items-center leading-none">
-              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${lastTickDir === 'UP' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+          <div className="hidden sm:flex bg-neutral-900/90 border border-white/10 rounded-lg px-3 py-1.5 items-center space-x-2.5 font-mono h-[38px] shadow-[0_4px_12px_rgba(0,0,0,0.4)]">
+            <span className="text-[9px] text-white/40 uppercase tracking-wider flex items-center leading-none font-bold">
+              <span className={`inline-block w-1.5 h-1.5 rounded-full mr-2 ${lastTickDir === 'UP' ? 'bg-emerald-400 shadow-[0_0_6px_#10b981]' : 'bg-rose-400 shadow-[0_0_6px_#f43f5e]'}`} />
               Ticks
             </span>
-            <span id="tv-ticks-live" className="text-[11px] font-mono text-emerald-400/95 font-bold leading-none">
+            <span id="tv-ticks-live" className="text-[11px] font-mono text-emerald-400/95 font-black leading-none">
               {(ticksCount / 1000).toFixed(1)}K
             </span>
           </div>
+        </div>
+      </div>
 
-          {/* Quick Indicator Control Dock */}
-          <div className="flex items-center space-x-1 p-1 bg-[#050505] rounded border border-white/5 h-[34px]">
+      {/* ROW 2: Resolution selection & Overlay toggles dropdowns */}
+      <div id="chart-header-row-2" className="flex flex-row items-center justify-between gap-3 w-full border-t border-white/[0.05] pt-3 pointer-events-auto flex-wrap">
+        {/* Left Hand: Timeframe pills + stream badges */}
+        <div className="flex flex-wrap items-center gap-3">
+
+
+              {/* Stream & Confluence Metadata - Fitted on the second row next to the resolution pills */}
+              <div className="hidden md:flex flex-wrap items-center gap-2.5">
+                
+                {/* 1. Live Price Action Badge with Interactive Hover Details */}
+                <div className="relative group cursor-help z-30">
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:border-indigo-500/30 hover:bg-white/[0.07] transition-all text-[#e5e5e5]/80 h-5.5">
+                    <span className="relative flex h-1.5 w-1.5 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                    </span>
+                    <span className="uppercase font-bold text-[8.5px] tracking-wider text-white/95">Live Price Action</span>
+                    <span className="text-white/30 text-[8px] font-sans">|</span>
+                    <span className={`text-[8.5px] font-extrabold flex items-center ${
+                      (metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'text-emerald-400' : (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'text-[#ff5555]' : 'text-amber-400'
+                    }`}>
+                      {(metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'BULLISH ↗' : (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'BEARISH ↘' : 'RANGE ⇌'}
+                    </span>
+                  </span>
+                  
+                  {/* Hover Tooltip Details for Price Action */}
+                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0d0d11]/95 border border-white/15 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.9)] text-left leading-tight z-50 w-[240px] pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
+                      <span className="text-white font-bold text-[9.5px] flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5 text-indigo-400" /> Live Market Feed
+                      </span>
+                      <span className="text-emerald-400 text-[8px] font-bold uppercase tracking-widest bg-emerald-500/10 px-1 py-0.5 rounded">Active</span>
+                    </div>
+                    <div className="space-y-1.5 text-white/75">
+                      <div className="flex justify-between">
+                        <span className="text-white/40">Active Symbol:</span>
+                        <span className="font-bold text-white">{symbol}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/40">Resolution:</span>
+                        <span className="font-semibold text-white">4-Hour (H4) stream</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/40">ATR Volatility:</span>
+                        <span className="font-bold text-white font-mono">{(metrics?.atr || 0).toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/40">Heartbeat State:</span>
+                        <span className="text-emerald-400 font-semibold">Healthy & Streaming</span>
+                      </div>
+                    </div>
+                    <div className="border-t border-white/5 pt-1.5 mt-2 text-[8px] text-white/30 italic">
+                      Updated live at millisecond interval rates.
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. HTF Confluence Badge with Technical Checklist */}
+                <div className="relative group cursor-help z-30">
+                  <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all text-[8.5px] font-bold uppercase tracking-wider h-5.5 duration-200 ${
+                    (metrics?.dailyBias || 'BULLISH') === (metrics?.trend || 'NEUTRAL')
+                      ? 'bg-emerald-500/10 border-emerald-500/25 hover:border-emerald-500/50 text-emerald-400'
+                      : 'bg-indigo-500/10 border-indigo-500/25 hover:border-indigo-500/50 text-indigo-300'
+                  }`}>
+                    <span className="relative flex h-1.5 w-1.5 shrink-0">
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-70 ${
+                        (metrics?.dailyBias || 'BULLISH') === (metrics?.trend || 'NEUTRAL') ? 'bg-emerald-400' : 'bg-indigo-400'
+                      }`}></span>
+                      <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
+                        (metrics?.dailyBias || 'BULLISH') === (metrics?.trend || 'NEUTRAL') ? 'bg-emerald-400' : 'bg-indigo-400'
+                      }`}></span>
+                    </span>
+                    <Zap className="w-3 h-3 text-indigo-400 shrink-0" />
+                    <span className="uppercase font-bold text-[8.5px] tracking-wider text-white/95">Confluence</span>
+                    <span className="text-white/30 text-[8px] font-sans">|</span>
+                    <span className="text-[8.5px] font-extrabold flex items-center">
+                      {(metrics?.dailyBias || 'BULLISH') === 'BULLISH' && (metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'STRONG BUY ⚡' :
+                       (metrics?.dailyBias || 'BULLISH') === 'BEARISH' && (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'STRONG SELL ⚡' :
+                       (metrics?.dailyBias || 'BULLISH') === 'BULLISH' ? 'BUY BIAS ↗' : 'SELL BIAS ↘'}
+                    </span>
+                  </span>
+                  
+                  {/* Hover Tooltip Details for HTF Confluence */}
+                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0d0d11]/95 border border-white/15 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.9)] text-left leading-tight z-50 w-[240px] pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
+                      <span className="text-white font-bold text-[9.5px] flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-amber-400" /> HTF Confluence Audit
+                      </span>
+                      <span className="text-white/40 text-[7px] uppercase tracking-wider">Multi-Timeframe</span>
+                    </div>
+                    
+                    {/* Confluence Checklist */}
+                    <div className="space-y-1.5 text-white/75 uppercase text-[8.5px]">
+                      <div className="flex items-center justify-between pb-1 border-b border-white/[0.03]">
+                        <span className="text-white/40">Dual H4 Bias:</span>
+                        <span className={`font-bold px-1 rounded text-[8px] ${
+                          (metrics?.dailyBias || 'BULLISH') === 'BULLISH' ? 'text-emerald-400 bg-emerald-500/10' : 'text-[#ff5555] bg-[#ff5555]/10'
+                        }`}>
+                          {metrics?.dailyBias || 'BULLISH'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pb-1 border-b border-white/[0.03]">
+                        <span className="text-white/40">Current 4H Trend:</span>
+                        <span className={`font-bold px-1 rounded text-[8px] ${
+                          (metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'text-emerald-400 bg-emerald-500/10' : (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'text-[#ff5555] bg-[#ff5555]/10' : 'text-amber-400 bg-amber-500/10'
+                        }`}>
+                          {metrics?.trend || 'NEUTRAL'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pb-1 border-b border-white/[0.03]">
+                        <span className="text-white/40">Momentum RSI:</span>
+                        <span className={`font-bold ${
+                          (metrics?.rsi || 50) > 70 ? 'text-[#ff5555]' : (metrics?.rsi || 50) < 30 ? 'text-emerald-400' : 'text-white'
+                        }`}>
+                          {(metrics?.rsi || 50).toFixed(1)} &middot; {(metrics?.rsi || 50) > 70 ? 'Overbought' : (metrics?.rsi || 50) < 30 ? 'Oversold' : 'Balanced'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/40">Active Order Blocks:</span>
+                        <span className="font-semibold text-white">{(obs || []).length > 0 ? `${(obs || []).length} Blocks` : 'None detected'}</span>
+                      </div>
+                    </div>
+                    <div className="border-t border-white/5 pt-1.5 mt-2 flex items-center justify-between text-[8px]">
+                      <span className="text-white/30">Alignment Confidence:</span>
+                      <span className="text-indigo-400 font-bold font-mono">
+                        {(metrics?.dailyBias || 'BULLISH') === (metrics?.trend || 'NEUTRAL') ? '92% Strong Alignment' : '65% Divergent Mode'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Institutional Bias Badge with interactive details */}
+                <div className="relative group cursor-help z-30 font-mono">
+                  <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all text-[8.5px] font-bold uppercase tracking-wider h-5.5 duration-200 ${
+                    metrics?.dailyBias === 'BULLISH'
+                      ? 'bg-emerald-500/10 border-emerald-500/25 hover:border-emerald-500/50 text-emerald-400'
+                      : 'bg-rose-500/10 border-rose-500/25 hover:border-rose-500/50 text-rose-400'
+                  }`}>
+                    <span className="relative flex h-1.5 w-1.5 shrink-0">
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-70 ${
+                        metrics?.dailyBias === 'BULLISH' ? 'bg-emerald-400' : 'bg-rose-400'
+                      }`}></span>
+                      <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
+                        metrics?.dailyBias === 'BULLISH' ? 'bg-emerald-400' : 'bg-rose-400'
+                      }`}></span>
+                    </span>
+                    <TrendingUp className={`w-3 h-3 shrink-0 ${metrics?.dailyBias === 'BULLISH' ? 'text-emerald-400' : 'text-rose-400'}`} />
+                    <span className="uppercase font-bold text-[8.5px] tracking-wider text-white/95">Bias</span>
+                    <span className="text-white/30 text-[8px] font-sans">|</span>
+                    <span className="text-[8.5px] font-extrabold flex items-center">
+                      {metrics?.dailyBias} (50 EMA)
+                    </span>
+                  </span>
+                  
+                  {/* Hover Tooltip Details for Trend Bias & Gauge & Alarm */}
+                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0d0d11]/95 border border-white/15 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.9)] text-left leading-tight z-50 w-[270px] pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
+                      <span className="text-white font-bold text-[9.5px] flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5 text-indigo-400" /> Institutional Bias Audit
+                      </span>
+                      <span className="text-white/40 text-[7px] uppercase tracking-wider">50-Period EMA</span>
+                    </div>
+                    
+                    <div className="space-y-2 text-white/75">
+                      <div className="flex justify-between">
+                        <span className="text-white/40 font-semibold uppercase text-[8px]">Direction:</span>
+                        <span className={`font-black uppercase tracking-wider ${
+                          metrics?.dailyBias === 'BULLISH' ? 'text-emerald-400' : 'text-rose-400'
+                        }`}>
+                          {metrics?.dailyBias} (50 EMA)
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/40 font-semibold uppercase text-[8px]">EMA Gap:</span>
+                        <span className="font-bold text-white font-mono">{trendIntensity.displayDistance}</span>
+                      </div>
+
+                      {/* Progress Bar / Gauge */}
+                      <div className="flex flex-col space-y-1 bg-white/[0.02] border border-white/5 rounded p-1.5">
+                        <div className="flex justify-between items-center text-[7.5px] text-white/50">
+                          <span className="font-bold">MOMENTUM STRENGTH</span>
+                          <span className="font-bold text-white">{trendIntensity.percent}% ({trendIntensity.label})</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden relative">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              metrics?.dailyBias === 'BULLISH' ? 'bg-emerald-500' : 'bg-rose-500'
+                            }`}
+                            style={{ width: `${trendIntensity.percent}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Audible Momentum Alarm Action */}
+                      <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
+                        <span className="text-white/40 font-semibold uppercase text-[8px]">Momentum Alarm:</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setIsAlarmEnabled(!isAlarmEnabled);
+                          }}
+                          className={`flex items-center space-x-1 px-1.5 py-0.5 rounded border transition-all pointer-events-auto cursor-pointer ${
+                            isAlarmEnabled
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 font-bold'
+                              : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10 hover:text-white/60'
+                          }`}
+                        >
+                          {isAlarmEnabled ? <Volume2 className="w-2.5 h-2.5 text-amber-300 animate-pulse" /> : <VolumeX className="w-2.5 h-2.5 text-white/40" />}
+                          <span className="text-[7.5px] font-bold uppercase tracking-wider">{isAlarmEnabled ? 'ACTIVE: ON' : 'OFF'}</span>
+                        </button>
+                      </div>
+
+                      {/* Mean Reversion Signal Info (from original) */}
+                      {trendIntensity.percent >= 70 && (
+                        <div className="flex items-center space-x-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded text-[8.5px] text-amber-300 font-bold tracking-tight animate-pulse transition-all">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                          </span>
+                          <span>OVEREXTENDED (MEAN REVERSION RISK)</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+        {/* ROW 2 RIGHT SECTION: Multi-Layer Overlays & Draw utilities */}
+        <div className="flex items-center justify-center sm:justify-end gap-2.5 sm:gap-3 pointer-events-auto shrink-0">
+          
+          {/* Consolidated LAYERS AND OVERLAYS Dropdown */}
+          <div className="relative pointer-events-auto">
             <button
-              id="toggle-fvg"
-              onClick={() => setShowFVG(!showFVG)}
-              className={`px-2.5 py-1 rounded text-[10px] font-mono transition-all font-bold cursor-pointer h-full flex items-center justify-center ${
-                showFVG 
-                  ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30' 
-                  : 'text-white/30 hover:text-white/60 hover:bg-white/[0.02]'
+              id="dropdown-layers-trigger"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsLayersDropdownOpen(!isLayersDropdownOpen);
+                setIsDrawDropdownOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:border-indigo-500/30 hover:bg-white/[0.07] transition-all text-[#e5e5e5]/80 h-5.5 outline-none select-none cursor-pointer duration-200 ${
+                isLayersDropdownOpen ? 'border-indigo-500/40 bg-indigo-500/10' : ''
               }`}
-              title="Fair Value Gap Imbalances"
+              title="Toggle Chart Layers & Structural Overlays (OB, FVG, EMA, News, Liquidity, etc.)"
             >
-              FVG
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                {activeLayersCount > 0 && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-70"></span>
+                )}
+                <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${activeLayersCount > 0 ? 'bg-indigo-400' : 'bg-white/25'}`}></span>
+              </span>
+              <Eye className="w-3 h-3 text-indigo-400 shrink-0" />
+              <span className="uppercase font-bold text-[8.5px] tracking-wider text-white/95">Layers</span>
+              <span className="text-white/30 text-[8px] font-sans">|</span>
+              <span className={`text-[8.5px] font-extrabold flex items-center ${
+                activeLayersCount > 0 ? 'text-indigo-400' : 'text-white/45'
+              }`}>
+                {activeLayersCount > 0 ? `${activeLayersCount} ACTIVE` : 'STANDARD'}
+              </span>
+              <ChevronDown className={`w-2.5 h-2.5 text-white/40 transition-transform duration-200 ${isLayersDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
-            <button
-              id="toggle-ob"
-              onClick={() => setShowOB(!showOB)}
-              className={`px-2.5 py-1 rounded text-[10px] font-mono transition-all font-bold cursor-pointer h-full flex items-center justify-center ${
-                showOB 
-                  ? 'bg-amber-600/20 text-amber-300 border border-amber-500/30' 
-                  : 'text-white/30 hover:text-white/60 hover:bg-white/[0.02]'
-              }`}
-              title="Institutional Order Blocks"
-            >
-              OB
-            </button>
-            <button
-              id="toggle-indicators"
-              onClick={() => setShowIndicators(!showIndicators)}
-              className={`px-2.5 py-1 rounded text-[10px] font-mono transition-all font-bold cursor-pointer h-full flex items-center justify-center ${
-                showIndicators 
-                  ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30' 
-                  : 'text-white/30 hover:text-white/60 hover:bg-white/[0.02]'
-              }`}
-              title="50 EMA & 200 SMA Confluence Lines"
-            >
-              EMA/SMA
-            </button>
-            <button
-              id="toggle-news-overlay"
-              onClick={() => setShowNewsOverlay(!showNewsOverlay)}
-              className={`px-2.5 py-1 rounded text-[10px] font-mono transition-all font-bold cursor-pointer h-full flex items-center justify-center ${
-                showNewsOverlay 
-                  ? 'bg-rose-600/20 text-rose-300 border border-rose-500/30' 
-                  : 'text-white/30 hover:text-white/60 hover:bg-white/[0.02]'
-              }`}
-              title="Overlay Macro News flags on the chart timeline"
-            >
-              NEWS
-            </button>
-            <button
-              id="toggle-liquidity-map"
-              onClick={() => setShowLiquidityMap(!showLiquidityMap)}
-              className={`px-2.5 py-1 rounded text-[10px] font-mono transition-all font-bold cursor-pointer h-full flex items-center justify-center ${
-                showLiquidityMap 
-                  ? 'bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30' 
-                  : 'text-white/30 hover:text-white/60 hover:bg-white/[0.02]'
-              }`}
-              title="Liquidity pools stop-loss density heatmap (swing extrema)"
-            >
-              LIQ MAP
-            </button>
+
+            {isLayersDropdownOpen && (
+              <div 
+                id="dropdown-layers-menu"
+                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d]/95 backdrop-blur-md border border-white/15 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.85)] z-50 p-1.5 space-y-0.5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-b border-white/5 mb-1.5">
+                  Visibility Layers
+                </div>
+
+                <button
+                  onClick={() => setShowFVG(!showFVG)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showFVG ? 'bg-indigo-400 shadow-[0_0_6px_#818cf8]' : 'bg-transparent border border-white/30'}`} />
+                    Fair Value Gaps (FVG)
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showFVG ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-white/30'}`}>
+                    {showFVG ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowOB(!showOB)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showOB ? 'bg-amber-400 shadow-[0_0_6px_#fbbf24]' : 'bg-transparent border border-white/30'}`} />
+                    Order Blocks (OB)
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showOB ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-white/30'}`}>
+                    {showOB ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowIndicators(!showIndicators)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showIndicators ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]' : 'bg-transparent border border-white/30'}`} />
+                    EMA/SMA Averages
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showIndicators ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-white/30'}`}>
+                    {showIndicators ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowLiquidityMap(!showLiquidityMap)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showLiquidityMap ? 'bg-yellow-400 shadow-[0_0_6px_#facc15]' : 'bg-transparent border border-white/30'}`} />
+                    Liquidity Heatmap
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showLiquidityMap ? 'bg-yellow-500/20 text-yellow-300' : 'bg-white/5 text-white/30'}`}>
+                    {showLiquidityMap ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowVolumeProfile(!showVolumeProfile)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showVolumeProfile ? 'bg-indigo-300 shadow-[0_0_6px_#a5b4fc]' : 'bg-transparent border border-white/30'}`} />
+                    Volume Profile
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showVolumeProfile ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-white/30'}`}>
+                    {showVolumeProfile ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowNewsOverlay(!showNewsOverlay)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showNewsOverlay ? 'bg-rose-400 shadow-[0_0_6px_#f87171]' : 'bg-transparent border border-white/30'}`} />
+                    Timeline News flags
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showNewsOverlay ? 'bg-rose-500/20 text-rose-300' : 'bg-white/5 text-white/30'}`}>
+                    {showNewsOverlay ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <div className="border-t border-white/5 my-1.5 pt-1.5" />
+
+                <button
+                  onClick={() => setIsOneClickActive(!isOneClickActive)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/85 font-semibold">
+                    <Zap className={`w-3.5 h-3.5 ${isOneClickActive ? 'fill-amber-400 text-amber-400 animate-pulse' : 'text-white/40'}`} />
+                    One-Click Executions
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${isOneClickActive ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-white/30'}`}>
+                    {isOneClickActive ? 'ENABLED' : 'DISABLED'}
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Visual ALERT DRAW INITIATOR Tool Button */}
-          <button
-            id="toggle-draw-alert"
-            onClick={() => {
-              setIsDrawingPriceAlert(!isDrawingPriceAlert);
-              if (!isDrawingPriceAlert) {
-                setIsAlertsOpen(true); // Auto-open the sidebar drawer to show the visual alerts checklist
-              }
-            }}
-            className={`px-3 py-1 rounded text-[10px] font-mono font-bold flex items-center gap-1.5 cursor-pointer h-[34px] border transition-all pointer-events-auto shrink-0 ${
-              isDrawingPriceAlert
-                ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.35)] font-bold animate-pulse'
-                : 'bg-[#050505] text-white/50 hover:text-white/80 border-white/10 hover:bg-white/5'
-            }`}
-            title="Click here, then click anywhere on the chart canvas to set a horizontal price level crossing alert (ESC to cancel)"
-          >
-            <Bell className={`w-3.5 h-3.5 ${isDrawingPriceAlert ? 'text-black stroke-[2.5px]' : 'text-white/45'}`} />
-            <span className="uppercase tracking-tight text-[10px]">
-              {isDrawingPriceAlert ? 'MAPPING LEVEL...' : 'Set Alert Line'}
-            </span>
-          </button>
+          {/* Consolidated DRAWING AND UTILITIES Dropdown */}
+          <div className="relative pointer-events-auto">
+            <button
+              id="dropdown-draw-trigger"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDrawDropdownOpen(!isDrawDropdownOpen);
+                setIsLayersDropdownOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:border-emerald-500/35 hover:bg-white/[0.07] transition-all text-[#e5e5e5]/80 h-5.5 outline-none select-none cursor-pointer duration-200 ${
+                isDrawDropdownOpen ? 'border-emerald-500/40 bg-emerald-500/10' : ''
+              }`}
+              title="Set price levels alerts, diagonal trendlines, guides snap modes"
+            >
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                {isDrawingActive && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70"></span>
+                )}
+                <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${isDrawingActive ? 'bg-emerald-400' : 'bg-white/25'}`}></span>
+              </span>
+              <TrendingUp className="w-3 h-3 text-emerald-400 shrink-0" />
+              <span className="uppercase font-bold text-[8.5px] tracking-wider text-white/95">Draw</span>
+              <span className="text-white/30 text-[8px] font-sans">|</span>
+              <span className={`text-[8.5px] font-extrabold flex items-center ${
+                isDrawingActive ? 'text-emerald-400' : 'text-white/45'
+              }`}>
+                {isDrawingPriceAlert ? 'ALERT LINE' : isDrawingTrendline ? 'TRENDLINE' : isMagnetActive ? 'MAGNET ON' : !showCrosshairTool ? 'NO CROSS' : 'READY'}
+              </span>
+              <ChevronDown className={`w-2.5 h-2.5 text-white/40 transition-transform duration-200 ${isDrawDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-          {/* Smart Alerts Trigger Button */}
+            {isDrawDropdownOpen && (
+              <div 
+                id="dropdown-draw-menu"
+                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d]/95 backdrop-blur-md border border-white/15 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.85)] z-50 p-1.5 space-y-0.5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-b border-white/5 mb-1.5">
+                  Analysis Drawings
+                </div>
+
+                <button
+                  onClick={() => {
+                    setIsDrawingPriceAlert(!isDrawingPriceAlert);
+                    if (!isDrawingPriceAlert) {
+                      setIsAlertsOpen(true);
+                    }
+                    setIsDrawingTrendline(false);
+                    setTrendlineStartPoint(null);
+                    setIsDrawDropdownOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors ${
+                    isDrawingPriceAlert ? 'bg-amber-500/15 text-amber-300' : 'text-white/80 hover:bg-white/5'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    <Bell className="w-3.5 h-3.5 text-amber-400" />
+                    Set Alert Line
+                  </span>
+                  {isDrawingPriceAlert && <span className="text-[8px] font-bold text-amber-400 animate-pulse">ACTIVE</span>}
+                </button>
+
+                <button
+                  onClick={() => {
+                    const nextState = !isDrawingTrendline;
+                    setIsDrawingTrendline(nextState);
+                    if (nextState) {
+                      setIsDrawingPriceAlert(false);
+                      setTrendlineStartPoint(null);
+                      setTrendlineHoverPoint(null);
+                      setIsAlertsOpen(true);
+                    }
+                    setIsDrawDropdownOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors ${
+                    isDrawingTrendline ? 'bg-emerald-500/15 text-emerald-300' : 'text-white/80 hover:bg-white/5'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                    Draw Trendline
+                  </span>
+                  {isDrawingTrendline && <span className="text-[8px] font-bold text-emerald-400 animate-pulse">ACTIVE</span>}
+                </button>
+
+                <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-t border-white/5 my-1.5 pt-1.5">
+                  Assists & Guides
+                </div>
+
+                <button
+                  onClick={() => setShowCrosshairTool(!showCrosshairTool)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <Crosshair className="w-3.5 h-3.5 text-sky-450" />
+                    Crosshair guideline
+                  </span>
+                  <span className={`text-[8.5px] font-mono px-1 py-0.5 rounded leading-none ${showCrosshairTool ? 'text-sky-300 bg-sky-500/10' : 'text-white/30'}`}>
+                    {showCrosshairTool ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setIsMagnetActive(!isMagnetActive)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <Magnet className="w-3.5 h-3.5 text-indigo-400" />
+                    Wick/Body Magnet
+                  </span>
+                  <span className={`text-[8.5px] font-mono px-1 py-0.5 rounded leading-none ${isMagnetActive ? 'text-indigo-300 bg-indigo-500/10' : 'text-white/30'}`}>
+                    {isMagnetActive ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Smart Alerts Trigger Drawer Toggle Button */}
           <button
             id="toggle-smart-alerts"
             onClick={() => setIsAlertsOpen(!isAlertsOpen)}
-            className={`px-3 py-1 rounded text-[10px] font-mono font-bold flex items-center gap-1.5 cursor-pointer h-[34px] border transition-all pointer-events-auto ${
-              isAlertsOpen 
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' 
-                : 'bg-[#050505] text-white/50 hover:text-white/80 border-white/10 hover:bg-white/5'
+            className={`flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:border-amber-500/35 hover:bg-white/[0.07] transition-all text-[#e5e5e5]/80 h-5.5 outline-none select-none cursor-pointer duration-200 ${
+              isAlertsOpen ? 'border-amber-500/40 bg-amber-500/10' : ''
             }`}
-            title="Configure Smart Alerts (Proximity to EMA)"
+            title="Configure Proximity Alarms & Actionable Thresholds"
           >
-            <Sliders className={`w-3.5 h-3.5 ${isAlertsOpen ? 'text-amber-300' : 'text-white/45'}`} />
-            <span className="uppercase tracking-tight text-[10px]">Alerts ({smartAlerts.filter(a => a.isActive).length})</span>
+            <span className="relative flex h-1.5 w-1.5 shrink-0">
+              {(isAlertsOpen || activeAlertsCount > 0) && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-70"></span>
+              )}
+              <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${isAlertsOpen || activeAlertsCount > 0 ? 'bg-amber-400' : 'bg-white/25'}`}></span>
+            </span>
+            <Sliders className={`w-3 h-3 text-amber-400 shrink-0 ${isAlertsOpen ? 'animate-pulse' : ''}`} />
+            <span className="uppercase font-bold text-[8.5px] tracking-wider text-white/95">Alerts</span>
+            <span className="text-white/30 text-[8px] font-sans">|</span>
+            <span className={`text-[8.5px] font-extrabold flex items-center ${
+              isAlertsOpen || activeAlertsCount > 0 ? 'text-amber-400' : 'text-white/45'
+            }`}>
+              {isAlertsOpen ? 'DRAWER' : activeAlertsCount > 0 ? `${activeAlertsCount} ACTIVE` : 'OFF'}
+            </span>
           </button>
         </div>
-
       </div>
+    </div>
 
       {/* Main Candlestick Frame */}
       <div className="relative p-4 md:p-6 pb-2 min-h-[380px] select-none">
         {/* Dynamic OHLCAV Info Strip */}
-        <div className="absolute top-6 left-6 z-10 flex flex-wrap gap-x-4 gap-y-1 bg-[#050505]/90 backdrop-blur border border-white/10 px-4 py-2 rounded font-mono text-xs shadow-lg max-w-[90%] pointer-events-none">
+        <div className="absolute top-6 left-6 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 bg-[#050505]/95 backdrop-blur border border-white/10 px-4 py-1.5 rounded-lg font-mono text-xs shadow-lg max-w-[90%] pointer-events-none select-none">
           {hoveredCandle ? (
             <>
-              <span className="text-white/40 font-mono">Time: <span className="text-indigo-400 font-bold">{formatIndexTime(hoveredCandle.timestamp)}</span></span>
-              <span className="text-white/40 font-mono">O: <span className={hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>{hoveredCandle.open}</span></span>
-              <span className="text-white/40 font-mono">H: <span className="text-white/90">{hoveredCandle.high}</span></span>
-              <span className="text-white/40 font-mono">L: <span className="text-white/90">{hoveredCandle.low}</span></span>
-              <span className="text-white/40 font-mono">C: <span className={hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>{hoveredCandle.close}</span></span>
-              <span className="text-white/40 font-mono">V: <span className="text-white/60">{hoveredCandle.volume}</span></span>
+              <span className="text-white/40 font-mono flex items-center leading-none">Time: <span className="text-indigo-400 font-bold ml-1">{formatIndexTime(hoveredCandle.timestamp)}</span></span>
+              <span className="text-white/40 font-mono flex items-center leading-none">O: <span className={`ml-1 font-bold ${hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}`}>{hoveredCandle.open.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
+              <span className="text-white/40 font-mono flex items-center leading-none">H: <span className="text-white/90 ml-1 font-semibold">{hoveredCandle.high.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
+              <span className="text-white/40 font-mono flex items-center leading-none">L: <span className="text-white/90 ml-1 font-semibold">{hoveredCandle.low.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
+              <span className="text-white/40 font-mono flex items-center leading-none">C: <span className={`ml-1 font-bold ${hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}`}>{hoveredCandle.close.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
+              <span className="text-white/40 font-mono flex items-center leading-none">V: <span className="text-white/60 ml-1 font-semibold">{hoveredCandle.volume.toLocaleString()}</span></span>
             </>
           ) : (
             <>
-              <span className="text-white uppercase font-bold tracking-wider">Trend Bias:</span>
-              <span className={metrics.dailyBias === 'BULLISH' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                Institutional {metrics.dailyBias} (50 EMA)
-              </span>
-              <span className="text-white/20">|</span>
-              <div className="flex items-center space-x-2.5">
-                <span className="text-white/40 font-mono text-[10px] uppercase tracking-wider">EMA GAP:</span>
-                <span className="text-white font-mono text-[10.5px] font-semibold">{trendIntensity.displayDistance}</span>
-                <div className="relative flex items-center">
-                  <div 
-                    id="trend-gauge-track" 
-                    onMouseEnter={() => setIsGaugeHovered(true)}
-                    onMouseLeave={() => setIsGaugeHovered(false)}
-                    className="w-16 sm:w-20 h-1.5 bg-white/10 rounded-full overflow-hidden border border-white/5 relative flex items-center cursor-help pointer-events-auto"
-                  >
-                    <div 
-                      id="trend-gauge-fill" 
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        metrics.dailyBias === 'BULLISH' ? 'bg-emerald-500' : 'bg-rose-500'
-                      }`}
-                      style={{ width: `${trendIntensity.percent}%` }}
-                    />
-                  </div>
-                  {isGaugeHovered && (
-                    <div 
-                      id="gauge-tooltip"
-                      className="absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 bg-[#0c0c0c]/95 backdrop-blur-md border border-white/10 px-3 py-2 rounded shadow-[0_8px_24px_rgba(0,0,0,0.9)] text-[10px] whitespace-nowrap z-[100] flex flex-col items-center gap-1 min-w-[130px]"
-                    >
-                      <div className="flex items-center justify-between w-full gap-2">
-                        <span className="text-white/40 font-mono uppercase tracking-wider text-[8.5px]">50 EMA Gap:</span>
-                        <span className="font-bold font-mono text-white">{trendIntensity.displayDistance}</span>
-                      </div>
-                      <div className="flex items-center justify-between w-full gap-2 border-t border-white/5 pt-1">
-                        <span className="text-white/40 font-mono uppercase tracking-wider text-[8.5px]">Trend Bias:</span>
-                        <span className={`font-extrabold uppercase font-mono tracking-wider ${
-                          metrics.dailyBias === 'BULLISH' ? 'text-emerald-400' : 'text-rose-400'
-                        }`}>
-                          {metrics.dailyBias}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between w-full gap-2">
-                        <span className="text-white/40 font-mono uppercase tracking-wider text-[8.5px]">Strength:</span>
-                        <span className={`font-black font-mono tracking-wider ${
-                          metrics.dailyBias === 'BULLISH' ? 'text-emerald-400' : 'text-rose-400'
-                        }`}>
-                          {trendIntensity.percent}% {trendIntensity.label}
-                        </span>
-                      </div>
-                      <div className="w-1.5 h-1.5 bg-[#0c0c0c] border-r border-b border-white/10 rotate-45 absolute top-[calc(100%-4px)] left-1/2 -translate-x-1/2" />
-                    </div>
-                  )}
-                </div>
-                <span className={`text-[10px] font-mono font-extrabold ${
-                  metrics.dailyBias === 'BULLISH' ? 'text-emerald-400' : 'text-rose-400'
-                }`}>
-                  {trendIntensity.percent}% {trendIntensity.label}
+              <span className="text-indigo-400 font-extrabold uppercase font-sans text-[10px] tracking-wider pr-2 border-r border-white/10 flex items-center gap-1.5 shrink-0">
+                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-70"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-505 bg-indigo-500"></span>
                 </span>
-                <button
-                  id="audible-alarm-toggle"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    setIsAlarmEnabled(!isAlarmEnabled);
-                  }}
-                  className={`pointer-events-auto p-1 rounded border transition-all cursor-pointer flex items-center gap-1 h-5 ${
-                    isAlarmEnabled 
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 font-bold' 
-                      : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10 hover:text-white/60'
-                  }`}
-                  title={isAlarmEnabled ? "Audible momentum alarm is active (>80% threshold)" : "Enable audible alarm for high-conviction momentum"}
-                >
-                  {isAlarmEnabled ? (
-                    <Volume2 className="w-3 h-3 text-amber-300 animate-pulse shrink-0" />
-                  ) : (
-                    <VolumeX className="w-3 h-3 text-white/40 shrink-0" />
-                  )}
-                  <span className="text-[7.5px] font-mono font-bold uppercase tracking-wider leading-none">
-                    {isAlarmEnabled ? 'ALARM: ON' : 'ALARM: OFF'}
-                  </span>
-                </button>
-              </div>
-              <span className="text-white/20">|</span>
-              {trendIntensity.percent >= 70 ? (
-                <div className="flex items-center space-x-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded text-[9.5px] text-amber-300 font-mono font-bold tracking-tight animate-pulse transition-all">
-                  <span id="mean-reversion-pulse" className="flex items-center space-x-1.5">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
-                    </span>
-                    <span>MEAN REVERSION SIGNAL (OVEREXTENDED)</span>
-                  </span>
-                  <button
-                    id="log-backtest-bell"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      if (!onLogEventToAdvisor) return;
-                      const activePrice = hoveredCandle ? hoveredCandle.close : (typeof livePrice !== 'undefined' ? livePrice : basePrice);
-                      const activeTimestamp = hoveredCandle ? hoveredCandle.timestamp : (lastCandle ? lastCandle.timestamp : new Date().toISOString());
-                      onLogEventToAdvisor(activeTimestamp, activePrice);
-                    }}
-                    className="ml-1 p-0.5 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 hover:text-white border border-amber-500/40 hover:border-amber-400 rounded transition-all cursor-pointer flex items-center justify-center shrink-0 pointer-events-auto"
-                    title="Log current timestamp and price to Advisor Chat"
-                  >
-                    <Bell className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-              ) : (
-                <span className="text-white/40 font-serif italic">Hover over candles for metrics</span>
-              )}
-
-              {imminentHighImpactNews.length > 0 && (
-                <>
-                  <span className="text-white/20">|</span>
-                  <div className="flex flex-wrap gap-1.5 items-center pointer-events-auto select-none">
-                    {imminentHighImpactNews.slice(0, 2).map((news, idx) => {
-                      const evTime = new Date(news.time);
-                      const target = new Date('2026-06-01T10:21:59Z');
-                      const diffMinutes = Math.round((evTime.getTime() - target.getTime()) / (1000 * 60));
-                      const hours = Math.floor(diffMinutes / 60);
-                      const mins = diffMinutes % 60;
-                      const displayTime = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-                      
-                      return (
-                        <div
-                          key={`warn-${idx}`}
-                          className="flex items-center space-x-1.5 bg-rose-500/15 border border-rose-500/30 px-2.5 py-0.5 rounded text-[9.5px] text-rose-300 font-sans font-bold tracking-tight animate-pulse cursor-help"
-                          title={`${news.currency} ${news.title} ${news.impact} Impact Macroeconomic Event Scheduled in ${displayTime}.`}
-                        >
-                          <span className="relative flex h-1.5 w-1.5">
+                {symbol} Feed
+              </span>
+              {candles.length > 0 && (() => {
+                const lastCandle = candles[candles.length - 1];
+                const isGreen = lastCandle.close >= lastCandle.open;
+                const format = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
+                return (
+                  <>
+                    <span className="text-white/40 font-mono flex items-center leading-none">O: <span className={`ml-1 font-semibold ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>{lastCandle.open.toFixed(format)}</span></span>
+                    <span className="text-white/40 font-mono flex items-center leading-none">H: <span className="text-white/95 ml-1 font-semibold">{lastCandle.high.toFixed(format)}</span></span>
+                    <span className="text-white/40 font-mono flex items-center leading-none">L: <span className="text-white/95 ml-1 font-semibold">{lastCandle.low.toFixed(format)}</span></span>
+                    <span className="text-white/40 font-mono flex items-center leading-none">C: <span className={`ml-1 font-extrabold ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>{lastCandle.close.toFixed(format)}</span></span>
+                    <span className="text-white/40 font-mono flex items-center leading-none">V: <span className="text-white/60 ml-1 font-semibold">{lastCandle.volume.toLocaleString()}</span></span>
+                    {imminentHighImpactNews.length > 0 && (
+                      <>
+                        <span className="text-white/30 px-1 font-bold">|</span>
+                        <div className="flex items-center space-x-1.5 bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded text-[8.5px] text-rose-300 font-sans font-bold tracking-tight animate-pulse pointer-events-auto cursor-help" title="IMMINENT MACRO DATA INBOUND">
+                          <span className="relative flex h-1.5 w-1.5 shrink-0">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
                           </span>
-                          <span className="font-mono uppercase">🚨 {news.currency} {news.title} IN {displayTime}</span>
+                          <span className="font-mono uppercase font-black text-[7.5px]">🚨 {imminentHighImpactNews[0].currency} {imminentHighImpactNews[0].title} MACRO RISK INBOUND</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
+                      </>
+                    )}
+                  </>
+                );
+              })()}
             </>
           )}
         </div>
 
-        {/* Responsive Candlestick Canvas SVG */}
-        <div 
-          className="w-full h-[360px] overflow-hidden rounded bg-[#050505]/50 border border-white/5 relative"
-          onWheel={handleWheel}
-        >
+        {/* Responsive Candlestick Canvas SVG and DOM Price Ladder */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 relative h-auto">
+          {/* Main Chart Column */}
+          <div className="col-span-12 lg:col-span-9 relative flex flex-col min-h-[380px]">
+            <div 
+              ref={containerRef}
+              className={`w-full overflow-hidden rounded bg-[#050505]/50 border border-white/5 relative shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] transition-all duration-300 ${
+                isExpanded ? 'h-[550px]' : 'h-[360px]'
+              }`}
+              onWheel={handleWheel}
+            >
           {/* Draw Mode Info Ribbon overlaying chart */}
           {isDrawingPriceAlert && (
             <div className="absolute top-4 left-1/2 -track-translate-x-1/2 -translate-x-1/2 z-[110] bg-amber-500 text-black font-sans text-[10px] font-black px-4 py-2 rounded-full shadow-2xl border border-amber-300 flex items-center space-x-2 animate-bounce select-none pointer-events-auto">
@@ -1281,13 +3174,126 @@ export default function ChartContainer({
             </div>
           )}
 
+          {/* Floating One-Click Template Configuration Panel */}
+          {isOneClickActive && (
+            <div 
+              id="one-click-cockpit"
+              className="absolute top-4 right-4 z-[99] bg-[#0c0c0e]/95 border border-amber-500/40 p-3 rounded-lg shadow-2xl backdrop-blur-md w-72 pointer-events-auto text-left select-none hover:border-amber-500/70 transition-all font-mono"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2">
+                <span className="text-amber-400 font-bold text-[10.5px] uppercase tracking-wider flex items-center gap-1.5 animate-pulse">
+                  <Zap className="w-3.5 h-3.5 fill-amber-400" />
+                  One-Click Cockpit
+                </span>
+                <span className={`text-[8.5px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                  oneClickStatus === 'EXECUTING...' ? 'bg-amber-500/20 text-amber-300 animate-pulse' :
+                  oneClickStatus === 'SUCCESS!' ? 'bg-emerald-500/20 text-emerald-400' :
+                  oneClickStatus === 'ERROR' ? 'bg-rose-500/20 text-[#f43f5e]' :
+                  'bg-white/5 text-white/40'
+                }`}>
+                  {oneClickStatus || 'READY'}
+                </span>
+              </div>
+              
+              <div className="space-y-2 text-[10px]">
+                <div>
+                  <label className="text-[8.5px] text-white/40 uppercase font-black tracking-wider block mb-1">Risk Preset</label>
+                  <select
+                    value={selectedTemplateName}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      setSelectedTemplateName(name);
+                      if (name !== 'Custom') {
+                        const preset = DEFAULT_TEMPLATES.find(p => p.name === name);
+                        if (preset) {
+                          setOneClickLots(preset.size);
+                          setOneClickRR(preset.rr);
+                          setOneClickBuffer(preset.bufferPips);
+                        }
+                      }
+                    }}
+                    className="w-full bg-[#050505] text-[10px] text-white border border-white/10 rounded px-2 py-1 outline-none h-7 font-bold text-amber-300/90 cursor-pointer"
+                  >
+                    {DEFAULT_TEMPLATES.map(p => (
+                      <option key={p.name} value={p.name}>{p.name} ({p.size} Lot, {p.rr}:1 RR)</option>
+                    ))}
+                    <option value="Custom">Custom Template Editor</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[8px] text-white/35 uppercase font-black tracking-wider block mb-0.5">Lotsize</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="0.01"
+                      max="10.0"
+                      value={oneClickLots}
+                      onChange={(e) => {
+                        setSelectedTemplateName('Custom');
+                        setOneClickLots(parseFloat(e.target.value) || 0.01);
+                      }}
+                      className="w-full bg-[#050505] text-[10.5px] text-white font-bold border border-white/10 rounded px-1.5 py-0.5 outline-none h-6 text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] text-white/35 uppercase font-black tracking-wider block mb-0.5 font-bold">R:R Ratio</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="1.0"
+                      max="10.0"
+                      value={oneClickRR}
+                      onChange={(e) => {
+                        setSelectedTemplateName('Custom');
+                        setOneClickRR(parseFloat(e.target.value) || 1.0);
+                      }}
+                      className="w-full bg-[#050505] text-[10.5px] text-white font-bold border border-white/10 rounded px-1.5 py-0.5 outline-none h-6 text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] text-white/35 uppercase font-black tracking-wider block mb-0.5">Buffer (pips)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.0"
+                      max="10.0"
+                      value={oneClickBuffer}
+                      onChange={(e) => {
+                        setSelectedTemplateName('Custom');
+                        setOneClickBuffer(parseFloat(e.target.value) || 0.0);
+                      }}
+                      className="w-full bg-[#050505] text-[10.5px] text-white font-bold border border-white/10 rounded px-1.5 py-0.5 outline-none h-6 text-center"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-white/5 pt-1.5 mt-1 text-[8px] text-white/40 leading-normal font-sans">
+                  <span className="text-amber-500 font-bold font-mono text-[8.5px] block mb-0.5 uppercase tracking-wider">⚡ QUICK INSTRUCTION</span>
+                  Move mouse over any active <span className="text-emerald-400 font-semibold font-mono">FVG / OB</span> boundary overlay on the chart below to preview. Click inside the highlighted shape to execute an instant order structure.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Floating Triggered Alert Banners */}
-          {triggeredAlertBanners.length > 0 && (
-            <div className="absolute bottom-4 left-4 z-[120] space-y-2 pointer-events-auto max-w-[280px]">
-              {triggeredAlertBanners.slice(-3).map((banner) => (
-                <div 
+          <div className="absolute bottom-4 left-4 z-[120] space-y-2 pointer-events-auto max-w-[280px]">
+            <AnimatePresence>
+              {/* Render Standard crossing alerts */}
+              {triggeredAlertBanners.slice(-2).map((banner) => (
+                <motion.div 
                   key={banner.id}
-                  className="bg-[#0c0c0d]/95 border border-amber-500/60 p-3 rounded-lg shadow-2xl flex items-start space-x-2.5 animate-fadeIn backdrop-blur-md"
+                  initial={{ opacity: 0, y: 15, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.85, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTriggeredAlertBanners(prev => prev.filter(b => b.id !== banner.id));
+                  }}
+                  title="Click to dismiss notification"
+                  className="bg-[#0c0c0d]/95 border border-amber-500/60 p-3 rounded-lg shadow-2xl flex items-start space-x-2.5 backdrop-blur-md cursor-pointer select-none hover:bg-[#121215] hover:border-amber-400 active:scale-[0.98] transition-all duration-150"
                 >
                   <div className="p-1 bg-amber-500/10 rounded text-amber-400 shrink-0 mt-0.5 animate-bounce">
                     <Bell className="w-3.5 h-3.5" />
@@ -1296,8 +3302,11 @@ export default function ChartContainer({
                     <div className="flex items-center justify-between">
                       <span className="text-white font-black uppercase text-[10px] tracking-tight">{banner.symbol} Level Alert!</span>
                       <button 
-                        onClick={() => setTriggeredAlertBanners(prev => prev.filter(b => b.id !== banner.id))}
-                        className="text-white/40 hover:text-white font-bold ml-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTriggeredAlertBanners(prev => prev.filter(b => b.id !== banner.id));
+                        }}
+                        className="text-white/40 hover:text-white font-bold ml-1 hover:bg-white/5 px-1.5 py-0.5 rounded text-[11px] leading-none transition-colors"
                       >
                         ×
                       </button>
@@ -1307,19 +3316,85 @@ export default function ChartContainer({
                     </p>
                     <span className="text-white/35 text-[8px] block mt-1">{banner.time}</span>
                   </div>
-                </div>
+                </motion.div>
               ))}
-            </div>
-          )}
+
+              {/* Render Price-Action Persistent Toasts */}
+              {persistentToasts.slice(-2).map((toast) => (
+                <motion.div 
+                  key={toast.id}
+                  initial={{ opacity: 0, y: 15, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.85, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPersistentToasts(prev => prev.filter(t => t.id !== toast.id));
+                  }}
+                  title="Click to dismiss persistent alert"
+                  className={`p-3 rounded-lg shadow-2xl flex items-start space-x-2.5 backdrop-blur-md cursor-pointer select-none active:scale-[0.98] transition-all duration-150 bg-[#0c0c0d]/98 border ${
+                    toast.type === 'success' 
+                      ? 'border-emerald-500/50 hover:border-emerald-400 hover:bg-[#0c1410]/95' 
+                      : 'border-amber-500/50 hover:border-amber-400 hover:bg-[#14120c]/95'
+                  }`}
+                >
+                  <div className={`p-1 rounded shrink-0 mt-0.5 animate-pulse ${
+                    toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-300'
+                  }`}>
+                    {toast.type === 'success' ? (
+                      <TrendingUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5" />
+                    )}
+                  </div>
+                  <div className="flex-1 font-mono text-[10px]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-1.5">
+                        <span className={`text-[7.5px] font-black uppercase tracking-wider px-1 py-0.2 rounded leading-none ${
+                          toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                        }`}>
+                          {toast.badge}
+                        </span>
+                        <span className="text-white font-black uppercase text-[10px] tracking-tight">{toast.symbol}</span>
+                      </div>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPersistentToasts(prev => prev.filter(t => t.id !== toast.id));
+                        }}
+                        className="text-white/40 hover:text-white font-bold ml-1 hover:bg-white/5 px-1.5 py-0.5 rounded text-[11px] leading-none transition-colors animate-none"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <p className="text-white/75 mt-1 leading-normal font-sans text-[9.5px]">
+                      {toast.message}
+                    </p>
+                    <div className="flex items-center justify-between mt-1 text-[8px] text-white/35">
+                      <span>Tactical Alert Triggered</span>
+                      <span>{toast.timestamp}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
           <svg 
             viewBox={`0 0 ${width} ${height}`} 
             className={`w-full h-full font-mono text-[9px] fill-white/20 stroke-white/20 select-none ${
-              isDragging ? 'cursor-grabbing' : 'cursor-grab'
+              isDragging 
+                ? 'cursor-grabbing' 
+                : showCrosshairTool 
+                  ? 'cursor-crosshair' 
+                  : 'cursor-grab'
             }`}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           >
             <defs>
               <clipPath id="chart-plot-area">
@@ -1330,6 +3405,23 @@ export default function ChartContainer({
                   height={height - padding.top - padding.bottom}
                 />
               </clipPath>
+              
+              {/* Premium Magnet Snap Snapping Halo Filter & Gradients */}
+              <filter id="anchor-magnet-glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="5" result="blur1" />
+                <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur2" />
+                <feMerge>
+                  <feMergeNode in="blur1" />
+                  <feMergeNode in="blur2" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+
+              <radialGradient id="magnet-radial-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.5" />
+                <stop offset="45%" stopColor="#4f46e5" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
+              </radialGradient>
             </defs>
 
             {/* Grid Lines */}
@@ -1353,15 +3445,21 @@ export default function ChartContainer({
               </g>
             ))}
 
-            {/* Time Grid Lines (e.g., every 8 candles) */}
-            {candles.map((c, idx) => {
-              if (idx % 8 === 0) {
-                const x = getX(idx);
-                // Only render if within the visible boundary thresholds
-                if (x < padding.left || x > width - padding.right) return null;
+            {/* Time Grid Lines (every 8 candles, extrapolated safely for shift/forecast bars) */}
+            {(() => {
+              const gridLines: React.JSX.Element[] = [];
+              if (candles.length === 0) return null;
 
-                const d = new Date(c.timestamp);
-                const hour = d.getUTCHours();
+              // Grid aligns perfectly on multiples of 8 indices
+              const startGridIndex = Math.ceil(startIndex / 8) * 8;
+              for (let idx = startGridIndex; idx <= endIndex; idx += 8) {
+                const x = getX(idx);
+                if (x < padding.left || x > width - padding.right) continue;
+
+                const details = getIndexTimestampAndHour(idx);
+                if (!details) continue;
+
+                const { timestamp, hour } = details;
                 let sessionName = 'Asian';
                 let sessionColor = 'fill-[#38bdf8]'; // sky-400
                 let lineStroke = 'rgba(56, 189, 248, 0.08)';
@@ -1375,7 +3473,10 @@ export default function ChartContainer({
                   lineStroke = 'rgba(52, 211, 153, 0.08)';
                 }
 
-                return (
+                // Protect against clipping/overlapping on horizontal extremes, especially the right scale area (padding.right is 70px)
+                const showText = x >= padding.left + 35 && x <= width - padding.right - 45;
+
+                gridLines.push(
                   <g key={`time-grid-${idx}`}>
                     <line
                       x1={x}
@@ -1386,30 +3487,197 @@ export default function ChartContainer({
                       strokeWidth={1}
                       strokeDasharray="2,2"
                     />
-                    {/* Date and Hour tag */}
-                    <text
-                      x={x - 20}
-                      y={height - padding.bottom + 12}
-                      className="fill-white/40 font-mono text-[9px] select-none"
-                    >
-                      {formatIndexTime(c.timestamp).split(' ')[0]} {hour.toString().padStart(2, '0')}:00
-                    </text>
-                    {/* Session Dot and Name */}
-                    <text
-                      x={x - 20}
-                      y={height - padding.bottom + 23}
-                      className={`font-sans font-bold text-[8.5px] uppercase tracking-wider select-none ${sessionColor}`}
-                    >
-                      ● {sessionName}
-                    </text>
+                    {showText && (
+                      <>
+                        {/* Date and Hour tag - perfectly centered with textAnchor="middle" */}
+                        <text
+                          x={x}
+                          y={height - padding.bottom + 12}
+                          textAnchor="middle"
+                          className="fill-white/40 font-mono text-[9px] select-none"
+                        >
+                          {formatIndexTime(timestamp).split(' ')[0]} {hour.toString().padStart(2, '0')}:00
+                        </text>
+                        {/* Session Dot and Name - perfectly centered with textAnchor="middle" */}
+                        <text
+                          x={x}
+                          y={height - padding.bottom + 23}
+                          textAnchor="middle"
+                          className={`font-sans font-bold text-[8.5px] uppercase tracking-wider select-none ${sessionColor}`}
+                        >
+                          ● {sessionName}
+                        </text>
+                      </>
+                    )}
                   </g>
                 );
               }
-              return null;
-            })}
+              return gridLines;
+            })()}
 
             {/* Plot elements wrapped inside area clipping path */}
             <g clipPath="url(#chart-plot-area)">
+              {/* D3 visual overlays group container */}
+              <g ref={d3ContainerRef} id="d3-visual-overlays-layer" />
+
+              {/* Volume Profile Overlay (rendered as a background-midground histogram) */}
+              {showVolumeProfile && volumeProfile && (
+                <g id="volume-profile-layer" className="pointer-events-auto">
+                  {volumeProfile.bins.map((bin) => {
+                    const topY = getY(bin.maxPrice);
+                    const bottomY = getY(bin.minPrice);
+                    const rectHeight = Math.max(1, bottomY - topY - 0.5);
+
+                    const maxProfileWidth = (width - padding.left - padding.right) * 0.22;
+                    const totalBarWidth = (bin.volume / volumeProfile.maxVolume) * maxProfileWidth;
+                    
+                    const buyFraction = bin.volume > 0 ? bin.buyVolume / bin.volume : 0.5;
+                    const buyWidth = totalBarWidth * buyFraction;
+                    const sellWidth = totalBarWidth * (1 - buyFraction);
+
+                    const isHovered = hoveredProfileBin?.index === bin.index;
+
+                    return (
+                      <g 
+                        key={`vp-bin-${bin.index}`} 
+                        className="cursor-help"
+                        onMouseEnter={() => setHoveredProfileBin(bin)}
+                        onMouseLeave={() => setHoveredProfileBin(null)}
+                      >
+                        {/* Background row highlighting on hover */}
+                        {isHovered && (
+                          <rect
+                            x={padding.left}
+                            y={topY}
+                            width={width - padding.left - padding.right}
+                            height={Math.max(1, bottomY - topY)}
+                            fill="rgba(99, 102, 241, 0.05)"
+                            className="pointer-events-none"
+                          />
+                        )}
+
+                        {/* Buy volume portion (vivid cyan-green, semi-transparent) */}
+                        {buyWidth > 0 && (
+                          <rect
+                            x={padding.left}
+                            y={topY}
+                            width={buyWidth}
+                            height={rectHeight}
+                            fill="#10b981"
+                            opacity={isHovered ? 0.45 : 0.22}
+                            style={{ transition: 'opacity 0.2s', mixBlendMode: 'screen' }}
+                          />
+                        )}
+
+                        {/* Sell volume portion (vivid rose-red, semi-transparent) */}
+                        {sellWidth > 0 && (
+                          <rect
+                            x={padding.left + buyWidth}
+                            y={topY}
+                            width={sellWidth}
+                            height={rectHeight}
+                            fill="#ef4444"
+                            opacity={isHovered ? 0.45 : 0.22}
+                            style={{ transition: 'opacity 0.2s', mixBlendMode: 'screen' }}
+                          />
+                        )}
+
+                        {/* Label indicators (HVN/LVN/POC) at the edge of the bar */}
+                        {totalBarWidth > 12 && (bin.type === 'HVN' || bin.type === 'LVN') && (
+                          <g transform={`translate(${padding.left + totalBarWidth + 6}, ${topY + (bottomY - topY) / 2 + 3})`}>
+                            <text
+                              className={`font-mono text-[7px] font-black tracking-wider uppercase select-none ${
+                                bin.isPOC 
+                                  ? 'fill-amber-400' 
+                                  : bin.type === 'HVN' 
+                                    ? 'fill-indigo-300' 
+                                    : 'fill-rose-400/90'
+                              }`}
+                            >
+                              {bin.isPOC ? 'POC' : bin.type}
+                            </text>
+                          </g>
+                        )}
+                      </g>
+                    );
+                  })}
+
+                  {/* Red POC / High-Volume Line */}
+                  {volumeProfile.pocIndex !== -1 && (
+                    (() => {
+                      const pocBin = volumeProfile.bins[volumeProfile.pocIndex];
+                      const yCenter = getY((pocBin.minPrice + pocBin.maxPrice) / 2);
+                      return (
+                        <g className="pointer-events-none">
+                          <line
+                            x1={padding.left}
+                            y1={yCenter}
+                            x2={width - padding.right}
+                            y2={yCenter}
+                            stroke="#f59e0b"
+                            strokeWidth={1.2}
+                            strokeDasharray="4,3"
+                            opacity={0.75}
+                          />
+                          <g transform={`translate(${width - padding.right - 42}, ${yCenter - 6})`}>
+                            <rect
+                              width={36}
+                              height={12}
+                              rx={2}
+                              fill="#f59e0b"
+                            />
+                            <text
+                              x={18}
+                              y={9}
+                              textAnchor="middle"
+                              className="fill-black font-mono text-[7.5px] font-black tracking-widest leading-none"
+                            >
+                              POC
+                            </text>
+                          </g>
+                        </g>
+                      );
+                    })()
+                  )}
+
+                  {/* Floating tooltip overlay for hovered volume profile bin stats */}
+                  {hoveredProfileBin && (
+                    <g 
+                      transform={`translate(${Math.max(padding.left + 15, width / 2 - 90)}, ${Math.min(height - padding.bottom - 65, Math.max(padding.top + 10, getY((hoveredProfileBin.minPrice + hoveredProfileBin.maxPrice) / 2) - 30))})`} 
+                      className="pointer-events-none select-none"
+                    >
+                      <rect
+                        width={180}
+                        height={60}
+                        rx={4}
+                        fill="rgba(5, 5, 5, 0.95)"
+                        stroke="rgba(255, 255, 255, 0.12)"
+                        strokeWidth={1}
+                        style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }}
+                      />
+                      <text x={8} y={15} className="fill-white font-bold font-sans text-[8.5px] uppercase tracking-wide">
+                        {hoveredProfileBin.isPOC 
+                          ? '⭐ Point of Control (POC)' 
+                          : hoveredProfileBin.type === 'HVN' 
+                            ? '🔥 High Volume Node (HVN)' 
+                            : hoveredProfileBin.type === 'LVN' 
+                              ? '❄️ Low Volume Node (LVN)' 
+                              : '📊 Profile Volume Node'}
+                      </text>
+                      <text x={8} y={28} className="fill-white/60 font-mono text-[8px]">
+                        Price: {hoveredProfileBin.minPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)} - {hoveredProfileBin.maxPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}
+                      </text>
+                      <text x={8} y={39} className="fill-white/65 font-mono text-[8px]">
+                        Vol: {Math.round(hoveredProfileBin.volume).toLocaleString()} units
+                      </text>
+                      <text x={8} y={50} className="fill-emerald-400 font-mono text-[8px] font-bold">
+                        BUY {Math.round(hoveredProfileBin.buyVolume).toLocaleString()} <tspan className="fill-white/20">|</tspan> <tspan className="fill-rose-400">SELL {Math.round(hoveredProfileBin.sellVolume).toLocaleString()}</tspan>
+                      </text>
+                    </g>
+                  )}
+                </g>
+              )}
+
               {/* Liquidity Heatmap Grid Layers */}
               {showLiquidityMap && liquidityHeatmap.map((bin, bIdx) => {
                 const topY = getY(bin.priceMax);
@@ -1447,7 +3715,7 @@ export default function ChartContainer({
               })}
 
               {/* FVG Highlight Areas (As overlays behind wicks) */}
-              {showFVG &&
+              {showFVG && !highlightOrderBlocks &&
                 fvgs.map((fvg, fIdx) => {
                   const startX = getX(fvg.index - 1);
                   const endX = getX(fvg.index + 1);
@@ -1461,6 +3729,12 @@ export default function ChartContainer({
                     ? 'fill-emerald-500/10 stroke-emerald-500/20'
                     : 'fill-rose-500/10 stroke-rose-500/20';
 
+                  const hoverClasses = isOneClickActive 
+                    ? (fvg.type === 'BULLISH' 
+                        ? 'cursor-pointer hover:fill-emerald-500/30 hover:stroke-emerald-500/50 transition-colors pointer-events-auto' 
+                        : 'cursor-pointer hover:fill-rose-500/30 hover:stroke-rose-500/50 transition-colors pointer-events-auto')
+                    : 'pointer-events-none';
+
                   return (
                     <g key={`fvg-${fIdx}`}>
                       <rect
@@ -1468,9 +3742,36 @@ export default function ChartContainer({
                         y={topY}
                         width={blockWidth}
                         height={Math.max(2, blockHeight)}
-                        className={colorClass}
+                        className={`${colorClass} ${hoverClasses}`}
                         strokeWidth={1}
                         strokeDasharray={fvg.isMitigated ? '1,1' : 'none'}
+                        onClick={(e) => {
+                          if (isOneClickActive) {
+                            e.stopPropagation();
+                            handleOneClickExecute('FVG', fvg);
+                          }
+                        }}
+                        onMouseDown={(e) => {
+                          if (isOneClickActive) {
+                            e.stopPropagation();
+                          }
+                        }}
+                        onMouseEnter={() => {
+                          if (isOneClickActive) {
+                            setHoveredBlock({
+                              type: 'FVG',
+                              id: fvg.id,
+                              gapStart: fvg.gapStart,
+                              gapEnd: fvg.gapEnd,
+                              blockType: fvg.type,
+                            });
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (isOneClickActive) {
+                            setHoveredBlock(null);
+                          }
+                        }}
                       />
                       {!fvg.isMitigated && (
                         <text
@@ -1487,7 +3788,7 @@ export default function ChartContainer({
                 })}
 
               {/* Order Blocks Highlights */}
-              {showOB &&
+              {showOB && !highlightOrderBlocks &&
                 obs.map((ob, oIdx) => {
                   const obX = getX(ob.index);
                   const blockWidth = xStep * 4; // draw forward block representing validity
@@ -1499,6 +3800,12 @@ export default function ChartContainer({
                     ? 'fill-indigo-500/10 stroke-indigo-500/20'
                     : 'fill-purple-500/10 stroke-purple-500/20';
 
+                  const hoverClasses = isOneClickActive 
+                    ? (ob.type === 'BULLISH' 
+                        ? 'cursor-pointer hover:fill-indigo-500/30 hover:stroke-indigo-500/50 transition-colors pointer-events-auto' 
+                        : 'cursor-pointer hover:fill-purple-500/30 hover:stroke-purple-500/50 transition-colors pointer-events-auto')
+                    : 'pointer-events-none';
+
                   return (
                     <g key={`ob-${ob.id}-${oIdx}`}>
                       <rect
@@ -1506,9 +3813,36 @@ export default function ChartContainer({
                         y={topY}
                         width={blockWidth}
                         height={Math.max(2, blockHeight)}
-                        className={colorClass}
+                        className={`${colorClass} ${hoverClasses}`}
                         strokeWidth={1}
                         strokeDasharray={ob.isBroken ? '2,2' : 'none'}
+                        onClick={(e) => {
+                          if (isOneClickActive) {
+                            e.stopPropagation();
+                            handleOneClickExecute('OB', ob);
+                          }
+                        }}
+                        onMouseDown={(e) => {
+                          if (isOneClickActive) {
+                            e.stopPropagation();
+                          }
+                        }}
+                        onMouseEnter={() => {
+                          if (isOneClickActive) {
+                            setHoveredBlock({
+                              type: 'OB',
+                              id: ob.id,
+                              high: ob.high,
+                              low: ob.low,
+                              blockType: ob.type,
+                            });
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (isOneClickActive) {
+                            setHoveredBlock(null);
+                          }
+                        }}
                       />
                       {!ob.isBroken && (
                         <text
@@ -1790,6 +4124,155 @@ export default function ChartContainer({
               );
             })}
 
+            {/* One-Click Quick Entry Live Target Preview Overlay */}
+            {isOneClickActive && hoveredBlock && (() => {
+              const preview = calculateOneClickLevels(hoveredBlock);
+              const yEntry = getY(preview.entry);
+              const ySL = getY(preview.sl);
+              const yTP = getY(preview.tp);
+              
+              const isEntryVisible = yEntry >= padding.top && yEntry <= height - padding.bottom;
+              const isSLVisible = ySL >= padding.top && ySL <= height - padding.bottom;
+              const isTPVisible = yTP >= padding.top && yTP <= height - padding.bottom;
+              
+              const displayFormat = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
+              const xStart = padding.left;
+              const xEnd = width - padding.right;
+              
+              return (
+                <g className="pointer-events-none select-none font-sans opacity-95 animate-fadeIn">
+                  {/* Risk Zone Box overlay (Red) */}
+                  <rect
+                    x={xStart}
+                    y={Math.min(yEntry, ySL)}
+                    width={xEnd - xStart}
+                    height={Math.abs(yEntry - ySL)}
+                    fill="#ef4444"
+                    fillOpacity={0.08}
+                    stroke="#ef4444"
+                    strokeWidth={0.5}
+                    strokeDasharray="2,2"
+                  />
+                  
+                  {/* Reward Zone Box overlay (Green) */}
+                  <rect
+                    x={xStart}
+                    y={Math.min(yEntry, yTP)}
+                    width={xEnd - xStart}
+                    height={Math.abs(yEntry - yTP)}
+                    fill="#10b981"
+                    fillOpacity={0.08}
+                    stroke="#10b981"
+                    strokeWidth={0.5}
+                    strokeDasharray="2,2"
+                  />
+
+                  {/* SL Preview Line & Badge */}
+                  {isSLVisible && (
+                    <g>
+                      <line
+                        x1={xStart}
+                        y1={ySL}
+                        x2={xEnd}
+                        y2={ySL}
+                        stroke="#f43f5e"
+                        strokeWidth={1.5}
+                        strokeDasharray="3,3"
+                      />
+                      <rect
+                        x={xEnd - 110}
+                        y={ySL - 7}
+                        width={105}
+                        height={14}
+                        rx={2}
+                        fill="#be123c"
+                      />
+                      <text
+                        x={xEnd - 57}
+                        y={ySL + 3}
+                        fill="#ffffff"
+                        fontSize="8px"
+                        fontWeight="black"
+                        textAnchor="middle"
+                        className="font-mono text-[7.5px]"
+                      >
+                        PREVIEW SL: {preview.sl.toFixed(displayFormat)}
+                      </text>
+                    </g>
+                  )}
+
+                  {/* TP Preview Line & Badge */}
+                  {isTPVisible && (
+                    <g>
+                      <line
+                        x1={xStart}
+                        y1={yTP}
+                        x2={xEnd}
+                        y2={yTP}
+                        stroke="#10b981"
+                        strokeWidth={1.5}
+                        strokeDasharray="3,3"
+                      />
+                      <rect
+                        x={xEnd - 110}
+                        y={yTP - 7}
+                        width={105}
+                        height={14}
+                        rx={2}
+                        fill="#047857"
+                      />
+                      <text
+                        x={xEnd - 57}
+                        y={yTP + 3}
+                        fill="#ffffff"
+                        fontSize="8px"
+                        fontWeight="black"
+                        textAnchor="middle"
+                        className="font-mono text-[7.5px]"
+                      >
+                        PREVIEW TP: {preview.tp.toFixed(displayFormat)}
+                      </text>
+                    </g>
+                  )}
+
+                  {/* Dynamic Entry Line */}
+                  {isEntryVisible && (
+                    <g>
+                      <line
+                        x1={xStart}
+                        y1={yEntry}
+                        x2={xEnd}
+                        y2={yEntry}
+                        stroke="#fbbf24"
+                        strokeWidth={2}
+                      />
+                      <rect
+                        x={xStart + 15}
+                        y={yEntry - 9}
+                        width={215}
+                        height={18}
+                        rx={3}
+                        fill="#0c0c0e"
+                        stroke="#fbbf24"
+                        strokeWidth={1.2}
+                      />
+                      <text
+                        x={xStart + 23}
+                        y={yEntry + 3}
+                        fill="#fbbf24"
+                        fontSize="8px"
+                        fontWeight="black"
+                        textAnchor="start"
+                        className="font-mono text-[7.5px]"
+                      >
+                        ⚡ ONE-CLICK {preview.side} ({oneClickLots} LOT, {oneClickRR}:1 R:R)
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })()}
+
             {/* Visual Backtesting News Impact Overlay */}
             {showNewsOverlay && newsEventsWithCandles.map((item, idx) => {
               const { candleIndex, event } = item;
@@ -2000,8 +4483,346 @@ export default function ChartContainer({
               </g>
             )}
 
+            {/* Manual Trendlines Overlay */}
+            <g clipPath="url(#chart-plot-area)">
+              {manualTrendlines
+                .filter((tl) => tl.symbol === symbol)
+                .map((tl) => {
+                  const startX = getX(tl.startIdx);
+                  const startY = getY(tl.startPrice);
+                  const endX = getX(tl.endIdx);
+                  const endY = getY(tl.endPrice);
+
+                  const isDashed = tl.style === 'dashed';
+                  const isDotted = tl.style === 'dotted';
+
+                  return (
+                    <g key={tl.id} className="group/trendline select-none font-sans">
+                      {/* Interactive Selection Target (thick line underneath) */}
+                      <line
+                        x1={startX}
+                        y1={startY}
+                        x2={endX}
+                        y2={endY}
+                        stroke="transparent"
+                        strokeWidth={12}
+                        className="cursor-pointer pointer-events-auto"
+                      />
+
+                      {/* Main Trendline render path */}
+                      <line
+                        x1={startX}
+                        y1={startY}
+                        x2={endX}
+                        y2={endY}
+                        stroke={tl.color || '#22c55e'}
+                        strokeWidth={2}
+                        strokeDasharray={isDashed ? '5,5' : isDotted ? '2,2' : 'none'}
+                        className="transition-all"
+                      />
+
+                      {/* Anchor vertex circles */}
+                      <circle
+                        cx={startX}
+                        cy={startY}
+                        r={3.5}
+                        fill="#050515"
+                        stroke={tl.color || '#22c55e'}
+                        strokeWidth={1.5}
+                      />
+                      <circle
+                        cx={endX}
+                        cy={endY}
+                        r={3.5}
+                        fill="#050515"
+                        stroke={tl.color || '#22c55e'}
+                        strokeWidth={1.5}
+                      />
+
+                      {/* Floating Interactive Delete Button on trendline center vertex */}
+                      <g
+                        className="cursor-pointer pointer-events-auto opacity-0 group-hover/trendline:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setManualTrendlines(prev => prev.filter(t => t.id !== tl.id));
+                        }}
+                        title="Delete Trendline"
+                      >
+                        <circle
+                          cx={(startX + endX) / 2}
+                          cy={(startY + endY) / 2}
+                          r={7.5}
+                          fill="#ef4444"
+                          stroke="#ffffff"
+                          strokeWidth={0.5}
+                        />
+                        <text
+                          x={(startX + endX) / 2}
+                          y={(startY + endY) / 2 + 2.5}
+                          style={{ fontSize: '7.5px', fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }}
+                        >
+                          ×
+                        </text>
+                      </g>
+                    </g>
+                  );
+                })
+              }
+
+              {/* If drawing trendline but start point is not placed yet, render a hover target indicator */}
+              {isDrawingTrendline && !trendlineStartPoint && trendlineHoverPoint && (
+                <g className="pointer-events-none select-none">
+                  {isMagnetActive ? (
+                    // Magnet active glowing halo
+                    <g>
+                      {/* Soft underlying neon aura */}
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={24}
+                        fill="url(#magnet-radial-glow)"
+                        className="animate-pulse"
+                      />
+                      {/* Interactive snapping halo with standard glow filter */}
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={12}
+                        fill="none"
+                        stroke="#38bdf8"
+                        strokeWidth={1.8}
+                        filter="url(#anchor-magnet-glow)"
+                        className="animate-pulse"
+                      />
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={18}
+                        fill="none"
+                        stroke="rgba(56, 189, 248, 0.3)"
+                        strokeWidth={1}
+                        className="animate-ping"
+                        style={{ animationDuration: '2.5s' }}
+                      />
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={8}
+                        fill="rgba(56, 189, 248, 0.08)"
+                        stroke="rgba(99, 102, 241, 0.6)"
+                        strokeWidth={1}
+                      />
+                      {/* Precise target crosshairs showing wick/body lock-on */}
+                      <line
+                        x1={getX(trendlineHoverPoint.xIndex) - 14}
+                        y1={getY(trendlineHoverPoint.price)}
+                        x2={getX(trendlineHoverPoint.xIndex) - 6}
+                        y2={getY(trendlineHoverPoint.price)}
+                        stroke="rgba(56, 189, 248, 0.95)"
+                        strokeWidth={1.2}
+                      />
+                      <line
+                        x1={getX(trendlineHoverPoint.xIndex) + 6}
+                        y1={getY(trendlineHoverPoint.price)}
+                        x2={getX(trendlineHoverPoint.xIndex) + 14}
+                        y2={getY(trendlineHoverPoint.price)}
+                        stroke="rgba(56, 189, 248, 0.95)"
+                        strokeWidth={1.2}
+                      />
+                      <line
+                        x1={getX(trendlineHoverPoint.xIndex)}
+                        y1={getY(trendlineHoverPoint.price) - 14}
+                        x2={getX(trendlineHoverPoint.xIndex)}
+                        y2={getY(trendlineHoverPoint.price) - 6}
+                        stroke="rgba(56, 189, 248, 0.95)"
+                        strokeWidth={1.2}
+                      />
+                      <line
+                        x1={getX(trendlineHoverPoint.xIndex)}
+                        y1={getY(trendlineHoverPoint.price) + 6}
+                        x2={getX(trendlineHoverPoint.xIndex)}
+                        y2={getY(trendlineHoverPoint.price) + 14}
+                        stroke="rgba(56, 189, 248, 0.95)"
+                        strokeWidth={1.2}
+                      />
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={3}
+                        fill="#38bdf8"
+                      />
+                    </g>
+                  ) : (
+                    // Standard hover target indicator
+                    <g>
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={6}
+                        fill="none"
+                        stroke="#22c55e"
+                        strokeWidth={1}
+                        className="animate-pulse"
+                      />
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={2.5}
+                        fill="#22c55e"
+                      />
+                    </g>
+                  )}
+                </g>
+              )}
+
+              {/* Live drawing preview trendline */}
+              {isDrawingTrendline && trendlineStartPoint && trendlineHoverPoint && (
+                <g className="pointer-events-none select-none font-sans">
+                  <line
+                    x1={getX(trendlineStartPoint.xIndex)}
+                    y1={getY(trendlineStartPoint.price)}
+                    x2={getX(trendlineHoverPoint.xIndex)}
+                    y2={getY(trendlineHoverPoint.price)}
+                    stroke="#22c55e"
+                    strokeWidth={1.5}
+                    strokeDasharray="4,4"
+                  />
+                  {isMagnetActive ? (
+                    // Glowing start anchor point wick lock
+                    <g>
+                      <circle
+                        cx={getX(trendlineStartPoint.xIndex)}
+                        cy={getY(trendlineStartPoint.price)}
+                        r={12}
+                        fill="rgba(99, 102, 241, 0.08)"
+                        stroke="rgba(129, 140, 248, 0.45)"
+                        strokeWidth={1}
+                        className="animate-pulse"
+                      />
+                      <circle
+                        cx={getX(trendlineStartPoint.xIndex)}
+                        cy={getY(trendlineStartPoint.price)}
+                        r={6}
+                        fill="#050505"
+                        stroke="#818cf8"
+                        strokeWidth={2}
+                      />
+                    </g>
+                  ) : (
+                    // Standard start point
+                    <circle
+                      cx={getX(trendlineStartPoint.xIndex)}
+                      cy={getY(trendlineStartPoint.price)}
+                      r={5}
+                      fill="#050505"
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                    />
+                  )}
+
+                  {isMagnetActive ? (
+                    // Glowing hover anchor point wick lock
+                    <g>
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={18}
+                        fill="rgba(99, 102, 241, 0.12)"
+                        stroke="rgba(129, 140, 248, 0.4)"
+                        strokeWidth={1}
+                        className="animate-ping"
+                        style={{ animationDuration: '2.5s' }}
+                      />
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={10}
+                        fill="rgba(99, 102, 241, 0.05)"
+                        stroke="rgba(99, 102, 241, 0.7)"
+                        strokeWidth={1.2}
+                      />
+                      <line
+                        x1={getX(trendlineHoverPoint.xIndex) - 14}
+                        y1={getY(trendlineHoverPoint.price)}
+                        x2={getX(trendlineHoverPoint.xIndex) - 6}
+                        y2={getY(trendlineHoverPoint.price)}
+                        stroke="rgba(129, 140, 248, 0.85)"
+                        strokeWidth={1}
+                      />
+                      <line
+                        x1={getX(trendlineHoverPoint.xIndex) + 6}
+                        y1={getY(trendlineHoverPoint.price)}
+                        x2={getX(trendlineHoverPoint.xIndex) + 14}
+                        y2={getY(trendlineHoverPoint.price)}
+                        stroke="rgba(129, 140, 248, 0.85)"
+                        strokeWidth={1}
+                      />
+                      <line
+                        x1={getX(trendlineHoverPoint.xIndex)}
+                        y1={getY(trendlineHoverPoint.price) - 14}
+                        x2={getX(trendlineHoverPoint.xIndex)}
+                        y2={getY(trendlineHoverPoint.price) - 6}
+                        stroke="rgba(129, 140, 248, 0.85)"
+                        strokeWidth={1}
+                      />
+                      <line
+                        x1={getX(trendlineHoverPoint.xIndex)}
+                        y1={getY(trendlineHoverPoint.price) + 6}
+                        x2={getX(trendlineHoverPoint.xIndex)}
+                        y2={getY(trendlineHoverPoint.price) + 14}
+                        stroke="rgba(129, 140, 248, 0.85)"
+                        strokeWidth={1}
+                      />
+                      <circle
+                        cx={getX(trendlineHoverPoint.xIndex)}
+                        cy={getY(trendlineHoverPoint.price)}
+                        r={6}
+                        fill="#050505"
+                        stroke="#38bdf8"
+                        strokeWidth={2}
+                      />
+                    </g>
+                  ) : (
+                    // Standard hover point
+                    <circle
+                      cx={getX(trendlineHoverPoint.xIndex)}
+                      cy={getY(trendlineHoverPoint.price)}
+                      r={5}
+                      fill="#050505"
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                      className="animate-ping"
+                    />
+                  )}
+                  <g transform={`translate(${Math.max(padding.left + 10, Math.min(getX(trendlineHoverPoint.xIndex) + 12, width - padding.right - 120))}, ${Math.max(padding.top + 10, Math.min(getY(trendlineHoverPoint.price) - 25, height - padding.bottom - 30))})`}>
+                    <rect
+                      width={105}
+                      height={18}
+                      rx={3}
+                      fill="#050505"
+                      stroke="#22c55e"
+                      strokeWidth={1}
+                      fillOpacity={0.9}
+                    />
+                    <text
+                      x={52.5}
+                      y={11.5}
+                      fill="#22c55e"
+                      fontSize="7.5px"
+                      fontWeight="bold"
+                      textAnchor="middle"
+                      className="font-mono"
+                    >
+                      Click to Lock Endpoint
+                    </text>
+                  </g>
+                </g>
+              )}
+            </g>
+
             {/* General Hover Crosshair and Liquidity Telemetry */}
-            {!isDrawingPriceAlert && cursorY !== null && cursorPrice !== null && (
+            {showCrosshairTool && !isDrawingPriceAlert && cursorY !== null && cursorPrice !== null && (
               (() => {
                 const { type, density } = getLiquidityDensityAtPrice(cursorPrice);
                 const isHighDensity = density > 0.15;
@@ -2011,8 +4832,8 @@ export default function ChartContainer({
                 const densityLabel = type !== 'NONE' ? ` ${type}(${densityPercent}%)` : '';
                 
                 return (
-                  <g className="pointer-events-none">
-                    {/* Horizontal crosshair */}
+                  <g className="pointer-events-none" id="crosshair-precision-layer">
+                    {/* Horizontal crosshair line */}
                     <line
                       x1={padding.left}
                       y1={cursorY}
@@ -2023,8 +4844,22 @@ export default function ChartContainer({
                       strokeDasharray="2,2"
                       opacity={isHighDensity ? 0.7 : 0.3}
                     />
+
+                    {/* Vertical crosshair line synced to cursor center */}
+                    {cursorX !== null && (
+                      <line
+                        x1={cursorX}
+                        y1={padding.top}
+                        x2={cursorX}
+                        y2={height - padding.bottom}
+                        stroke="#ffffff"
+                        strokeWidth={0.5}
+                        strokeDasharray="2,2"
+                        opacity={0.3}
+                      />
+                    )}
                     
-                    {/* Crosshair tag background */}
+                    {/* Crosshair horizontal tag background */}
                     <rect
                       x={width - padding.right + 4}
                       y={cursorY - 8}
@@ -2035,7 +4870,7 @@ export default function ChartContainer({
                       opacity={0.9}
                     />
                     
-                    {/* Crosshair tag text */}
+                    {/* Crosshair horizontal tag text */}
                     <text
                       x={width - padding.right + 8}
                       y={cursorY + 3.5}
@@ -2047,6 +4882,40 @@ export default function ChartContainer({
                     >
                       {cursorPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}{densityLabel}
                     </text>
+
+                    {/* Vertical Timestamp Tag on bottom horizontal axis */}
+                    {cursorX !== null && cursorTime !== null && (
+                      (() => {
+                        const tagWidth = 92;
+                        const rx = Math.max(padding.left, Math.min(width - padding.right - tagWidth, cursorX - tagWidth / 2));
+                        return (
+                          <g id="crosshair-timestamp-tag">
+                            <rect
+                              x={rx}
+                              y={height - padding.bottom + 2}
+                              width={tagWidth}
+                              height={16}
+                              rx={2}
+                              fill="#6366f1"
+                              stroke="#818cf8"
+                              strokeWidth={0.5}
+                              opacity={0.95}
+                            />
+                            <text
+                              x={rx + tagWidth / 2}
+                              y={height - padding.bottom + 13}
+                              fill="#ffffff"
+                              fontSize="8.2px"
+                              fontWeight="bold"
+                              textAnchor="middle"
+                              className="font-mono tracking-tight"
+                            >
+                              {formatIndexTime(cursorTime)}
+                            </text>
+                          </g>
+                        );
+                      })()
+                    )}
                   </g>
                 );
               })()
@@ -2054,7 +4923,7 @@ export default function ChartContainer({
           </svg>
 
           {/* Floating Zoom & Pan HUD in the bottom left of the chart area */}
-          <div className="absolute bottom-10 left-6 z-10 flex items-center space-x-1 bg-[#050505]/95 backdrop-blur border border-white/10 p-1.5 rounded shadow-lg">
+          <div className="absolute bottom-10 left-6 z-10 flex items-center space-x-1 bg-[#050505]/95 backdrop-blur border border-white/10 p-1.5 rounded shadow-lg pointer-events-auto">
             <button
               id="chart-zoom-in"
               onClick={zoomIn}
@@ -2081,6 +4950,48 @@ export default function ChartContainer({
             >
               Reset
             </button>
+
+            {/* MT5 Chart Shift controls spacer */}
+            <span className="text-white/10 mx-1 select-none">|</span>
+
+            {/* Chart Shift toggle */}
+            <button
+              id="chart-shift-toggle"
+              onClick={() => setIsChartShiftActive(prev => !prev)}
+              className={`px-2 py-1 text-[9px] font-mono leading-none rounded border transition-all cursor-pointer h-6 flex items-center justify-center gap-1 uppercase select-none ${
+                isChartShiftActive 
+                  ? 'bg-indigo-600/25 text-indigo-300 border-indigo-500/40 font-black shadow-[0_0_8px_rgba(99,102,241,0.25)]' 
+                  : 'bg-[#0a0a0c] text-white/40 border-white/10 hover:text-white hover:bg-white/5'
+              }`}
+              title="Toggle MT5-Style Right-Margin Shift (Extra space for predictive path modeling)"
+            >
+              <ArrowRightLeft className="w-2.5 h-2.5" />
+              <span>Shift: {isChartShiftActive ? chartShiftBars : 'OFF'}</span>
+            </button>
+
+            {isChartShiftActive && (
+              <div className="flex items-center space-x-0.5 ml-1 bg-[#050505] p-0.5 rounded border border-white/5">
+                <button
+                  id="chart-shift-inc"
+                  onClick={() => setChartShiftBars(prev => Math.min(45, prev + 5))}
+                  className="p-1 hover:bg-white/10 rounded text-sky-400 hover:text-sky-300 transition-all cursor-pointer flex items-center justify-center font-bold"
+                  style={{ width: '18px', height: '18px' }}
+                  title="Increase Right-Margin Empty Space (+5 Columns)"
+                >
+                  <Plus className="w-2.5 h-2.5" />
+                </button>
+                <button
+                  id="chart-shift-dec"
+                  onClick={() => setChartShiftBars(prev => Math.max(5, prev - 5))}
+                  className="p-1 hover:bg-white/10 rounded text-rose-500 hover:text-rose-400 transition-all cursor-pointer flex items-center justify-center font-bold"
+                  style={{ width: '18px', height: '18px' }}
+                  title="Decrease Right-Margin Empty Space (-5 Columns)"
+                >
+                  <Minus className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            )}
+
             {(offset > 0 || visibleCount < (candles.length || 40)) && (
               <span className="text-[8px] text-indigo-400 font-mono font-bold px-1.5 animate-pulse select-none uppercase tracking-wider">
                 Zoomed
@@ -2103,7 +5014,16 @@ export default function ChartContainer({
                   </span>
                   <span className="font-extrabold text-white/90">{hoveredNews.currency}</span>
                 </div>
-                <span className="text-[9px] text-white/40">{new Date(hoveredNews.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="text-[9px] text-white/40">{(() => {
+                  if (!hoveredNews.time) return '—';
+                  const d = new Date(hoveredNews.time);
+                  if (isNaN(d.getTime())) return hoveredNews.time;
+                  try {
+                    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  } catch {
+                    return hoveredNews.time;
+                  }
+                })()}</span>
               </div>
               
               <div className="font-sans font-bold text-white/95 text-xs mb-2 leading-tight font-sans">
@@ -2147,15 +5067,39 @@ export default function ChartContainer({
               </div>
             </div>
           )}
+            </div>
+          </div>
+
+          {/* DOM Price Ladder Column */}
+          <div className={`col-span-12 lg:col-span-3 h-[420px] transition-all duration-300 ${
+            isExpanded ? 'lg:h-[550px]' : 'lg:h-[360px]'
+          }`}>
+            <DOMPriceLadder
+              symbol={symbol as any}
+              livePrice={hoveredCandle ? hoveredCandle.close : (typeof livePrice !== 'undefined' ? livePrice : basePrice)}
+              trades={trades}
+              oneClickLots={oneClickLots}
+              onTradeExecuted={onTradeExecuted}
+              basePrice={basePrice}
+              sweeps={sweeps}
+              candles={candles}
+              showTWVP={showTWVP}
+              metrics={metrics}
+            />
+          </div>
         </div>
 
         {/* Smart Alerts Sidebar Drawer */}
-        <div 
-          id="smart-alerts-drawer"
-          className={`absolute top-0 right-0 bottom-0 w-[310px] sm:w-[350px] bg-[#0c0c0c]/98 border-l border-white/10 z-[100] flex flex-col shadow-[-12px_0_40px_rgba(0,0,0,0.95)] transition-all duration-300 transform font-mono pointer-events-auto h-full ${
-            isAlertsOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
+        <AnimatePresence>
+          {isAlertsOpen && (
+            <motion.div 
+              id="smart-alerts-drawer"
+              initial={{ opacity: 0, scale: 0.98, x: 10 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.98, x: 10 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="absolute top-0 right-0 bottom-0 w-[310px] sm:w-[350px] bg-[#0c0c0c]/98 border-l border-white/10 z-[100] flex flex-col shadow-[-12px_0_40px_rgba(0,0,0,0.95)] font-mono pointer-events-auto h-full"
+            >
           {/* Drawer Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/[0.02] shrink-0">
             <div className="flex items-center space-x-2 text-amber-300">
@@ -2187,311 +5131,654 @@ export default function ChartContainer({
               </div>
             </div>
           </div>
-
-          {/* Smart Add Alert Form Section */}
-          <form onSubmit={handleAddAlert} className="p-3.5 border-b border-white/10 space-y-2.5 bg-white/[0.01] shrink-0">
-            <span className="text-[9px] uppercase font-bold tracking-wider text-white/40 block mb-1">Create Multi-Instrument Alert</span>
-            
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[8.5px] uppercase font-semibold text-white/40 block mb-1 font-mono">Instrument</label>
-                <select
-                  value={newAlertSymbol}
-                  onChange={(e) => {
-                    setNewAlertSymbol(e.target.value);
-                    if (newAlertType === 'TREND_STRENGTH') {
-                      setNewAlertValue(80);
-                    } else {
-                      setNewAlertValue(e.target.value === 'BTC/USDT' ? 150 : e.target.value === 'GOLD/USD' ? 5 : e.target.value === 'USD/JPY' ? 0.1 : 10);
-                    }
-                  }}
-                  className="w-full bg-[#050505] text-[10px] text-white/90 border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
-                >
-                  <option value="EUR/USD">EUR/USD</option>
-                  <option value="GBP/USD">GBP/USD</option>
-                  <option value="USD/JPY">USD/JPY</option>
-                  <option value="BTC/USDT">BTC/USDT</option>
-                  <option value="GOLD/USD">GOLD/USD</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[8.5px] uppercase font-semibold text-white/40 block mb-1 font-mono">Metric Type</label>
-                <select
-                  value={newAlertType}
-                  onChange={(e) => {
-                    const val = e.target.value as 'GAP_PIPS_PRICE' | 'TREND_STRENGTH';
-                    setNewAlertType(val);
-                    if (val === 'TREND_STRENGTH') {
-                      setNewAlertValue(80);
-                    } else {
-                      setNewAlertValue(newAlertSymbol === 'BTC/USDT' ? 150 : newAlertSymbol === 'GOLD/USD' ? 5 : newAlertSymbol === 'USD/JPY' ? 0.1 : 10);
-                    }
-                  }}
-                  className="w-full bg-[#050505] text-[10px] text-white/90 border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
-                >
-                  <option value="TREND_STRENGTH">Strength (%)</option>
-                  <option value="GAP_PIPS_PRICE">EMA Gap</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[8.5px] uppercase font-semibold text-white/40 block mb-1 font-mono font-bold">Comparison</label>
-                <select
-                  value={newAlertComparison}
-                  onChange={(e) => setNewAlertComparison(e.target.value as 'EXCEEDS' | 'BELOW')}
-                  className="w-full bg-[#050505] text-[10px] text-white/90 border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
-                >
-                  <option value="EXCEEDS">Exceeds (&gt;=)</option>
-                  <option value="BELOW">Falls Below (&lt;=)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[8.5px] uppercase font-semibold text-white/40 block mb-1 font-mono font-bold">
-                  {newAlertType === 'TREND_STRENGTH' ? 'Threshold (%)' : `Threshold (${newAlertSymbol === 'BTC/USDT' ? 'USDT' : newAlertSymbol === 'USD/JPY' ? '¥' : 'Pips'})`}
-                </label>
-                <input
-                  type="number"
-                  step={newAlertSymbol === 'USD/JPY' && newAlertType === 'GAP_PIPS_PRICE' ? '0.01' : '1'}
-                  value={newAlertValue}
-                  onChange={(e) => setNewAlertValue(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-[#050505] text-[11px] font-bold text-white border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
-                />
-              </div>
-            </div>
-
+          <div className="flex border-b border-white/10 shrink-0 text-[10px] select-none bg-white/[0.01]">
             <button
-              type="submit"
-              className="w-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-white border border-amber-500/30 hover:border-amber-500/60 transition-all rounded py-1.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5 mt-2 pointer-events-auto"
+              id="pa-alerts-tab"
+              type="button"
+              onClick={() => setAlertsActiveTab('PRICE_ACTION')}
+              className={`flex-1 text-center py-2.5 font-bold uppercase tracking-wider transition-all cursor-pointer border-b-2 ${
+                alertsActiveTab === 'PRICE_ACTION'
+                  ? 'text-emerald-400 border-emerald-500 bg-emerald-500/5'
+                  : 'text-white/40 border-transparent hover:text-white/70 hover:bg-white/5'
+              }`}
             >
-              <Plus className="w-3 h-3 text-amber-400" />
-              Add Alert Rule
+              🔄 PA Alerts ({priceActionAlerts.filter(a => a.isActive).length})
             </button>
-          </form>
+            <button
+              id="standard-alerts-tab"
+              type="button"
+              onClick={() => setAlertsActiveTab('STANDARD')}
+              className={`flex-1 text-center py-2.5 font-bold uppercase tracking-wider transition-all cursor-pointer border-b-2 ${
+                alertsActiveTab === 'STANDARD'
+                  ? 'text-amber-400 border-amber-500 bg-amber-500/5'
+                  : 'text-white/40 border-transparent hover:text-white/70 hover:bg-white/5'
+              }`}
+            >
+              📊 EMA/Gap Alerts
+            </button>
+          </div>
 
-          {/* List of Scheduled Alerts */}
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-2 custom-scrollbar shrink">
-            <div className="text-[9px] uppercase font-bold tracking-wider text-white/45 block mb-1 flex items-center justify-between">
-              <span>Active Alerts ({smartAlerts.length})</span>
-              {smartAlerts.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm("Delete all Smart Alerts?")) {
-                      setSmartAlerts([]);
-                    }
-                  }}
-                  className="text-[8.5px] text-rose-500 hover:text-rose-400 uppercase tracking-tight cursor-pointer font-bold"
-                >
-                  Clear All
-                </button>
-              )}
-            </div>
-
-            {smartAlerts.length === 0 ? (
-              <div className="text-center py-8 border border-dashed border-white/5 rounded px-2.5">
-                <span className="text-[10px] text-white/35 italic block leading-relaxed">No smart alerts scheduled. Set a custom rule above to capture high-conviction trends.</span>
-              </div>
-            ) : (
-              smartAlerts.map((alert) => {
-                const isCur = alert.symbol === symbol;
-                const unitLabel = alert.type === 'TREND_STRENGTH' 
-                  ? '%' 
-                  : (alert.symbol === 'BTC/USDT' ? ' USDT' : alert.symbol === 'USD/JPY' ? ' ¥' : ' Pips');
+          {alertsActiveTab === 'STANDARD' ? (
+            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col min-h-0">
+              {/* Smart Add Alert Form Section */}
+              <form onSubmit={handleAddAlert} className="p-3.5 border-b border-white/10 space-y-2.5 bg-white/[0.01] shrink-0">
+                <span className="text-[9px] uppercase font-bold tracking-wider text-white/40 block mb-1">Create Multi-Instrument Alert</span>
                 
-                return (
-                  <div 
-                    key={alert.id}
-                    className={`relative flex flex-col p-2.5 rounded border transition-all ${
-                      alert.isTriggered && alert.isActive
-                        ? 'bg-rose-500/20 border-rose-500/50 shadow-[0_0_15px_rgba(239,68,68,0.25)] animate-pulse'
-                        : alert.isActive
-                          ? 'bg-white/[0.02] border-white/10 hover:border-white/20'
-                          : 'bg-white/[0.01] border-white/5 opacity-55'
-                    }`}
-                  >
-                    {/* Flag and symbol line */}
-                    <div className="flex items-center justify-between mb-1.5 border-b border-white/5 pb-1 select-none">
-                      <div className="flex items-center space-x-1.5">
-                        <span className={`inline-block text-[9px] px-1 py-0.5 rounded font-bold font-sans ${isCur ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-white/50'}`}>
-                          {alert.symbol}
-                        </span>
-                        <span className="text-[8px] text-white/30 uppercase tracking-wider font-extrabold">
-                          {alert.type === 'TREND_STRENGTH' ? 'STRENGTH' : 'GAP'}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-1.5">
-                        {/* Active / Disable toggle */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleAlertActive(alert.id)}
-                          className={`text-[8.5px] uppercase font-bold tracking-tight px-1 py-0.5 rounded transition-all cursor-pointer border ${
-                            alert.isActive
-                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/30'
-                              : 'bg-white/5 text-white/35 border-white/5 hover:bg-white/10 hover:text-white/60'
-                          }`}
-                          title={alert.isActive ? "Deactivate active alert" : "Activate disabled alert"}
-                        >
-                          {alert.isActive ? 'ACTIVE' : 'MUTED'}
-                        </button>
-
-                        {/* Trash indicator */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAlert(alert.id)}
-                          className="p-1 hover:bg-rose-500/10 hover:text-rose-400 text-white/20 rounded transition-all cursor-pointer"
-                          title="Delete custom alert"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Config explanation */}
-                    <div className="text-[10px] sm:text-[10.5px] text-white/85 font-semibold flex items-center flex-wrap gap-1 leading-tight select-none">
-                      <span>Trigger when</span>
-                      <span className="bg-white/5 text-white text-[9px] px-1 py-0.5 rounded font-black font-sans">
-                        {alert.comparison === 'EXCEEDS' ? '>=' : '<='}
-                      </span>
-                      <span className="text-amber-300 font-bold">{alert.value}{unitLabel}</span>
-                    </div>
-
-                    {/* Triggers logged stats */}
-                    {alert.triggeredCount > 0 && (
-                      <div className="mt-2 pt-1 border-t border-white/5 flex items-center justify-between text-[8px] text-white/40 select-none">
-                        <span className="text-rose-400 font-bold flex items-center gap-0.5">
-                          <span className="w-1 h-1 rounded bg-rose-400 animate-ping inline-block" />
-                          ALARM ({alert.triggeredCount}x)
-                        </span>
-                        <div className="flex items-center space-x-1.5">
-                          {alert.lastTriggered && (
-                            <span title={`At price: ${alert.lastTriggeredPrice}`}>Last: {alert.lastTriggered}</span>
-                          )}
-                          <span className="text-white/20">|</span>
-                          <button
-                            type="button"
-                            onClick={() => handleResetTriggerCount(alert.id)}
-                            className="text-white/35 hover:text-white/60 hover:underline cursor-pointer font-bold text-[8px] uppercase tracking-tighter"
-                          >
-                            Reset
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[8.5px] uppercase font-semibold text-white/40 block mb-1 font-mono">Instrument</label>
+                    <select
+                      value={newAlertSymbol}
+                      onChange={(e) => {
+                        setNewAlertSymbol(e.target.value);
+                        if (newAlertType === 'TREND_STRENGTH') {
+                          setNewAlertValue(80);
+                        } else {
+                          setNewAlertValue(e.target.value === 'BTC/USDT' ? 150 : e.target.value === 'GOLD/USD' ? 5 : e.target.value === 'USD/JPY' ? 0.1 : 10);
+                        }
+                      }}
+                      className="w-full bg-[#050505] text-[10px] text-white/90 border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
+                    >
+                      {Object.keys(FRIENDLY_NAMES).map((sym) => (
+                        <option key={sym} value={sym}>{sym}</option>
+                      ))}
+                    </select>
                   </div>
-                );
-              })
-            )}
 
-            {/* Visual Price alert section */}
-            <div className="pt-4 border-t border-white/10 mt-2">
-              <div className="text-[10px] uppercase font-bold tracking-wider text-amber-400 block mb-2 flex items-center justify-between">
-                <span>Visual Alert Lines ({visualPriceAlerts.length})</span>
-                {visualPriceAlerts.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm("Delete all Visual Price Alerts?")) {
-                        setVisualPriceAlerts([]);
-                      }
-                    }}
-                    className="text-[8.5px] text-rose-500 hover:text-rose-400 uppercase tracking-tight cursor-pointer font-bold"
-                  >
-                    Clear All
-                  </button>
-                )}
-              </div>
-
-              {visualPriceAlerts.length === 0 ? (
-                <div className="text-center py-6 border border-dashed border-white/5 rounded px-2.5">
-                  <span className="text-[10px] text-white/35 italic block leading-relaxed">
-                    No visual alert lines set. Click on "Set Alert Line" above and click anywhere on the chart canvas to add one.
-                  </span>
+                  <div>
+                    <label className="text-[8.5px] uppercase font-semibold text-white/40 block mb-1 font-mono">Metric Type</label>
+                    <select
+                      value={newAlertType}
+                      onChange={(e) => {
+                        const val = e.target.value as 'GAP_PIPS_PRICE' | 'TREND_STRENGTH';
+                        setNewAlertType(val);
+                        if (val === 'TREND_STRENGTH') {
+                          setNewAlertValue(80);
+                        } else {
+                          setNewAlertValue(newAlertSymbol === 'BTC/USDT' ? 150 : newAlertSymbol === 'GOLD/USD' ? 5 : newAlertSymbol === 'USD/JPY' ? 0.1 : 10);
+                        }
+                      }}
+                      className="w-full bg-[#050505] text-[10px] text-white/90 border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
+                    >
+                      <option value="TREND_STRENGTH">Strength (%)</option>
+                      <option value="GAP_PIPS_PRICE">EMA Gap</option>
+                    </select>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {visualPriceAlerts.map((alert) => {
-                    const displayFormat = alert.symbol === 'USD/JPY' ? 2 : alert.symbol === 'BTC/USDT' ? 0 : 5;
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[8.5px] uppercase font-semibold text-white/40 block mb-1 font-mono font-bold">Comparison</label>
+                    <select
+                      value={newAlertComparison}
+                      onChange={(e) => setNewAlertComparison(e.target.value as 'EXCEEDS' | 'BELOW')}
+                      className="w-full bg-[#050505] text-[10px] text-white/90 border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
+                    >
+                      <option value="EXCEEDS">Exceeds (&gt;=)</option>
+                      <option value="BELOW">Falls Below (&lt;=)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[8.5px] uppercase font-semibold text-white/40 block mb-1 font-mono font-bold">
+                      {newAlertType === 'TREND_STRENGTH' ? 'Threshold (%)' : `Threshold (${newAlertSymbol === 'BTC/USDT' ? 'USDT' : newAlertSymbol === 'USD/JPY' ? '¥' : 'Pips'})`}
+                    </label>
+                    <input
+                      type="number"
+                      step={newAlertSymbol === 'USD/JPY' && newAlertType === 'GAP_PIPS_PRICE' ? '0.01' : '1'}
+                      value={newAlertValue}
+                      onChange={(e) => setNewAlertValue(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-[#050505] text-[11px] font-bold text-white border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-white border border-amber-500/30 hover:border-amber-500/60 transition-all rounded py-1.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5 mt-2 pointer-events-auto"
+                >
+                  <Plus className="w-3 h-3 text-amber-400" />
+                  Add Alert Rule
+                </button>
+              </form>
+
+              {/* List of Scheduled Alerts */}
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-2 custom-scrollbar shrink">
+                <div className="text-[9px] uppercase font-bold tracking-wider text-white/45 block mb-1 flex items-center justify-between">
+                  <span>Active Alerts ({smartAlerts.length})</span>
+                  {smartAlerts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Delete all Smart Alerts?")) {
+                          setSmartAlerts([]);
+                        }
+                      }}
+                      className="text-[8.5px] text-rose-500 hover:text-rose-400 uppercase tracking-tight cursor-pointer font-bold"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+
+                {smartAlerts.length === 0 ? (
+                  <div className="text-center py-8 border border-dashed border-white/5 rounded px-2.5">
+                    <span className="text-[10px] text-white/35 italic block leading-relaxed">No smart alerts scheduled. Set a custom rule above to capture high-conviction trends.</span>
+                  </div>
+                ) : (
+                  smartAlerts.map((alert) => {
                     const isCur = alert.symbol === symbol;
+                    const unitLabel = alert.type === 'TREND_STRENGTH' 
+                      ? '%' 
+                      : (alert.symbol === 'BTC/USDT' ? ' USDT' : alert.symbol === 'USD/JPY' ? ' ¥' : ' Pips');
+                    
                     return (
                       <div 
                         key={alert.id}
-                        className={`flex flex-col p-2.5 rounded border transition-all ${
-                          alert.isTriggered
-                            ? 'bg-amber-500/10 border-amber-500/40 opacity-70'
+                        className={`relative flex flex-col p-2.5 rounded border transition-all ${
+                          alert.isTriggered && alert.isActive
+                            ? 'bg-rose-500/20 border-rose-500/50 shadow-[0_0_15px_rgba(239,68,68,0.25)] animate-pulse'
                             : alert.isActive
-                              ? 'bg-white/[0.02] border-white/10'
+                              ? 'bg-white/[0.02] border-white/10 hover:border-white/20'
                               : 'bg-white/[0.01] border-white/5 opacity-55'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-1">
+                        {/* Flag and symbol line */}
+                        <div className="flex items-center justify-between mb-1.5 border-b border-white/5 pb-1 select-none">
                           <div className="flex items-center space-x-1.5">
-                            <span className={`inline-block text-[8px] px-1 py-0.5 rounded font-bold font-sans ${isCur ? 'bg-amber-500/10 text-amber-400' : 'bg-white/5 text-white/50'}`}>
+                            <span className={`inline-block text-[9px] px-1 py-0.5 rounded font-bold font-sans ${isCur ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-white/50'}`}>
                               {alert.symbol}
                             </span>
-                            <span className="text-[8px] text-white/40 uppercase tracking-wider font-extrabold flex items-center gap-1">
-                              <span>CROSSING</span>
-                              <span className={alert.type === 'CROSS_UP' ? 'text-emerald-400' : 'text-rose-400'}>
-                                {alert.type === 'CROSS_UP' ? '▲ UP' : '▼ DOWN'}
-                              </span>
+                            <span className="text-[8px] text-white/30 uppercase tracking-wider font-extrabold">
+                              {alert.type === 'TREND_STRENGTH' ? 'STRENGTH' : 'GAP'}
                             </span>
                           </div>
-
+                          
                           <div className="flex items-center space-x-1.5">
-                            {/* Mute toggle button */}
+                            {/* Active / Disable toggle */}
                             <button
                               type="button"
-                              onClick={() => {
-                                setVisualPriceAlerts(prev => prev.map(p => p.id === alert.id ? { ...p, isActive: !p.isActive, isTriggered: false } : p));
-                              }}
+                              onClick={() => handleToggleAlertActive(alert.id)}
                               className={`text-[8.5px] uppercase font-bold tracking-tight px-1 py-0.5 rounded transition-all cursor-pointer border ${
-                                alert.isActive && !alert.isTriggered
-                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/20 hover:bg-amber-500/30'
+                                alert.isActive
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/30'
                                   : 'bg-white/5 text-white/35 border-white/5 hover:bg-white/10 hover:text-white/60'
                               }`}
+                              title={alert.isActive ? "Deactivate active alert" : "Activate disabled alert"}
                             >
-                              {alert.isTriggered ? 'TRIGGERED' : alert.isActive ? 'ACTIVE' : 'MUTED'}
+                              {alert.isActive ? 'ACTIVE' : 'MUTED'}
                             </button>
 
-                            {/* Trash button */}
+                            {/* Trash indicator */}
                             <button
                               type="button"
-                              onClick={() => {
-                                setVisualPriceAlerts(prev => prev.filter(p => p.id !== alert.id));
-                              }}
+                              onClick={() => handleDeleteAlert(alert.id)}
                               className="p-1 hover:bg-rose-500/10 hover:text-rose-400 text-white/20 rounded transition-all cursor-pointer"
-                              title="Delete visual alert"
+                              title="Delete custom alert"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
                         </div>
 
-                        <div className="text-[11px] font-bold text-white leading-tight mt-1 flex items-center justify-between">
-                          <span>
-                            Level: <span className="text-amber-400">{alert.price.toFixed(displayFormat)}</span>
+                        {/* Config explanation */}
+                        <div className="text-[10px] sm:text-[10.5px] text-white/85 font-semibold flex items-center flex-wrap gap-1 leading-tight select-none">
+                          <span>Trigger when</span>
+                          <span className="bg-white/5 text-white text-[9px] px-1 py-0.5 rounded font-black font-sans">
+                            {alert.comparison === 'EXCEEDS' ? '>=' : '<='}
                           </span>
-                          <span className="text-white/30 text-[8px] font-normal">{alert.createdAt}</span>
+                          <span className="text-amber-300 font-bold">{alert.value}{unitLabel}</span>
                         </div>
 
-                        {/* Trigger details label if crossed */}
-                        {alert.isTriggered && alert.lastTriggeredTime && (
-                          <div className="mt-1.5 pt-1 border-t border-white/5 text-[8.5px] text-amber-400/80">
-                            🔔 Triggered at {alert.lastTriggeredTime}
+                        {/* Triggers logged stats */}
+                        {alert.triggeredCount > 0 && (
+                          <div className="mt-2 pt-1 border-t border-white/5 flex items-center justify-between text-[8px] text-white/40 select-none">
+                            <span className="text-rose-400 font-bold flex items-center gap-0.5">
+                              <span className="w-1 h-1 rounded bg-rose-400 animate-ping inline-block" />
+                              ALARM ({alert.triggeredCount}x)
+                            </span>
+                            <div className="flex items-center space-x-1.5">
+                              {alert.lastTriggered && (
+                                <span title={`At price: ${alert.lastTriggeredPrice}`}>Last: {alert.lastTriggered}</span>
+                              )}
+                              <span className="text-white/20">|</span>
+                              <button
+                                type="button"
+                                onClick={() => handleResetTriggerCount(alert.id)}
+                                className="text-white/35 hover:text-white/60 hover:underline cursor-pointer font-bold text-[8px] uppercase tracking-tighter"
+                              >
+                                Reset
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
                     );
-                  })}
+                  })
+                )}
+
+                {/* Visual Price alert section */}
+                <div className="pt-4 border-t border-white/10 mt-2">
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-amber-400 block mb-2 flex items-center justify-between">
+                    <span>Visual Alert Lines ({visualPriceAlerts.length})</span>
+                    {visualPriceAlerts.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("Delete all Visual Price Alerts?")) {
+                            setVisualPriceAlerts([]);
+                          }
+                        }}
+                        className="text-[8.5px] text-rose-500 hover:text-rose-400 uppercase tracking-tight cursor-pointer font-bold"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+
+                  {visualPriceAlerts.length === 0 ? (
+                    <div className="text-center py-6 border border-dashed border-white/5 rounded px-2.5">
+                      <span className="text-[10px] text-white/35 italic block leading-relaxed">
+                        No visual alert lines set. Click on "Set Alert Line" above and click anywhere on the chart canvas to add one.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {visualPriceAlerts.map((alert) => {
+                        const displayFormat = alert.symbol === 'USD/JPY' ? 2 : alert.symbol === 'BTC/USDT' ? 0 : 5;
+                        const isCur = alert.symbol === symbol;
+                        return (
+                          <div 
+                            key={alert.id}
+                            className={`flex flex-col p-2.5 rounded border transition-all ${
+                              alert.isTriggered
+                                ? 'bg-amber-500/10 border-amber-500/40 opacity-70'
+                                : alert.isActive
+                                  ? 'bg-white/[0.02] border-white/10'
+                                  : 'bg-white/[0.01] border-white/5 opacity-55'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center space-x-1.5">
+                                <span className={`inline-block text-[8px] px-1 py-0.5 rounded font-bold font-sans ${isCur ? 'bg-amber-500/10 text-amber-400' : 'bg-white/5 text-white/50'}`}>
+                                  {alert.symbol}
+                                </span>
+                                <span className="text-[8px] text-white/40 uppercase tracking-wider font-extrabold flex items-center gap-1">
+                                  <span>CROSSING</span>
+                                  <span className={alert.type === 'CROSS_UP' ? 'text-emerald-400' : 'text-rose-400'}>
+                                    {alert.type === 'CROSS_UP' ? '▲ UP' : '▼ DOWN'}
+                                  </span>
+                                </span>
+                              </div>
+
+                              <div className="flex items-center space-x-1.5">
+                                {/* Mute toggle button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVisualPriceAlerts(prev => prev.map(p => p.id === alert.id ? { ...p, isActive: !p.isActive, isTriggered: false } : p));
+                                  }}
+                                  className={`text-[8.5px] uppercase font-bold tracking-tight px-1 py-0.5 rounded transition-all cursor-pointer border ${
+                                    alert.isActive && !alert.isTriggered
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/20 hover:bg-amber-500/30'
+                                      : 'bg-white/5 text-white/35 border-white/5 hover:bg-white/10 hover:text-white/60'
+                                  }`}
+                                >
+                                  {alert.isTriggered ? 'TRIGGERED' : alert.isActive ? 'ACTIVE' : 'MUTED'}
+                                </button>
+
+                                {/* Trash button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVisualPriceAlerts(prev => prev.filter(p => p.id !== alert.id));
+                                  }}
+                                  className="p-1 hover:bg-rose-500/10 hover:text-rose-400 text-white/20 rounded transition-all cursor-pointer"
+                                  title="Delete visual alert"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="text-[11px] font-bold text-white leading-tight mt-1 flex items-center justify-between">
+                              <span>
+                                Level: <span className="text-amber-400">{alert.price.toFixed(displayFormat)}</span>
+                              </span>
+                              <span className="text-white/30 text-[8px] font-normal">{alert.createdAt}</span>
+                            </div>
+
+                            {/* Trigger details label if crossed */}
+                            {alert.isTriggered && alert.lastTriggeredTime && (
+                              <div className="mt-1.5 pt-1 border-t border-white/5 text-[8.5px] text-amber-400/80">
+                                🔔 Triggered at {alert.lastTriggeredTime}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Manual Trendlines Section */}
+                <div className="pt-4 border-t border-white/10 mt-4 pb-4">
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-emerald-400 block mb-2 flex items-center justify-between">
+                    <span>Drawn Trendlines ({manualTrendlines.length})</span>
+                    {manualTrendlines.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("Delete all manually drawn trendlines?")) {
+                            setManualTrendlines([]);
+                          }
+                        }}
+                        className="text-[8.5px] text-rose-500 hover:text-rose-400 uppercase tracking-tight cursor-pointer font-bold"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+
+                  {manualTrendlines.length === 0 ? (
+                    <div className="text-center py-6 border border-dashed border-white/5 rounded px-2.5">
+                      <span className="text-[10px] text-white/35 italic block leading-relaxed">
+                        No custom trendlines drawn. Click on "Draw Trendline" above and click two points on the chart to set one.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                      {manualTrendlines.map((tl) => {
+                        const displayFormat = tl.symbol === 'USD/JPY' ? 2 : tl.symbol === 'BTC/USDT' ? 0 : 5;
+                        const isCur = tl.symbol === symbol;
+                        return (
+                          <div
+                            key={tl.id}
+                            className={`p-2 bg-white/[0.01] border hover:bg-white/[0.02] transition-all rounded ${
+                              isCur ? 'border-emerald-500/25' : 'border-white/5'
+                            } ${!isCur ? 'opacity-65' : ''}`}
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <div className="flex items-center space-x-1">
+                                <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${isCur ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-white/40'}`}>
+                                  {tl.symbol}
+                                </span>
+                                <span className="text-[7.5px] text-white/45 font-mono uppercase tracking-tight">
+                                  Pts: #{tl.startIdx} → #{tl.endIdx}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center space-x-1.5 font-bold">
+                                {/* Style Selector */}
+                                <select
+                                  value={tl.style || 'solid'}
+                                  onChange={(e) => {
+                                    const newStyle = e.target.value as 'solid' | 'dashed' | 'dotted';
+                                    setManualTrendlines(prev => prev.map(t => t.id === tl.id ? { ...t, style: newStyle } : t));
+                                  }}
+                                  className="text-[8px] bg-[#050505] text-white/70 border border-white/10 rounded px-1 py-0.5 focus:outline-none cursor-pointer"
+                                >
+                                  <option value="solid">Solid</option>
+                                  <option value="dashed">Dashed</option>
+                                  <option value="dotted">Dotted</option>
+                                </select>
+
+                                {/* Trash button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setManualTrendlines(prev => prev.filter(t => t.id !== tl.id));
+                                  }}
+                                  className="p-1 hover:bg-rose-500/10 hover:text-rose-400 text-white/20 hover:text-rose-400 rounded transition-all cursor-pointer"
+                                  title="Delete trendline"
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Interactive Color selection pallet */}
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="text-[9.5px] text-white/50 font-mono">
+                                Range: <span className="text-white/80 font-semibold">{tl.startPrice.toFixed(displayFormat)}</span> - <span className="text-white/80 font-semibold">{tl.endPrice.toFixed(displayFormat)}</span>
+                              </div>
+                              
+                              <div className="flex items-center space-x-1">
+                                {['#22c55e', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899'].map((c) => (
+                                  <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => {
+                                      setManualTrendlines(prev => prev.map(t => t.id === tl.id ? { ...t, color: c } : t));
+                                    }}
+                                    className={`w-2.5 h-2.5 rounded-full transition-transform cursor-pointer hover:scale-125 ${(tl.color || '#22c55e') === c ? 'ring-1 ring-white/70 scale-110' : 'opacity-65'}`}
+                                    style={{ backgroundColor: c }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col min-h-0">
+              {/* Form specifically for custom Price-Action Trend Alerts */}
+              <form onSubmit={handleAddPaAlert} className="p-3.5 border-b border-white/10 space-y-2.5 bg-white/[0.01] shrink-0">
+                <span className="text-[9px] uppercase font-bold tracking-wider text-emerald-400 block mb-1 font-mono">Create Price-Action Trend Alert</span>
+                
+                <div className="grid grid-cols-3 gap-1.5">
+                  <div>
+                    <label className="text-[8px] uppercase font-semibold text-white/40 block mb-1 font-mono">Instrument</label>
+                    <select
+                      value={newPaSymbol}
+                      onChange={(e) => setNewPaSymbol(e.target.value)}
+                      className="w-full bg-[#050505] text-[9.5px] text-white/90 border border-white/10 rounded px-1 py-1 outline-none focus:border-emerald-500 font-mono cursor-pointer"
+                    >
+                      {Object.keys(FRIENDLY_NAMES).map((sym) => (
+                        <option key={sym} value={sym}>{sym}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[8px] uppercase font-semibold text-white/40 block mb-1 font-mono">Event Type</label>
+                    <select
+                      value={newPaType}
+                      onChange={(e) => setNewPaType(e.target.value as 'BREAKING_OB' | 'FVG_TAP')}
+                      className="w-full bg-[#050505] text-[9.5px] text-white/90 border border-white/10 rounded px-1 py-1 outline-none focus:border-emerald-500 font-mono cursor-pointer"
+                    >
+                      <option value="BREAKING_OB">OB Break</option>
+                      <option value="FVG_TAP">FVG Tap</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[8px] uppercase font-semibold text-white/40 block mb-1 font-mono">Direction</label>
+                    <select
+                      value={newPaDirection}
+                      onChange={(e) => setNewPaDirection(e.target.value as 'BULLISH' | 'BEARISH' | 'ANY')}
+                      className="w-full bg-[#050505] text-[9.5px] text-white/90 border border-white/10 rounded px-1 py-1 outline-none focus:border-emerald-500 font-mono cursor-pointer"
+                    >
+                      <option value="ANY">Any Zone</option>
+                      <option value="BULLISH">Bullish Only</option>
+                      <option value="BEARISH">Bearish Only</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 hover:text-white border border-emerald-500/30 hover:border-emerald-500/60 transition-all rounded py-1.5 text-[9.5px] font-bold uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1.5 pointer-events-auto"
+                >
+                  <Plus className="w-3 h-3 text-emerald-400" />
+                  Configure PA Alert
+                </button>
+              </form>
+
+              {/* List of custom Price-Action Trend Alert rules */}
+              <div className="flex-grow overflow-y-auto p-3.5 space-y-3 custom-scrollbar min-h-0">
+                <div className="text-[9px] uppercase font-bold tracking-wider text-emerald-400/80 block mb-1 flex items-center justify-between">
+                  <span>PA Trend Rules ({priceActionAlerts.length})</span>
+                  {priceActionAlerts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Delete all Custom Price Action Alerts?")) {
+                          setPriceActionAlerts([]);
+                        }
+                      }}
+                      className="text-[8px] text-rose-500 hover:text-rose-400 uppercase tracking-tight cursor-pointer font-bold"
+                    >
+                      Clear Rules
+                    </button>
+                  )}
+                </div>
+
+                {priceActionAlerts.length === 0 ? (
+                  <div className="text-center py-6 border border-dashed border-white/5 rounded px-2">
+                    <span className="text-[9.5px] text-white/35 italic block leading-relaxed select-none">
+                      No tactical price action alerts configured. Toggle settings above to establish smart indicators.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                    {priceActionAlerts.map((alert) => {
+                      const isCur = alert.symbol === symbol;
+                      return (
+                        <div
+                          key={alert.id}
+                          className={`p-2 bg-white/[0.01] border hover:bg-white/[0.02] transition-all rounded ${
+                            alert.isTriggered
+                              ? 'border-emerald-500/10 opacity-60 bg-black/20'
+                              : alert.isActive
+                                ? 'border-emerald-500/25 bg-black/40'
+                                : 'border-white/5 opacity-55'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1 mb-1 select-none">
+                            <div className="flex items-center space-x-1.5">
+                              <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${isCur ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-white/40'}`}>
+                                {alert.symbol}
+                              </span>
+                              <span className="text-[7.5px] text-white/50 font-mono uppercase tracking-tight font-black">
+                                {alert.type === 'BREAKING_OB' ? 'OB BREAK' : 'FVG TAP'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePaAlertActive(alert.id)}
+                                className={`text-[8.5px] uppercase font-bold tracking-tight px-1 py-0.5 rounded transition-all cursor-pointer border ${
+                                  alert.isActive
+                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/30 font-extrabold'
+                                    : 'bg-white/5 text-white/35 border-white/5 hover:bg-white/10'
+                                }`}
+                              >
+                                {alert.isTriggered ? 'TRIGGERED' : alert.isActive ? 'ACTIVE' : 'MUTED'}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePaAlert(alert.id)}
+                                className="p-0.5 hover:bg-rose-500/10 hover:text-rose-400 text-white/20 hover:text-rose-400 rounded transition-all cursor-pointer"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="text-[9.5px] text-white/70 font-sans mt-0.5 flex items-center justify-between select-none">
+                            <span>
+                              Check {alert.direction === 'ANY' ? 'any' : alert.direction.toLowerCase()} instances
+                            </span>
+                            {alert.lastTriggeredTime && (
+                              <span className="text-[7.5px] text-emerald-400 italic font-mono font-bold">Hit: {alert.lastTriggeredTime}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* PERSISTENT TOASTS HISTORY INBOX IN DRAWER */}
+                <div className="pt-3 border-t border-white/10 mt-2 pb-4">
+                  <div className="text-[9px] uppercase font-bold tracking-wider text-emerald-400 block mb-2 flex items-center justify-between">
+                    <span>Persistent Toasts Inbox ({persistentToasts.length})</span>
+                    {persistentToasts.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("Clear all persistent toast notifications history?")) {
+                            setPersistentToasts([]);
+                          }
+                        }}
+                        className="text-[8px] text-rose-500 hover:text-rose-400 uppercase tracking-tight cursor-pointer font-bold"
+                      >
+                        Clear Inbox
+                      </button>
+                    )}
+                  </div>
+
+                  {persistentToasts.length === 0 ? (
+                    <div className="text-center py-6 border border-dashed border-white/5 rounded px-2 bg-black/[0.15]">
+                      <span className="text-[9px] text-white/25 italic block leading-relaxed select-none">
+                        No custom trend alerts triggered yet. Price action crossings will register persistent items here.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                      {persistentToasts.map((toast) => (
+                        <div
+                          key={toast.id}
+                          className={`p-2 bg-black/45 hover:bg-white/[0.01] border rounded flex flex-col gap-0.5 relative transition-all text-left ${
+                            toast.type === 'success' ? 'border-emerald-500/15' : 'border-amber-500/15'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between pointer-events-auto">
+                            <div className="flex items-center space-x-1.5 select-none">
+                              <span className={`text-[7px] font-black tracking-wider px-1 py-0.5 rounded leading-none ${
+                                toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-300'
+                              }`}>
+                                {toast.badge}
+                              </span>
+                              <span className="text-[8.5px] text-white/80 font-mono font-bold">{toast.symbol}</span>
+                            </div>
+                            
+                            <button
+                              type="button"
+                              onClick={() => setPersistentToasts(prev => prev.filter(t => t.id !== toast.id))}
+                              className="text-white/35 hover:text-rose-400 font-bold hover:bg-white/5 rounded px-1 cursor-pointer transition-colors text-[9px] leading-none"
+                              title="Dismiss alert history"
+                            >
+                              ×
+                            </button>
+                          </div>
+
+                          <p className="text-[8.5px] text-white/60 leading-normal font-sans pr-4 select-text">
+                            {toast.message}
+                          </p>
+                          
+                          <div className="text-[7.5px] text-white/30 text-right select-none font-mono">
+                            {toast.timestamp}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Pane 2: Recharts RSI Panel */}

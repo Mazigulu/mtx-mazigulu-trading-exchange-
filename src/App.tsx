@@ -10,6 +10,7 @@ import ChartContainer from './components/ChartContainer';
 import AdvisorChat, { Message } from './components/AdvisorChat';
 import EconomicCalendar from './components/EconomicCalendar';
 import OrderBookTracker from './components/OrderBookTracker';
+import CumulativeDepthChart from './components/CumulativeDepthChart';
 import Mt5BridgeGuide from './components/Mt5BridgeGuide';
 import TradeTerminal from './components/TradeTerminal';
 import BacktestSimulator from './components/BacktestSimulator';
@@ -25,10 +26,12 @@ import SettingsPanel from './components/SettingsPanel';
 import TickerPrice from './components/TickerPrice';
 import TradeJournal from './components/TradeJournal';
 import StrategyPerformanceChart from './components/StrategyPerformanceChart';
+import { TradePositionRowItem } from './components/TradePositionRowItem';
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
 import { 
   HelpCircle, 
+  Calendar,
   Layers, 
   Radio, 
   Cpu, 
@@ -49,11 +52,24 @@ import {
   Moon,
   TrendingUp,
   X,
+  Menu,
   ChevronDown,
   ChevronUp,
   Camera,
-  Timer
+  Timer,
+  Filter,
+  Share2,
+  Check,
+  Terminal,
+  Folder,
+  FileCode,
+  Play,
+  Square,
+  Eye,
+  Download
 } from 'lucide-react';
+
+const emptyPositionsImg = new URL('./assets/images/empty_positions_1781203013885.jpg', import.meta.url).href;
 
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -83,8 +99,14 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'INTELLIGENCE' | 'EXECUTION' | 'RISK' | 'RESEARCH' | 'SETTINGS'>('DASHBOARD');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'INTELLIGENCE' | 'EXECUTION' | 'RISK' | 'RESEARCH' | 'SETTINGS'>('INTELLIGENCE');
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isChartExpanded, setIsChartExpanded] = useState(true);
   const [symbol, setSymbol] = useState<MarketSymbol>('EUR/USD');
+  const [jumpRange, setJumpRange] = useState<{ start: string; end: string; triggerId: number } | null>(null);
+  const [sessionStartDate, setSessionStartDate] = useState('');
+  const [sessionEndDate, setSessionEndDate] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [mt5Ping, setMt5Ping] = useState<number>(12);
   const [isSimulatingSpike, setIsSimulatingSpike] = useState<boolean>(false);
@@ -98,6 +120,35 @@ export default function App() {
     pnl: number;
     timestamp: string;
   } | null>(null);
+
+  // --- Metatrader 5 Wrapper & EA Agentic States ---
+  const [eaInputMagicNumber, setEaInputMagicNumber] = useState<number>(234567);
+  const [eaInputRiskPct, setEaInputRiskPct] = useState<number>(1.0);
+  const [eaInputSlippage, setEaInputSlippage] = useState<number>(3);
+  const [eaInputTrailingStop, setEaInputTrailingStop] = useState<number>(10);
+  const [eaInputBreakeven, setEaInputBreakeven] = useState<number>(15);
+  const [eaActiveMode, setEaActiveMode] = useState<'COPILOT' | 'AUTOPILOT'>('COPILOT');
+  const [mqlEditorTab, setMqlEditorTab] = useState<'MQL5_CODE' | 'EA_INPUTS' | 'TERMINAL_LOGS'>('MQL5_CODE');
+  const [isCompilingMql, setIsCompilingMql] = useState<boolean>(false);
+  const [compileSuccess, setCompileSuccess] = useState<boolean>(false);
+  const [mqlConsoleLogs, setMqlConsoleLogs] = useState<string[]>([
+    "2026.06.08 08:00:15.012 MetaTrader 5 Terminal Build 4022 started (Pepperstone Group)",
+    "2026.06.08 08:00:15.845 MQL5 Cloud Network service initialized successfully",
+    "2026.06.08 08:00:16.110 Secured socket link established with Apex Cloud Server",
+    "2026.06.08 08:00:16.112 Terminal connected to Account #234567 on Pepperstone-MT5-Live-3",
+    "2026.06.08 08:00:17.301 EX5 Analyzer: expert 'Apex_Agentic_ICT.ex5' loaded successfully",
+    "2026.06.08 08:00:17.320 Expert Advisor initialized: 'Apex_Agentic_ICT.ex5' on EUR/USD, H4. Signal mode active."
+  ]);
+
+  // Append symbol-switch logs dynamically
+  useEffect(() => {
+    const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
+    setMqlConsoleLogs(prev => [
+      ...prev,
+      `${timeStr}.104 Chart symbol switched to ${symbol}. Synchronizing H4 candlesticks buffer...`,
+      `${timeStr}.218 MQL5 Expert Advisor updated subscription channels. Ready.`
+    ].slice(-150)); // cap at 150 lines
+  }, [symbol]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -126,6 +177,20 @@ export default function App() {
   // Automated Volatility Alert states
   const [volatilityAlertEnabled, setVolatilityAlertEnabled] = useState(false);
   const [dismissedVolatilityAlertSymbol, setDismissedVolatilityAlertSymbol] = useState<string | null>(null);
+  const [dailyPnLGoal, setDailyPnLGoal] = useState<number>(1000);
+  const [trendProjectionEnabled, setTrendProjectionEnabled] = useState<boolean>(false);
+
+  // Daily PnL threshold alerts options
+  const [dailyPnLAlertEnabled, setDailyPnLAlertEnabled] = useState(false);
+  const [dailyPnLPositiveThreshold, setDailyPnLPositiveThreshold] = useState(2000);
+  const [dailyPnLNegativeThreshold, setDailyPnLNegativeThreshold] = useState(-1000);
+
+  // Highlight Order blocks and FVG using D3 state to coordinate overlays
+  const [highlightOrderBlocks, setHighlightOrderBlocks] = useState(false);
+  const [resetChartKey, setResetChartKey] = useState(0);
+
+  const hasTriggeredPositiveRef = useRef(false);
+  const hasTriggeredNegativeRef = useRef(false);
 
   useEffect(() => {
     const checkSettings = () => {
@@ -134,8 +199,20 @@ export default function App() {
         if (saved) {
           const parsed = JSON.parse(saved);
           setVolatilityAlertEnabled(!!parsed.volatilityAlertEnabled);
+          if (typeof parsed.dailyPnLGoal === 'number') {
+            setDailyPnLGoal(parsed.dailyPnLGoal);
+          } else {
+            setDailyPnLGoal(1000);
+          }
+          setDailyPnLAlertEnabled(!!parsed.dailyPnLAlertEnabled);
+          setDailyPnLPositiveThreshold(typeof parsed.dailyPnLPositiveThreshold === 'number' ? parsed.dailyPnLPositiveThreshold : 2000);
+          setDailyPnLNegativeThreshold(typeof parsed.dailyPnLNegativeThreshold === 'number' ? parsed.dailyPnLNegativeThreshold : -1000);
         } else {
           setVolatilityAlertEnabled(false);
+          setDailyPnLGoal(1000);
+          setDailyPnLAlertEnabled(false);
+          setDailyPnLPositiveThreshold(2000);
+          setDailyPnLNegativeThreshold(-1000);
         }
       } catch (e) {
         console.warn('Failed reading settings key in App:', e);
@@ -210,14 +287,21 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
   const [sweeps, setSweeps] = useState<LiquiditySweep[]>([]);
   const [metrics, setMetrics] = useState<MarketMetrics | null>(null);
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
+  const [showTWVP, setShowTWVP] = useState<boolean>(true);
   const [newsEvents, setNewsEvents] = useState<NewsEvent[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [expandedTradeIds, setExpandedTradeIds] = useState<Record<string, boolean>>({});
   const [positionSort, setPositionSort] = useState<'PROFITABLE' | 'MARGIN' | 'DURATION'>('PROFITABLE');
+  const [positionFilter, setPositionFilter] = useState<'ALL' | 'WINNING' | 'LOSING'>('ALL');
 
   const sortedActivePositions = useMemo(() => {
     const openPos = trades.filter(t => t.status === 'OPEN');
-    return [...openPos].sort((a, b) => {
+    const filteredPos = openPos.filter(t => {
+      if (positionFilter === 'WINNING') return t.pnl > 0;
+      if (positionFilter === 'LOSING') return t.pnl <= 0;
+      return true;
+    });
+    return [...filteredPos].sort((a, b) => {
       if (positionSort === 'PROFITABLE') {
         return b.pnl - a.pnl;
       } else if (positionSort === 'MARGIN') {
@@ -232,7 +316,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       }
       return 0;
     });
-  }, [trades, positionSort]);
+  }, [trades, positionSort, positionFilter]);
 
   const toggleTradeExpand = (id: string) => {
     setExpandedTradeIds(prev => ({
@@ -240,6 +324,61 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       [id]: !prev[id]
     }));
   };
+
+  // Browser-native desktop notification service for TP/SL hits
+  const prevTradesRef = useRef<Trade[]>([]);
+
+  useEffect(() => {
+    // 1. Check if desktop notifications are enabled in local storage settings
+    let desktopNotificationsEnabled = false;
+    try {
+      const saved = localStorage.getItem('apex_institutional_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        desktopNotificationsEnabled = !!parsed.desktopNotificationsEnabled;
+      }
+    } catch (e) {
+      console.warn('Failed to parse settings for desktop notifications:', e);
+    }
+
+    const prevTrades = prevTradesRef.current;
+
+    // We only evaluate transitions if we have a previous recorded state
+    if (prevTrades && prevTrades.length > 0 && trades && trades.length > 0) {
+      trades.forEach((currentTrade) => {
+        // Find if this trade was OPEN in the last tick
+        const wasOpen = prevTrades.find((t) => t.id === currentTrade.id && t.status === 'OPEN');
+        if (wasOpen && currentTrade.status === 'CLOSED') {
+          // Check if transition reason is due to hit stop-loss or take-profit
+          const reason = currentTrade.reason || '';
+          const isSL = reason.toLowerCase().includes('sl hit') || reason.toLowerCase().includes('stop-loss') || reason.toLowerCase().includes('stop loss');
+          const isTP = reason.toLowerCase().includes('tp hit') || reason.toLowerCase().includes('take-profit') || reason.toLowerCase().includes('take profit');
+
+          if (isSL || isTP) {
+            const heading = isTP ? '🎯 Take-Profit Target Reached' : '🛡️ Stop-Loss Target Reached';
+            const hitPrice = currentTrade.exitPrice || currentTrade.entryPrice;
+            const pnlString = currentTrade.pnl >= 0 ? `+$${currentTrade.pnl}` : `-$${Math.abs(currentTrade.pnl)}`;
+            const body = `${currentTrade.symbol} ${currentTrade.side} hit ${isTP ? 'TP' : 'SL'} at ${hitPrice}. Net PnL: ${pnlString}. Reason: ${reason}`;
+
+            if (desktopNotificationsEnabled && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification(heading, {
+                  body,
+                  tag: currentTrade.id,
+                  icon: '/assets/favicon.png'
+                });
+              } catch (err) {
+                console.error('Failed to trigger native Notification instance:', err);
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Always update current ref
+    prevTradesRef.current = trades;
+  }, [trades]);
 
   const sessionTrades = useMemo(() => {
     return trades.filter((t) => {
@@ -337,6 +476,58 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       console.error('Failed to capture high-resolution positions snapshot:', error);
     } finally {
       setIsSnapshotting(false);
+    }
+  };
+
+  const [shareSuccess, setShareSuccess] = useState(false);
+
+  const handleSharePositions = async () => {
+    const openPos = trades.filter(t => t.status === 'OPEN');
+    const totalPnl = openPos.reduce((sum, t) => sum + t.pnl, 0);
+    const sign = totalPnl >= 0 ? '+' : '';
+    const timestamp = new Date().toLocaleString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit',
+      timeZoneName: 'short' 
+    });
+
+    let textSummary = `⚡ APEX INSTITUTIONAL ACTIVE EXPOSURES SUMMARY ⚡\n`;
+    textSummary += `==============================================\n`;
+    textSummary += `Generated At       : ${timestamp}\n`;
+    textSummary += `Active Positions   : ${openPos.length}\n`;
+    textSummary += `Total Floating PnL : ${sign}$${totalPnl.toFixed(2)}\n`;
+    textSummary += `==============================================\n\n`;
+
+    if (openPos.length === 0) {
+      textSummary += `No active micro-leveraged exposures are currently open in the market.\n`;
+    } else {
+      textSummary += `Active Positions Detail:\n`;
+      openPos.forEach((t, idx) => {
+        const signRow = t.pnl >= 0 ? '+' : '';
+        textSummary += `${idx + 1}. [${t.side}] ${t.symbol}\n`;
+        textSummary += `   • Size       : ${t.size} Lots\n`;
+        textSummary += `   • Entry Price: ${t.entryPrice.toFixed(t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5)}\n`;
+        textSummary += `   • SL / TP    : ${t.stopLoss.toFixed(t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5)} / ${t.takeProfit.toFixed(t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5)}\n`;
+        textSummary += `   • Net PnL    : ${signRow}$${t.pnl.toFixed(2)}\n`;
+        textSummary += `   • Duration   : ${formatOpenDuration(t.timestamp)}\n\n`;
+      });
+    }
+
+    textSummary += `==============================================\n`;
+    textSummary += `Apex Institutional Risk & Position Engine active.`;
+
+    try {
+      await navigator.clipboard.writeText(textSummary);
+      setShareSuccess(true);
+      setTimeout(() => {
+        setShareSuccess(false);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy positions summary to clipboard:', err);
     }
   };
 
@@ -587,256 +778,351 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       riskRatio: totalOpenRiskAmount || 0.0,
     };
   }, [trades, candles]);
+
+  // Monitor Daily PnL threshold alerts and trigger browser-native desktop notifications
+  useEffect(() => {
+    if (!dailyPnLAlertEnabled) {
+      hasTriggeredPositiveRef.current = false;
+      hasTriggeredNegativeRef.current = false;
+      return;
+    }
+
+    const currentDailyPnL = systemDashboardSummary.dailyPnL;
+
+    // Check positive (profit) threshold
+    if (currentDailyPnL >= dailyPnLPositiveThreshold) {
+      if (!hasTriggeredPositiveRef.current) {
+        hasTriggeredPositiveRef.current = true;
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('📈 Daily Profit Threshold Reached', {
+              body: `Your daily PnL of $${currentDailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} has reached or exceeded your profit threshold of $${dailyPnLPositiveThreshold.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
+              icon: '/assets/favicon.png'
+            });
+          } catch (err) {
+            console.error('Failed to trigger daily profit target notification:', err);
+          }
+        }
+      }
+    } else {
+      // Allow re-triggers if it falls below the profit threshold
+      hasTriggeredPositiveRef.current = false;
+    }
+
+    // Check negative (loss) threshold
+    // Handle either negatively entered or positively entered threshold (e.g. -1000 or 1000 for loss limit)
+    const resolvedMinLimit = dailyPnLNegativeThreshold < 0 ? dailyPnLNegativeThreshold : -Math.abs(dailyPnLNegativeThreshold);
+    
+    if (currentDailyPnL <= resolvedMinLimit) {
+      if (!hasTriggeredNegativeRef.current) {
+        hasTriggeredNegativeRef.current = true;
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('🚨 Daily Loss Threshold Reached', {
+              body: `Your daily PnL of $${currentDailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} has dropped to or below your loss limit threshold of $${resolvedMinLimit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
+              icon: '/assets/favicon.png'
+            });
+          } catch (err) {
+            console.error('Failed to trigger daily loss target notification:', err);
+          }
+        }
+      }
+    } else {
+      // Allow re-triggers if it goes back out of danger
+      hasTriggeredNegativeRef.current = false;
+    }
+  }, [
+    systemDashboardSummary.dailyPnL,
+    dailyPnLAlertEnabled,
+    dailyPnLPositiveThreshold,
+    dailyPnLNegativeThreshold
+  ]);
   
   // Dataset for 'Projection vs Actual' Area Chart tracking cumulative performance against institutional goals
   const projectionVsActualData = useMemo(() => {
     const dailyPnL = systemDashboardSummary.dailyPnL;
-    // Institutional goal is set to $1,000.00
-    const targetGoal = 1000;
-    const hours = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00'];
+    // User-configurable daily performance goal
+    const targetGoal = dailyPnLGoal;
+    const hours = [
+      '08:00', '09:00', '10:00', '11:00', '12:00', 
+      '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
+    ];
     
-    return hours.map((hour, idx) => {
+    // Cumulative ratios representing progress toward final daily PnL, with realistic intraday pullbacks
+    const pnlRatios = [0.10, 0.18, 0.30, 0.25, 0.42, 0.55, 0.51, 0.68, 0.82, 0.92, 1.00];
+
+    // Determine the current pivot hour for trend projection (e.g. based on current hour from 08:00 to 18:00)
+    const currentHourNum = new Date().getHours();
+    let currentHourIdx = currentHourNum - 8;
+    if (currentHourIdx < 1 || currentHourIdx >= 10) {
+      currentHourIdx = 5; // default to 13:00 mid-session pivot
+    }
+    
+    const pivotRatio = pnlRatios[currentHourIdx] !== undefined ? pnlRatios[currentHourIdx] : ((currentHourIdx + 1) / hours.length);
+    const pivotActual = Math.round(dailyPnL * pivotRatio);
+    const slope = pivotActual / (currentHourIdx + 1);
+    
+    const dataPoints = hours.map((hour, idx) => {
       const fraction = (idx + 1) / hours.length;
       const targetProj = Math.round(targetGoal * fraction);
+      const ratio = pnlRatios[idx] !== undefined ? pnlRatios[idx] : fraction;
+      const actualVal = Math.round(dailyPnL * ratio);
       
-      let actualVal = 0;
-      if (idx === 0) {
-        actualVal = Math.round(dailyPnL * 0.18);
-      } else if (idx === 1) {
-        actualVal = Math.round(dailyPnL * 0.45);
-      } else if (idx === 2) {
-        actualVal = Math.round(dailyPnL * 0.35); // small dip
-      } else if (idx === 3) {
-        actualVal = Math.round(dailyPnL * 0.70);
-      } else if (idx === 4) {
-        actualVal = Math.round(dailyPnL * 0.88);
-      } else {
-        actualVal = Math.round(dailyPnL);
-      }
+      // Calculate Trend Projection:
+      // Starting from 08:00, extend the slope of the current pivot hour up to the end of day (18:00)
+      const trendProjVal = Math.round(slope * (idx + 1));
       
       return {
         hour,
         'Daily Goal': targetProj,
-        'Actual PnL': actualVal
+        'Actual PnL': actualVal,
+        'Trend Projection': trendProjVal
       };
     });
-  }, [systemDashboardSummary.dailyPnL]);
+
+    // Compute hourly changes (differences between consecutive hours)
+    return dataPoints.map((dp, idx) => {
+      const previousValue = idx > 0 ? dataPoints[idx - 1]['Actual PnL'] : 0;
+      const hourlyChange = dp['Actual PnL'] - previousValue;
+      return {
+        ...dp,
+        hourlyChange
+      };
+    });
+  }, [systemDashboardSummary.dailyPnL, dailyPnLGoal]);
+  
+  // Dynamic pivot hour description for interactive Trend Projection toggle
+  const currentPivotHourText = useMemo(() => {
+    const currentHourNum = new Date().getHours();
+    let currentHourIdx = currentHourNum - 8;
+    if (currentHourIdx < 1 || currentHourIdx >= 10) {
+      currentHourIdx = 5;
+    }
+    const hours = [
+      '08:00', '09:00', '10:00', '11:00', '12:00', 
+      '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
+    ];
+    return hours[currentHourIdx];
+  }, []);
 
   // Simulated live prices for ticker blocks
   const tickerStats: Record<MarketSymbol, { name: string; price: number; pChange: number }> = {
-    'EUR/USD': { name: 'EURUSD', price: candles[candles.length - 1]?.close || 1.1645, pChange: +0.25 },
+    'EUR/USD': { name: 'EURUSD', price: symbol === 'EUR/USD' ? (candles[candles.length - 1]?.close || 1.1645) : 1.1645, pChange: +0.25 },
     'GBP/USD': { name: 'GBPUSD', price: symbol === 'GBP/USD' ? (candles[candles.length - 1]?.close || 1.2680) : 1.2680, pChange: +0.14 },
     'USD/JPY': { name: 'USDJPY', price: symbol === 'USD/JPY' ? (candles[candles.length - 1]?.close || 155.40) : 155.40, pChange: -0.32 },
-    'BTC/USDT': { name: 'BTCUSDT', price: symbol === 'BTC/USDT' ? (candles[candles.length - 1]?.close || 67500.0) : 67500.0, pChange: +1.82 },
+    'AUD/USD': { name: 'AUDUSD', price: symbol === 'AUD/USD' ? (candles[candles.length - 1]?.close || 0.6650) : 0.6650, pChange: +0.11 },
+    'EUR/GBP': { name: 'EURGBP', price: symbol === 'EUR/GBP' ? (candles[candles.length - 1]?.close || 0.8520) : 0.8520, pChange: -0.05 },
     'GOLD/USD': { name: 'GOLDUSD', price: symbol === 'GOLD/USD' ? (candles[candles.length - 1]?.close || 2355.50) : 2355.50, pChange: +0.42 },
+    'SILVER/USD': { name: 'SILVERUSD', price: symbol === 'SILVER/USD' ? (candles[candles.length - 1]?.close || 29.50) : 29.50, pChange: +0.58 },
+    'BTC/USDT': { name: 'BTCUSDT', price: symbol === 'BTC/USDT' ? (candles[candles.length - 1]?.close || 67500.0) : 67500.0, pChange: +1.82 },
+    'ETH/USDT': { name: 'ETHUSDT', price: symbol === 'ETH/USDT' ? (candles[candles.length - 1]?.close || 3450.0) : 3450.0, pChange: +1.45 },
+    'SOL/USDT': { name: 'SOLUSDT', price: symbol === 'SOL/USDT' ? (candles[candles.length - 1]?.close || 148.55) : 148.55, pChange: +2.10 },
+    'US30': { name: 'US30', price: symbol === 'US30' ? (candles[candles.length - 1]?.close || 38850.0) : 38850.0, pChange: +0.35 },
+    'NAS100': { name: 'NAS100', price: symbol === 'NAS100' ? (candles[candles.length - 1]?.close || 18550.0) : 18550.0, pChange: +0.52 },
+    'GER40': { name: 'GER40', price: symbol === 'GER40' ? (candles[candles.length - 1]?.close || 18200.0) : 18200.0, pChange: -0.15 },
+    'SPX500': { name: 'SPX500', price: symbol === 'SPX500' ? (candles[candles.length - 1]?.close || 5300.0) : 5300.0, pChange: +0.28 },
   };
 
   return (
-    <div id="apex-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex flex-col justify-between selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div id="apex-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex selection:bg-indigo-500/30 selection:text-indigo-200">
       
-      {/* Banner / Header */}
-      <header className="border-b border-white/10 bg-[#080808]/80 backdrop-blur sticky top-0 z-30">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-          
-          {/* Logo Title */}
-          <div className="flex items-center space-x-3">
-            <div className="relative">
-              <div className="h-8 w-8 rounded bg-indigo-600 flex items-center justify-center font-black text-white text-base tracking-widest shadow-[0_0_12px_#4f46e5]">
-                Ω
+      {/* Retractable Left-Hand Side Menu Navigation - Hidden on mobile screens */}
+      <aside
+        id="reproducible-side-nav"
+        className={`fixed inset-y-0 left-0 z-40 bg-[#080808] border-r border-white/10 flex-col justify-between transition-all duration-300 ease-in-out hidden md:flex ${
+          isSidebarExpanded ? 'w-64 shadow-[10px_0_35px_rgba(0,0,0,0.7)]' : 'w-16 shadow-none'
+        }`}
+        onMouseEnter={() => setIsSidebarExpanded(true)}
+        onMouseLeave={() => setIsSidebarExpanded(false)}
+      >
+        <div className="flex flex-col h-full justify-between py-5 overflow-y-auto overflow-x-hidden no-scrollbar">
+          <div>
+            {/* Top section: Brand Identity Logo */}
+            <div className="px-3 mb-8 flex items-center gap-3">
+              <div className="relative shrink-0">
+                <div className="h-10 w-10 rounded bg-indigo-600 flex items-center justify-center font-black text-white text-lg tracking-widest shadow-[0_0_12px_#4f46e5]">
+                  Ω
+                </div>
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
               </div>
-              <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+
+              {isSidebarExpanded && (
+                <div className="whitespace-nowrap animate-fadeIn">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">
+                      APEX QUANT<span className="text-indigo-500 font-extrabold">.AI</span>
+                    </span>
+                    <span className="px-1 py-0.2 rounded bg-white/5 border border-white/10 text-[7px] font-mono uppercase tracking-wide text-[#e5e5e5]/60 font-bold">
+                      v1.0
+                    </span>
+                  </div>
+                  <p className="text-[8.5px] text-white/40 font-serif italic font-light tracking-wide leading-none mt-1">
+                    Institutional Decision Engine
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Middle section: Navigation Links */}
+            <nav className="space-y-2 px-2.5">
+              {[
+                { id: 'INTELLIGENCE', label: 'Intelligence', icon: Bot },
+                { id: 'DASHBOARD', label: 'Dashboard', icon: Layers },
+                { id: 'EXECUTION', label: 'Execution', icon: Activity },
+                { id: 'RISK', label: 'Risk Desk', icon: ShieldAlert },
+                { id: 'RESEARCH', label: 'Research', icon: Award },
+                { id: 'SETTINGS', label: 'Settings', icon: Settings }
+              ].map((item) => {
+                const active = activeTab === item.id;
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    id={`side-nav-tab-${item.id.toLowerCase()}`}
+                    onClick={() => setActiveTab(item.id as any)}
+                    className={`w-full py-3 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-150 flex items-center gap-3 cursor-pointer ${
+                      active
+                        ? 'bg-indigo-600/15 text-white border border-indigo-500/40 shadow-[0_0_12px_rgba(99,102,241,0.15)] font-black'
+                        : 'text-[#e5e5e5]/50 hover:text-white hover:bg-white/[0.03] border border-transparent'
+                    } ${isSidebarExpanded ? 'px-4' : 'justify-center px-0'}`}
+                    title={item.label}
+                  >
+                    <Icon className={`w-4 h-4 shrink-0 transition-colors ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
+                    {isSidebarExpanded && (
+                      <span className="whitespace-nowrap animate-fadeIn">
+                        {item.label}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Bottom section: Connectivity Indicators */}
+          <div className="px-3 pt-4 border-t border-white/5">
+            <div className={`flex items-center gap-2.5 ${isSidebarExpanded ? 'px-1' : 'justify-center'}`}>
+              <div className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="text-sm font-semibold uppercase tracking-wider text-white leading-none">
-                  APEX QUANT<span className="text-indigo-500">.AI</span>
-                </h1>
-                <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[8px] font-mono uppercase tracking-wide text-[#e5e5e5]/60 font-bold leading-none">
-                  v1.0
+              </div>
+              {isSidebarExpanded && (
+                <span className="text-[8.5px] font-mono text-emerald-400 font-bold uppercase tracking-wider whitespace-nowrap animate-fadeIn">
+                  System Online
                 </span>
-              </div>
-              <p className="text-[10px] text-white/40 font-serif italic mt-1 font-light tracking-wide">
-                The Trading Bible & Institutional Decision Engine
-              </p>
+              )}
             </div>
           </div>
-
-          {/* Navigation Controls */}
-          <div className="flex items-center space-x-1 border border-white/5 bg-[#080808] p-1 rounded-lg overflow-x-auto max-w-[calc(100vw-3rem)] no-scrollbar">
-            <button
-              id="nav-tab-dashboard"
-              onClick={() => setActiveTab('DASHBOARD')}
-              className={`px-3 py-1.5 rounded text-[11px] font-mono font-bold uppercase transition-all flex items-center space-x-1 shrink-0 ${
-                activeTab === 'DASHBOARD'
-                  ? 'bg-white/5 text-white border border-white/10'
-                  : 'text-white/50 hover:text-white border border-transparent'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Dashboard</span>
-            </button>
-            <button
-              id="nav-tab-intelligence"
-              onClick={() => setActiveTab('INTELLIGENCE')}
-              className={`px-3 py-1.5 rounded text-[11px] font-mono font-bold uppercase transition-all flex items-center space-x-1 shrink-0 ${
-                activeTab === 'INTELLIGENCE'
-                  ? 'bg-white/5 text-white border border-white/10'
-                  : 'text-white/50 hover:text-white border border-transparent'
-              }`}
-            >
-              <Bot className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Intelligence</span>
-            </button>
-            <button
-              id="nav-tab-execution"
-              onClick={() => setActiveTab('EXECUTION')}
-              className={`px-3 py-1.5 rounded text-[11px] font-mono font-bold uppercase transition-all flex items-center space-x-1 shrink-0 ${
-                activeTab === 'EXECUTION'
-                  ? 'bg-white/5 text-white border border-white/10'
-                  : 'text-white/50 hover:text-white border border-transparent'
-              }`}
-            >
-              <Activity className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Execution</span>
-            </button>
-            <button
-              id="nav-tab-risk"
-              onClick={() => setActiveTab('RISK')}
-              className={`px-3 py-1.5 rounded text-[11px] font-mono font-bold uppercase transition-all flex items-center space-x-1 shrink-0 ${
-                activeTab === 'RISK'
-                  ? 'bg-white/5 text-white border border-white/10'
-                  : 'text-white/50 hover:text-white border border-transparent'
-              }`}
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Risk Desk</span>
-            </button>
-            <button
-              id="nav-tab-research"
-              onClick={() => setActiveTab('RESEARCH')}
-              className={`px-3 py-1.5 rounded text-[11px] font-mono font-bold uppercase transition-all flex items-center space-x-1 shrink-0 ${
-                activeTab === 'RESEARCH'
-                  ? 'bg-white/5 text-white border border-white/10'
-                  : 'text-white/50 hover:text-white border border-transparent'
-              }`}
-            >
-              <Award className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Research</span>
-            </button>
-            <button
-              id="nav-tab-settings"
-              onClick={() => setActiveTab('SETTINGS')}
-              className={`px-3 py-1.5 rounded text-[11px] font-mono font-bold uppercase transition-all flex items-center space-x-1 shrink-0 ${
-                activeTab === 'SETTINGS'
-                  ? 'bg-white/5 text-white border border-white/10'
-                  : 'text-white/50 hover:text-white border border-transparent'
-              }`}
-            >
-              <Settings className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Settings</span>
-            </button>
-          </div>
-
-          {/* Active status indicator ledger */}
-          <div className="flex items-center space-x-3.5">
-            <button
-              id="global-theme-toggle-btn"
-              onClick={toggleTheme}
-              className="p-2 hover:bg-white/5 border border-white/10 rounded text-white/60 hover:text-white transition-colors flex items-center justify-center cursor-pointer h-9 w-9"
-              title={theme === 'dark' ? 'Switch to High-Contrast Light Mode' : 'Switch to Elegant Dark Mode'}
-            >
-              {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
-            </button>
-            <button
-              id="manual-refresh-btn"
-              onClick={handleManualRefresh}
-              className="p-2 hover:bg-white/5 border border-white/10 rounded text-white/60 hover:text-white transition-colors h-9 w-9 flex items-center justify-center"
-              title="Manual Sync Feed"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-indigo-400' : ''}`} />
-            </button>
-               {/* Session Time Discipline Indicator */}
-            <button
-              id="session-discipline-tracker"
-              onClick={() => setIsSessionSummaryOpen(true)}
-              className="flex items-center space-x-2 px-2.5 py-1.5 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/15 hover:border-indigo-500/35 rounded font-mono text-[11px] h-9 transition-all cursor-pointer text-left focus:outline-none focus:ring-1 focus:ring-indigo-500/30 font-bold"
-              title="Time active in current trading session. Click to view Session Summary."
-            >
-              <Timer className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
-              <div className="flex flex-col text-left leading-none">
-                <span className="text-[7.5px] text-white/30 uppercase tracking-widest font-extrabold flex items-center gap-1">
-                  Active Session
-                  <span className="inline-block w-1 h-2 rounded bg-indigo-500/30 animate-pulse" />
-                </span>
-                <span className="text-white font-black tabular-nums tracking-tight mt-0.5">{formatSessionTime(sessionSeconds)}</span>
-              </div>
-            </button>
-
-            {/* Alt+X Emergency panic close all button */}
-            <button
-              id="emergency-close-all-btn"
-              onClick={handleEmergencyCloseAll}
-              className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/40 rounded font-mono text-[11px] h-9 text-rose-400 font-bold transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-500/30"
-              title="Alt+X: Trigger Emergency Close All open positions immediately"
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse shrink-0" />
-              <div className="flex flex-col text-left leading-none">
-                <span className="text-[7.5px] text-rose-500/60 uppercase tracking-widest font-extrabold font-mono">Emergency</span>
-                <span className="text-white font-black tracking-tight mt-0.5 font-mono">Alt + X</span>
-              </div>
-            </button>
-            <div className="hidden md:flex items-center space-x-2 text-right">
-              <span className="text-[10px] text-white/40 block font-mono uppercase tracking-tighter">Live Ingress Gateway</span>
-              <span className="text-emerald-400 text-xs font-mono flex items-center justify-end font-bold uppercase tracking-wide">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mr-1.5 shadow-[0_0_8px_#10b981]"></span>
-                ACTIVE FEED (H4)
-              </span>
-            </div>
-          </div>
-
         </div>
-      </header>
+      </aside>
 
-      {/* Symbol ticker strip */}
-      <section className="bg-[#080808] border-b border-white/10 py-2">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 flex items-center gap-4 overflow-x-auto select-none no-scrollbar">
-          <div className="text-[9px] uppercase tracking-wider font-extrabold text-white/30 border-r border-white/10 pr-4 shrink-0 font-mono flex items-center space-x-1">
-            <Radio className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-            <span>Select Pair</span>
-          </div>
+      {/* Main Content Area Container with static padding to allow the expanded menu to overlap gracefully */}
+      <div
+        className="flex-1 flex flex-col min-w-0 min-h-screen transition-all duration-300 ease-in-out justify-between pl-0 pb-16 md:pb-0 md:pl-16"
+      >
+        {/* Top Status Header Bar */}
+        <header className="border-b border-white/10 bg-[#080808]/80 backdrop-blur sticky top-0 z-30">
+          <div className="max-w-[1400px] mx-auto px-3 md:px-6 py-3 flex items-center justify-between gap-4">
+            
+            {/* Mobile Brand Logo & Active Sub-Workspace Label Badge */}
+            <div className="flex items-center space-x-3.5">
+              {/* Mobile Menu Hamburger Toggle */}
+              <button
+                id="mobile-menu-hamburger-toggle"
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="flex md:hidden p-1.5 hover:bg-white/5 border border-white/10 rounded-md text-white/60 hover:text-white transition-all cursor-pointer h-8 w-8 items-center justify-center shrink-0"
+                title="Open Mobile Navigation Menu"
+              >
+                <Menu className="w-4 h-4 text-white" />
+              </button>
 
-          <div className="flex items-center space-x-3.5">
-            {(Object.keys(tickerStats) as MarketSymbol[]).map((sym) => {
-              const active = symbol === sym;
-              const stats = tickerStats[sym];
-              return (
-                <button
-                  id={`ticker-select-${stats.name}`}
-                  key={sym}
-                  onClick={() => setSymbol(sym)}
-                  className={`px-4 py-1.5 border rounded flex items-center space-x-2.5 transition-all cursor-pointer ${
-                    active
-                      ? 'bg-indigo-600/10 border-indigo-500/40 text-white shadow-[0_0_12px_rgba(99,102,241,0.05)]'
-                      : 'bg-[#0c0c0c] border-white/5 text-white/40 hover:border-white/10 hover:text-[#e5e5e5]'
-                  }`}
-                >
-                  <span className="text-xs font-mono font-bold tracking-tight">{sym}</span>
-                  <TickerPrice price={stats.price} symbol={sym} />
-                  <span className={`text-[10px] font-mono font-semibold ${stats.pChange >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {stats.pChange >= 0 ? `+${stats.pChange}%` : `${stats.pChange}%`}
+              {/* Logo block rendered exclusively on mobile devices */}
+              <div id="mobile-brand-logo" className="flex md:hidden items-center gap-1.5 shrink-0 select-none">
+                <div className="h-7 w-7 rounded bg-indigo-600 flex items-center justify-center font-black text-white text-[11px] shadow-[0_0_8px_#4f46e5]">
+                  Ω
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-white">
+                  APEX<span className="text-indigo-400 font-extrabold">.AI</span>
+                </span>
+              </div>
+
+              {/* Standard workspace indicator for desktop screens only */}
+              <div className="hidden md:flex items-center space-x-2.5">
+                <span className="text-[10px] text-white/30 uppercase font-mono tracking-wider font-bold">Active Workspace:</span>
+                <span className="px-2.5 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] text-indigo-400 font-mono font-bold uppercase tracking-wider">
+                  {activeTab === 'RISK' ? 'Risk Desk' : activeTab}
+                </span>
+              </div>
+            </div>
+
+            {/* Active status indicator ledger */}
+            <div className="flex items-center space-x-2 md:space-x-3">
+              <button
+                id="global-theme-toggle-btn"
+                onClick={toggleTheme}
+                className="p-1.5 hover:bg-white/5 border border-white/10 rounded text-white/60 hover:text-white transition-colors flex items-center justify-center cursor-pointer h-8 w-8 text-xs shrink-0"
+                title={theme === 'dark' ? 'Switch to High-Contrast Light Mode' : 'Switch to Elegant Dark Mode'}
+              >
+                {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-400" />}
+              </button>
+              <button
+                id="manual-refresh-btn"
+                onClick={handleManualRefresh}
+                className="p-1.5 hover:bg-white/5 border border-white/10 rounded text-white/60 hover:text-white transition-colors h-8 w-8 flex items-center justify-center shrink-0"
+                title="Manual Sync Feed"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-indigo-400' : ''}`} />
+              </button>
+              
+              {/* Session Time Discipline Indicator - hidden on mobile to avoid row leaks */}
+              <button
+                id="session-discipline-tracker"
+                onClick={() => setIsSessionSummaryOpen(true)}
+                className="hidden md:flex items-center space-x-2 px-2.5 py-1.5 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/15 hover:border-indigo-500/35 rounded font-mono text-[11px] h-9 transition-all cursor-pointer text-left focus:outline-none focus:ring-1 focus:ring-indigo-500/30 font-bold"
+                title="Time active in current trading session. Click to view Session Summary."
+              >
+                <Timer className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
+                <div className="flex flex-col text-left leading-none">
+                  <span className="text-[7.5px] text-white/30 uppercase tracking-widest font-extrabold flex items-center gap-1">
+                    Active Session
+                    <span className="inline-block w-1 h-2 rounded bg-indigo-500/30 animate-pulse" />
                   </span>
-                </button>
-              );
-            })}
+                  <span className="text-white font-black tabular-nums tracking-tight mt-0.5">{formatSessionTime(sessionSeconds)}</span>
+                </div>
+              </button>
+
+              {/* Alt+X Emergency panic close all button - hidden on mobile since physical keyboard shortcut is absent */}
+              <button
+                id="emergency-close-all-btn"
+                onClick={handleEmergencyCloseAll}
+                className="hidden md:flex items-center space-x-1.5 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/40 rounded font-mono text-[11px] h-9 text-rose-400 font-bold transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-500/30"
+                title="Alt+X: Trigger Emergency Close All open positions immediately"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse shrink-0" />
+                <div className="flex flex-col text-left leading-none">
+                  <span className="text-[7.5px] text-rose-500/60 uppercase tracking-widest font-extrabold font-mono">Emergency</span>
+                  <span className="text-white font-black tracking-tight mt-0.5 font-mono">Alt + X</span>
+                </div>
+              </button>
+              <div className="hidden md:flex items-center space-x-2 text-right">
+                <span className="text-[10px] text-white/40 block font-mono uppercase tracking-tighter">Live Ingress Gateway</span>
+                <span className="text-emerald-400 text-xs font-mono flex items-center justify-end font-bold uppercase tracking-wide">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mr-1.5 shadow-[0_0_8px_#10b981]"></span>
+                  ACTIVE FEED (H4)
+                </span>
+              </div>
+            </div>
+
           </div>
-        </div>
-      </section>
+        </header>
+
+
 
       {/* Core Dynamic Workplace Area */}
-      <main className="max-w-[1400px] mx-auto w-full px-4 sm:px-6 py-6 flex-1">
+      <main className="max-w-[1400px] mx-auto w-full px-3 md:px-6 py-2 md:py-6 flex-1">
         
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -936,22 +1222,44 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
                   {/* Card 3: Projection vs Actual Area Chart */}
                   <div id="projection-vs-actual-card" className="col-span-2 md:col-span-2 lg:col-span-2 bg-[#0a0a0b] border border-white/5 rounded-lg p-3.5 flex flex-col justify-between shadow-sm select-none h-full">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider flex items-center gap-1.5">
-                        <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
-                        Goals vs Performance
-                      </span>
-                      <div className="flex items-center gap-2 font-mono text-[9px]">
-                        <span className="text-white/30">Goal:</span>
-                        <span className="text-indigo-400 font-bold">$1,000</span>
-                        <span className="text-white/30">| Actual:</span>
-                        <span className={`${systemDashboardSummary.dailyPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-bold`}>
-                          ${systemDashboardSummary.dailyPnL.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-white/[0.03]">
+                      <div className="flex items-center justify-between sm:justify-start gap-2.5">
+                        <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider flex items-center gap-1.5">
+                          <TrendingUp className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                          Goals vs Performance
                         </span>
+                        {/* Interactive Trend Projection Toggle */}
+                        <button
+                          id="btn-toggle-trend-projection"
+                          onClick={() => setTrendProjectionEnabled(!trendProjectionEnabled)}
+                          className={`px-1.5 py-0.5 rounded border text-[8px] font-mono font-bold tracking-wider uppercase transition-all flex items-center gap-1 cursor-pointer select-none h-4.5 ${
+                            trendProjectionEnabled
+                              ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                              : 'bg-white/[0.02] border-white/5 text-white/40 hover:text-white/70 hover:bg-white/[0.05]'
+                          }`}
+                          title={`Toggle Trend Projection Line (extending current ${currentPivotHourText} slope to close)`}
+                        >
+                          <TrendingUp className="w-2 text-white" />
+                          <span>Proj Trend</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-2 font-mono text-[9px] bg-white/[0.01] px-2 py-0.5 rounded border border-white/5">
+                        <div className="flex items-center gap-1">
+                          <span className="text-white/30">Goal:</span>
+                          <span className="text-indigo-400 font-bold">${dailyPnLGoal.toLocaleString()}</span>
+                        </div>
+                        <span className="text-white/10 hidden sm:inline">|</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-white/30">Actual:</span>
+                          <span className={`${systemDashboardSummary.dailyPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-bold`}>
+                            ${systemDashboardSummary.dailyPnL.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="h-[55px] w-full mt-2">
+                    <div className="h-[75px] md:h-[80px] w-full mt-2.5">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={projectionVsActualData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
                           <defs>
@@ -970,12 +1278,94 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                             content={({ active, payload }) => {
                               if (active && payload && payload.length) {
                                 const dataPoint = payload[0].payload;
+                                const activeHourIdx = projectionVsActualData.findIndex(item => item.hour === dataPoint.hour);
+                                const historicalHours = projectionVsActualData.slice(0, activeHourIdx + 1);
+                                const isAhead = dataPoint['Actual PnL'] >= dataPoint['Daily Goal'];
+                                const diff = dataPoint['Actual PnL'] - dataPoint['Daily Goal'];
+
                                 return (
-                                  <div className="bg-[#0e0e11] border border-white/10 px-2.5 py-1.5 text-[9px] font-mono rounded shadow-lg text-left leading-tight z-50">
-                                    <div className="text-white/40 font-bold mb-1">{dataPoint.hour} Mark</div>
-                                    <div className="text-indigo-400">Goal: ${dataPoint['Daily Goal']}</div>
-                                    <div className={`${dataPoint['Actual PnL'] >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                      Actual: ${dataPoint['Actual PnL'] >= 0 ? '+' : ''}${dataPoint['Actual PnL']}
+                                  <div className="bg-[#0b0c10]/95 border border-white/10 px-3 py-2.5 text-[9px] font-mono rounded-lg shadow-[0_12px_24px_rgba(0,0,0,0.8)] text-left leading-tight z-50 w-[240px] pointer-events-none backdrop-blur-md">
+                                    {/* Snapshot Header */}
+                                    <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
+                                      <span className="text-white font-bold text-[10px] flex items-center gap-1.5">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                                        {dataPoint.hour} Update
+                                      </span>
+                                      <span className="text-white/40 text-[8px] uppercase tracking-wider">Trading Progress</span>
+                                    </div>
+
+                                    {/* Core Stats Grid (Adapts to 3 columns if Trend is toggled) */}
+                                    <div className={`grid ${trendProjectionEnabled ? 'grid-cols-3' : 'grid-cols-2'} gap-x-2 gap-y-1 mb-2`}>
+                                      <div>
+                                        <div className="text-white/30 text-[7.5px] uppercase tracking-wider">Goal Target</div>
+                                        <div className="text-indigo-300 font-bold mt-0.5">${dataPoint['Daily Goal'].toLocaleString()}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-white/30 text-[7.5px] uppercase tracking-wider">Actual PnL</div>
+                                        <div className={`font-bold mt-0.5 ${dataPoint['Actual PnL'] >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                          ${dataPoint['Actual PnL'] >= 0 ? '+' : ''}{dataPoint['Actual PnL'].toLocaleString()}
+                                        </div>
+                                      </div>
+                                      {trendProjectionEnabled && (
+                                        <div>
+                                          <div className="text-amber-400/70 text-[7.5px] uppercase tracking-wider">Trend Proj</div>
+                                          <div className={`font-bold mt-0.5 ${dataPoint['Trend Projection'] >= 0 ? 'text-amber-400' : 'text-rose-300'}`}>
+                                            ${dataPoint['Trend Projection'] >= 0 ? '+' : ''}{dataPoint['Trend Projection'].toLocaleString()}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Divergence warning or accolade */}
+                                    <div className={`p-1 rounded text-[8px] font-bold text-center border mb-2 flex items-center justify-center gap-1 leading-none ${
+                                      isAhead 
+                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                                        : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                                    }`}>
+                                      {isAhead ? (
+                                        <>+ Ahead of Goal by ${diff.toLocaleString()}</>
+                                      ) : (
+                                        <>- Behind Goal by ${Math.abs(diff).toLocaleString()}</>
+                                      )}
+                                    </div>
+
+                                    {/* Trend Projection divergence highlight bar */}
+                                    {trendProjectionEnabled && (
+                                      <div className={`p-1 rounded text-[8px] font-bold text-center border mb-2 flex items-center justify-center gap-1 leading-none ${
+                                        dataPoint['Trend Projection'] >= dataPoint['Daily Goal']
+                                          ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                          : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                                      }`}>
+                                        {dataPoint['Trend Projection'] >= dataPoint['Daily Goal'] ? (
+                                          <>Trend: Ahead of Goal by ${(dataPoint['Trend Projection'] - dataPoint['Daily Goal']).toLocaleString()}</>
+                                        ) : (
+                                          <>Trend: Behind Goal by ${(dataPoint['Daily Goal'] - dataPoint['Trend Projection']).toLocaleString()}</>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Hourly Breakdown Subsection */}
+                                    <div className="border-t border-white/5 pt-1.5">
+                                      <div className="text-[7.5px] text-white/30 uppercase font-black tracking-wider mb-1 flex items-center justify-between">
+                                        <span>Historical Timeline</span>
+                                        <span>Hourly Delta</span>
+                                      </div>
+                                      <div className="space-y-1 max-h-[140px] overflow-y-auto no-scrollbar">
+                                        {historicalHours.map((hist, hIdx) => {
+                                          const isPositive = hist.hourlyChange >= 0;
+                                          return (
+                                            <div key={hist.hour} className="flex justify-between items-center text-[8.5px] py-0.5 border-b border-white/[0.02]">
+                                              <span className="text-white/50">
+                                                {hist.hour} &middot; <span className="font-semibold text-white/80">${hist['Actual PnL']}</span>
+                                              </span>
+                                              <span className={`font-mono text-[8.5px] flex items-center gap-0.5 ${isPositive ? 'text-emerald-500' : 'text-rose-400'}`}>
+                                                {hIdx === 0 ? '' : (isPositive ? '▲' : '▼')}
+                                                {hIdx === 0 ? `$${hist.hourlyChange}` : `$${Math.abs(hist.hourlyChange)}`}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -1000,6 +1390,17 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                             fillOpacity={1}
                             fill="url(#actualGrad)"
                           />
+                          {trendProjectionEnabled && (
+                            <Line
+                              type="monotone"
+                              dataKey="Trend Projection"
+                              stroke="#f59e0b"
+                              strokeWidth={1.5}
+                              strokeDasharray="3 3"
+                              dot={false}
+                              activeDot={{ r: 4 }}
+                            />
+                          )}
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -1024,18 +1425,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                         {systemDashboardSummary.riskRatio.toFixed(1)}% Active
                       </div>
                       <span className="text-[9px] font-mono text-white/30">Leverage Cap: 2.0% Max</span>
-                    </div>
-                  </div>
-
-                  {/* Card 6: System Health */}
-                  <div className="col-span-2 lg:col-span-1 bg-[#0a0a0b] border border-white/5 rounded-lg p-4 flex flex-col justify-between space-y-3 shadow-sm select-none">
-                    <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider">System Status</span>
-                    <div>
-                      <div className="text-base font-mono font-bold text-emerald-400 flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span>NOMINAL</span>
-                      </div>
-                      <span className="text-[9px] font-mono text-white/30">Feeds Inbound H4</span>
                     </div>
                   </div>
                 </div>
@@ -1084,193 +1473,224 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                             <Camera className={`w-3 h-3 ${isSnapshotting ? 'animate-pulse text-indigo-300' : ''}`} />
                             <span>{isSnapshotting ? 'Capture...' : 'Snapshot'}</span>
                           </button>
+
+                          {/* Pre-formatted Text Share Action */}
+                          <button
+                            id="btn-share-active-positions"
+                            onClick={handleSharePositions}
+                            className={`px-2 py-0.5 border rounded transition-all text-[9px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
+                              shareSuccess 
+                                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' 
+                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
+                            }`}
+                            title="Copy Live Active Position Exposures Summary to Clipboard"
+                          >
+                            {shareSuccess ? (
+                              <Check className="w-3 h-3 text-emerald-400 font-bold" />
+                            ) : (
+                              <Share2 className="w-3 h-3 text-indigo-400" />
+                            )}
+                            <span>{shareSuccess ? 'Copied!' : 'Share'}</span>
+                          </button>
                         </div>
 
-                        {/* Highly tactual Sort Selection */}
+                                         {/* Highly tactual Sort & Dropdown Filter Selection */}
                         {systemDashboardSummary.activeTradesCount > 0 && (
-                          <div className="flex items-center space-x-1 font-mono text-[9.5px]">
-                            <span className="text-white/35 mr-1 text-[8.5px] uppercase tracking-wider">Sort:</span>
-                            <div className="flex bg-black/40 p-0.5 rounded border border-white/5 space-x-0.5">
-                              <button
-                                onClick={() => setPositionSort('PROFITABLE')}
-                                className={`px-2 py-0.5 rounded text-[9px] transition-all font-semibold uppercase tracking-wider cursor-pointer ${
-                                  positionSort === 'PROFITABLE'
-                                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                                    : 'text-white/45 hover:text-white/85 border border-transparent'
-                                }`}
-                                title="Sort by Most Profitable"
-                              >
-                                PnL
-                              </button>
-                              <button
-                                onClick={() => setPositionSort('MARGIN')}
-                                className={`px-2 py-0.5 rounded text-[9px] transition-all font-semibold uppercase tracking-wider cursor-pointer ${
-                                  positionSort === 'MARGIN'
-                                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                                    : 'text-white/45 hover:text-white/85 border border-transparent'
-                                }`}
-                                title="Sort by Highest Margin Used"
-                              >
-                                Margin
-                              </button>
-                              <button
-                                onClick={() => setPositionSort('DURATION')}
-                                className={`px-2 py-0.5 rounded text-[9px] transition-all font-semibold uppercase tracking-wider cursor-pointer ${
-                                  positionSort === 'DURATION'
-                                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                                    : 'text-white/45 hover:text-white/85 border border-transparent'
-                                }`}
-                                title="Sort by Longest Duration"
-                              >
-                                Duration
-                              </button>
+                          <div className="flex flex-wrap items-center gap-3 font-mono text-[9.5px]">
+                            {/* Dropdown for Filter */}
+                            <div className="flex items-center space-x-1">
+                              <span className="text-white/35 mr-1 text-[8.5px] uppercase tracking-wider flex items-center gap-1">
+                                <Filter className="w-2.5 h-2.5 text-white/40" /> Filter:
+                              </span>
+                              <div className="relative">
+                                <select
+                                  id="select-position-filter"
+                                  value={positionFilter}
+                                  onChange={(e) => setPositionFilter(e.target.value as 'ALL' | 'WINNING' | 'LOSING')}
+                                  className="appearance-none bg-[#0a0a0b] text-white/80 border border-white/10 rounded pl-2 pr-6 py-0.5 text-[9px] font-mono outline-none focus:border-indigo-500 hover:border-white/20 transition-colors cursor-pointer font-semibold uppercase tracking-wider"
+                                >
+                                  <option value="ALL">ALL DECK</option>
+                                  <option value="WINNING" className="text-emerald-400">WINNINGS</option>
+                                  <option value="LOSING" className="text-rose-455">LOSSES</option>
+                                </select>
+                                <ChevronDown className="w-3 h-3 text-white/40 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                              </div>
+                            </div>
+
+                            {/* Decorative Separator */}
+                            <span className="hidden sm:inline text-white/10 select-none">|</span>
+
+                            <div className="flex items-center space-x-1">
+                              <span className="text-white/35 mr-1 text-[8.5px] uppercase tracking-wider">Sort:</span>
+                              <div className="flex bg-black/40 p-0.5 rounded border border-white/5 space-x-0.5">
+                                <button
+                                  onClick={() => setPositionSort('PROFITABLE')}
+                                  className={`px-2 py-0.5 rounded text-[9px] transition-all font-semibold uppercase tracking-wider cursor-pointer ${
+                                    positionSort === 'PROFITABLE'
+                                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                                      : 'text-white/45 hover:text-white/85 border border-transparent'
+                                  }`}
+                                  title="Sort by Most Profitable"
+                                >
+                                  PnL
+                                </button>
+                                <button
+                                  onClick={() => setPositionSort('MARGIN')}
+                                  className={`px-2 py-0.5 rounded text-[9px] transition-all font-semibold uppercase tracking-wider cursor-pointer ${
+                                    positionSort === 'MARGIN'
+                                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                                      : 'text-white/45 hover:text-white/85 border border-transparent'
+                                  }`}
+                                  title="Sort by Highest Margin Used"
+                                >
+                                  Margin
+                                </button>
+                                <button
+                                  onClick={() => setPositionSort('DURATION')}
+                                  className={`px-2 py-0.5 rounded text-[9px] transition-all font-semibold uppercase tracking-wider cursor-pointer ${
+                                    positionSort === 'DURATION'
+                                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                                      : 'text-white/45 hover:text-white/85 border border-transparent'
+                                  }`}
+                                  title="Sort by Longest Duration"
+                                >
+                                  Duration
+                                </button>
+                              </div>
                             </div>
                           </div>
                         )}
                       </div>
                       
                       {sortedActivePositions.length === 0 ? (
-                        <div className="py-12 text-center space-y-3">
-                          <div className="h-10 w-10 bg-indigo-500/5 rounded-full flex items-center justify-center mx-auto border border-indigo-500/10 text-indigo-400 opacity-60">
-                            ✓
+                        <div className="py-6 flex flex-col items-center justify-center text-center space-y-4">
+                          <div className="relative w-48 h-48 sm:w-52 sm:h-52 rounded-xl overflow-hidden border border-white/10 bg-black/60 shadow-lg shadow-indigo-500/5 group">
+                            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:16px_16px] z-10 pointer-events-none" />
+                            
+                            <img 
+                              src={emptyPositionsImg} 
+                              alt="Institutional Trading System Inactive Matrix" 
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover opacity-50 mix-blend-lighten transition-transform duration-700 group-hover:scale-105"
+                            />
+                            
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0b] via-transparent to-[#0a0a0b]/80 pointer-events-none" />
+                            <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0b] via-transparent to-[#0a0a0b] pointer-events-none" />
+                            
+                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 bg-black/80 border border-white/10 px-2.5 py-1 rounded font-mono text-[8px] uppercase tracking-wider text-white/70 flex items-center gap-1.5 backdrop-blur-md whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-550 animate-pulse" />
+                              MATRIX STATE: SYNCED
+                            </div>
                           </div>
-                          <p className="text-xs font-mono text-white/35">No micro-leveraged active positions detected.</p>
-                          <button 
-                            onClick={() => setActiveTab('EXECUTION')} 
-                            className="text-[10px] uppercase font-mono font-extrabold text-indigo-400 hover:text-indigo-300 tracking-wider hover:underline cursor-pointer"
-                          >
-                            Open trading interface &rarr;
-                          </button>
+
+                          <div className="space-y-1.5 max-w-[280px]">
+                            <p className="text-xs font-mono font-bold tracking-tight text-white/50">
+                              {systemDashboardSummary.activeTradesCount > 0 
+                                ? "NO MATCHING EXPOSURES"
+                                : "ZERO ACTIVE DECK"}
+                            </p>
+                            <p className="text-[10.5px] font-sans text-white/35 leading-normal">
+                              {systemDashboardSummary.activeTradesCount > 0 
+                                ? `No active ${positionFilter === 'WINNING' ? 'winning' : 'losing'} positions found matching your filter overlay.`
+                                : "The institutional portfolio database is currently clear. No micro-leveraged exposure or delta-hedged risk vectors detected."}
+                            </p>
+                          </div>
+
+                          {systemDashboardSummary.activeTradesCount === 0 && (
+                            <button 
+                              onClick={() => setActiveTab('EXECUTION')} 
+                              className="px-3.5 py-1.5 text-[9px] uppercase font-mono font-extrabold text-indigo-400 hover:text-white bg-indigo-500/10 hover:bg-indigo-600/30 border border-indigo-500/20 hover:border-indigo-500/40 rounded transition-all tracking-wider cursor-pointer"
+                            >
+                              Open trading interface &rarr;
+                            </button>
+                          )}
                         </div>
                       ) : (
-                        <div className="space-y-3">
-                          {sortedActivePositions.map(trade => (
-                            <div key={trade.id} className="bg-[#050505] rounded border border-white/5 overflow-hidden transition-all duration-200">
-                              {/* Position Header/Summary Row */}
-                              <div 
-                                onClick={() => toggleTradeExpand(trade.id)} 
-                                className="p-3 flex items-center justify-between gap-3 cursor-pointer hover:bg-white/[0.02] select-none"
-                              >
-                                <div className="flex items-center space-x-2 md:space-x-3">
-                                  <span className="text-white/30 hover:text-white transition-colors">
-                                    {expandedTradeIds[trade.id] ? (
-                                      <ChevronUp className="w-3.5 h-3.5 text-indigo-400" />
-                                    ) : (
-                                      <ChevronDown className="w-3.5 h-3.5" />
-                                    )}
-                                  </span>
-                                  <span className={`px-2 py-0.5 rounded text-[9.5px] font-black font-mono ${trade.side === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                                    {trade.side}
-                                  </span>
-                                  <div>
-                                    <span className="text-xs font-bold font-mono text-white block">{trade.symbol}</span>
-                                    <span className="text-[9.5px] text-white/30 font-mono">Lot size: {trade.size}</span>
-                                  </div>
-                                </div>
-
-                                {/* Minimalist Sparkline Chart */}
-                                {trade.pnlTrajectory && trade.pnlTrajectory.length > 0 ? (
-                                  <div className="hidden sm:block w-20 md:w-28 h-7 grow-0 shrink-0 self-center opacity-80 hover:opacity-100 transition-opacity pr-2" title={`${trade.symbol} PnL trajectory (Last 60m)`}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                      <LineChart data={trade.pnlTrajectory} margin={{ top: 2, bottom: 2, left: 2, right: 2 }}>
-                                        <Line
-                                          type="monotone"
-                                          dataKey="pnl"
-                                          stroke={trade.pnl >= 0 ? '#10b981' : '#f43f5e'}
-                                          strokeWidth={1.5}
-                                          dot={false}
-                                          isAnimationActive={true}
-                                          animationDuration={600}
-                                        />
-                                      </LineChart>
-                                    </ResponsiveContainer>
-                                  </div>
-                                ) : (
-                                  <div className="hidden sm:block w-20 md:w-28 h-7 shrink-0" />
-                                )}
-
-                                <div className="flex items-center space-x-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                  <div className="text-right">
-                                    <span className={`text-xs font-mono font-bold ${trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
-                                      {trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}
-                                    </span>
-                                    <span className="text-[8.5px] text-white/20 block font-mono">PnL</span>
-                                  </div>
-                                  <button
-                                    onClick={() => handleQuickCloseTrade(trade.id)}
-                                    className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 hover:text-white border border-rose-500/25 hover:border-rose-500/60 rounded text-[9px] font-mono font-bold uppercase transition-all tracking-wider cursor-pointer flex items-center space-x-1"
-                                  >
-                                    <X className="w-3 h-3" />
-                                    <span>Close</span>
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Expanded position details wrapper */}
-                              {expandedTradeIds[trade.id] && (
-                                <div className="px-3 pb-3 pt-1.5 border-t border-white/5 bg-white/[0.01] grid grid-cols-3 gap-2 text-[10px] font-mono text-white/50 animate-fadeIn">
-                                  <div className="bg-black/30 p-2 rounded border border-white/5">
-                                    <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Entry Price</span>
-                                    <span className="text-white font-bold">{trade.entryPrice.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : 5)}</span>
-                                  </div>
-                                  <div className="bg-black/30 p-2 rounded border border-white/5">
-                                    <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Open Duration</span>
-                                    <span className="text-white font-bold">{formatOpenDuration(trade.timestamp)}</span>
-                                  </div>
-                                  <div className="bg-black/30 p-2 rounded border border-white/5">
-                                    <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Margin Usage</span>
-                                    <span className="text-indigo-400 font-extrabold">${((trade.symbol === 'BTC/USDT' ? trade.size * trade.entryPrice : trade.size * 100000) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                        <div className="space-y-3 relative">
+                          <AnimatePresence initial={false}>
+                            {sortedActivePositions.map(trade => (
+                              <TradePositionRowItem
+                                key={trade.id}
+                                trade={trade}
+                                isExpanded={!!expandedTradeIds[trade.id]}
+                                onToggleExpand={toggleTradeExpand}
+                                onQuickClose={handleQuickCloseTrade}
+                                formatOpenDuration={formatOpenDuration}
+                              />
+                            ))}
+                          </AnimatePresence>
                         </div>
                       )}
                     </div>
 
                     <SystemStatus />
                   </div>
-
                 </div>
-
               </div>
             ) : activeTab === 'INTELLIGENCE' ? (
-              <div id="intelligence-workspace-deck" className="space-y-6 animate-fadeIn">
+              <div id="intelligence-workspace-deck" className="space-y-3 md:space-y-6 animate-fadeIn">
                 
-                {/* Dual pane chart & AI chatbot */}
+                {/* 1. Full-Width Panoramic Chart row (rendered permanently as final panoramic mode) */}
+                {metrics && (
+                  <div className="w-full transition-all duration-300">
+                    <ChartContainer
+                      symbol={symbol}
+                      candles={candles}
+                      fvgs={fvgs}
+                      obs={obs}
+                      sweeps={sweeps}
+                      metrics={metrics}
+                      onLogEventToAdvisor={handleLogEventToAdvisor}
+                      trades={trades}
+                      onTradeExecuted={fetchMarketData}
+                      newsEvents={newsEvents}
+                      highlightOrderBlocks={highlightOrderBlocks}
+                      resetKey={resetChartKey}
+                      jumpRange={jumpRange}
+                      showTWVP={showTWVP}
+                      isExpanded={true}
+                      onSymbolChange={setSymbol}
+                    />
+                  </div>
+                )}
+
+                {/* 2. Main Workspace Layout Grid */}
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                   
-                  {/* Candlestick Trading charts (Left side) */}
+                  {/* Left-hand layout details (Default width or under expanded chart) */}
                   <div className="xl:col-span-8 space-y-6">
-                    {metrics && (
-                      <ChartContainer
-                        symbol={symbol}
-                        candles={candles}
-                        fvgs={fvgs}
-                        obs={obs}
-                        sweeps={sweeps}
-                        metrics={metrics}
-                        onLogEventToAdvisor={handleLogEventToAdvisor}
-                        trades={trades}
-                        onTradeExecuted={fetchMarketData}
-                        newsEvents={newsEvents}
-                      />
-                    )}
 
-                    {/* AI Signal Insights and Explainability */}
+                    {/* AI Signal Insights and Explainability - Hidden on mobile screens */}
                     {metrics && (
-                      <TradeExplainability
-                        symbol={symbol}
-                        metrics={metrics}
-                      />
+                      <div className="hidden md:block">
+                        <TradeExplainability
+                          symbol={symbol}
+                          metrics={metrics}
+                          trades={trades}
+                          highlightOrderBlocks={highlightOrderBlocks}
+                          onToggleHighlightOrderBlocks={() => setHighlightOrderBlocks(prev => !prev)}
+                          showTWVP={showTWVP}
+                          onToggleTWVP={() => setShowTWVP(prev => !prev)}
+                          onResetChartView={() => {
+                            setHighlightOrderBlocks(false);
+                            setShowTWVP(false);
+                            setResetChartKey(prev => prev + 1);
+                          }}
+                        />
+                      </div>
                     )}
                   </div>
 
-                  {/* Right hand layout pane: Order Book & Correlation Matrix */}
-                  <div className="xl:col-span-4 space-y-6">
+                  {/* Right hand layout pane: Order Book & Correlation Matrix - Hidden on mobile, perfectly proportioned on desktop */}
+                  <div className="hidden md:block xl:col-span-4 space-y-6">
                     {orderBook && (
                       <OrderBookTracker
+                        symbol={symbol}
+                        orderBook={orderBook}
+                      />
+                    )}
+                    {orderBook && (
+                      <CumulativeDepthChart
                         symbol={symbol}
                         orderBook={orderBook}
                       />
@@ -1332,6 +1752,157 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               </div>
             ) : activeTab === 'RESEARCH' ? (
               <div id="backtest-workspace" className="animate-fadeIn space-y-6">
+                {/* Historical Replay Engine controls relocated from top of Intelligence */}
+                <div id="intelligence-control-bar" className="bg-[#0c0c0e]/95 border border-white/5 rounded-lg p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 font-mono select-none">
+                  
+                  {/* Left block: Title and Icon */}
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-indigo-500/10 rounded border border-indigo-500/25 text-indigo-400 shrink-0">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold uppercase text-white tracking-wider">Historical Replay Engine</h3>
+                      <p className="text-[9.5px] text-white/30 font-sans mt-0.5">Focus charts and price ladder metrics on historic key sessions or custom date bounds</p>
+                    </div>
+                  </div>
+
+                  {/* Center & Right sections: Preset Session Jumpers & Custom Date Fields */}
+                  <div className="flex flex-wrap items-center gap-3 md:gap-4 flex-1 justify-end">
+                    
+                    {/* Presets Jumper */}
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">Sessions:</span>
+                      <select 
+                        id="session-preset-select"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (!val || candles.length === 0) return;
+                          
+                          let startIdx = 0;
+                          let endIdx = 0;
+                          
+                          if (val === 'london_breakout') {
+                            startIdx = Math.max(0, Math.floor(candles.length * 0.15));
+                            endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.25));
+                          } else if (val === 'ny_reversal') {
+                            startIdx = Math.max(0, Math.floor(candles.length * 0.40));
+                            endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.50));
+                          } else if (val === 'asia_consolidation') {
+                            startIdx = Math.max(0, Math.floor(candles.length * 0.65));
+                            endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.75));
+                          } else if (val === 'fomc_spike') {
+                            startIdx = Math.max(0, Math.floor(candles.length * 0.82));
+                            endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.90));
+                          }
+                          
+                          const startCandle = candles[startIdx];
+                          const endCandle = candles[endIdx];
+                          if (startCandle && endCandle) {
+                            setJumpRange({
+                              start: startCandle.timestamp,
+                              end: endCandle.timestamp,
+                              triggerId: Date.now()
+                            });
+                          }
+                        }}
+                        className="bg-[#050505] text-[11px] text-indigo-300 font-bold border border-white/10 hover:border-indigo-500/30 px-3 py-1.5 rounded cursor-pointer outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/50 transition-all font-mono leading-tight animate-pulse border-indigo-400/30"
+                      >
+                        <option value="">-- Jump to Market Session --</option>
+                        {candles.length > 0 && (
+                          <>
+                            <option value="london_breakout">
+                              🇬🇧 London Breakout Peak ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.15))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
+                            </option>
+                            <option value="ny_reversal">
+                              🇺🇸 NY PM Liquidity Reversal ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.40))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
+                            </option>
+                            <option value="asia_consolidation">
+                              🇯🇵 Tokyo Tight Consolidation ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.65))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
+                            </option>
+                            <option value="fomc_spike">
+                              🔥 FOMC Post-Rate Expansion ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.82))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
+                            </option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+
+                    <div className="h-6 w-[1px] bg-white/10 hidden sm:block" />
+
+                    {/* Custom Date Picker inputs */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center space-x-1">
+                        <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">From:</span>
+                        <input 
+                          type="date"
+                          id="replay-date-start"
+                          value={sessionStartDate}
+                          onChange={(e) => setSessionStartDate(e.target.value)}
+                          min={candles.length > 0 ? candles[0].timestamp.substring(0, 10) : ''}
+                          max={candles.length > 0 ? candles[candles.length - 1].timestamp.substring(0, 10) : ''}
+                          className="bg-[#050505] text-[10.5px] text-white/80 border border-white/10 hover:border-white/20 px-2.5 py-1.5 rounded outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 font-mono transition-colors [color-scheme:dark]"
+                        />
+                      </div>
+
+                      <div className="flex items-center space-x-1">
+                        <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">To:</span>
+                        <input 
+                          type="date"
+                          id="replay-date-end"
+                          value={sessionEndDate}
+                          onChange={(e) => setSessionEndDate(e.target.value)}
+                          min={sessionStartDate || (candles.length > 0 ? candles[0].timestamp.substring(0, 10) : '')}
+                          max={candles.length > 0 ? candles[candles.length - 1].timestamp.substring(0, 10) : ''}
+                          className="bg-[#050505] text-[10.5px] text-white/80 border border-white/10 hover:border-white/20 px-2.5 py-1.5 rounded outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 font-mono transition-colors [color-scheme:dark]"
+                        />
+                      </div>
+
+                      {/* Custom Date Picker trigger buttons */}
+                      <div className="flex items-center gap-1.5 ml-1">
+                        <button
+                          id="btn-apply-replay-range"
+                          onClick={() => {
+                            if (!sessionStartDate || !sessionEndDate) return;
+                            setJumpRange({
+                              start: `${sessionStartDate}T00:00:00.000Z`,
+                              end: `${sessionEndDate}T23:59:59.999Z`,
+                              triggerId: Date.now()
+                            });
+                          }}
+                          disabled={!sessionStartDate || !sessionEndDate}
+                          className={`px-3 py-1.5 rounded font-mono text-[10px] font-bold tracking-tight border h-[34px] flex items-center justify-center cursor-pointer transition-all ${
+                            sessionStartDate && sessionEndDate
+                              ? 'bg-indigo-600 border-indigo-500 hover:bg-indigo-500 text-white shadow-md active:scale-95'
+                              : 'bg-[#050505] border-white/5 text-white/20 cursor-not-allowed'
+                          }`}
+                        >
+                          APPLY
+                        </button>
+
+                        <button
+                          id="btn-reset-replay-view"
+                          onClick={() => {
+                            setSessionStartDate('');
+                            setSessionEndDate('');
+                            const selectEl = document.getElementById('session-preset-select') as HTMLSelectElement;
+                            if (selectEl) selectEl.value = '';
+                            
+                            setJumpRange(null);
+                            setResetChartKey(prev => prev + 1);
+                          }}
+                          title="Return to the latest live ticker session"
+                          className="px-2.5 py-1.5 bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/10 text-white/70 hover:text-white rounded font-mono text-[10px] font-bold tracking-tight h-[34px] flex items-center justify-center cursor-pointer transition-all"
+                        >
+                          LIVE
+                        </button>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
                 <StrategyPerformanceChart />
                 <BacktestSimulator selectedSymbol={symbol} onSymbolChange={(sym) => setSymbol(sym)} />
                 <PerformanceTracker trades={trades} onTradeUpdated={fetchMarketData} />
@@ -1349,7 +1920,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
       {/* Footer Info strip */}
       <footer className="border-t border-white/10 bg-[#080808] py-6 mt-10">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 flex flex-col lg:flex-row items-center justify-between gap-4 font-mono text-[11px] text-white/30">
+        <div className="max-w-[1400px] mx-auto px-3 md:px-6 flex flex-col lg:flex-row items-center justify-between gap-4 font-mono text-[11px] text-white/30">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center space-x-2">
               <ShieldCheck className="w-4 h-4 text-emerald-500" />
@@ -1423,10 +1994,13 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
           </div>
         </div>
       </footer>
+      </div>
 
       {/* Floating Bottom-Left Advisor Chat */}
       {metrics && (
-        <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start">
+        <div 
+          className="fixed bottom-18 md:bottom-6 left-3 md:left-[84px] z-50 flex flex-col items-start transition-all duration-300 ease-in-out"
+        >
           {/* Chat Panel Popover */}
           {isChatOpen && (
             <div className="mb-3 w-[360px] sm:w-[400px] md:w-[420px] max-w-[calc(100vw-3rem)] rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 bg-[#080808] overflow-hidden transition-all duration-300 animate-fadeIn h-[510px]">
@@ -1720,6 +2294,131 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Sticky Bottom Navigation Dock */}
+      <nav id="mobile-sticky-bottom-nav" className="fixed bottom-0 left-0 right-0 z-40 bg-[#080808]/95 backdrop-blur-md border-t border-white/10 flex md:hidden items-center justify-around py-1.5 px-2 safe-bottom">
+        {[
+          { id: 'INTELLIGENCE', label: 'Intel', icon: Bot },
+          { id: 'DASHBOARD', label: 'Dash', icon: Layers },
+          { id: 'EXECUTION', label: 'Exec', icon: Activity },
+          { id: 'RISK', label: 'Risk', icon: ShieldAlert },
+          { id: 'RESEARCH', label: 'Research', icon: Award },
+          { id: 'SETTINGS', label: 'Settings', icon: Settings }
+        ].map((item) => {
+          const active = activeTab === item.id;
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition-all ${
+                active 
+                  ? 'text-indigo-400 font-extrabold scale-105' 
+                  : 'text-[#e5e5e5]/50 hover:text-white/80'
+              }`}
+            >
+              <Icon className={`w-4.5 h-4.5 ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
+              <span className="text-[8px] font-mono tracking-tight mt-0.5 uppercase">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Mobile Drawer Navigation Menu */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm md:hidden"
+            />
+            
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="fixed inset-y-0 left-0 w-72 z-55 bg-[#080808] border-r border-white/10 p-5 flex flex-col justify-between md:hidden shadow-[8px_0_32px_rgba(0,0,0,0.85)]"
+            >
+              <div className="space-y-6">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded bg-indigo-600 flex items-center justify-center font-black text-white text-sm shadow-[0_0_10px_#4f46e5]">
+                      Ω
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">
+                      APEX QUANT<span className="text-indigo-400 font-extrabold">.AI</span>
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="p-1.5 hover:bg-white/5 border border-white/10 rounded-md text-white/60 hover:text-white transition-all cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Navigation Items */}
+                <nav className="space-y-1.5">
+                  {[
+                    { id: 'INTELLIGENCE', label: 'Intelligence Workspace', icon: Bot, desc: 'Trend Bias, Gaps, Order Blocks' },
+                    { id: 'DASHBOARD', label: 'General Dashboard', icon: Layers, desc: 'Portfolio PnL & Health' },
+                    { id: 'EXECUTION', label: 'Execution Terminal', icon: Activity, desc: 'Manual & EA Order Panel' },
+                    { id: 'RISK', label: 'Risk Desk Management', icon: ShieldAlert, desc: 'Leverage, Limits & Heatmap' },
+                    { id: 'RESEARCH', label: 'Research & Calendar', icon: Award, desc: 'Economic events & insights' },
+                    { id: 'SETTINGS', label: 'System Settings', icon: Settings, desc: 'API, alerts & notification settings' }
+                  ].map((item) => {
+                    const active = activeTab === item.id;
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setActiveTab(item.id as any);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full p-3 rounded-lg text-left transition-all flex items-start gap-3.5 cursor-pointer border ${
+                          active
+                            ? 'bg-indigo-600/15 text-white border-indigo-500/30'
+                            : 'text-[#e5e5e5]/60 hover:text-white hover:bg-white/[0.02] border-transparent'
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${active ? 'text-indigo-400' : 'text-white/35'}`} />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-mono font-bold uppercase tracking-wide leading-none">{item.label}</span>
+                          <span className="text-[9px] text-[#e5e5e5]/30 mt-1">{item.desc}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-white/5 pt-4 flex flex-col space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">
+                    Institutional Node Active
+                  </span>
+                </div>
+                <div className="text-[8px] font-mono text-white/20">
+                  APEX GATEWAY S9 &middot; BUILD 4022
+                </div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

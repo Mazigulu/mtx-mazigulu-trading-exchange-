@@ -156,15 +156,24 @@ export default function HistoricalBreachLog() {
             <tbody className="divide-y divide-white/[0.03]">
               {filteredBreaches.map((b) => {
                 const exposureSeverityColor = b.exposure >= 1.8 ? 'text-rose-500' : 'text-amber-500';
-                const formattedDate = new Date(b.timestamp).toLocaleString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                  hour12: false
-                });
+                const formattedDate = (() => {
+                  if (!b.timestamp) return '—';
+                  const d = new Date(b.timestamp);
+                  if (isNaN(d.getTime())) return b.timestamp;
+                  try {
+                    return d.toLocaleString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: false
+                    });
+                  } catch {
+                    return b.timestamp;
+                  }
+                })();
 
                 return (
                   <tr key={b.id} className="hover:bg-white/[0.01] transition-colors group">

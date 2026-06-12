@@ -31,7 +31,50 @@ export default function CorrelationMatrix() {
   const [selectedPair, setSelectedPair] = useState<{ s1: MarketSymbol; s2: MarketSymbol } | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ s1: string; s2: string } | null>(null);
 
-  const symbols: MarketSymbol[] = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+  const ALL_SYMBOLS: MarketSymbol[] = [
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+    'GOLD/USD', 'SILVER/USD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'US30', 'NAS100', 'GER40', 'SPX500'
+  ];
+
+  const CATEGORIES = [
+    { id: 'ALL', name: 'All Instruments' },
+    { id: 'FOREX', name: 'Forex' },
+    { id: 'METALS', name: 'Metals' },
+    { id: 'CRYPTO', name: 'Crypto' },
+    { id: 'INDICES', name: 'Indices' },
+  ];
+
+  const [selectedCategory, setSelectedCategory] = useState('FOREX');
+
+  const getFilteredSymbols = () => {
+    switch (selectedCategory) {
+      case 'ALL':
+        return ALL_SYMBOLS;
+      case 'FOREX':
+        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP'];
+      case 'METALS':
+        return ['GOLD/USD', 'SILVER/USD'];
+      case 'CRYPTO':
+        return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
+      case 'INDICES':
+        return ['US30', 'NAS100', 'GER40', 'SPX500'];
+      default:
+        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+    }
+  };
+
+  const symbols = getFilteredSymbols();
+
+  useEffect(() => {
+    const activeList = getFilteredSymbols();
+    if (activeList.length >= 2) {
+      if (!selectedPair || !activeList.includes(selectedPair.s1) || !activeList.includes(selectedPair.s2)) {
+        setSelectedPair({ s1: activeList[0], s2: activeList[1] });
+      }
+    }
+  }, [selectedCategory]);
 
   const fetchCorrelation = async () => {
     try {
@@ -175,6 +218,23 @@ export default function CorrelationMatrix() {
         Pearson correlation factors are re-calculated on live ticker intervals. Heavy green tiles represent matching price structures, while red indicates inverse drift patterns. Use these correlations to execute directional hedges.
       </p>
 
+      {/* Category Tabs Menu */}
+      <div className="flex flex-wrap gap-1.5 mb-4 border-b border-white/5 pb-3">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setSelectedCategory(cat.id)}
+            className={`px-3 py-1 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
+              selectedCategory === cat.id
+                ? 'bg-indigo-600/20 border border-indigo-500/40 text-indigo-300'
+                : 'bg-white/[0.02] border border-white/5 hover:border-white/15 text-white/40 hover:text-white/70'
+            }`}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
       {/* Main Container layout: heat grid + side description */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         
@@ -194,7 +254,10 @@ export default function CorrelationMatrix() {
             <div className="min-w-[340px] select-none">
               
               {/* Matrix Element Grid */}
-              <div className="grid grid-cols-6 gap-1.5 font-mono text-[10px]">
+              <div 
+                className="grid gap-1.5 font-mono text-[10px]"
+                style={{ gridTemplateColumns: `repeat(${symbols.length + 1}, minmax(0, 1fr))` }}
+              >
                 
                 {/* Row 0: Top Header corner (empty) */}
                 <div className="flex items-center justify-center text-[8.5px] text-white/30 tracking-wider text-right pr-2">

@@ -144,6 +144,105 @@ const SYMBOL_CONFIGS: Record<MarketSymbol, {
       { hourIndex: 82, title: 'US Federal Reserve Interest Rate Decision (FOMC Hawkes)', movementInPips: 420, impact: 'HIGH' },
       { hourIndex: 120, title: 'Geopolitical Risk Escalation (Safe Haven Inflow)', movementInPips: 380, impact: 'HIGH' },
     ]
+  },
+  'AUD/USD': {
+    name: 'Australian Dollar / U.S. Dollar',
+    basePrice: 0.6650,
+    pipSize: 0.0001,
+    decimals: 5,
+    averageRange: 0.0006,
+    driftFactor: 0.0011,
+    flagF1: '🇦🇺',
+    flagF2: '🇺🇸',
+    newsEvents: []
+  },
+  'EUR/GBP': {
+    name: 'Euro / Great Britain Pound',
+    basePrice: 0.8520,
+    pipSize: 0.0001,
+    decimals: 5,
+    averageRange: 0.0005,
+    driftFactor: 0.0009,
+    flagF1: '🇪🇺',
+    flagF2: '🇬🇧',
+    newsEvents: []
+  },
+  'SILVER/USD': {
+    name: 'Silver / U.S. Dollar',
+    basePrice: 29.50,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 0.25,
+    driftFactor: 0.45,
+    flagF1: '💵',
+    flagF2: '🥈',
+    newsEvents: []
+  },
+  'ETH/USDT': {
+    name: 'Ethereum / TetherUS',
+    basePrice: 3450.0,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 25.0,
+    driftFactor: 45.0,
+    flagF1: '💎',
+    flagF2: '💎',
+    newsEvents: []
+  },
+  'SOL/USDT': {
+    name: 'Solana / TetherUS',
+    basePrice: 148.55,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 1.8,
+    driftFactor: 3.5,
+    flagF1: '☀️',
+    flagF2: '☀️',
+    newsEvents: []
+  },
+  'US30': {
+    name: 'Dow Jones 30 Index',
+    basePrice: 38850.0,
+    pipSize: 1.0,
+    decimals: 1,
+    averageRange: 150.0,
+    driftFactor: 280.0,
+    flagF1: '🇺🇸',
+    flagF2: '📈',
+    newsEvents: []
+  },
+  'NAS100': {
+    name: 'Nasdaq 100 Index',
+    basePrice: 18550.0,
+    pipSize: 1.0,
+    decimals: 1,
+    averageRange: 90.0,
+    driftFactor: 160.0,
+    flagF1: '🇺🇸',
+    flagF2: '📊',
+    newsEvents: []
+  },
+  'GER40': {
+    name: 'DAX 40 Index',
+    basePrice: 18200.0,
+    pipSize: 1.0,
+    decimals: 1,
+    averageRange: 110.0,
+    driftFactor: 200.0,
+    flagF1: '🇩🇪',
+    flagF2: '📈',
+    newsEvents: []
+  },
+  'SPX500': {
+    name: 'S&P 500 Index',
+    basePrice: 5300.0,
+    pipSize: 1.0,
+    decimals: 1,
+    averageRange: 35.0,
+    driftFactor: 65.0,
+    flagF1: '🇺🇸',
+    flagF2: '📊',
+    newsEvents: []
   }
 };
 

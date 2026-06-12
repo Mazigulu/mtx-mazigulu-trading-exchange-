@@ -507,7 +507,12 @@ app.get('/api/market-data', (req, res) => {
 
 // get asset correlation matrix based on past 30 candle closes
 app.get('/api/market-correlation', (req, res) => {
-  const symbols: MarketSymbol[] = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+  const symbols: MarketSymbol[] = [
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+    'GOLD/USD', 'SILVER/USD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'US30', 'NAS100', 'GER40', 'SPX500'
+  ];
   const matrix: Record<string, Record<string, number>> = {};
   const candleSeries: Record<string, number[]> = {};
 
@@ -555,7 +560,12 @@ app.get('/api/market-correlation', (req, res) => {
 
 // get real-time market sentiment and state analysis
 app.get('/api/market-sentiment', (req, res) => {
-  const symbols: MarketSymbol[] = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+  const symbols: MarketSymbol[] = [
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+    'GOLD/USD', 'SILVER/USD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'US30', 'NAS100', 'GER40', 'SPX500'
+  ];
   const sentimentMap: Record<string, any> = {};
 
   const now = new Date();
@@ -1010,7 +1020,12 @@ app.get('/api/market-briefing', async (req, res) => {
     return;
   }
 
-  const symbols: MarketSymbol[] = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+  const symbols: MarketSymbol[] = [
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+    'GOLD/USD', 'SILVER/USD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'US30', 'NAS100', 'GER40', 'SPX500'
+  ];
 
   // 1. Gather all current indicators
   const marketDetails = symbols.map(sym => {

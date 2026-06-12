@@ -44,7 +44,21 @@ export interface LiquiditySweep {
   timestamp: string;
 }
 
-export type MarketSymbol = 'EUR/USD' | 'GBP/USD' | 'USD/JPY' | 'BTC/USDT' | 'GOLD/USD';
+export type MarketSymbol = 
+  | 'EUR/USD' 
+  | 'GBP/USD' 
+  | 'USD/JPY' 
+  | 'AUD/USD' 
+  | 'EUR/GBP' 
+  | 'GOLD/USD' 
+  | 'SILVER/USD' 
+  | 'BTC/USDT' 
+  | 'ETH/USDT' 
+  | 'SOL/USDT' 
+  | 'US30' 
+  | 'NAS100' 
+  | 'GER40' 
+  | 'SPX500';
 
 export interface Trade {
   id: string;

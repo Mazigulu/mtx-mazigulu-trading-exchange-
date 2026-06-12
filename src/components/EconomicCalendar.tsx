@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { NewsEvent } from '../types';
 import { Calendar, AlertOctagon, Terminal, Clock, ShieldAlert } from 'lucide-react';
 
@@ -18,6 +18,12 @@ export default function EconomicCalendar({ events }: EconomicCalendarProps) {
     MEDIUM: true,
     LOW: true,
   });
+
+  const [newsPage, setNewsPage] = useState(0);
+
+  useEffect(() => {
+    setNewsPage(0);
+  }, [selectedImpacts]);
 
   const toggleImpact = (impact: 'HIGH' | 'MEDIUM' | 'LOW') => {
     setSelectedImpacts((prev) => ({
@@ -45,6 +51,15 @@ export default function EconomicCalendar({ events }: EconomicCalendarProps) {
   const filteredEvents = useMemo(() => {
     return events.filter((ev) => selectedImpacts[ev.impact]);
   }, [events, selectedImpacts]);
+
+  const newsPageSize = 5;
+  const totalNews = filteredEvents.length;
+  const totalNewsPages = Math.ceil(totalNews / newsPageSize);
+  const newsStartIndex = newsPage * newsPageSize;
+  const newsEndIndex = Math.min(newsStartIndex + newsPageSize, totalNews);
+  const displayedEvents = useMemo(() => {
+    return filteredEvents.slice(newsStartIndex, newsEndIndex);
+  }, [filteredEvents, newsStartIndex, newsEndIndex]);
 
   const getImpactBadge = (impact: 'HIGH' | 'MEDIUM' | 'LOW') => {
     switch (impact) {
@@ -157,7 +172,7 @@ export default function EconomicCalendar({ events }: EconomicCalendarProps) {
 
         {/* Events listing */}
         <div className="space-y-3.5 mt-4 max-h-[310px] overflow-y-auto pr-1">
-          {filteredEvents.length === 0 ? (
+          {displayedEvents.length === 0 ? (
             <div id="news-empty-state" className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-white/5 rounded bg-[#030303]/40">
               <span className="text-xs text-white/25 font-mono">No news events match selected filter</span>
               <button 
@@ -169,7 +184,7 @@ export default function EconomicCalendar({ events }: EconomicCalendarProps) {
               </button>
             </div>
           ) : (
-            filteredEvents.map((ev) => {
+            displayedEvents.map((ev) => {
               const isHigh = ev.impact === 'HIGH';
               return (
                 <div
@@ -205,6 +220,42 @@ export default function EconomicCalendar({ events }: EconomicCalendarProps) {
             })
           )}
         </div>
+
+        {/* Dynamic Inline Pagination for News Events */}
+        {totalNewsPages > 1 && (
+          <div className="flex items-center justify-between border-t border-white/5 pt-3.5 mt-3 font-mono text-[10px] text-white/50 select-none">
+            <span className="text-[9.5px] text-white/30 font-sans">
+              Showing <span className="font-bold font-mono text-indigo-400">{newsStartIndex + 1}</span>-
+              <span className="font-bold font-mono text-indigo-400">{newsEndIndex}</span> of{' '}
+              <span className="font-bold font-mono text-indigo-200">{totalNews}</span> events
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setNewsPage(prev => Math.max(0, prev - 1))}
+                disabled={newsPage === 0}
+                className={`px-2 py-0.5 rounded border text-[9.5px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer select-none ${
+                  newsPage === 0
+                    ? 'border-white/5 text-white/20 bg-transparent cursor-not-allowed'
+                    : 'border-white/10 text-white/75 bg-white/5 hover:border-indigo-500/40 hover:text-indigo-300'
+                }`}
+              >
+                ◀ Prev
+              </button>
+              <button
+                onClick={() => setNewsPage(prev => Math.min(totalNewsPages - 1, prev + 1))}
+                disabled={newsPage === totalNewsPages - 1}
+                className={`px-2 py-0.5 rounded border text-[9.5px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer select-none ${
+                  newsPage === totalNewsPages - 1
+                    ? 'border-white/5 text-white/20 bg-transparent cursor-not-allowed'
+                    : 'border-white/10 text-white/75 bg-white/5 hover:border-indigo-500/40 hover:text-indigo-300'
+                }`}
+              >
+                Next ▶
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
       <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-white/30">

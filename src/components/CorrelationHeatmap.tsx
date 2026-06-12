@@ -41,7 +41,50 @@ export default function CorrelationHeatmap({ trades }: CorrelationHeatmapProps) 
   // Interaction selection state
   const [selectedCell, setSelectedCell] = useState<{ s1: MarketSymbol; s2: MarketSymbol } | null>(null);
 
-  const symbols: MarketSymbol[] = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+  const ALL_SYMBOLS: MarketSymbol[] = [
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+    'GOLD/USD', 'SILVER/USD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'US30', 'NAS100', 'GER40', 'SPX500'
+  ];
+
+  const CATEGORIES = [
+    { id: 'ALL', name: 'All Instruments' },
+    { id: 'FOREX', name: 'Forex' },
+    { id: 'METALS', name: 'Metals' },
+    { id: 'CRYPTO', name: 'Crypto' },
+    { id: 'INDICES', name: 'Indices' },
+  ];
+
+  const [selectedCategory, setSelectedCategory] = useState('FOREX');
+
+  const getFilteredSymbols = (): MarketSymbol[] => {
+    switch (selectedCategory) {
+      case 'ALL':
+        return ALL_SYMBOLS;
+      case 'FOREX':
+        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP'];
+      case 'METALS':
+        return ['GOLD/USD', 'SILVER/USD'];
+      case 'CRYPTO':
+        return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
+      case 'INDICES':
+        return ['US30', 'NAS100', 'GER40', 'SPX500'];
+      default:
+        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP'];
+    }
+  };
+
+  const symbols = getFilteredSymbols();
+
+  useEffect(() => {
+    const list = getFilteredSymbols();
+    if (list.length >= 2) {
+      if (!selectedCell || !list.includes(selectedCell.s1) || !list.includes(selectedCell.s2)) {
+        setSelectedCell({ s1: list[0], s2: list[1] });
+      }
+    }
+  }, [selectedCategory]);
 
   const fetchCorrelation = async () => {
     try {
@@ -352,6 +395,23 @@ export default function CorrelationHeatmap({ trades }: CorrelationHeatmapProps) 
         </button>
       </div>
 
+      {/* Category Tabs Menu */}
+      <div className="flex flex-wrap gap-1.5 mb-2 border-b border-white/5 pb-3">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setSelectedCategory(cat.id)}
+            className={`px-3 py-1 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
+              selectedCategory === cat.id
+                ? 'bg-indigo-600/20 border border-indigo-500/40 text-indigo-300'
+                : 'bg-white/[0.02] border border-white/5 hover:border-white/15 text-white/40 hover:text-white/70'
+            }`}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch">
         
         {/* Left Column: Interactive Heatmap Grid overlay */}
@@ -381,7 +441,10 @@ export default function CorrelationHeatmap({ trades }: CorrelationHeatmapProps) 
             <div className="overflow-x-auto select-none min-w-[320px]">
               
               {/* Matrix Heatmap Elements */}
-              <div className="grid grid-cols-6 gap-1.5 font-mono text-[10px]">
+              <div 
+                className="grid gap-1.5 font-mono text-[10px]"
+                style={{ gridTemplateColumns: `repeat(${symbols.length + 1}, minmax(0, 1fr))` }}
+              >
                 
                 {/* Empty corner indicator */}
                 <div className="flex items-center justify-end text-[8.5px] text-white/20 uppercase tracking-widest pr-3 font-semibold select-none pb-1">

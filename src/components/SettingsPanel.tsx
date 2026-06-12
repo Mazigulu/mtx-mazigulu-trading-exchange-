@@ -22,7 +22,8 @@ import {
   EyeOff,
   Sliders,
   AlertTriangle,
-  Bot
+  Bot,
+  Target
 } from 'lucide-react';
 import Mt5BridgeGuide from './Mt5BridgeGuide';
 
@@ -39,6 +40,11 @@ interface ConnectionState {
   telegramOnExecution: boolean;
   mockApiKey: string;
   volatilityAlertEnabled: boolean;
+  desktopNotificationsEnabled?: boolean;
+  dailyPnLGoal?: number;
+  dailyPnLAlertEnabled?: boolean;
+  dailyPnLPositiveThreshold?: number;
+  dailyPnLNegativeThreshold?: number;
 }
 
 export default function SettingsPanel() {
@@ -47,6 +53,9 @@ export default function SettingsPanel() {
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
   const [telegramTestSuccess, setTelegramTestSuccess] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
+  );
 
   const [settings, setSettings] = useState<ConnectionState>(() => {
     try {
@@ -65,6 +74,11 @@ export default function SettingsPanel() {
           telegramOnExecution: true,
           mockApiKey: '••••••••••••••••••••••••••••',
           volatilityAlertEnabled: false,
+          desktopNotificationsEnabled: false,
+          dailyPnLGoal: 1000,
+          dailyPnLAlertEnabled: false,
+          dailyPnLPositiveThreshold: 2000,
+          dailyPnLNegativeThreshold: -1000,
           ...JSON.parse(saved)
         };
       }
@@ -84,6 +98,11 @@ export default function SettingsPanel() {
       telegramOnExecution: true,
       mockApiKey: '••••••••••••••••••••••••••••',
       volatilityAlertEnabled: false,
+      desktopNotificationsEnabled: false,
+      dailyPnLGoal: 1000,
+      dailyPnLAlertEnabled: false,
+      dailyPnLPositiveThreshold: 2000,
+      dailyPnLNegativeThreshold: -1000,
     };
   });
 
@@ -439,6 +458,179 @@ export default function SettingsPanel() {
                   onChange={(e) => setSettings({ ...settings, volatilityAlertEnabled: e.target.checked })}
                   className="rounded bg-[#050505] border-white/10 text-indigo-500 h-4 w-4 accent-indigo-500 focus:ring-0 cursor-pointer"
                 />
+              </div>
+
+              {/* Browser-Native Desktop Notifications */}
+              <div className="flex flex-col border-t border-white/5 pt-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-[11px] font-bold text-white block uppercase font-mono">Desktop Push Decryptor</span>
+                    <p className="text-[9.5px] text-white/40 font-mono">Deliver real-time browser-native desktop notifications when positions hit TP or SL targets.</p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {/* Visual permission indicator */}
+                    {typeof window !== 'undefined' && 'Notification' in window && (
+                      <span className={`text-[8.5px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
+                        permission === 'granted' 
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                          : permission === 'denied' 
+                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
+                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {permission === 'granted' ? 'Allowed' : permission === 'denied' ? 'Blocked' : 'No Permission'}
+                      </span>
+                    )}
+                    <input
+                      id="settings-desktop-notifications-checkbox"
+                      type="checkbox"
+                      checked={settings.desktopNotificationsEnabled || false}
+                      onChange={async (e) => {
+                        if (e.target.checked) {
+                          if (!('Notification' in window)) {
+                            alert('This browser does not support desktop notifications.');
+                            return;
+                          }
+                          if (Notification.permission === 'default') {
+                            const res = await Notification.requestPermission();
+                            setPermission(res);
+                            if (res === 'granted') {
+                              setSettings({ ...settings, desktopNotificationsEnabled: true });
+                              new Notification('System Core Active', {
+                                body: 'Desktop trigger alerts configured successfully.',
+                                icon: '/assets/favicon.png'
+                              });
+                            } else {
+                              setSettings({ ...settings, desktopNotificationsEnabled: false });
+                            }
+                          } else if (Notification.permission === 'granted') {
+                            setSettings({ ...settings, desktopNotificationsEnabled: true });
+                          } else {
+                            setSettings({ ...settings, desktopNotificationsEnabled: false });
+                          }
+                        } else {
+                          setSettings({ ...settings, desktopNotificationsEnabled: false });
+                        }
+                      }}
+                      className="rounded bg-[#050505] border-white/10 text-indigo-500 h-4 w-4 accent-indigo-500 focus:ring-0 cursor-pointer"
+                    />
+                  </div>
+                </div>
+                {permission === 'denied' && (
+                  <span className="text-[8.5px] text-rose-400/80 font-mono mt-1 leading-normal">
+                    ⚠️ Browser-native notifications are blocked. To receive TP/SL execution alerts, click the lock icon in your URL bar and reset site permissions to "Allow".
+                  </span>
+                )}
+              </div>
+
+              {/* Daily PnL Goal Target */}
+              <div className="flex flex-col border-t border-white/5 pt-3">
+                <div className="flex items-center justify-between zoom-in-50">
+                  <div className="space-y-0.5">
+                    <span className="text-[11px] font-bold text-white block uppercase font-mono flex items-center gap-1.5">
+                      <Target className="w-3.5 h-3.5 text-indigo-400" />
+                      Daily Performance Goal ($)
+                    </span>
+                    <p className="text-[9.5px] text-white/40 font-mono">Target benchmark PnL projection for institutional tracking.</p>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="settings-daily-pnl-goal"
+                      type="number"
+                      min="50"
+                      max="1000000"
+                      step="50"
+                      value={settings.dailyPnLGoal ?? 1000}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                        setSettings({ ...settings, dailyPnLGoal: val });
+                      }}
+                      className="w-28 bg-[#050505] text-white border border-white/10 rounded px-2.5 py-1 text-xs font-mono font-bold text-right outline-none focus:border-indigo-500 hover:border-white/20 transition-colors"
+                      title="Enter Daily PnL Goal ($)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Daily PnL Threshold Alerts */}
+              <div className="flex flex-col border-t border-white/5 pt-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-[11px] font-bold text-white block uppercase font-mono flex items-center gap-1.5">
+                      <Bell className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                      Daily PnL Threshold Alerts
+                    </span>
+                    <p className="text-[9.5px] text-white/40 font-mono">
+                      Trigger a desktop notification when daily PnL reaches positive or negative threshold.
+                    </p>
+                  </div>
+                  <input
+                    id="settings-daily-pnl-alert-checkbox"
+                    type="checkbox"
+                    checked={settings.dailyPnLAlertEnabled || false}
+                    onChange={async (e) => {
+                      const checked = e.target.checked;
+                      if (checked) {
+                        if (typeof window !== 'undefined' && 'Notification' in window) {
+                          if (Notification.permission === 'default') {
+                            const res = await Notification.requestPermission();
+                            setPermission(res);
+                            setSettings({
+                              ...settings,
+                              dailyPnLAlertEnabled: res === 'granted' ? true : false,
+                              desktopNotificationsEnabled: res === 'granted' ? true : settings.desktopNotificationsEnabled
+                            });
+                            return;
+                          } else if (Notification.permission === 'denied') {
+                            alert('Notifications are blocked by your browser settings. Please enable them to use PnL alerts.');
+                            setSettings({ ...settings, dailyPnLAlertEnabled: false });
+                            return;
+                          }
+                        }
+                      }
+                      setSettings({ ...settings, dailyPnLAlertEnabled: checked });
+                    }}
+                    className="rounded bg-[#050505] border-white/10 text-indigo-500 h-4 w-4 accent-indigo-500 focus:ring-0 cursor-pointer"
+                  />
+                </div>
+
+                {settings.dailyPnLAlertEnabled && (
+                  <div className="mt-3 grid grid-cols-2 gap-3 pl-5 border-l border-indigo-500/30 animate-fadeIn text-[10px] font-mono">
+                    <div className="space-y-1">
+                      <label className="text-[8.5px] text-white/45 uppercase font-bold tracking-wider block">Profit Threshold ($)</label>
+                      <input
+                        id="settings-daily-pnl-pos-threshold"
+                        type="number"
+                        min="1"
+                        max="1000000"
+                        step="100"
+                        value={settings.dailyPnLPositiveThreshold ?? 2000}
+                        onChange={(e) => {
+                          const val = Math.max(1, parseInt(e.target.value) || 0);
+                          setSettings({ ...settings, dailyPnLPositiveThreshold: val });
+                        }}
+                        className="w-full bg-[#050505] text-emerald-400 border border-white/10 rounded px-2.5 py-1 text-xs font-bold text-right outline-none focus:border-emerald-500/40 hover:border-white/20 transition-colors"
+                        title="Alert triggers above this profit limit"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[8.5px] text-white/45 uppercase font-bold tracking-wider block">Loss Limit Threshold ($)</label>
+                      <input
+                        id="settings-daily-pnl-neg-threshold"
+                        type="number"
+                        min="-1000000"
+                        max="1000000"
+                        step="100"
+                        value={settings.dailyPnLNegativeThreshold ?? -1000}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setSettings({ ...settings, dailyPnLNegativeThreshold: val });
+                        }}
+                        className="w-full bg-[#050505] text-rose-400 border border-white/10 rounded px-2.5 py-1 text-xs font-bold text-right outline-none focus:border-rose-500/40 hover:border-white/20 transition-colors"
+                        title="Alert triggers below this loss limit"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>

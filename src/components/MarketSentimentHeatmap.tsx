@@ -48,6 +48,9 @@ export default function MarketSentimentHeatmap() {
   // Selected asset for highlighting detailed macro composition
   const [selectedSymbol, setSelectedSymbol] = useState<MarketSymbol>('EUR/USD');
 
+  // Pagination for list of instruments exceeding 5 items
+  const [currentPage, setCurrentPage] = useState(0);
+
   const fetchSentiment = async () => {
     try {
       const response = await fetch('/api/market-sentiment');
@@ -76,7 +79,46 @@ export default function MarketSentimentHeatmap() {
     return () => clearInterval(interval);
   }, []);
 
-  const symbols: MarketSymbol[] = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+  const symbols: MarketSymbol[] = [
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+    'GOLD/USD', 'SILVER/USD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'US30', 'NAS100', 'GER40', 'SPX500'
+  ];
+
+  const CATEGORIES = [
+    { id: 'ALL', name: 'All Instruments' },
+    { id: 'FOREX', name: 'Forex' },
+    { id: 'METALS', name: 'Metals' },
+    { id: 'CRYPTO', name: 'Crypto' },
+    { id: 'INDICES', name: 'Indices' },
+  ];
+
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+
+  const getFilteredSymbols = () => {
+    switch (selectedCategory) {
+      case 'FOREX':
+        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP'];
+      case 'METALS':
+        return ['GOLD/USD', 'SILVER/USD'];
+      case 'CRYPTO':
+        return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
+      case 'INDICES':
+        return ['US30', 'NAS100', 'GER40', 'SPX500'];
+      default:
+        return symbols;
+    }
+  };
+
+  const filteredSymbols = getFilteredSymbols();
+
+  useEffect(() => {
+    setCurrentPage(0);
+    if (filteredSymbols.length > 0 && !filteredSymbols.includes(selectedSymbol)) {
+      setSelectedSymbol(filteredSymbols[0] as MarketSymbol);
+    }
+  }, [selectedCategory]);
 
   // Style helper for Overall Sentiment Score Backgrounds
   const getScoreColorClass = (score: number) => {
@@ -147,6 +189,21 @@ export default function MarketSentimentHeatmap() {
     }
   };
 
+  const pageSize = 5;
+  const totalSymbols = filteredSymbols.length;
+  const totalPages = Math.ceil(totalSymbols / pageSize);
+  const startIndex = currentPage * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalSymbols);
+  const displayedSymbols = filteredSymbols.slice(startIndex, endIndex);
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    const firstOnNewPage = filteredSymbols[newPage * pageSize];
+    if (firstOnNewPage) {
+      setSelectedSymbol(firstOnNewPage as MarketSymbol);
+    }
+  };
+
   const activeAsset = data?.sentiment[selectedSymbol];
 
   return (
@@ -170,6 +227,23 @@ export default function MarketSentimentHeatmap() {
         Aggregates live exchange order-flow metrics and macroeconomic news calendar weights. Displays calculated Pearson shifts, RSI parameters, and ATR volatility boundaries.
       </p>
 
+      {/* Category Tabs Menu */}
+      <div className="flex flex-wrap gap-1.5 mb-4 border-b border-white/5 pb-3">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setSelectedCategory(cat.id)}
+            className={`px-3 py-1 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
+              selectedCategory === cat.id
+                ? 'bg-indigo-600/20 border border-indigo-500/40 text-indigo-300'
+                : 'bg-white/[0.02] border border-white/5 hover:border-white/15 text-white/40 hover:text-white/70'
+            }`}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
       {/* Main Grid: Heatmap Blocks + Detail Info */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         
@@ -187,7 +261,7 @@ export default function MarketSentimentHeatmap() {
             </div>
           ) : (
             <div className="space-y-2">
-              {symbols.map((sym) => {
+              {displayedSymbols.map((sym) => {
                 const asset = data?.sentiment[sym];
                 if (!asset) return null;
 
@@ -245,6 +319,42 @@ export default function MarketSentimentHeatmap() {
                   </div>
                 );
               })}
+
+              {/* Dynamic inline pagination block */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-3 font-mono text-[10px] text-white/50 select-none">
+                  <span className="text-[9.5px] text-white/30 font-sans">
+                    Showing <span className="font-bold font-mono text-indigo-400">{startIndex + 1}</span>-
+                    <span className="font-bold font-mono text-indigo-400">{endIndex}</span> of{' '}
+                    <span className="font-bold font-mono text-indigo-200">{totalSymbols}</span> instruments
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 0}
+                      className={`px-2 py-0.5 rounded border text-[9px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer select-none ${
+                        currentPage === 0
+                          ? 'border-white/5 text-white/20 bg-transparent cursor-not-allowed'
+                          : 'border-white/10 text-white/75 bg-white/5 hover:border-indigo-500/40 hover:text-indigo-300'
+                      }`}
+                    >
+                      ◀ Prev
+                    </button>
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages - 1}
+                      className={`px-2 py-0.5 rounded border text-[9px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer select-none ${
+                        currentPage === totalPages - 1
+                          ? 'border-white/5 text-white/20 bg-transparent cursor-not-allowed'
+                          : 'border-white/10 text-white/75 bg-white/5 hover:border-indigo-500/40 hover:text-indigo-300'
+                      }`}
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
         </div>
