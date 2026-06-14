@@ -254,10 +254,10 @@ export default function DailyBriefing() {
         <div className="space-y-5 animate-fadeIn">
           {/* Quota limit warning banner */}
           {(!briefing.isLive && !briefing.isCachedFallback) && (
-            <div className="bg-amber-500/10 border border-amber-500/15 rounded-md p-3 text-[11px] font-mono flex items-start space-x-2.5 text-amber-300">
+            <div className="bg-[#121008] border border-amber-500/40 rounded-md p-3 text-[11px] font-mono flex items-start space-x-2.5 text-amber-300">
               <Zap className="w-4 h-4 text-amber-500 shrink-0 mt-0.5 animate-pulse" />
               <div>
-                <p className="font-bold tracking-tight text-amber-400">APEX HIGH-FIDELITY SIMULATION MODE</p>
+                <p className="font-bold tracking-tight text-amber-400">MTXQUANT HIGH-FIDELITY SIMULATION MODE</p>
                 <p className="text-white/60 font-sans mt-1 leading-relaxed text-[11px]">
                   The live AI service is currently resolving standard public quota constraints (20 requests per day limit). The platform has seamlessly loaded the high-fidelity SMC institutional confluence matrix so your active sessions continue without delay.
                 </p>

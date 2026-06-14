@@ -4,11 +4,12 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'motion/react';
 import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent, MarketSymbol } from '../types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders, Zap, Server, Magnet, Crosshair, Maximize2, Minimize2, ArrowRightLeft, ArrowRight, ChevronDown, Clock } from 'lucide-react';
+import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders, Zap, Server, Magnet, Crosshair, Maximize2, Minimize2, ArrowRightLeft, ArrowRight, ChevronDown, Clock, Type } from 'lucide-react';
 import DOMPriceLadder from './DOMPriceLadder';
 
 const FRIENDLY_NAMES: Record<string, string> = {
@@ -230,6 +231,56 @@ export default function ChartContainer({
   onSymbolChange,
 }: ChartContainerProps) {
   const [hoveredCandle, setHoveredCandle] = useState<Candlestick | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const toggleFullscreen = () => {
+    const element = document.getElementById("chart-container-root");
+    if (!element) {
+      setIsFullscreen(prev => !prev);
+      return;
+    }
+
+    if (isFullscreen) {
+      try {
+        if (typeof document !== 'undefined' && document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      } catch (err) {
+        console.warn("exitFullscreen failed/blocked", err);
+      }
+      setIsFullscreen(false);
+    } else {
+      const currentScroll = typeof window !== 'undefined' ? (window.scrollY || window.pageYOffset || 0) : 0;
+      setScrollOffset(currentScroll);
+      
+      // Fully safe requestFullscreen check
+      if (element && typeof element.requestFullscreen === 'function') {
+        try {
+          element.requestFullscreen()
+            .then(() => {
+              setIsFullscreen(true);
+            })
+            .catch((err) => {
+              console.warn("requestFullscreen promise rejected, using fallback", err);
+              setIsFullscreen(true);
+            });
+        } catch (err) {
+          console.warn("requestFullscreen synchronous error, using fallback", err);
+          setIsFullscreen(true);
+        }
+      } else {
+        // Fallback to React-based layout if native API is blocked/not supported
+        setIsFullscreen(true);
+      }
+    }
+  };
+
   const [isLayersDropdownOpen, setIsLayersDropdownOpen] = useState(false);
   const [isDrawDropdownOpen, setIsDrawDropdownOpen] = useState(false);
   const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
@@ -355,9 +406,18 @@ export default function ChartContainer({
           close: (c.open + c.close) / 2,
           high: Math.max(c.open, c.close, (c.open + c.close) / 2),
         });
+
+        // Determine a safe, chronological intermediate timestamp (e.g. 2 hours after the parent)
+        let secondTimestamp = `${c.timestamp}_1h`;
+        const originalDate = new Date(c.timestamp);
+        if (!isNaN(originalDate.getTime())) {
+          const secondDate = new Date(originalDate.getTime() + 2 * 60 * 60 * 1000);
+          secondTimestamp = secondDate.toISOString();
+        }
+
         subdivided.push({
           ...c,
-          timestamp: `${c.timestamp}_1h`,
+          timestamp: secondTimestamp,
           open: (c.open + c.close) / 2,
           low: Math.min(c.open, c.close, (c.open + c.close) / 2),
         });
@@ -478,6 +538,10 @@ export default function ChartContainer({
     });
     
     const reasonText = `One-Click direct entry triggered via Chart ${blockType} [${block.type}] block. Auto-calculated ${oneClickRR}:1 R:R structural limits.`;
+    let userMarketNote = '';
+    try {
+      userMarketNote = localStorage.getItem('apex_predefined_market_note') || '';
+    } catch (_) {}
     
     try {
       setOneClickStatus('EXECUTING...');
@@ -500,6 +564,7 @@ export default function ChartContainer({
             'One-Click Automated Institutional Template',
             `${selectedTemplateName} Allocation`
           ],
+          marketNote: userMarketNote ? `${userMarketNote} (Chart Triggered)` : 'Entered via Chart One-Click template.',
         }),
       });
       
@@ -687,6 +752,56 @@ export default function ChartContainer({
       localStorage.setItem('apex_manual_trendlines', JSON.stringify(manualTrendlines));
     } catch (_) {}
   }, [manualTrendlines]);
+
+  // Price Text Annotations persistent state and drawing status
+  interface ChartAnnotation {
+    id: string;
+    symbol: string;
+    xIndex: number;
+    price: number;
+    text: string;
+    createdAt: number;
+  }
+
+  const [isDrawingAnnotation, setIsDrawingAnnotation] = useState(false);
+  const [chartAnnotations, setChartAnnotations] = useState<ChartAnnotation[]>(() => {
+    try {
+      const saved = localStorage.getItem('apex_chart_annotations');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (_) {}
+    return [];
+  });
+  const [activeInputAnnotation, setActiveInputAnnotation] = useState<{
+    xIndex: number;
+    price: number;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_chart_annotations', JSON.stringify(chartAnnotations));
+    } catch (_) {}
+  }, [chartAnnotations]);
+
+  const handleSaveAnnotation = (text: string) => {
+    if (!activeInputAnnotation || !text.trim()) {
+      setActiveInputAnnotation(null);
+      return;
+    }
+    const newAnn: ChartAnnotation = {
+      id: 'ann-' + Date.now(),
+      symbol: symbol,
+      xIndex: activeInputAnnotation.xIndex,
+      price: activeInputAnnotation.price,
+      text: text.trim(),
+      createdAt: Date.now()
+    };
+    setChartAnnotations(prev => [...prev, newAnn]);
+    setActiveInputAnnotation(null);
+  };
   const [triggeredAlertBanners, setTriggeredAlertBanners] = useState<{
     id: string;
     symbol: string;
@@ -1176,20 +1291,45 @@ export default function ChartContainer({
     }
   }, [livePrice, symbol, priceActionAlerts, obs, fvgs, onLogEventToAdvisor]);
 
-  // Escape key drawing-mode cancel listener
+  // Escape key drawing-mode cancel listener & fullscreen exit
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsDrawingPriceAlert(false);
         setIsDrawingTrendline(false);
+        setIsDrawingAnnotation(false);
         setTrendlineStartPoint(null);
         setTrendlineHoverPoint(null);
         setHoveredY(null);
+        setIsFullscreen(false);
+        setActiveInputAnnotation(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // HTML5 requestFullscreen synchronization effect
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const handleFSChange = () => {
+      const isCurrentlyFS = !!document.fullscreenElement;
+      if (isCurrentlyFS) {
+        setScrollOffset(window.scrollY || window.pageYOffset || 0);
+      }
+      if (isCurrentlyFS !== isFullscreen) {
+        setIsFullscreen(isCurrentlyFS);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFSChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFSChange);
+    };
+  }, [isFullscreen]);
 
   const handleAddAlert = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1283,7 +1423,32 @@ export default function ChartContainer({
     return () => {
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [isFullscreen]);
+
+  // Prevent parent body scroll and lock layout bounds when in fullscreen pop-up mode
+  useEffect(() => {
+    if (isFullscreen) {
+      const originalBodyOverflow = document.body.style.overflow;
+      const originalBodyHeight = document.body.style.height;
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      const originalHtmlHeight = document.documentElement.style.height;
+
+      document.body.style.overflow = 'hidden';
+      document.body.style.height = '100vh';
+      document.documentElement.style.overflow = 'hidden';
+      document.documentElement.style.height = '100vh';
+      
+      // Auto-focus and scroll to absolute top of view to align overlays perfectly
+      window.scrollTo(0, 0);
+
+      return () => {
+        document.body.style.overflow = originalBodyOverflow;
+        document.body.style.height = originalBodyHeight;
+        document.documentElement.style.overflow = originalHtmlOverflow;
+        document.documentElement.style.height = originalHtmlHeight;
+      };
+    }
+  }, [isFullscreen]);
 
   const padding = { top: 20, right: 70, bottom: 30, left: 20 };
 
@@ -1944,15 +2109,74 @@ export default function ChartContainer({
     return null;
   };
 
-  // Price ticks on right axis matching current dynamic price limits
-  const priceTicks = useMemo(() => {
-    const ticks = [];
-    const step = (priceLimits.max - priceLimits.min) / 5;
-    for (let i = 0; i <= 5; i++) {
-      ticks.push(priceLimits.min + i * step);
+  // Adaptive, dynamic price grid lines that automatically adjust their granularity based on zoom level
+  const priceGridData = useMemo(() => {
+    const minVal = priceLimits.min;
+    const maxVal = priceLimits.max;
+    const range = maxVal - minVal;
+    if (range <= 0) return { majorTicks: [], minorTicks: [] };
+
+    // Determine target grid density based on horizontal zoom level (visibleCount)
+    // Zoomed in (low visibleCount) -> higher density of grid lines for precision
+    // Zoomed out (high visibleCount) -> lower density to prevent clutter
+    let targetLines = 5;
+    if (visibleCount <= 22) {
+      targetLines = 8; // Zoomed in: high granularity
+    } else if (visibleCount <= 45) {
+      targetLines = 5; // Medium zoom
+    } else {
+      targetLines = 3; // Zoomed out: low granularity
     }
-    return ticks;
-  }, [priceLimits]);
+
+    // Rough step size
+    const roughStep = range / targetLines;
+
+    // Normalize roughStep to find the base-10 exponent
+    const exponent = Math.floor(Math.log10(roughStep));
+    const base10 = Math.pow(10, exponent);
+
+    // Find the cleanest step multiplier: 1, 2, 2.5, 5, or 10
+    const ratio = roughStep / base10;
+    let cleanStepMultiplier = 1;
+    if (ratio < 1.5) {
+      cleanStepMultiplier = 1;
+    } else if (ratio < 2.25) {
+      cleanStepMultiplier = 2;
+    } else if (ratio < 3.5) {
+      cleanStepMultiplier = 2.5;
+    } else if (ratio < 7.5) {
+      cleanStepMultiplier = 5;
+    } else {
+      cleanStepMultiplier = 10;
+    }
+
+    const step = cleanStepMultiplier * base10;
+
+    // Generate ticks aligned on step multiples
+    const startTick = Math.ceil(minVal / step) * step;
+    const majorTicks: number[] = [];
+    for (let current = startTick; current <= maxVal; current += step) {
+      majorTicks.push(current);
+    }
+
+    // Generate minor sub-ticks halfway between major ticks when zoomed in
+    const minorTicks: number[] = [];
+    if (visibleCount <= 30) {
+      const minorStep = step / 2;
+      const startMinor = Math.ceil(minVal / minorStep) * minorStep;
+      for (let current = startMinor; current <= maxVal; current += minorStep) {
+        // Exclude ticks that lie on or extremely close to major ticks
+        const isCloseToMajor = majorTicks.some(major => Math.abs(current - major) < step * 0.1);
+        if (!isCloseToMajor) {
+          minorTicks.push(current);
+        }
+      }
+    }
+
+    return { majorTicks, minorTicks };
+  }, [priceLimits, visibleCount]);
+
+  const priceTicks = priceGridData.majorTicks;
 
   // Generate EMA & SMA SVG paths (only include visible paths or render with getX mapping)
   const emaPath = useMemo(() => {
@@ -2107,6 +2331,26 @@ export default function ChartContainer({
       return;
     }
 
+    if (isDrawingAnnotation) {
+      const svg = e.currentTarget;
+      const rect = svg.getBoundingClientRect();
+      const relativeX = e.clientX - rect.left;
+      const relativeY = e.clientY - rect.top;
+
+      const clickIdx = getIndexFromX(relativeX);
+      const clickedPrice = getPriceFromY(relativeY);
+
+      setActiveInputAnnotation({
+        xIndex: clickIdx,
+        price: clickedPrice,
+        x: relativeX,
+        y: relativeY
+      });
+
+      setIsDrawingAnnotation(false);
+      return;
+    }
+
     setIsDragging(true);
     setDragStartX(e.clientX);
     setDragStartOffset(offset);
@@ -2205,13 +2449,28 @@ export default function ChartContainer({
   };
 
   const activeLayersCount = [showFVG, showOB, showIndicators, showNewsOverlay, showLiquidityMap, showVolumeProfile].filter(Boolean).length;
-  const isDrawingActive = isDrawingPriceAlert || isDrawingTrendline || !showCrosshairTool || isMagnetActive;
+  const isDrawingActive = isDrawingPriceAlert || isDrawingTrendline || isDrawingAnnotation || !showCrosshairTool || isMagnetActive;
   const activeAlertsCount = smartAlerts.filter(a => a.isActive).length;
 
-  return (
+  const isNativeFS = typeof document !== 'undefined' && !!document.fullscreenElement;
+  const shouldUseFallbackAbsolute = isFullscreen && !isNativeFS;
+
+  const chartMainContent = (
     <div 
       id="chart-container-root" 
-      className="bg-[#080808] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative z-15 overflow-hidden select-none"
+      className={`bg-[#080808] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative z-15 transition-all duration-300 select-none ${
+        isFullscreen 
+          ? 'fixed inset-0 z-[99999999] w-screen h-screen !max-w-none !max-h-none !rounded-none p-0 m-0 flex flex-col overflow-hidden bg-[#050505]' 
+          : 'overflow-hidden'
+      }`}
+      style={shouldUseFallbackAbsolute ? { 
+        position: 'absolute', 
+        top: `${scrollOffset}px`, 
+        left: 0, 
+        width: '100vw', 
+        height: '100vh',
+        zIndex: 999999999
+      } : undefined}
       onTouchStart={handleWorkspaceTouchStart}
       onTouchEnd={handleWorkspaceTouchEnd}
     >
@@ -2223,7 +2482,7 @@ export default function ChartContainer({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: -10 }}
             transition={{ type: "spring", stiffness: 450, damping: 25 }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-[#0c0c11]/95 backdrop-blur-md border border-white/10 px-5 py-3 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] flex flex-col items-center justify-center space-y-2 pointer-events-none text-center"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-[#0c0c11] border border-white/15 px-5 py-3 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] flex flex-col items-center justify-center space-y-2 pointer-events-none text-center"
           >
             <div className="flex items-center space-x-2">
               {swipeFlash.type === 'SYMBOL' ? (
@@ -2249,13 +2508,14 @@ export default function ChartContainer({
       </AnimatePresence>
 
       {/* Consolidated Institutional Terminal Header */}
-      <div id="chart-consolidated-header" className="flex flex-col gap-3.5 px-3 py-2.5 md:px-6 md:py-3.5 border-b border-white/10 bg-[#0c0c0c]/85 select-none rounded-t-lg">
+      {!isFullscreen && (
+        <div id="chart-consolidated-header" className="relative z-[200] flex flex-col gap-3.5 px-3 py-2.5 md:px-6 md:py-3.5 border-b border-white/10 bg-[#0c0c0c] select-none rounded-t-lg">
         
         {/* ROW 1: Symbol Info & Instant Rates */}
         <div id="chart-header-row-1" className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full pointer-events-auto">
           {/* Left Hand Indicator: Pair and Info Stream */}
           <div className="flex items-center justify-center sm:justify-start space-x-3 w-full sm:w-auto text-center sm:text-left">
-          {/* Overlapping Flags Representation - integrated cleanly */}
+            {/* Overlapping Flags Representation - integrated cleanly */}
           <div className="relative w-8 h-8 items-center shrink-0 hidden sm:flex bg-white/[0.03] border border-white/5 rounded-full justify-center">
             <span className="text-[15px] absolute select-none drop-shadow-sm filter saturate-125">
               {symbolEmoji.f1}
@@ -2293,10 +2553,10 @@ export default function ChartContainer({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 12, scale: 0.97 }}
                         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                        className="absolute left-0 mt-3 w-[34rem] max-w-[calc(100vw-24px)] z-[101] bg-[#0c0c0c]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.95)] flex min-h-[250px] overflow-hidden"
+                        className="absolute left-0 mt-3 w-[34rem] max-w-[calc(100vw-24px)] z-[101] bg-[#0c0c0c] border border-white/15 rounded-xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.95)] flex min-h-[250px] overflow-hidden"
                       >
                         {/* Categories panel (Left Column) */}
-                        <div className="w-[165px] border-r border-white/10 bg-[#050505]/90 p-2.5 shrink-0 flex flex-col space-y-1 select-none">
+                        <div className="w-[165px] border-r border-white/10 bg-[#050505] p-2.5 shrink-0 flex flex-col space-y-1 select-none">
                           <div className="text-[8px] font-mono font-bold tracking-widest text-white/20 uppercase px-2.5 py-2 border-b border-white/5 mb-1.5 flex items-center gap-1.5">
                             <Server className="w-3 h-3 text-indigo-400/80" />
                             <span>Broker Groups</span>
@@ -2331,7 +2591,7 @@ export default function ChartContainer({
                         </div>
 
                         {/* Sub-assets dynamic panel (Right Column) */}
-                        <div className="flex-1 p-3.5 bg-[#090909]/40 flex flex-col min-h-0 select-none">
+                        <div className="flex-1 p-3.5 bg-[#090909] flex flex-col min-h-0 select-none">
                           {(() => {
                             const activeCat = ASSET_CLASSES.find(c => c.id === hoveredCategory) || ASSET_CLASSES[0];
                             return (
@@ -2436,7 +2696,7 @@ export default function ChartContainer({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.97 }}
                         transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                        className="absolute left-0 mt-2 w-44 z-[101] bg-[#0c0c0c]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.85)] p-1.5 space-y-0.5 text-left"
+                        className="absolute left-0 mt-2 w-44 z-[101] bg-[#0c0c0c] border border-white/15 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.95)] p-1.5 space-y-0.5 text-left"
                       >
                         <div className="text-[8px] font-mono font-bold tracking-widest text-white/20 uppercase px-2 py-1 select-none border-b border-white/5 mb-1 flex items-center gap-1.5">
                           <Clock className="w-2.5 h-2.5 text-indigo-400/80" />
@@ -2481,14 +2741,14 @@ export default function ChartContainer({
               </div>
               
               {/* OANDA FEED ON THE VERY TOP */}
-              <div className="relative group cursor-help z-30 font-mono">
+              <div className="relative group cursor-help z-[210] hover:z-[280] font-mono">
                 {isMt5Active ? (
-                  <span className="flex items-center text-emerald-400 font-extrabold uppercase bg-emerald-500/10 border border-emerald-500/25 hover:border-emerald-500/50 px-2 py-0.5 rounded text-[8.5px] tracking-wider transition-all h-5.5 select-none cursor-pointer">
+                  <span className="flex items-center text-emerald-400 font-extrabold uppercase bg-[#071911] border border-emerald-500/50 hover:border-emerald-500/70 px-2 py-0.5 rounded text-[8.5px] tracking-wider transition-all h-5.5 select-none cursor-pointer">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1 animate-ping shrink-0" />
                     MT5 INSTITUTIONAL
                   </span>
                 ) : (
-                  <span className="text-indigo-300 hover:text-indigo-200 font-bold uppercase tracking-wider bg-indigo-500/10 border border-indigo-500/25 hover:border-indigo-500/50 px-2 py-0.5 rounded text-[8.5px] transition-all flex items-center gap-1.5 h-5.5 select-none cursor-pointer duration-200">
+                  <span className="text-indigo-300 hover:text-indigo-200 font-bold uppercase tracking-wider bg-[#0c0d1a] border border-indigo-500/55 hover:border-indigo-500/75 px-2 py-0.5 rounded text-[8.5px] transition-all flex items-center gap-1.5 h-5.5 select-none cursor-pointer duration-200">
                     <span className="relative flex h-1.5 w-1.5 shrink-0">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-70"></span>
                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-400"></span>
@@ -2499,7 +2759,7 @@ export default function ChartContainer({
                 )}
                 
                 {/* Hover Tooltip Details for Feed Provider - opens downwards because it is at the very top */}
-                <div className="absolute top-full left-0 mt-2 p-3 bg-[#0d0d11]/95 border border-white/15 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.9)] text-left leading-tight z-50 w-[240px] pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
+                <div className="absolute top-full left-0 mt-2 p-3 bg-[#0a0a0c] border border-white/25 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.95)] text-left leading-tight z-[250] w-[240px] pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
                   <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
                     <span className="text-white font-bold text-[9.5px] flex items-center gap-1.5">
                       <Server className="w-3.5 h-3.5 text-indigo-400" /> Liquidity feed provider
@@ -2597,8 +2857,8 @@ export default function ChartContainer({
               <div className="hidden md:flex flex-wrap items-center gap-2.5">
                 
                 {/* 1. Live Price Action Badge with Interactive Hover Details */}
-                <div className="relative group cursor-help z-30">
-                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:border-indigo-500/30 hover:bg-white/[0.07] transition-all text-[#e5e5e5]/80 h-5.5">
+                <div className="relative group cursor-help z-[210] hover:z-[280]">
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#0f0f12] border border-white/15 hover:border-indigo-500/40 hover:bg-[#131317] transition-all text-[#e5e5e5]/80 h-5.5">
                     <span className="relative flex h-1.5 w-1.5 shrink-0">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70"></span>
                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
@@ -2613,7 +2873,7 @@ export default function ChartContainer({
                   </span>
                   
                   {/* Hover Tooltip Details for Price Action */}
-                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0d0d11]/95 border border-white/15 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.9)] text-left leading-tight z-50 w-[240px] pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
+                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0a0a0c] border border-white/25 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.95)] text-left leading-tight z-[250] w-[240px] pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
                     <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
                       <span className="text-white font-bold text-[9.5px] flex items-center gap-1.5">
                         <TrendingUp className="w-3.5 h-3.5 text-indigo-400" /> Live Market Feed
@@ -2645,11 +2905,11 @@ export default function ChartContainer({
                 </div>
 
                 {/* 2. HTF Confluence Badge with Technical Checklist */}
-                <div className="relative group cursor-help z-30">
+                <div className="relative group cursor-help z-[210] hover:z-[280]">
                   <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all text-[8.5px] font-bold uppercase tracking-wider h-5.5 duration-200 ${
                     (metrics?.dailyBias || 'BULLISH') === (metrics?.trend || 'NEUTRAL')
-                      ? 'bg-emerald-500/10 border-emerald-500/25 hover:border-emerald-500/50 text-emerald-400'
-                      : 'bg-indigo-500/10 border-indigo-500/25 hover:border-indigo-500/50 text-indigo-300'
+                      ? 'bg-[#071911] border-emerald-500/50 hover:border-emerald-500/70 text-emerald-400'
+                      : 'bg-[#0c0d1a] border-indigo-500/55 hover:border-indigo-500/75 text-indigo-300'
                   }`}>
                     <span className="relative flex h-1.5 w-1.5 shrink-0">
                       <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-70 ${
@@ -2670,7 +2930,7 @@ export default function ChartContainer({
                   </span>
                   
                   {/* Hover Tooltip Details for HTF Confluence */}
-                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0d0d11]/95 border border-white/15 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.9)] text-left leading-tight z-50 w-[240px] pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
+                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0a0a0c] border border-white/25 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.95)] text-left leading-tight z-[250] w-[240px] pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
                     <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
                       <span className="text-white font-bold text-[9.5px] flex items-center gap-1.5">
                         <Activity className="w-3.5 h-3.5 text-amber-400" /> HTF Confluence Audit
@@ -2719,11 +2979,11 @@ export default function ChartContainer({
                 </div>
 
                 {/* 3. Institutional Bias Badge with interactive details */}
-                <div className="relative group cursor-help z-30 font-mono">
+                <div className="relative group cursor-help z-[210] hover:z-[280] font-mono">
                   <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all text-[8.5px] font-bold uppercase tracking-wider h-5.5 duration-200 ${
                     metrics?.dailyBias === 'BULLISH'
-                      ? 'bg-emerald-500/10 border-emerald-500/25 hover:border-emerald-500/50 text-emerald-400'
-                      : 'bg-rose-500/10 border-rose-500/25 hover:border-rose-500/50 text-rose-400'
+                      ? 'bg-[#071911] border-emerald-500/50 hover:border-emerald-500/70 text-emerald-400'
+                      : 'bg-[#1a0a0c] border-rose-500/50 hover:border-rose-500/70 text-rose-400'
                   }`}>
                     <span className="relative flex h-1.5 w-1.5 shrink-0">
                       <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-70 ${
@@ -2742,7 +3002,7 @@ export default function ChartContainer({
                   </span>
                   
                   {/* Hover Tooltip Details for Trend Bias & Gauge & Alarm */}
-                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0d0d11]/95 border border-white/15 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.9)] text-left leading-tight z-50 w-[270px] pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
+                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0a0a0c] border border-white/25 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.95)] text-left leading-tight z-[250] w-[270px] pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
                     <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
                       <span className="text-white font-bold text-[9.5px] flex items-center gap-1.5">
                         <TrendingUp className="w-3.5 h-3.5 text-indigo-400" /> Institutional Bias Audit
@@ -2854,7 +3114,7 @@ export default function ChartContainer({
             {isLayersDropdownOpen && (
               <div 
                 id="dropdown-layers-menu"
-                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d]/95 backdrop-blur-md border border-white/15 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.85)] z-50 p-1.5 space-y-0.5"
+                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d] border border-white/20 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.95)] z-50 p-1.5 space-y-0.5"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-b border-white/5 mb-1.5">
@@ -2983,7 +3243,7 @@ export default function ChartContainer({
               <span className={`text-[8.5px] font-extrabold flex items-center ${
                 isDrawingActive ? 'text-emerald-400' : 'text-white/45'
               }`}>
-                {isDrawingPriceAlert ? 'ALERT LINE' : isDrawingTrendline ? 'TRENDLINE' : isMagnetActive ? 'MAGNET ON' : !showCrosshairTool ? 'NO CROSS' : 'READY'}
+                {isDrawingPriceAlert ? 'ALERT LINE' : isDrawingTrendline ? 'TRENDLINE' : isDrawingAnnotation ? 'ANNOTATION' : isMagnetActive ? 'MAGNET ON' : !showCrosshairTool ? 'NO CROSS' : 'READY'}
               </span>
               <ChevronDown className={`w-2.5 h-2.5 text-white/40 transition-transform duration-200 ${isDrawDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -2991,7 +3251,7 @@ export default function ChartContainer({
             {isDrawDropdownOpen && (
               <div 
                 id="dropdown-draw-menu"
-                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d]/95 backdrop-blur-md border border-white/15 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.85)] z-50 p-1.5 space-y-0.5"
+                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d] border border-white/20 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.95)] z-50 p-1.5 space-y-0.5"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-b border-white/5 mb-1.5">
@@ -3040,6 +3300,26 @@ export default function ChartContainer({
                     Draw Trendline
                   </span>
                   {isDrawingTrendline && <span className="text-[8px] font-bold text-emerald-400 animate-pulse">ACTIVE</span>}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDrawingAnnotation(!isDrawingAnnotation);
+                    setIsDrawingPriceAlert(false);
+                    setIsDrawingTrendline(false);
+                    setTrendlineStartPoint(null);
+                    setIsDrawDropdownOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors ${
+                    isDrawingAnnotation ? 'bg-indigo-500/15 text-indigo-300' : 'text-white/80 hover:bg-white/5'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    <Type className="w-3.5 h-3.5 text-indigo-400" />
+                    Place Text Annotation
+                  </span>
+                  {isDrawingAnnotation && <span className="text-[8px] font-bold text-indigo-400 animate-pulse">ACTIVE</span>}
                 </button>
 
                 <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-t border-white/5 my-1.5 pt-1.5">
@@ -3102,70 +3382,107 @@ export default function ChartContainer({
         </div>
       </div>
     </div>
+      )}
 
       {/* Main Candlestick Frame */}
-      <div className="relative p-4 md:p-6 pb-2 min-h-[380px] select-none">
-        {/* Dynamic OHLCAV Info Strip */}
-        <div className="absolute top-6 left-6 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 bg-[#050505]/95 backdrop-blur border border-white/10 px-4 py-1.5 rounded-lg font-mono text-xs shadow-lg max-w-[90%] pointer-events-none select-none">
-          {hoveredCandle ? (
-            <>
-              <span className="text-white/40 font-mono flex items-center leading-none">Time: <span className="text-indigo-400 font-bold ml-1">{formatIndexTime(hoveredCandle.timestamp)}</span></span>
-              <span className="text-white/40 font-mono flex items-center leading-none">O: <span className={`ml-1 font-bold ${hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}`}>{hoveredCandle.open.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
-              <span className="text-white/40 font-mono flex items-center leading-none">H: <span className="text-white/90 ml-1 font-semibold">{hoveredCandle.high.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
-              <span className="text-white/40 font-mono flex items-center leading-none">L: <span className="text-white/90 ml-1 font-semibold">{hoveredCandle.low.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
-              <span className="text-white/40 font-mono flex items-center leading-none">C: <span className={`ml-1 font-bold ${hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}`}>{hoveredCandle.close.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
-              <span className="text-white/40 font-mono flex items-center leading-none">V: <span className="text-white/60 ml-1 font-semibold">{hoveredCandle.volume.toLocaleString()}</span></span>
-            </>
-          ) : (
-            <>
-              <span className="text-indigo-400 font-extrabold uppercase font-sans text-[10px] tracking-wider pr-2 border-r border-white/10 flex items-center gap-1.5 shrink-0">
-                <span className="relative flex h-1.5 w-1.5 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-70"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-505 bg-indigo-500"></span>
-                </span>
-                {symbol} Feed
-              </span>
-              {candles.length > 0 && (() => {
-                const lastCandle = candles[candles.length - 1];
-                const isGreen = lastCandle.close >= lastCandle.open;
-                const format = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
-                return (
-                  <>
-                    <span className="text-white/40 font-mono flex items-center leading-none">O: <span className={`ml-1 font-semibold ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>{lastCandle.open.toFixed(format)}</span></span>
-                    <span className="text-white/40 font-mono flex items-center leading-none">H: <span className="text-white/95 ml-1 font-semibold">{lastCandle.high.toFixed(format)}</span></span>
-                    <span className="text-white/40 font-mono flex items-center leading-none">L: <span className="text-white/95 ml-1 font-semibold">{lastCandle.low.toFixed(format)}</span></span>
-                    <span className="text-white/40 font-mono flex items-center leading-none">C: <span className={`ml-1 font-extrabold ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>{lastCandle.close.toFixed(format)}</span></span>
-                    <span className="text-white/40 font-mono flex items-center leading-none">V: <span className="text-white/60 ml-1 font-semibold">{lastCandle.volume.toLocaleString()}</span></span>
-                    {imminentHighImpactNews.length > 0 && (
-                      <>
-                        <span className="text-white/30 px-1 font-bold">|</span>
-                        <div className="flex items-center space-x-1.5 bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded text-[8.5px] text-rose-300 font-sans font-bold tracking-tight animate-pulse pointer-events-auto cursor-help" title="IMMINENT MACRO DATA INBOUND">
-                          <span className="relative flex h-1.5 w-1.5 shrink-0">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
-                          </span>
-                          <span className="font-mono uppercase font-black text-[7.5px]">🚨 {imminentHighImpactNews[0].currency} {imminentHighImpactNews[0].title} MACRO RISK INBOUND</span>
-                        </div>
-                      </>
-                    )}
-                  </>
-                );
-              })()}
-            </>
-          )}
-        </div>
+      <div className={`relative select-none ${
+        isFullscreen ? 'flex-1 min-h-0 flex flex-col p-0 mt-2' : 'p-4 md:p-6 pb-2 min-h-[380px]'
+      }`}>
+
 
         {/* Responsive Candlestick Canvas SVG and DOM Price Ladder */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 relative h-auto">
+        <div className={`relative ${
+          isFullscreen 
+            ? 'flex-1 flex flex-col min-h-0 w-full' 
+            : 'grid grid-cols-1 lg:grid-cols-12 gap-5 h-auto'
+        }`}>
           {/* Main Chart Column */}
-          <div className="col-span-12 lg:col-span-9 relative flex flex-col min-h-[380px]">
+          <div className={`relative flex flex-col ${
+            isFullscreen 
+              ? 'flex-1 min-h-0 w-full' 
+              : 'col-span-12 lg:col-span-9 min-h-[380px]'
+          }`}>
             <div 
               ref={containerRef}
               className={`w-full overflow-hidden rounded bg-[#050505]/50 border border-white/5 relative shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] transition-all duration-300 ${
-                isExpanded ? 'h-[550px]' : 'h-[360px]'
+                isFullscreen 
+                  ? 'flex-1 h-full bg-[#050505]' 
+                  : isExpanded ? 'h-[550px]' : 'h-[360px]'
               }`}
               onWheel={handleWheel}
             >
+              {/* Dynamic OHLCAV Info Strip and Fullscreen control within the chart HUD canvas */}
+              <div className="absolute top-4 left-4 z-[115] flex items-center gap-2 max-w-[95%] overflow-x-auto no-scrollbar pointer-events-auto">
+                {/* Fullscreen Analysis Box Symbol in the top left corner */}
+                <button
+                  id="btn-chart-canvas-fullscreen"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                    setIsAlertsOpen(false);
+                    setIsAssetSelectorOpen(false);
+                  }}
+                  className="p-1.5 rounded bg-[#0a0a0c]/85 border border-white/10 hover:border-indigo-500/40 hover:bg-neutral-800 hover:text-white text-white/50 transition-all duration-200 shadow-[0_4px_12px_rgba(0,0,0,0.5)] cursor-pointer flex items-center justify-center group shrink-0"
+                  title={isFullscreen ? "Exit Fullscreen Analysis" : "Fullscreen Analysis"}
+                >
+                  {isFullscreen ? (
+                    <Minimize2 className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-105" />
+                  ) : (
+                    <Maximize2 className="w-3.5 h-3.5 text-white/70 group-hover:scale-105" />
+                  )}
+                </button>
+
+                {/* Info values element */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-[#050505]/95 border border-white/10 px-3 py-1 rounded-lg font-mono text-[10.5px] shadow-lg pointer-events-none select-none">
+                  {hoveredCandle ? (
+                    <>
+                      <span className="text-white/40 font-mono flex items-center leading-none">Time: <span className="text-indigo-400 font-bold ml-1">{formatIndexTime(hoveredCandle.timestamp)}</span></span>
+                      <span className="text-white/40 font-mono flex items-center leading-none font-bold font-bold font-semibold font-semibold font-extrabold font-extrabold">O: <span className={`ml-1 font-bold ${hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}`}>{hoveredCandle.open.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
+                      <span className="text-white/40 font-mono flex items-center leading-none font-semibold">H: <span className="text-white/95 ml-1 font-semibold">{hoveredCandle.high.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
+                      <span className="text-white/40 font-mono flex items-center leading-none">L: <span className="text-white/95 ml-1 font-semibold">{hoveredCandle.low.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
+                      <span className="text-white/40 font-mono flex items-center leading-none font-bold">C: <span className={`ml-1 font-bold ${hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}`}>{hoveredCandle.close.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
+                      <span className="text-white/40 font-mono flex items-center leading-none">V: <span className="text-white/60 ml-1 font-semibold">{hoveredCandle.volume.toLocaleString()}</span></span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-indigo-400 font-extrabold uppercase font-sans text-[10px] tracking-wider pr-2 border-r border-white/10 flex items-center gap-1.5 shrink-0">
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-70"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#6366f1] bg-indigo-500"></span>
+                        </span>
+                        {symbol} Feed
+                      </span>
+                      {candles.length > 0 && (() => {
+                        const lastCandle = candles[candles.length - 1];
+                        const isGreen = lastCandle.close >= lastCandle.open;
+                        const format = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
+                        return (
+                          <>
+                            <span className="text-white/40 font-mono flex items-center leading-none font-semibold">O: <span className={`ml-1 ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>{lastCandle.open.toFixed(format)}</span></span>
+                            <span className="text-white/40 font-mono flex items-center leading-none font-semibold">H: <span className="text-white/95 ml-1 font-semibold">{lastCandle.high.toFixed(format)}</span></span>
+                            <span className="text-white/40 font-mono flex items-center leading-none">L: <span className="text-white/95 ml-1 font-semibold">{lastCandle.low.toFixed(format)}</span></span>
+                            <span className="text-white/40 font-mono flex items-center leading-none font-bold">C: <span className={`ml-1 ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>{lastCandle.close.toFixed(format)}</span></span>
+                            <span className="text-white/40 font-mono flex items-center leading-none font-semibold">V: <span className="text-white/60 ml-1 font-semibold">{lastCandle.volume.toLocaleString()}</span></span>
+                            {imminentHighImpactNews.length > 0 && (
+                              <>
+                                <span className="text-white/30 px-1 font-bold">|</span>
+                                <div className="flex items-center space-x-1.5 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded text-[8px] text-rose-300 font-sans font-bold tracking-tight animate-pulse pointer-events-auto cursor-help" title="IMMINENT MACRO DATA INBOUND">
+                                  <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
+                                  </span>
+                                  <span className="font-mono uppercase font-black text-[7px]">🚨 {imminentHighImpactNews[0].currency} {imminentHighImpactNews[0].title} MACRO RISK INBOUND</span>
+                                </div>
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </>
+                  )}
+                </div>
+              </div>
+
           {/* Draw Mode Info Ribbon overlaying chart */}
           {isDrawingPriceAlert && (
             <div className="absolute top-4 left-1/2 -track-translate-x-1/2 -translate-x-1/2 z-[110] bg-amber-500 text-black font-sans text-[10px] font-black px-4 py-2 rounded-full shadow-2xl border border-amber-300 flex items-center space-x-2 animate-bounce select-none pointer-events-auto">
@@ -3174,11 +3491,18 @@ export default function ChartContainer({
             </div>
           )}
 
+          {isDrawingAnnotation && (
+            <div className="absolute top-4 left-1/2 -track-translate-x-1/2 -translate-x-1/2 z-[110] bg-indigo-600 text-white font-sans text-[10px] font-black px-4 py-2 rounded-full shadow-2xl border border-indigo-400 flex items-center space-x-2 animate-bounce select-none pointer-events-auto">
+              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+              <span className="uppercase tracking-wider">Left-click on chart to place a text note (ESC to cancel)</span>
+            </div>
+          )}
+
           {/* Floating One-Click Template Configuration Panel */}
           {isOneClickActive && (
             <div 
               id="one-click-cockpit"
-              className="absolute top-4 right-4 z-[99] bg-[#0c0c0e]/95 border border-amber-500/40 p-3 rounded-lg shadow-2xl backdrop-blur-md w-72 pointer-events-auto text-left select-none hover:border-amber-500/70 transition-all font-mono"
+              className="absolute top-4 right-4 z-[99] bg-[#0c0c0e] border border-amber-500/60 p-3 rounded-lg shadow-2xl w-72 pointer-events-auto text-left select-none hover:border-amber-500/85 transition-all font-mono"
             >
               <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2">
                 <span className="text-amber-400 font-bold text-[10.5px] uppercase tracking-wider flex items-center gap-1.5 animate-pulse">
@@ -3293,7 +3617,7 @@ export default function ChartContainer({
                     setTriggeredAlertBanners(prev => prev.filter(b => b.id !== banner.id));
                   }}
                   title="Click to dismiss notification"
-                  className="bg-[#0c0c0d]/95 border border-amber-500/60 p-3 rounded-lg shadow-2xl flex items-start space-x-2.5 backdrop-blur-md cursor-pointer select-none hover:bg-[#121215] hover:border-amber-400 active:scale-[0.98] transition-all duration-150"
+                  className="bg-[#0c0c0d] border border-amber-500/60 p-3 rounded-lg shadow-2xl flex items-start space-x-2.5 cursor-pointer select-none hover:bg-[#121215] hover:border-amber-400 active:scale-[0.98] transition-all duration-150"
                 >
                   <div className="p-1 bg-amber-500/10 rounded text-amber-400 shrink-0 mt-0.5 animate-bounce">
                     <Bell className="w-3.5 h-3.5" />
@@ -3332,10 +3656,10 @@ export default function ChartContainer({
                     setPersistentToasts(prev => prev.filter(t => t.id !== toast.id));
                   }}
                   title="Click to dismiss persistent alert"
-                  className={`p-3 rounded-lg shadow-2xl flex items-start space-x-2.5 backdrop-blur-md cursor-pointer select-none active:scale-[0.98] transition-all duration-150 bg-[#0c0c0d]/98 border ${
+                  className={`p-3 rounded-lg shadow-2xl flex items-start space-x-2.5 cursor-pointer select-none active:scale-[0.98] transition-all duration-150 bg-[#0c0c0d] border ${
                     toast.type === 'success' 
-                      ? 'border-emerald-500/50 hover:border-emerald-400 hover:bg-[#0c1410]/95' 
-                      : 'border-amber-500/50 hover:border-amber-400 hover:bg-[#14120c]/95'
+                      ? 'border-emerald-500/50 hover:border-emerald-400 hover:bg-[#0c1410]' 
+                      : 'border-amber-500/50 hover:border-amber-400 hover:bg-[#14120c]'
                   }`}
                 >
                   <div className={`p-1 rounded shrink-0 mt-0.5 animate-pulse ${
@@ -3384,7 +3708,7 @@ export default function ChartContainer({
             className={`w-full h-full font-mono text-[9px] fill-white/20 stroke-white/20 select-none ${
               isDragging 
                 ? 'cursor-grabbing' 
-                : showCrosshairTool 
+                : (showCrosshairTool || isDrawingAnnotation)
                   ? 'cursor-crosshair' 
                   : 'cursor-grab'
             }`}
@@ -3425,20 +3749,42 @@ export default function ChartContainer({
             </defs>
 
             {/* Grid Lines */}
-            {priceTicks.map((tick, idx) => (
-              <g key={`grid-${idx}`}>
+            {/* Minor Dynamic Price Grid Lines (rendered with high transparency for deep fine-grained clarity) */}
+            {priceGridData.minorTicks.map((tick, idx) => (
+              <g key={`minor-grid-${idx}`}>
                 <line
                   x1={padding.left}
                   y1={getY(tick)}
                   x2={width - padding.right}
                   y2={getY(tick)}
-                  className="stroke-white/[0.04]"
+                  className="stroke-white/[0.015]"
+                  strokeDasharray="2,4"
+                />
+                <text
+                  x={width - padding.right + 8}
+                  y={getY(tick) + 2.5}
+                  className="fill-white/15 font-sans text-[7.5px] select-none"
+                >
+                  {tick.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 4)}
+                </text>
+              </g>
+            ))}
+
+            {/* Major Dynamic Price Grid Lines */}
+            {priceGridData.majorTicks.map((tick, idx) => (
+              <g key={`major-grid-${idx}`}>
+                <line
+                  x1={padding.left}
+                  y1={getY(tick)}
+                  x2={width - padding.right}
+                  y2={getY(tick)}
+                  className="stroke-white/[0.05]"
                   strokeDasharray="4,4"
                 />
                 <text
                   x={width - padding.right + 8}
                   y={getY(tick) + 3}
-                  className="fill-white/40 font-medium font-sans"
+                  className="fill-white/40 font-medium font-sans text-[9px] select-none"
                 >
                   {tick.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 4)}
                 </text>
@@ -3647,15 +3993,24 @@ export default function ChartContainer({
                       className="pointer-events-none select-none"
                     >
                       <rect
-                        width={180}
+                        width={185}
                         height={60}
-                        rx={4}
-                        fill="rgba(5, 5, 5, 0.95)"
-                        stroke="rgba(255, 255, 255, 0.12)"
+                        rx={6}
+                        fill="#0c0c0e"
+                        stroke="rgba(99, 102, 241, 0.4)"
                         strokeWidth={1}
-                        style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }}
+                        style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.85))' }}
                       />
-                      <text x={8} y={15} className="fill-white font-bold font-sans text-[8.5px] uppercase tracking-wide">
+                      {/* Left border-like high-contrast highlight accent line */}
+                      <rect
+                        x={0.5}
+                        y={0.5}
+                        width={3}
+                        height={59}
+                        rx={1}
+                        fill="#6366f1"
+                      />
+                      <text x={10} y={15} className="fill-white font-bold font-sans text-[8.5px] uppercase tracking-wide">
                         {hoveredProfileBin.isPOC 
                           ? '⭐ Point of Control (POC)' 
                           : hoveredProfileBin.type === 'HVN' 
@@ -3664,13 +4019,13 @@ export default function ChartContainer({
                               ? '❄️ Low Volume Node (LVN)' 
                               : '📊 Profile Volume Node'}
                       </text>
-                      <text x={8} y={28} className="fill-white/60 font-mono text-[8px]">
+                      <text x={10} y={28} className="fill-white/60 font-mono text-[8px]">
                         Price: {hoveredProfileBin.minPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)} - {hoveredProfileBin.maxPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}
                       </text>
-                      <text x={8} y={39} className="fill-white/65 font-mono text-[8px]">
+                      <text x={10} y={39} className="fill-white/65 font-mono text-[8px]">
                         Vol: {Math.round(hoveredProfileBin.volume).toLocaleString()} units
                       </text>
-                      <text x={8} y={50} className="fill-emerald-400 font-mono text-[8px] font-bold">
+                      <text x={10} y={50} className="fill-emerald-400 font-mono text-[8px] font-bold">
                         BUY {Math.round(hoveredProfileBin.buyVolume).toLocaleString()} <tspan className="fill-white/20">|</tspan> <tspan className="fill-rose-400">SELL {Math.round(hoveredProfileBin.sellVolume).toLocaleString()}</tspan>
                       </text>
                     </g>
@@ -4570,6 +4925,102 @@ export default function ChartContainer({
                 })
               }
 
+              {/* Price Text Annotations Overlay */}
+              {chartAnnotations
+                .filter((ann) => ann.symbol === symbol)
+                .map((ann) => {
+                  const x = getX(ann.xIndex);
+                  const y = getY(ann.price);
+
+                  // Only render if within visual bounds
+                  if (x < padding.left || x > width - padding.right) return null;
+                  if (y < padding.top || y > height - padding.bottom) return null;
+
+                  // Dynamic sizing based on text length
+                  const textLengthPercent = ann.text.length;
+                  const estimatedWidth = Math.max(70, textLengthPercent * 5.8 + 22);
+                  const cardHeight = 18;
+                  const rx = 3;
+
+                  return (
+                    <g key={ann.id} className="group/annotation select-none font-sans pointer-events-auto">
+                      {/* Connection pointer dotted line */}
+                      <line
+                        x1={x}
+                        y1={y}
+                        x2={x + 10}
+                        y2={y - 12}
+                        stroke="#818cf8"
+                        strokeWidth={1}
+                        strokeDasharray="1,1"
+                        opacity={0.8}
+                      />
+
+                      {/* Connection Point Halo */}
+                      <circle cx={x} cy={y} r={6} fill="#6366f1" opacity={0.2} className="animate-pulse" />
+                      <circle cx={x} cy={y} r={2.5} fill="#6366f1" stroke="#ffffff" strokeWidth={0.8} />
+
+                      {/* Card background */}
+                      <rect
+                        x={x + 10}
+                        y={y - 21}
+                        width={estimatedWidth}
+                        height={cardHeight}
+                        rx={rx}
+                        fill="#08080f"
+                        stroke="#818cf8"
+                        strokeWidth={1}
+                        className="filter drop-shadow-lg"
+                        opacity={0.95}
+                      />
+
+                      {/* Annotation Content Text */}
+                      <text
+                        x={x + 16}
+                        y={y - 9}
+                        fill="#e2e8f0"
+                        fontSize="9px"
+                        fontWeight="600"
+                        textAnchor="start"
+                        className="font-medium font-sans"
+                      >
+                        {ann.text}
+                      </text>
+
+                      {/* Delete X 'Button' on the right */}
+                      <g
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setChartAnnotations((prev) => prev.filter((a) => a.id !== ann.id));
+                        }}
+                      >
+                        <rect
+                          x={x + 10 + estimatedWidth - 16}
+                          y={y - 19}
+                          width={14}
+                          height={14}
+                          rx={2}
+                          fill="transparent"
+                          className="hover:fill-rose-500/10"
+                        />
+                        <text
+                          x={x + 10 + estimatedWidth - 9}
+                          y={y - 9}
+                          fill="#f87171"
+                          fontSize="9px"
+                          fontWeight="bold"
+                          textAnchor="middle"
+                          title="Click to remove note"
+                        >
+                          ×
+                        </text>
+                      </g>
+                    </g>
+                  );
+                })}
+
               {/* If drawing trendline but start point is not placed yet, render a hover target indicator */}
               {isDrawingTrendline && !trendlineStartPoint && trendlineHoverPoint && (
                 <g className="pointer-events-none select-none">
@@ -4826,10 +5277,14 @@ export default function ChartContainer({
               (() => {
                 const { type, density } = getLiquidityDensityAtPrice(cursorPrice);
                 const isHighDensity = density > 0.15;
-                const labelBg = type === 'BSL' ? '#fbbf24' : type === 'SSL' ? '#8b5cf6' : '#27272a';
-                const labelFg = type === 'BSL' || type === 'SSL' ? '#000000' : '#ffffff';
+                const labelBg = type === 'BSL' ? '#fbbf24' : type === 'SSL' ? '#8b5cf6' : '#1e1b4b'; // Dark blue indigo theme for normal
+                const labelFg = type === 'BSL' || type === 'SSL' ? '#000000' : '#e0e7ff';
                 const densityPercent = Math.round(density * 100);
                 const densityLabel = type !== 'NONE' ? ` ${type}(${densityPercent}%)` : '';
+                
+                // Dynamically fit tag width within the right padding bounds to avoid SVG clipping
+                const tagWidth = type !== 'NONE' ? 112 : 62;
+                const tx = Math.min(width - tagWidth - 2, width - padding.right + 4);
                 
                 return (
                   <g className="pointer-events-none" id="crosshair-precision-layer">
@@ -4839,10 +5294,10 @@ export default function ChartContainer({
                       y1={cursorY}
                       x2={width - padding.right}
                       y2={cursorY}
-                      stroke={isHighDensity ? labelBg : '#ffffff'}
-                      strokeWidth={0.5}
-                      strokeDasharray="2,2"
-                      opacity={isHighDensity ? 0.7 : 0.3}
+                      stroke={isHighDensity ? labelBg : '#6366f1'}
+                      strokeWidth={0.75}
+                      strokeDasharray="3,3"
+                      opacity={isHighDensity ? 0.85 : 0.45}
                     />
 
                     {/* Vertical crosshair line synced to cursor center */}
@@ -4852,27 +5307,51 @@ export default function ChartContainer({
                         y1={padding.top}
                         x2={cursorX}
                         y2={height - padding.bottom}
-                        stroke="#ffffff"
-                        strokeWidth={0.5}
-                        strokeDasharray="2,2"
-                        opacity={0.3}
+                        stroke="#6366f1"
+                        strokeWidth={0.75}
+                        strokeDasharray="3,3"
+                        opacity={0.45}
                       />
                     )}
+
+                    {/* Intersection target indicator */}
+                    {cursorX !== null && (
+                      <g id="crosshair-intersection-target">
+                        <circle
+                          cx={cursorX}
+                          cy={cursorY}
+                          r={8}
+                          fill="none"
+                          stroke={isHighDensity ? labelBg : '#818cf8'}
+                          strokeWidth={1}
+                          opacity={0.6}
+                          className="animate-pulse"
+                        />
+                        <circle
+                          cx={cursorX}
+                          cy={cursorY}
+                          r={2.5}
+                          fill={isHighDensity ? labelBg : '#e0e7ff'}
+                        />
+                      </g>
+                    )}
                     
-                    {/* Crosshair horizontal tag background */}
+                    {/* Crosshair horizontal tag background on the right Y-axis */}
                     <rect
-                      x={width - padding.right + 4}
+                      x={tx}
                       y={cursorY - 8}
-                      width={112}
+                      width={tagWidth}
                       height={16}
                       rx={2}
                       fill={labelBg}
-                      opacity={0.9}
+                      stroke={isHighDensity ? '#ffffff' : '#818cf8'}
+                      strokeWidth={0.5}
+                      opacity={0.95}
                     />
                     
                     {/* Crosshair horizontal tag text */}
                     <text
-                      x={width - padding.right + 8}
+                      x={tx + 4}
                       y={cursorY + 3.5}
                       fill={labelFg}
                       fontSize="8.5px"
@@ -4883,7 +5362,7 @@ export default function ChartContainer({
                       {cursorPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}{densityLabel}
                     </text>
 
-                    {/* Vertical Timestamp Tag on bottom horizontal axis */}
+                    {/* Vertical Timestamp Tag on bottom horizontal X-axis */}
                     {cursorX !== null && cursorTime !== null && (
                       (() => {
                         const tagWidth = 92;
@@ -4896,7 +5375,7 @@ export default function ChartContainer({
                               width={tagWidth}
                               height={16}
                               rx={2}
-                              fill="#6366f1"
+                              fill="#4f46e5"
                               stroke="#818cf8"
                               strokeWidth={0.5}
                               opacity={0.95}
@@ -4922,8 +5401,46 @@ export default function ChartContainer({
             )}
           </svg>
 
+          {/* Floating/Inline Text Annotation Input */}
+          {activeInputAnnotation && (
+            <div 
+              className="absolute z-[130] bg-[#0c0c0e]/95 border border-indigo-500/80 rounded p-2 shadow-2xl flex items-center space-x-2 backdrop-blur"
+              style={{ 
+                left: `${(activeInputAnnotation.x / width) * 100}%`, 
+                top: `${(activeInputAnnotation.y / height) * 100}%`,
+                transform: 'translate(-50%, -100%)',
+                marginTop: '-10px'
+              }}
+            >
+              <input
+                id="floating-annotation-input"
+                type="text"
+                autoFocus
+                placeholder="Type note & hit Enter..."
+                className="bg-[#050505] text-[10px] text-white border border-white/10 px-2 py-1 rounded outline-none w-44 font-sans font-medium placeholder-white/20 focus:border-indigo-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveAnnotation(e.currentTarget.value);
+                  } else if (e.key === 'Escape') {
+                    setActiveInputAnnotation(null);
+                  }
+                }}
+                onBlur={(e) => {
+                  handleSaveAnnotation(e.target.value);
+                }}
+              />
+              <button
+                onClick={() => setActiveInputAnnotation(null)}
+                className="text-white/40 hover:text-white font-bold px-1.5 py-0.5 rounded text-[11px] hover:bg-white/5 transition-all outline-none"
+                title="Cancel"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           {/* Floating Zoom & Pan HUD in the bottom left of the chart area */}
-          <div className="absolute bottom-10 left-6 z-10 flex items-center space-x-1 bg-[#050505]/95 backdrop-blur border border-white/10 p-1.5 rounded shadow-lg pointer-events-auto">
+          <div className="absolute bottom-10 left-6 z-10 flex items-center space-x-1 bg-[#050505] border border-white/10 p-1.5 rounded shadow-lg pointer-events-auto">
             <button
               id="chart-zoom-in"
               onClick={zoomIn}
@@ -5002,7 +5519,11 @@ export default function ChartContainer({
           {/* Floated Visual Backtesting News Details Tooltip */}
           {hoveredNews && (
             <div 
-              className="absolute bg-[#0b0b0c]/95 border border-rose-500/40 p-3 rounded-md shadow-[0_4px_22px_rgba(244,63,94,0.18)] z-[110] font-mono text-[10.5px] text-white select-none backdrop-blur-md pointer-events-none w-[240px]"
+              className={`absolute bg-[#0c0c0e] border ${
+                hoveredNews.impact === 'HIGH' 
+                  ? 'border-rose-500/50 border-l-3 border-l-rose-500' 
+                  : 'border-amber-500/50 border-l-3 border-l-amber-500'
+              } p-3 rounded-lg shadow-[0_16px_36px_rgba(0,0,0,0.95)] z-[110] font-mono text-[10.5px] text-white select-none pointer-events-none w-[240px]`}
               style={{ left: `${Math.min(hoveredNews.x + 10, width - 260)}px`, top: `${Math.max(hoveredNews.y - 120, 10)}px` }}
             >
               <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
@@ -5071,22 +5592,24 @@ export default function ChartContainer({
           </div>
 
           {/* DOM Price Ladder Column */}
-          <div className={`col-span-12 lg:col-span-3 h-[420px] transition-all duration-300 ${
-            isExpanded ? 'lg:h-[550px]' : 'lg:h-[360px]'
-          }`}>
-            <DOMPriceLadder
-              symbol={symbol as any}
-              livePrice={hoveredCandle ? hoveredCandle.close : (typeof livePrice !== 'undefined' ? livePrice : basePrice)}
-              trades={trades}
-              oneClickLots={oneClickLots}
-              onTradeExecuted={onTradeExecuted}
-              basePrice={basePrice}
-              sweeps={sweeps}
-              candles={candles}
-              showTWVP={showTWVP}
-              metrics={metrics}
-            />
-          </div>
+          {!isFullscreen && (
+            <div className={`col-span-12 lg:col-span-3 transition-all duration-300 ${
+              isExpanded ? 'lg:h-[550px]' : 'lg:h-[360px]'
+            }`}>
+              <DOMPriceLadder
+                symbol={symbol as any}
+                livePrice={hoveredCandle ? hoveredCandle.close : (typeof livePrice !== 'undefined' ? livePrice : basePrice)}
+                trades={trades}
+                oneClickLots={oneClickLots}
+                onTradeExecuted={onTradeExecuted}
+                basePrice={basePrice}
+                sweeps={sweeps}
+                candles={candles}
+                showTWVP={showTWVP}
+                metrics={metrics}
+              />
+            </div>
+          )}
         </div>
 
         {/* Smart Alerts Sidebar Drawer */}
@@ -5563,6 +6086,69 @@ export default function ChartContainer({
                     </div>
                   )}
                 </div>
+
+                {/* Stored Text Annotations Section */}
+                <div className="pt-4 border-t border-white/10 mt-4">
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-indigo-400 block mb-2 flex items-center justify-between">
+                    <span>Chart Annotations ({chartAnnotations.length})</span>
+                    {chartAnnotations.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("Delete all chart text annotations?")) {
+                            setChartAnnotations([]);
+                          }
+                        }}
+                        className="text-[8.5px] text-rose-500 hover:text-rose-450 uppercase tracking-tight cursor-pointer font-bold"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+
+                  {chartAnnotations.length === 0 ? (
+                    <div className="text-center py-6 border border-dashed border-white/5 rounded px-2.5">
+                      <span className="text-[10px] text-white/35 italic block leading-relaxed">
+                        No text annotations placed yet. Click "Place Text Annotation" under analysis drawings and click on the chart.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                      {chartAnnotations.map((ann) => {
+                        const displayFormat = ann.symbol === 'USD/JPY' ? 2 : ann.symbol === 'BTC/USDT' ? 0 : 5;
+                        const isCur = ann.symbol === symbol;
+                        return (
+                          <div
+                            key={ann.id}
+                            className={`p-2 bg-white/[0.01] border hover:bg-white/[0.02] transition-all rounded ${
+                              isCur ? 'border-indigo-500/25' : 'border-white/5'
+                            } ${!isCur ? 'opacity-65' : ''}`}
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${isCur ? 'bg-indigo-500/10 text-indigo-400' : 'bg-white/5 text-white/40'}`}>
+                                {ann.symbol}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setChartAnnotations(prev => prev.filter(a => a.id !== ann.id));
+                                }}
+                                className="p-1 hover:bg-rose-500/10 hover:text-rose-450 text-white/25 hover:text-rose-400 rounded transition-all cursor-pointer"
+                                title="Delete annotation"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                            <div className="text-[9.5px] text-white/90 font-medium break-all whitespace-pre-wrap leading-normal font-sans">{ann.text}</div>
+                            <div className="text-[8.5px] text-white/40 font-mono mt-1">
+                              At Price: <span className="text-white/60 font-semibold">{ann.price.toFixed(displayFormat)}</span> (Idx #{ann.xIndex})
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
@@ -5782,7 +6368,8 @@ export default function ChartContainer({
       </div>
 
       {/* Pane 2: Recharts RSI Panel */}
-      <div className="px-6 py-3 border-t border-white/10 bg-[#0c0c0c]/20">
+      {!isFullscreen && (
+        <div className="px-6 py-3 border-t border-white/10 bg-[#0c0c0c]/20">
         <div className="flex items-center justify-between pb-1 text-xs text-white/40 font-mono">
           <div className="flex items-center space-x-1">
             <Activity className="w-3.5 h-3.5 text-indigo-400" />
@@ -5807,9 +6394,19 @@ export default function ChartContainer({
               <RechartsTooltip
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
+                    const value = Number(payload[0].value);
+                    const isOverbought = value >= 70;
+                    const isOversold = value <= 30;
+                    const borderAccent = isOverbought 
+                      ? 'border-rose-500/50 border-l-2 border-l-rose-500' 
+                      : isOversold 
+                        ? 'border-emerald-500/50 border-l-2 border-l-emerald-500'
+                        : 'border-indigo-500/50 border-l-2 border-l-indigo-500';
                     return (
-                      <div className="bg-[#050505] border border-white/10 px-2 py-1 rounded text-[10px] font-mono text-white/80">
-                        RSI: <span className="text-indigo-400 font-bold">{payload[0].value}</span>
+                      <div className={`bg-[#0c0c0e] border ${borderAccent} px-2.5 py-1.5 rounded-lg text-[10px] font-mono text-white/90 shadow-[0_12px_32px_rgba(0,0,0,0.85)]`}>
+                        RSI: <span className="text-indigo-400 font-extrabold">{payload[0].value}</span>
+                        {isOverbought && <span className="text-[8px] text-rose-400 font-bold block mt-0.5 uppercase tracking-wide">Overbought</span>}
+                        {isOversold && <span className="text-[8px] text-emerald-400 font-bold block mt-0.5 uppercase tracking-wide">Oversold</span>}
                       </div>
                     );
                   }
@@ -5831,9 +6428,11 @@ export default function ChartContainer({
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Footer Info Ledger */}
-      <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/10 bg-[#0c0c0c]/40 p-4 divide-x divide-white/5 font-mono text-center">
+      {!isFullscreen && (
+        <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/10 bg-[#0c0c0c]/40 p-4 divide-x divide-white/5 font-mono text-center">
         <div className="py-1">
           <span className="text-white/35 text-[10px] block uppercase font-mono tracking-tight">Average True Range</span>
           <span className="text-white/90 text-sm font-semibold">{metrics.atr.toFixed(symbol === 'BTC/USDT' ? 0 : 5)}</span>
@@ -5851,6 +6450,25 @@ export default function ChartContainer({
           <span className="text-white/90 text-sm font-semibold">{sweeps.length} Detected</span>
         </div>
       </div>
+      )}
     </div>
   );
+
+  if (isFullscreen) {
+    const portalTarget = typeof document !== 'undefined' ? document.body : null;
+    return (
+      <>
+        {/* Placeholder inside inline layout to preserve exact spatial layout of dashboard */}
+        <div 
+          id="chart-placeholder"
+          className="w-full bg-[#0a0a0c]/20 border border-dashed border-white/5 rounded-lg h-[420px] md:h-[500px]"
+        />
+        {isMounted && portalTarget && typeof createPortal === 'function'
+          ? createPortal(chartMainContent, portalTarget)
+          : chartMainContent}
+      </>
+    );
+  }
+
+  return chartMainContent;
 }

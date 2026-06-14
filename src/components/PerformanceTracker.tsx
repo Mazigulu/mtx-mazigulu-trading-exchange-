@@ -659,7 +659,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `APEX_QUANT_AUDITED_LEDGER_${new Date().toISOString().substring(0,10)}.csv`);
+      link.setAttribute('download', `MTXQUANT_AUDITED_LEDGER_${new Date().toISOString().substring(0,10)}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -757,7 +757,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
               <p className="text-[10px] text-white/40 mt-0.5">Real-time compounded growth from genesis initial $10k account scale.</p>
             </div>
             <div className="text-right select-none font-mono">
-              <span className="text-[11px] font-black text-indigo-300 uppercase block tracking-wider">Apex High-Frequency core</span>
+              <span className="text-[11px] font-black text-indigo-300 uppercase block tracking-wider">MTXquant High-Frequency core</span>
             </div>
           </div>
 
@@ -786,8 +786,15 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
                   tickFormatter={(val) => `$${val}`}
                 />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#080808', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', fontFamily: 'monospace' }}
-                  labelStyle={{ color: '#888' }}
+                  contentStyle={{ 
+                    backgroundColor: '#0c0c0e', 
+                    border: '1px solid rgba(99, 102, 241, 0.4)', 
+                    borderLeft: '3px solid #6366f1',
+                    borderRadius: '6px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
+                    fontFamily: 'monospace' 
+                  }}
+                  labelStyle={{ color: '#a5b4fc' }}
                   itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                   formatter={(value: any, name: any, props: any) => {
                     if (name === 'balance') return [`$${parseFloat(value).toFixed(2)}`, 'Equity Balance'];
@@ -918,8 +925,15 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
                 <XAxis dataKey="month" stroke="#ffffff" opacity={0.3} tickLine={false} />
                 <YAxis stroke="#ffffff" opacity={0.3} tickLine={false} tickFormatter={(val) => `$${val}`} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#080808', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', fontFamily: 'monospace' }}
-                  labelStyle={{ color: '#888' }}
+                  contentStyle={{ 
+                    backgroundColor: '#0c0c0e', 
+                    border: '1px solid rgba(16, 185, 129, 0.4)', 
+                    borderLeft: '3px solid #10b981',
+                    borderRadius: '6px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
+                    fontFamily: 'monospace' 
+                  }}
+                  labelStyle={{ color: '#a5b4fc' }}
                   itemStyle={{ fontWeight: 'bold' }}
                   formatter={(value: any) => [`$${parseFloat(value).toLocaleString()}`, 'Net Monthly Gain']}
                 />

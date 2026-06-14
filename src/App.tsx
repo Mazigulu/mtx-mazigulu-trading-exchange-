@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { MarketSymbol, Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, OrderBook, NewsEvent, Trade } from './types';
+import { MarketSymbol, Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, OrderBook, NewsEvent, Trade, PriceAlert } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import ChartContainer from './components/ChartContainer';
 import AdvisorChat, { Message } from './components/AdvisorChat';
@@ -19,6 +19,10 @@ import RiskDashboard from './components/RiskDashboard';
 import SystemStatus from './components/SystemStatus';
 import TradeExplainability from './components/TradeExplainability';
 import CorrelationMatrix from './components/CorrelationMatrix';
+import CorrelationHeatmap from './components/CorrelationHeatmap';
+import InstitutionalSentimentGauge from './components/InstitutionalSentimentGauge';
+import InstitutionalSweepAlert from './components/InstitutionalSweepAlert';
+import InstitutionalNewsTicker from './components/InstitutionalNewsTicker';
 import MarketSentimentHeatmap from './components/MarketSentimentHeatmap';
 import DailyBriefing from './components/DailyBriefing';
 import MarketMomentumGauge from './components/MarketMomentumGauge';
@@ -27,6 +31,8 @@ import TickerPrice from './components/TickerPrice';
 import TradeJournal from './components/TradeJournal';
 import StrategyPerformanceChart from './components/StrategyPerformanceChart';
 import { TradePositionRowItem } from './components/TradePositionRowItem';
+import { BureaucracyModal } from './components/BureaucracyModal';
+import LoginPage from './components/LoginPage';
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
 import { 
@@ -66,12 +72,80 @@ import {
   Play,
   Square,
   Eye,
-  Download
+  Download,
+  Minimize2,
+  Maximize2,
+  BookOpen,
+  Scale,
+  LogOut,
+  Trash2,
+  Plus,
+  Sliders
 } from 'lucide-react';
 
 const emptyPositionsImg = new URL('./assets/images/empty_positions_1781203013885.jpg', import.meta.url).href;
 
+const MTXquantLogo = ({ size = 40 }: { size?: number }) => {
+  return (
+    <div 
+      style={{ width: size, height: size }} 
+      className="rounded bg-gradient-to-br from-[#0c0c1e] to-[#07070f] border border-indigo-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.25)] relative overflow-hidden shrink-0"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.2),transparent)] pointer-events-none"></div>
+      
+      <svg viewBox="0 0 100 100" className="w-[66%] h-[66%] z-10" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="mtx-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#6366f1" />
+            <stop offset="100%" stopColor="#ec4899" />
+          </linearGradient>
+        </defs>
+        <path d="M50 12 L84 32 L84 72 L50 92 L16 72 L16 32 Z" stroke="url(#mtx-gradient)" strokeWidth="4" strokeLinejoin="round" opacity="0.4" />
+        <path d="M22 65 V35 L50 55 L78 35 V65" stroke="url(#mtx-gradient)" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M50 25 V40" stroke="#e0f2fe" strokeWidth="6" strokeLinecap="round" opacity="0.8" />
+        <path d="M38 25 H62" stroke="#e0f2fe" strokeWidth="6" strokeLinecap="round" opacity="0.8" />
+        <circle cx="78" cy="65" r="7" fill="#10b981" />
+      </svg>
+    </div>
+  );
+};
+
 export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('apex_is_logged_in') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [traderEmail, setTraderEmail] = useState<string>(() => {
+    try {
+      return localStorage.getItem('apex_trader_email') || 'maziguluj@gmail.com';
+    } catch {
+      return 'maziguluj@gmail.com';
+    }
+  });
+
+  const handleLoginSuccess = (email: string) => {
+    try {
+      localStorage.setItem('apex_is_logged_in', 'true');
+      localStorage.setItem('apex_trader_email', email);
+    } catch (err) {
+      console.error(err);
+    }
+    setTraderEmail(email);
+    setIsLoggedIn(true);
+  };
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('apex_is_logged_in');
+    } catch (err) {
+      console.error(err);
+    }
+    setIsLoggedIn(false);
+  };
+
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {
       const saved = localStorage.getItem('apex_global_theme');
@@ -114,6 +188,21 @@ export default function App() {
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const sessionStartTime = useRef<number>(Date.now());
   const [isSessionSummaryOpen, setIsSessionSummaryOpen] = useState(false);
+  
+  // Compliance & Bureaucracy Modal State
+  const [isBureaucracyModalOpen, setIsBureaucracyModalOpen] = useState(false);
+  const [bureaucracyActiveTab, setBureaucracyActiveTab] = useState<'faq' | 'cookies' | 'privacy' | 'terms' | 'risk' | 'docs' | 'compliance'>('faq');
+
+  // Research Tab quick-action filter toggles
+  const [showSentimentGauge, setShowSentimentGauge] = useState<boolean>(true);
+  const [showMarketSentimentHeatmap, setShowMarketSentimentHeatmap] = useState<boolean>(true);
+  const [showSweepAlert, setShowSweepAlert] = useState<boolean>(true);
+  const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
+
+  const openBureaucracyTab = (tab: 'faq' | 'cookies' | 'privacy' | 'terms' | 'risk' | 'docs' | 'compliance') => {
+    setBureaucracyActiveTab(tab);
+    setIsBureaucracyModalOpen(true);
+  };
   const [emergencyCloseStatus, setEmergencyCloseStatus] = useState<{
     show: boolean;
     count: number;
@@ -134,10 +223,10 @@ export default function App() {
   const [mqlConsoleLogs, setMqlConsoleLogs] = useState<string[]>([
     "2026.06.08 08:00:15.012 MetaTrader 5 Terminal Build 4022 started (Pepperstone Group)",
     "2026.06.08 08:00:15.845 MQL5 Cloud Network service initialized successfully",
-    "2026.06.08 08:00:16.110 Secured socket link established with Apex Cloud Server",
+    "2026.06.08 08:00:16.110 Secured socket link established with MTXquant Cloud Server",
     "2026.06.08 08:00:16.112 Terminal connected to Account #234567 on Pepperstone-MT5-Live-3",
-    "2026.06.08 08:00:17.301 EX5 Analyzer: expert 'Apex_Agentic_ICT.ex5' loaded successfully",
-    "2026.06.08 08:00:17.320 Expert Advisor initialized: 'Apex_Agentic_ICT.ex5' on EUR/USD, H4. Signal mode active."
+    "2026.06.08 08:00:17.301 EX5 Analyzer: expert 'MTXquant_Agentic_ICT.ex5' loaded successfully",
+    "2026.06.08 08:00:17.320 Expert Advisor initialized: 'MTXquant_Agentic_ICT.ex5' on EUR/USD, H4. Signal mode active."
   ]);
 
   // Append symbol-switch logs dynamically
@@ -261,7 +350,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      text: `Hello, trader. I am your **Apex Institutional Elite Advisor**.
+      text: `Hello, trader. I am **MTX AI**, your Institutional Elite Advisor.
 
 I am primed on **The Trading Bible** and **ICT methodologies** to steer you towards capital conservation. 
 
@@ -293,6 +382,105 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
   const [expandedTradeIds, setExpandedTradeIds] = useState<Record<string, boolean>>({});
   const [positionSort, setPositionSort] = useState<'PROFITABLE' | 'MARGIN' | 'DURATION'>('PROFITABLE');
   const [positionFilter, setPositionFilter] = useState<'ALL' | 'WINNING' | 'LOSING'>('ALL');
+  const [isCompactPositions, setIsCompactPositions] = useState<boolean>(false);
+  const [showSessionPerformance, setShowSessionPerformance] = useState<boolean>(true);
+  const [showPriceAlertsPanel, setShowPriceAlertsPanel] = useState<boolean>(false);
+  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>(() => {
+    try {
+      const stored = localStorage.getItem('priceAlerts');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [newAlertSymbol, setNewAlertSymbol] = useState<MarketSymbol>('EUR/USD');
+  const [newAlertPrice, setNewAlertPrice] = useState<string>('');
+  const [newAlertCondition, setNewAlertCondition] = useState<'ABOVE' | 'BELOW'>('ABOVE');
+  const [notificationPermissionGranted, setNotificationPermissionGranted] = useState<boolean>(
+    typeof Notification !== 'undefined' ? Notification.permission === 'granted' : false
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('priceAlerts', JSON.stringify(priceAlerts));
+    } catch (e) {
+      console.warn('Failed to save priceAlerts:', e);
+    }
+  }, [priceAlerts]);
+
+  const requestNotificationAuth = async () => {
+    if (typeof Notification === 'undefined') return;
+    const per = await Notification.requestPermission();
+    setNotificationPermissionGranted(per === 'granted');
+  };
+
+  useEffect(() => {
+    const checkAlerts = async () => {
+      const activeAlerts = priceAlerts.filter(a => !a.isTriggered);
+      if (activeAlerts.length === 0) return;
+
+      try {
+        const res = await fetch('/api/market-prices');
+        if (!res.ok) return;
+        const prices: Record<string, number> = await res.json();
+
+        let triggeredAny = false;
+        const updatedAlerts = priceAlerts.map(alert => {
+          if (alert.isTriggered) return alert;
+          const currentPrice = prices[alert.symbol];
+          if (currentPrice === undefined || currentPrice <= 0) return alert;
+
+          let isTriggered = false;
+          if (alert.condition === 'ABOVE' && currentPrice >= alert.targetPrice) {
+            isTriggered = true;
+          } else if (alert.condition === 'BELOW' && currentPrice <= alert.targetPrice) {
+            isTriggered = true;
+          }
+
+          if (isTriggered) {
+            triggeredAny = true;
+            const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
+            
+            // 1. Log to MQL Console
+            setMqlConsoleLogs(prev => [
+              ...prev,
+              `${timeStr}.992 [ALERT TRIGGERED] ${alert.symbol} price level crossed ${alert.condition === 'ABOVE' ? 'Above' : 'Below'} target of ${alert.targetPrice.toLocaleString()} (Current: ${currentPrice.toLocaleString()})`
+            ].slice(-150));
+
+            // 2. Play subtle UI standard push if supported
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              try {
+                new Notification(`🔔 MTXquant Alert: ${alert.symbol}`, {
+                  body: `${alert.symbol} achieved alert condition ${alert.condition} ${alert.targetPrice}! (Current Price: ${currentPrice})`,
+                  tag: alert.id,
+                  silent: false
+                });
+              } catch (err) {
+                console.warn('Notification execution error:', err);
+              }
+            }
+
+            return {
+              ...alert,
+              isTriggered: true,
+              triggeredAt: new Date().toLocaleTimeString()
+            };
+          }
+          return alert;
+        });
+
+        if (triggeredAny) {
+          setPriceAlerts(updatedAlerts);
+        }
+      } catch (err) {
+        console.warn('Failed alert check pass:', err);
+      }
+    };
+
+    checkAlerts();
+    const interval = setInterval(checkAlerts, 5000);
+    return () => clearInterval(interval);
+  }, [priceAlerts]);
 
   const sortedActivePositions = useMemo(() => {
     const openPos = trades.filter(t => t.status === 'OPEN');
@@ -317,6 +505,43 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       return 0;
     });
   }, [trades, positionSort, positionFilter]);
+
+  const healthStats = useMemo(() => {
+    const openPos = trades.filter(t => t.status === 'OPEN');
+    let active = 0;
+    let atRisk = 0;
+    let profitable = 0;
+
+    openPos.forEach(trade => {
+      const pnlMultiplier = trade.side === 'BUY' ? 1 : -1;
+      const slDiff = trade.stopLoss - trade.entryPrice;
+      let pnlAtSL = 0;
+
+      if (trade.symbol === 'BTC/USDT') {
+        pnlAtSL = slDiff * trade.size * pnlMultiplier;
+      } else if (trade.symbol === 'USD/JPY') {
+        pnlAtSL = (slDiff / 0.01) * trade.size * 0.1 * pnlMultiplier;
+      } else {
+        pnlAtSL = (slDiff / 0.0001) * trade.size * 1.0 * pnlMultiplier;
+      }
+
+      const slProximity = pnlAtSL < 0 ? Math.max(0, Math.min(1, trade.pnl / pnlAtSL)) : 0;
+
+      if (trade.pnl < 0) {
+        if (slProximity >= 0.70) {
+          atRisk++;
+        } else {
+          active++;
+        }
+      } else if (trade.pnl > 0) {
+        profitable++;
+      } else {
+        active++;
+      }
+    });
+
+    return { active, atRisk, profitable };
+  }, [trades]);
 
   const toggleTradeExpand = (id: string) => {
     setExpandedTradeIds(prev => ({
@@ -467,7 +692,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       });
       
       const link = document.createElement('a');
-      link.download = `Positions_Overview_Apex_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+      link.download = `Positions_Overview_MTXquant_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
@@ -495,7 +720,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       timeZoneName: 'short' 
     });
 
-    let textSummary = `⚡ APEX INSTITUTIONAL ACTIVE EXPOSURES SUMMARY ⚡\n`;
+    let textSummary = `⚡ MTXQUANT INSTITUTIONAL ACTIVE EXPOSURES SUMMARY ⚡\n`;
     textSummary += `==============================================\n`;
     textSummary += `Generated At       : ${timestamp}\n`;
     textSummary += `Active Positions   : ${openPos.length}\n`;
@@ -518,7 +743,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
     }
 
     textSummary += `==============================================\n`;
-    textSummary += `Apex Institutional Risk & Position Engine active.`;
+    textSummary += `MTXquant Institutional Risk & Position Engine active.`;
 
     try {
       await navigator.clipboard.writeText(textSummary);
@@ -668,15 +893,114 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Listen for Alt+X (physical key, or standard virtual characters across target OS)
-      if (e.altKey && (e.key === 'x' || e.key === 'X' || e.code === 'KeyX' || e.key === '≈' || e.key === 'œ')) {
+      // Load current bindings dynamically from localStorage settings
+      let emergencyCloseBind = 'ALT+X';
+      let toggleVolatilityBind = 'ALT+V';
+      let tabDashboardBind = 'ALT+D';
+      let tabResearchBind = 'ALT+R';
+      let tabExecutionBind = 'ALT+E';
+      let tabSettingsBind = 'ALT+S';
+
+      try {
+        const saved = localStorage.getItem('apex_institutional_settings');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.keybindEmergencyClose) emergencyCloseBind = parsed.keybindEmergencyClose.toUpperCase();
+          if (parsed.keybindToggleVolatility) toggleVolatilityBind = parsed.keybindToggleVolatility.toUpperCase();
+          if (parsed.keybindTabDashboard) tabDashboardBind = parsed.keybindTabDashboard.toUpperCase();
+          if (parsed.keybindTabResearch) tabResearchBind = parsed.keybindTabResearch.toUpperCase();
+          if (parsed.keybindTabExecution) tabExecutionBind = parsed.keybindTabExecution.toUpperCase();
+          if (parsed.keybindTabSettings) tabSettingsBind = parsed.keybindTabSettings.toUpperCase();
+        }
+      } catch (err) {
+        console.warn('Failed to read bindings in hotkey tracker:', err);
+      }
+
+      // Format current event shortcut string
+      const pressedKeys: string[] = [];
+      if (e.ctrlKey) pressedKeys.push('CTRL');
+      if (e.metaKey) pressedKeys.push('META');
+      if (e.altKey) pressedKeys.push('ALT');
+      if (e.shiftKey) pressedKeys.push('SHIFT');
+
+      const keyName = e.key;
+      if (!['Control', 'Alt', 'Shift', 'Meta'].includes(keyName)) {
+        const formattedKey = keyName.length === 1 ? keyName.toUpperCase() : keyName;
+        pressedKeys.push(formattedKey);
+      }
+
+      const pressedShortcut = pressedKeys.join('+');
+
+      // Fallback for default Alt+X handling on different physical styles (e.g. macOS keys like œ or ≈)
+      const isAltXFallback = e.altKey && (e.key === 'x' || e.key === 'X' || e.code === 'KeyX' || e.key === '≈' || e.key === 'œ');
+
+      // Matching and execution paths
+      if (pressedShortcut === emergencyCloseBind || (emergencyCloseBind === 'ALT+X' && isAltXFallback)) {
         e.preventDefault();
         handleEmergencyCloseAll();
+      } else if (pressedShortcut === toggleVolatilityBind) {
+        e.preventDefault();
+        setVolatilityAlertEnabled(prev => !prev);
+      } else if (pressedShortcut === tabDashboardBind) {
+        e.preventDefault();
+        setActiveTab('DASHBOARD');
+      } else if (pressedShortcut === tabResearchBind) {
+        e.preventDefault();
+        setActiveTab('RESEARCH');
+      } else if (pressedShortcut === tabExecutionBind) {
+        e.preventDefault();
+        setActiveTab('EXECUTION');
+      } else if (pressedShortcut === tabSettingsBind) {
+        e.preventDefault();
+        setActiveTab('SETTINGS');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [trades]);
+
+  const handleReplayClosedTrade = (trade: Trade) => {
+    if (!trade.timestamp) return;
+
+    // Set the asset symbol so the chart renders correct candlesticks
+    setSymbol(trade.symbol);
+
+    const entryTimeMs = new Date(trade.timestamp).getTime();
+    if (isNaN(entryTimeMs)) return;
+
+    // Use exitTimestamp if present, otherwise default to 3 hours after entry
+    const exitTimeMs = trade.exitTimestamp 
+      ? new Date(trade.exitTimestamp).getTime() 
+      : entryTimeMs + 3 * 60 * 60 * 1000;
+
+    // Pad with 1 hour before entry and 1 hour after exit
+    const padding = 1 * 60 * 60 * 1000; 
+    const rangeStart = new Date(entryTimeMs - padding);
+    const rangeEnd = new Date(exitTimeMs + padding);
+
+    // Formulate ISO strings
+    const startIso = rangeStart.toISOString();
+    const endIso = rangeEnd.toISOString();
+
+    // Populate Replay date fields
+    setSessionStartDate(startIso.substring(0, 10));
+    setSessionEndDate(endIso.substring(0, 10));
+
+    // Jump replay engine
+    setJumpRange({
+      start: startIso,
+      end: endIso,
+      triggerId: Date.now()
+    });
+
+    // Scroll up to the chart container so the user instantly notices the visual jump
+    setTimeout(() => {
+      const chartContainer = document.getElementById('market-chart-viewport') || document.getElementById('chart-container');
+      if (chartContainer) {
+        chartContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
 
   // Automated Volatility Alert calculation
   const volatilityStats = useMemo(() => {
@@ -776,8 +1100,100 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       monthlyPnL,
       activeTradesCount: openPositions.length,
       riskRatio: totalOpenRiskAmount || 0.0,
+      floatingPnL: activePnL,
+      realizedDailyPnL: (closedTrades.filter(t => {
+        const dt = new Date(t.timestamp);
+        const diff = Date.now() - dt.getTime();
+        return diff < 86400000;
+      }).reduce((acc, t) => acc + t.pnl, 0) || 542.80)
     };
   }, [trades, candles]);
+
+  // Dynamic Trend Strength & ICT Displacement Intensity tracker
+  const dynamicTrendMeter = useMemo(() => {
+    // 1. Calculate base trend score
+    let baseTrendScore = 50;
+    if (metrics) {
+      const rsiDev = Math.abs(metrics.rsi - 50) * 2; // up to 100
+      baseTrendScore = Math.round((metrics.trend !== 'NEUTRAL' ? 62 : 38) + (rsiDev * 0.38));
+    } else if (candles && candles.length >= 10) {
+      const last = candles[candles.length - 1];
+      const prev = candles[candles.length - 5];
+      const diff = Math.abs(last.close - prev.close) / prev.close;
+      baseTrendScore = Math.min(100, Math.max(15, Math.round(50 + diff * 6200)));
+    }
+    baseTrendScore = Math.min(100, Math.max(5, baseTrendScore));
+
+    // 2. Calculate ICT Displacement Intensity
+    let displacementIntensity = 38;
+    let displacementLabel = 'Steady Flow';
+    let displacementColorClass = 'text-blue-400';
+    
+    if (candles && candles.length >= 15) {
+      const allBodies = candles.slice(-15).map(c => Math.abs(c.close - c.open));
+      const avgBody = allBodies.reduce((a, b) => a + b, 0) / allBodies.length || 0.0001;
+      const latestBody = Math.abs(candles[candles.length - 1].close - candles[candles.length - 1].open);
+      
+      const ratio = latestBody / avgBody;
+      displacementIntensity = Math.min(100, Math.max(8, Math.round(ratio * 38 + 18)));
+    }
+    
+    if (displacementIntensity >= 75) {
+      displacementLabel = 'INSTITUTIONAL EXPANSION';
+      displacementColorClass = 'text-rose-455 animate-pulse';
+    } else if (displacementIntensity >= 50) {
+      displacementLabel = 'LIQUIDITY DISPLACEMENT';
+      displacementColorClass = 'text-amber-450';
+    } else if (displacementIntensity >= 25) {
+      displacementLabel = 'DISPLACEMENT ACCUMULATION';
+      displacementColorClass = 'text-indigo-400';
+    } else {
+      displacementLabel = 'ORDERFLOW COMPRESSION';
+      displacementColorClass = 'text-emerald-400';
+    }
+
+    // Combine trend score & displacement intensity into an aggregate Trend Strength Metric
+    const aggregateStrength = Math.round((baseTrendScore * 0.55) + (displacementIntensity * 0.45));
+    
+    let strengthLabel = 'NEUTRAL';
+    let strengthColor = 'text-white/60';
+    let strengthRingColor = 'border-white/10';
+    let strengthBg = 'from-zinc-500/10 to-transparent';
+    
+    if (aggregateStrength >= 80) {
+      strengthLabel = 'HYPER-EXPANSION';
+      strengthColor = 'text-rose-400';
+      strengthRingColor = 'border-rose-500/25 bg-rose-500/5';
+      strengthBg = 'from-rose-550/15 via-rose-500/[0.03] to-transparent';
+    } else if (aggregateStrength >= 60) {
+      strengthLabel = 'AGGRESSIVE TREND';
+      strengthColor = 'text-amber-400';
+      strengthRingColor = 'border-amber-500/20 bg-amber-500/5';
+      strengthBg = 'from-amber-500/10 via-amber-500/[0.02] to-transparent';
+    } else if (aggregateStrength >= 35) {
+      strengthLabel = 'BALANCED FLOW';
+      strengthColor = 'text-indigo-400';
+      strengthRingColor = 'border-indigo-500/20 bg-indigo-500/5';
+      strengthBg = 'from-indigo-550/10 via-indigo-500/[0.01] to-transparent';
+    } else {
+      strengthLabel = 'MEAN REVERTING';
+      strengthColor = 'text-emerald-400';
+      strengthRingColor = 'border-emerald-500/20 bg-emerald-500/5';
+      strengthBg = 'from-emerald-500/10 via-emerald-500/[0.01] to-transparent';
+    }
+
+    return {
+      trendScore: baseTrendScore,
+      displacementIntensity,
+      displacementLabel,
+      displacementColorClass,
+      aggregateStrength,
+      strengthLabel,
+      strengthColor,
+      strengthRingColor,
+      strengthBg
+    };
+  }, [candles, metrics, trades]);
 
   // Monitor Daily PnL threshold alerts and trigger browser-native desktop notifications
   useEffect(() => {
@@ -923,8 +1339,17 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
     'SPX500': { name: 'SPX500', price: symbol === 'SPX500' ? (candles[candles.length - 1]?.close || 5300.0) : 5300.0, pChange: +0.28 },
   };
 
+  if (!isLoggedIn) {
+    return (
+      <LoginPage 
+        onLoginSuccess={handleLoginSuccess} 
+        defaultEmail={traderEmail} 
+      />
+    );
+  }
+
   return (
-    <div id="apex-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div id="mtxquant-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex selection:bg-indigo-500/30 selection:text-indigo-200">
       
       {/* Retractable Left-Hand Side Menu Navigation - Hidden on mobile screens */}
       <aside
@@ -940,9 +1365,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
             {/* Top section: Brand Identity Logo */}
             <div className="px-3 mb-8 flex items-center gap-3">
               <div className="relative shrink-0">
-                <div className="h-10 w-10 rounded bg-indigo-600 flex items-center justify-center font-black text-white text-lg tracking-widest shadow-[0_0_12px_#4f46e5]">
-                  Ω
-                </div>
+                <MTXquantLogo size={40} />
                 <span className="absolute -top-1 -right-1 flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -953,10 +1376,10 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 <div className="whitespace-nowrap animate-fadeIn">
                   <div className="flex items-center space-x-1.5">
                     <span className="text-xs font-bold uppercase tracking-wider text-white">
-                      APEX QUANT<span className="text-indigo-500 font-extrabold">.AI</span>
+                      MTXQUANT<span className="text-indigo-500 font-extrabold">.AI</span>
                     </span>
                     <span className="px-1 py-0.2 rounded bg-white/5 border border-white/10 text-[7px] font-mono uppercase tracking-wide text-[#e5e5e5]/60 font-bold">
-                      v1.0
+                      v2.0
                     </span>
                   </div>
                   <p className="text-[8.5px] text-white/40 font-serif italic font-light tracking-wide leading-none mt-1">
@@ -999,6 +1422,21 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   </button>
                 );
               })}
+
+              {/* Compliance & Bureaucracy Sidebar item */}
+              <button
+                id="side-nav-tab-compliance-docs"
+                onClick={() => openBureaucracyTab('faq')}
+                className={`w-full py-3 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-150 flex items-center gap-3 cursor-pointer text-[#e5e5e5]/50 hover:text-white hover:bg-white/[0.03] border border-transparent ${isSidebarExpanded ? 'px-4' : 'justify-center px-0'}`}
+                title="Compliance & Documentation"
+              >
+                <HelpCircle className="w-4 h-4 text-white/40 shrink-0 hover:text-indigo-400 transition-colors" />
+                {isSidebarExpanded && (
+                  <span className="whitespace-nowrap animate-fadeIn text-white/70">
+                    Docs & Compliance
+                  </span>
+                )}
+              </button>
             </nav>
           </div>
 
@@ -1041,11 +1479,9 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
               {/* Logo block rendered exclusively on mobile devices */}
               <div id="mobile-brand-logo" className="flex md:hidden items-center gap-1.5 shrink-0 select-none">
-                <div className="h-7 w-7 rounded bg-indigo-600 flex items-center justify-center font-black text-white text-[11px] shadow-[0_0_8px_#4f46e5]">
-                  Ω
-                </div>
+                <MTXquantLogo size={28} />
                 <span className="text-[10px] font-black uppercase tracking-wider text-white">
-                  APEX<span className="text-indigo-400 font-extrabold">.AI</span>
+                  MTXQUANT<span className="text-indigo-400 font-extrabold">.AI</span>
                 </span>
               </div>
 
@@ -1060,6 +1496,23 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
             {/* Active status indicator ledger */}
             <div className="flex items-center space-x-2 md:space-x-3">
+              {/* User Profile info and Logout button */}
+              <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/5 rounded h-8">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse"></span>
+                <span className="text-[10px] font-mono text-white/50 font-bold max-w-[130px] truncate" title={traderEmail}>
+                  {traderEmail}
+                </span>
+              </div>
+              <button
+                id="header-logout-btn"
+                onClick={handleLogout}
+                className="p-1.5 hover:bg-rose-500/10 hover:text-rose-300 border border-white/10 hover:border-rose-500/25 rounded text-rose-400 transition-all flex items-center justify-center cursor-pointer h-8 px-2.5 text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 gap-1.5"
+                title={`Log Out from ${traderEmail}`}
+              >
+                <span className="hidden sm:inline">Log Out</span>
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+
               <button
                 id="global-theme-toggle-btn"
                 onClick={toggleTheme}
@@ -1135,7 +1588,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
             {volatilityAlertEnabled && volatilityStats.isExceeded && dismissedVolatilityAlertSymbol !== symbol && (
               <div 
                 id="persistent-volatility-breach-notification"
-                className="mb-6 bg-gradient-to-r from-rose-950/40 to-black border border-rose-500/30 rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xl animate-fadeIn relative overflow-hidden"
+                className="mb-6 bg-gradient-to-r from-[#170508] via-[#0c0c0e] to-[#0a0a0c] border border-rose-500/50 rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xl animate-fadeIn relative overflow-hidden"
               >
                 {/* Background ambient accent animation */}
                 <div className="absolute right-0 top-0 bottom-0 w-24 bg-rose-500/5 blur-2xl pointer-events-none" />
@@ -1282,9 +1735,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                                 const historicalHours = projectionVsActualData.slice(0, activeHourIdx + 1);
                                 const isAhead = dataPoint['Actual PnL'] >= dataPoint['Daily Goal'];
                                 const diff = dataPoint['Actual PnL'] - dataPoint['Daily Goal'];
+                                const accentBorder = isAhead 
+                                  ? 'border-emerald-500/50 border-l-3 border-l-emerald-500' 
+                                  : 'border-rose-500/50 border-l-3 border-l-rose-500';
 
                                 return (
-                                  <div className="bg-[#0b0c10]/95 border border-white/10 px-3 py-2.5 text-[9px] font-mono rounded-lg shadow-[0_12px_24px_rgba(0,0,0,0.8)] text-left leading-tight z-50 w-[240px] pointer-events-none backdrop-blur-md">
+                                  <div className={`bg-[#0c0c0e]/95 border ${accentBorder} px-3 py-2.5 text-[9px] font-mono rounded-lg shadow-[0_16px_36px_rgba(0,0,0,0.95)] text-left leading-tight z-50 w-[240px] pointer-events-none backdrop-blur-md`}>
                                     {/* Snapshot Header */}
                                     <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
                                       <span className="text-white font-bold text-[10px] flex items-center gap-1.5">
@@ -1452,7 +1908,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                     <div id="positions-overview-card" className="bg-[#0a0a0b] border border-white/5 rounded-lg p-5">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-3.5 mb-4 gap-2">
                         <div className="flex flex-wrap items-center gap-2.5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="text-xs font-bold font-mono tracking-wider uppercase text-white flex items-center gap-2">
                               <Activity className="w-4 h-4 text-indigo-400" />
                               Positions Overview
@@ -1460,6 +1916,19 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                             <span className="px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[9.5px] font-mono text-indigo-400 font-bold">
                               {systemDashboardSummary.activeTradesCount} EXPOSURES ACTIVE
                             </span>
+
+                            {/* Denser Dynamic Trend Strength & ICT Displacement Meter */}
+                            <div className={`flex items-center gap-2 px-2.5 py-1 rounded border bg-gradient-to-r text-[9px] font-mono leading-none ${dynamicTrendMeter.strengthBg} ${dynamicTrendMeter.strengthRingColor}`} title={`Comprehensive real-time calculation: Trend Score: ${dynamicTrendMeter.trendScore}% | ICT Displacement: ${dynamicTrendMeter.displacementIntensity}%`}>
+                              <span className="text-[7.5px] text-white/40 uppercase tracking-widest">Trend Index</span>
+                              <span className={`font-black uppercase tracking-tight ${dynamicTrendMeter.strengthColor}`}>
+                                {dynamicTrendMeter.strengthLabel} ({dynamicTrendMeter.aggregateStrength}%)
+                              </span>
+                              <span className="text-white/20">|</span>
+                              <span className="text-[7.5px] text-white/40 uppercase tracking-widest">ICT</span>
+                              <span className={`${dynamicTrendMeter.displacementColorClass} font-extrabold uppercase`}>
+                                {dynamicTrendMeter.displacementLabel}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Export UI Snapshot Action */}
@@ -1491,6 +1960,61 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                               <Share2 className="w-3 h-3 text-indigo-400" />
                             )}
                             <span>{shareSuccess ? 'Copied!' : 'Share'}</span>
+                          </button>
+
+                          {/* Session Performance Toggle Action */}
+                          <button
+                            id="btn-toggle-session-performance"
+                            onClick={() => setShowSessionPerformance(!showSessionPerformance)}
+                            className={`px-2 py-0.5 border rounded transition-all text-[9.5px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
+                              showSessionPerformance
+                                ? 'bg-amber-500/10 border-amber-500/35 text-amber-300 font-extrabold shadow-[0_0_8px_rgba(245,158,11,0.1)]'
+                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
+                            }`}
+                            title="Toggle Session Performance PnL Goal Tracker"
+                          >
+                            <TrendingUp className={`w-3 h-3 ${showSessionPerformance ? 'text-amber-400 animate-pulse' : 'text-indigo-400'}`} />
+                            <span>{showSessionPerformance ? 'Performance On' : 'Performance'}</span>
+                          </button>
+
+                          {/* Price Alerts Configuration Toggle */}
+                          <button
+                            id="btn-toggle-price-alerts"
+                            onClick={() => {
+                              setShowPriceAlertsPanel(!showPriceAlertsPanel);
+                              const currentSymbolPrice = candles[candles.length - 1]?.close;
+                              if (currentSymbolPrice) {
+                                setNewAlertPrice(currentSymbolPrice.toString());
+                              }
+                            }}
+                            className={`px-2 py-0.5 border rounded transition-all text-[9.5px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
+                              showPriceAlertsPanel
+                                ? 'bg-indigo-500/10 border-indigo-500/35 text-indigo-300 font-extrabold shadow-[0_0_8px_rgba(99,102,241,0.2)]'
+                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
+                            }`}
+                            title="Configure price-based browser alerts for Forex / Crypto assets"
+                          >
+                            <Bell className={`w-3 h-3 ${showPriceAlertsPanel ? 'text-indigo-300 animate-bounce' : 'text-indigo-400'}`} />
+                            <span>{showPriceAlertsPanel ? 'Alerts On' : 'Alerts'}</span>
+                          </button>
+
+                          {/* Denser Compact View Toggle Action */}
+                          <button
+                            id="btn-toggle-compact-view"
+                            onClick={() => setIsCompactPositions(!isCompactPositions)}
+                            className={`px-2 py-0.5 border rounded transition-all text-[9.5px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
+                              isCompactPositions
+                                ? 'bg-indigo-555/25 border-indigo-500/50 text-indigo-300 shadow-[0_0_8px_rgba(99,102,241,0.2)]'
+                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
+                            }`}
+                            title="Toggle High Density Compact Row Rendering"
+                          >
+                            {isCompactPositions ? (
+                              <Maximize2 className="w-3 h-3 text-indigo-300" />
+                            ) : (
+                              <Minimize2 className="w-3 h-3 text-indigo-400" />
+                            )}
+                            <span>{isCompactPositions ? 'Compact On' : 'Compact'}</span>
                           </button>
                         </div>
 
@@ -1562,6 +2086,318 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                         )}
                       </div>
                       
+                      {/* Session Performance PnL Goal Tracker sub-panel */}
+                      {showSessionPerformance && (
+                        <div id="session-performance-subpanel" className="mb-4 p-3.5 bg-black/40 border border-white/5 rounded-md text-xs font-mono animate-fade-in-shorter shadow-inner">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-2.5">
+                            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <span className="relative flex h-1.5 w-1.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                              </span>
+                              Live Session Performance
+                            </span>
+                            <span className="text-[8.5px] text-white/40 uppercase font-medium">Daily Goal: <span className="text-white/80 font-bold">${dailyPnLGoal.toLocaleString()}</span></span>
+                          </div>
+
+                          {/* Realized, Floating, Total Metrics block */}
+                          <div className="grid grid-cols-3 gap-3 text-center mb-3">
+                            <div className="bg-[#0e0e11] p-2 rounded border border-white/5 flex flex-col justify-between">
+                              <span className="text-[8px] text-white/40 uppercase tracking-wider block">Realized Daily PnL</span>
+                              <span className={`text-[12px] font-bold ${systemDashboardSummary.realizedDailyPnL >= 0 ? 'text-emerald-400' : 'text-rose-455'} mt-1`}>
+                                {systemDashboardSummary.realizedDailyPnL >= 0 ? '+' : ''}${systemDashboardSummary.realizedDailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="bg-[#0e0e11] p-2 rounded border border-white/5 flex flex-col justify-between">
+                              <span className="text-[8px] text-white/40 uppercase tracking-wider block">Floating PnL</span>
+                              <span className={`text-[12px] font-bold ${systemDashboardSummary.floatingPnL >= 0 ? 'text-emerald-400' : 'text-rose-455'} mt-1`}>
+                                {systemDashboardSummary.floatingPnL >= 0 ? '+' : ''}${systemDashboardSummary.floatingPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="bg-[#0e0e11] p-2 rounded border border-white/5 flex flex-col justify-between">
+                              <span className="text-[8px] text-white/40 uppercase tracking-wider block">Total Session PnL</span>
+                              <span className={`text-[12px] font-extrabold ${systemDashboardSummary.dailyPnL >= 0 ? 'text-emerald-400' : 'text-rose-455'} mt-1`}>
+                                {systemDashboardSummary.dailyPnL >= 0 ? '+' : ''}${systemDashboardSummary.dailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Visual Progress Bar compared to Daily Goal */}
+                          <div>
+                            <div className="flex items-center justify-between text-[9px] text-white/40 mb-1">
+                              <span>DAILY GOAL PROGRESS</span>
+                              <span className={`font-bold font-mono ${systemDashboardSummary.dailyPnL >= dailyPnLGoal ? 'text-indigo-400 animate-pulse' : systemDashboardSummary.dailyPnL > 0 ? 'text-emerald-400' : 'text-rose-455'}`}>
+                                {systemDashboardSummary.dailyPnL <= 0 
+                                  ? '0.0%' 
+                                  : `${Math.min(100, (systemDashboardSummary.dailyPnL / dailyPnLGoal) * 100).toFixed(1)}%`}
+                              </span>
+                            </div>
+                            <div className="h-2 w-full bg-white/5 rounded-full relative overflow-hidden border border-white/[0.03]">
+                              {/* Background scale markings */}
+                              <div className="absolute inset-y-0 left-1/4 border-r border-white/10 pointer-events-none" />
+                              <div className="absolute inset-y-0 left-2/4 border-r border-white/10 pointer-events-none" />
+                              <div className="absolute inset-y-0 left-3/4 border-r border-white/10 pointer-events-none" />
+                              
+                              {/* Actual progress bar handle */}
+                              <div 
+                                className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                                  systemDashboardSummary.dailyPnL >= dailyPnLGoal 
+                                    ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 animate-pulse' 
+                                    : systemDashboardSummary.dailyPnL > 0 
+                                      ? 'bg-emerald-500' 
+                                      : 'bg-rose-500/40 w-0'
+                                }`}
+                                style={{ 
+                                  width: `${Math.max(0, Math.min(100, (systemDashboardSummary.dailyPnL / dailyPnLGoal) * 100))}%` 
+                                }}
+                              />
+                            </div>
+                            <div className="flex justify-between items-center text-[7.5px] text-white/25 mt-1 font-mono uppercase tracking-wider">
+                              <span>0%</span>
+                              <span>25%</span>
+                              <span>50%</span>
+                              <span>75%</span>
+                              <span className="text-white/50 font-bold">100% GOAL</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Price Alerts subpanel */}
+                      {showPriceAlertsPanel && (
+                        <div id="price-alerts-subpanel" className="mb-4 p-4 bg-[#0d0d11]/90 border border-indigo-500/15 rounded-lg text-xs font-mono animate-fade-in shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+                          
+                          {/* Banner & Title */}
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-3">
+                            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5 text-ellipsis overflow-hidden whitespace-nowrap">
+                              <Bell className="w-3.5 h-3.5 animate-pulse text-indigo-400 shrink-0" />
+                              Institution Price alerts
+                            </span>
+                            
+                            {/* Browser Notification Switcher Status */}
+                            {typeof Notification !== 'undefined' ? (
+                              <button
+                                onClick={requestNotificationAuth}
+                                className={`text-[8px] uppercase tracking-wide px-2 py-0.5 rounded border font-bold transition-all shrink-0 ${
+                                  notificationPermissionGranted
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                    : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                                }`}
+                                title={notificationPermissionGranted ? "Browser Notifications active" : "Enable native browser notification prompts"}
+                              >
+                                {notificationPermissionGranted ? '● Notifications On' : '⚡ Enable Notifications'}
+                              </button>
+                            ) : null}
+                          </div>
+
+                          {/* Quick Alert Creator Form */}
+                          <div className="bg-black/35 p-3 rounded-md border border-white/5 mb-3.5">
+                            <h4 className="text-[9px] font-bold text-white/50 uppercase tracking-widest mb-2">Create New Price alert</h4>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                              {/* Symbol Selection */}
+                              <div className="sm:col-span-4">
+                                <label className="block text-[8px] text-white/35 uppercase mb-1">Asset/Symbol</label>
+                                <select
+                                  value={newAlertSymbol}
+                                  onChange={(e) => {
+                                    const sym = e.target.value as MarketSymbol;
+                                    setNewAlertSymbol(sym);
+                                    // Prepopulate with latest mock/stats price
+                                    const currentPrice = tickerStats[sym]?.price || 0;
+                                    setNewAlertPrice(currentPrice > 0 ? currentPrice.toString() : '');
+                                  }}
+                                  className="w-full bg-[#121217] border border-white/10 rounded px-2 py-1.5 text-[10.5px] font-bold text-white outline-none focus:border-indigo-500/50"
+                                >
+                                  {Object.keys(tickerStats).map((sym) => (
+                                    <option key={sym} value={sym}>
+                                      {sym}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Alert Condition Selector */}
+                              <div className="sm:col-span-3">
+                                <label className="block text-[8px] text-white/35 uppercase mb-1">Condition</label>
+                                <select
+                                  value={newAlertCondition}
+                                  onChange={(e) => setNewAlertCondition(e.target.value as 'ABOVE' | 'BELOW')}
+                                  className="w-full bg-[#121217] border border-white/10 rounded px-2 py-1.5 text-[10.5px] text-white font-bold outline-none focus:border-indigo-500/50"
+                                >
+                                  <option value="ABOVE">≥ Crossing Up</option>
+                                  <option value="BELOW">≤ Crossing Down</option>
+                                </select>
+                              </div>
+
+                              {/* Target Price Value Input */}
+                              <div className="sm:col-span-3">
+                                <label className="block text-[8px] text-white/35 uppercase mb-1">
+                                  Target Price
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. 1.08500"
+                                  value={newAlertPrice}
+                                  onChange={(e) => setNewAlertPrice(e.target.value)}
+                                  className="w-full bg-[#121217] border border-white/10 rounded px-2 py-1.5 text-[10.5px] text-white font-bold outline-none focus:border-indigo-500/50"
+                                />
+                              </div>
+
+                              {/* Trigger Add Action Button */}
+                              <div className="sm:col-span-2 flex items-end">
+                                <button
+                                  onClick={() => {
+                                    const parsedPrice = parseFloat(newAlertPrice);
+                                    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+                                      // Log alert format error
+                                      const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
+                                      setMqlConsoleLogs(prev => [...prev, `${timeStr}.883 [ALERT ERROR] Invalid price format specified.`].slice(-150));
+                                      return;
+                                    }
+
+                                    // Add alert
+                                    const newAlert: PriceAlert = {
+                                      id: 'alert_' + Math.random().toString(36).substring(2, 9),
+                                      symbol: newAlertSymbol,
+                                      targetPrice: parsedPrice,
+                                      condition: newAlertCondition,
+                                      isTriggered: false,
+                                      createdAt: new Date().toLocaleTimeString()
+                                    };
+
+                                    setPriceAlerts(prev => [newAlert, ...prev]);
+                                    
+                                    // Log to terminal console
+                                    const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
+                                    setMqlConsoleLogs(prev => [
+                                      ...prev,
+                                      `${timeStr}.115 [ALERT REGISTERED] Created target level alert for ${newAlertSymbol} at price ${parsedPrice.toLocaleString()} when crossing ${newAlertCondition}`
+                                    ].slice(-150));
+
+                                    // Clean up price state
+                                    setNewAlertPrice('');
+                                  }}
+                                  className="w-full bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 font-extrabold py-1.5 rounded border border-indigo-500/35 transition-all text-[11px] flex items-center justify-center gap-1 cursor-pointer select-none"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>ADD</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* List of active alerts */}
+                          <div>
+                            <div className="flex items-center justify-between text-[8px] text-white/35 uppercase tracking-wider mb-2 font-bold select-none">
+                              <span>Configured Price Targets ({priceAlerts.length})</span>
+                              {priceAlerts.length > 0 && (
+                                <button
+                                  onClick={() => {
+                                    setPriceAlerts([]);
+                                    const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
+                                    setMqlConsoleLogs(prev => [...prev, `${timeStr}.050 [ALERTS PURGED] All active price monitors cleared.`].slice(-150));
+                                  }}
+                                  className="hover:text-rose-455 transition-colors uppercase cursor-pointer"
+                                >
+                                  Purge Alerts
+                                </button>
+                              )}
+                            </div>
+
+                            {priceAlerts.length === 0 ? (
+                              <div className="text-center py-4 bg-white/[0.02] border border-dashed border-white/5 rounded text-white/30 text-[10px]">
+                                No active alerts configured. Use the creator above to track targets.
+                              </div>
+                            ) : (
+                              <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1 select-none scrollbar-thin">
+                                {priceAlerts.map((alert) => (
+                                  <div
+                                    key={alert.id}
+                                    className={`p-2.5 rounded border flex items-center justify-between transition-all ${
+                                      alert.isTriggered
+                                        ? 'bg-emerald-500/5 border-emerald-500/25 opacity-75'
+                                        : 'bg-[#101014] border-white/5 hover:border-white/10'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      {/* Blink Indicator Status icon */}
+                                      <span className="relative flex h-2 w-2">
+                                        {alert.isTriggered ? (
+                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                                        ) : (
+                                          <>
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                                          </>
+                                        )}
+                                      </span>
+
+                                      <div className="flex flex-col">
+                                        <div className="flex items-center gap-1.5 font-bold text-white text-[10.5px]">
+                                          <span>{alert.symbol}</span>
+                                          <span className="text-[8.5px] font-medium text-white/45 uppercase">
+                                            {alert.condition === 'ABOVE' ? '≥ Crossing Up' : '≤ Crossing Down'}
+                                          </span>
+                                        </div>
+                                        <div className="text-[8px] text-white/35 mt-0.5">
+                                          Target: <strong className="text-indigo-400 font-bold">{alert.targetPrice}</strong>
+                                          {alert.isTriggered && alert.triggeredAt && (
+                                            <span className="text-emerald-400 font-bold ml-1.5">
+                                              Triggered at {alert.triggeredAt}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Action items deletion */}
+                                    <button
+                                      onClick={() => {
+                                        setPriceAlerts(prev => prev.filter(a => a.id !== alert.id));
+                                        const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
+                                        setMqlConsoleLogs(prev => [...prev, `${timeStr}.444 [ALERT DELETED] Cleared monitor ID ${alert.id}.`].slice(-150));
+                                      }}
+                                      className="p-1 hover:bg-rose-500/10 text-white/20 hover:text-rose-455 rounded transition-colors cursor-pointer shrink-0"
+                                      title="Delete Price Alert"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          
+                        </div>
+                      )}
+
+                      {/* Health Status Summary Metrics Banner Line */}
+                      {systemDashboardSummary.activeTradesCount > 0 && (
+                        <div className="mb-4 py-2 px-3 bg-[#0a0a0c] border border-white/10 rounded flex items-center justify-between text-[10px] font-mono select-none animate-fadeIn">
+                          <span className="text-white/35 uppercase tracking-wider font-bold">Health Status Summary:</span>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5" title="Active standard exposure without immediate safety/target breaches">
+                              <span className="w-2 h-2 rounded-full bg-indigo-400/80" />
+                              <span className="text-white/40">Active:</span>
+                              <span className="font-bold text-indigo-400">{healthStats.active}</span>
+                            </div>
+                            <span className="text-white/10">|</span>
+                            <div className="flex items-center gap-1.5" title="Critical Drawdown: close to stop-loss threshold (SL Proximity >= 70%)">
+                              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                              <span className="text-white/40">At Risk:</span>
+                              <span className="font-bold text-rose-400">{healthStats.atRisk}</span>
+                            </div>
+                            <span className="text-white/10">|</span>
+                            <div className="flex items-center gap-1.5" title="Healthy positive profit margin (> 0 PnL)">
+                              <span className="w-2 h-2 rounded-full bg-teal-400" />
+                              <span className="text-white/40">Profitable:</span>
+                              <span className="font-bold text-teal-400">{healthStats.profitable}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {sortedActivePositions.length === 0 ? (
                         <div className="py-6 flex flex-col items-center justify-center text-center space-y-4">
                           <div className="relative w-48 h-48 sm:w-52 sm:h-52 rounded-xl overflow-hidden border border-white/10 bg-black/60 shadow-lg shadow-indigo-500/5 group">
@@ -1606,7 +2442,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                           )}
                         </div>
                       ) : (
-                        <div className="space-y-3 relative">
+                        <div className={`${isCompactPositions ? 'space-y-1.5' : 'space-y-3'} relative`}>
                           <AnimatePresence initial={false}>
                             {sortedActivePositions.map(trade => (
                               <TradePositionRowItem
@@ -1616,6 +2452,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                                 onToggleExpand={toggleTradeExpand}
                                 onQuickClose={handleQuickCloseTrade}
                                 formatOpenDuration={formatOpenDuration}
+                                isCompact={isCompactPositions}
                               />
                             ))}
                           </AnimatePresence>
@@ -1903,10 +2740,85 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
                 </div>
 
+                {/* Quick-action Filter Bar to Declutter Workspace */}
+                <div id="research-quick-filters" className="bg-[#0c0c0e]/95 border border-white/5 rounded-lg p-3 md:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono select-none">
+                  <div className="flex items-center space-x-2">
+                    <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                    <div>
+                      <span className="text-xs font-bold uppercase text-white tracking-wider block">Workspace Filtration</span>
+                      <span className="text-[9px] text-white/30 font-sans block mt-0.5">Toggle visibility of specific intelligence widgets to optimize workspace layout</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Sentiment Gauge Toggle */}
+                    <button
+                      id="toggle-sentiment-gauge"
+                      onClick={() => setShowSentimentGauge(!showSentimentGauge)}
+                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        showSentimentGauge 
+                          ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300' 
+                          : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${showSentimentGauge ? 'bg-indigo-400' : 'bg-transparent border border-white/20'}`} />
+                      SENTIMENT GAUGE
+                    </button>
+
+                    {/* Market Sentiment Heatmap Toggle */}
+                    <button
+                      id="toggle-market-sentiment-heatmap"
+                      onClick={() => setShowMarketSentimentHeatmap(!showMarketSentimentHeatmap)}
+                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        showMarketSentimentHeatmap 
+                          ? 'bg-amber-500/10 border-amber-500/25 text-amber-300' 
+                          : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${showMarketSentimentHeatmap ? 'bg-amber-400' : 'bg-transparent border border-white/20'}`} />
+                      SENTIMENT HEATMAP
+                    </button>
+
+                    {/* Sweep Alert Toggle */}
+                    <button
+                      id="toggle-sweep-alerts"
+                      onClick={() => setShowSweepAlert(!showSweepAlert)}
+                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        showSweepAlert 
+                          ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' 
+                          : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${showSweepAlert ? 'bg-emerald-400' : 'bg-transparent border border-white/20'}`} />
+                      SWEEP ALERTS
+                    </button>
+
+                    {/* Heatmap Toggle */}
+                    <button
+                      id="toggle-correlation-heatmap"
+                      onClick={() => setShowHeatmap(!showHeatmap)}
+                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        showHeatmap 
+                          ? 'bg-rose-500/10 border-rose-500/25 text-rose-300' 
+                          : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${showHeatmap ? 'bg-rose-400' : 'bg-transparent border border-white/20'}`} />
+                      CORRELATION HEATMAP
+                    </button>
+                  </div>
+                </div>
+
+                <InstitutionalNewsTicker />
+
+                {showSentimentGauge && <InstitutionalSentimentGauge />}
+                {showMarketSentimentHeatmap && <MarketSentimentHeatmap />}
+                {showSweepAlert && <InstitutionalSweepAlert />}
+                {showHeatmap && <CorrelationHeatmap trades={trades} />}
                 <StrategyPerformanceChart />
                 <BacktestSimulator selectedSymbol={symbol} onSymbolChange={(sym) => setSymbol(sym)} />
                 <PerformanceTracker trades={trades} onTradeUpdated={fetchMarketData} />
-                <TradeJournal trades={trades} onTradeUpdated={fetchMarketData} />
+                <TradeJournal trades={trades} onTradeUpdated={fetchMarketData} onReplayTrade={handleReplayClosedTrade} />
               </div>
             ) : (
               <div id="settings-direct-control-workspace" className="animate-fadeIn">
@@ -1919,79 +2831,180 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       </main>
 
       {/* Footer Info strip */}
-      <footer className="border-t border-white/10 bg-[#080808] py-6 mt-10">
-        <div className="max-w-[1400px] mx-auto px-3 md:px-6 flex flex-col lg:flex-row items-center justify-between gap-4 font-mono text-[11px] text-white/30">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center space-x-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>Fiduciary Account Capital Protected by Fixed fractional (Max 1% SL invalidate) rules</span>
-            </div>
+      <footer className="border-t border-white/10 bg-[#080808] pt-10 pb-8 mt-12 font-mono">
+        <div className="max-w-[1400px] mx-auto px-4 md:px-8">
+          
+          {/* Main Footer Block Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-8 border-b border-white/5 text-[11px] text-white/30">
             
-            {/* Live Subtle Latency Monitor */}
-            <div className="flex flex-wrap items-center gap-2 lg:gap-3.5 lg:border-l lg:border-white/10 lg:pl-4">
-              <div className="flex items-center space-x-2">
-                {mt5Ping > 45 ? (
-                  <Wifi className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
-                ) : (
-                  <Wifi className="w-3.5 h-3.5 text-emerald-400 opacity-70" />
-                )}
-                
-                <span className="text-white/40">MT5 Bridge Ping:</span>
-                <span id="mt5-ping-value" className={`font-bold font-mono ${isTestingPing ? 'text-indigo-400 animate-pulse' : mt5Ping > 45 ? 'text-rose-400 font-extrabold animate-pulse' : 'text-emerald-400'}`}>
-                  {isTestingPing ? 'pinging...' : `${mt5Ping}ms`}
+            {/* Column 1: App Branding & Status */}
+            <div className="md:col-span-4 space-y-3.5">
+              <div className="flex items-center space-x-2.5">
+                <MTXquantLogo size={24} />
+                <span className="text-white text-xs font-black uppercase tracking-[0.15em] select-none">
+                  MTXQUANT<span className="text-indigo-400 font-extrabold">.AI</span>
                 </span>
               </div>
-
-              {/* Glowing Indicator Dot */}
-              <div className="relative flex h-2 w-2">
-                {mt5Ping > 45 ? (
-                  <>
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                  </>
-                ) : (
-                  <>
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </>
-                )}
+              <p className="text-[10px] text-white/30 leading-relaxed max-w-sm select-none">
+                Next-generation institutional-grade quantitative analysis and trade execution terminal. Integrates algorithmic displacement modeling with risk insulation.
+              </p>
+              <div className="flex items-center space-x-2 bg-emerald-500/5 border border-emerald-500/10 px-2.5 py-1 rounded w-fit text-[9.5px] select-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-emerald-400 font-bold uppercase tracking-wider">SECURE NODE STATUS: ALIGNED</span>
               </div>
+            </div>
 
-              {/* Warning Pill if Threshold Exceeded */}
-              {mt5Ping > 45 && (
-                <div id="latency-threshold-warning" className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 text-[9px] text-rose-300 font-bold tracking-tight animate-pulse uppercase">
-                  <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
-                  <span>Latency warning threshold exceeded (Limit: 45ms)</span>
+            {/* Column 2: Tech Documentation Hub ('docs' tab) */}
+            <div className="md:col-span-4 space-y-3 text-left">
+              <h4 className="text-[10.5px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5 select-none">
+                <BookOpen className="w-3.5 h-3.5" /> SYSTEM DOCUMENTATION
+              </h4>
+              <p className="text-[9.5px] text-white/30 leading-relaxed select-none">
+                Unlock deeper mechanical heuristics of spatial OB/FVG alignments and MT5 execution configurations.
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <button 
+                  onClick={() => openBureaucracyTab('docs')} 
+                  className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+                >
+                  &raquo; Strategy Guide
+                </button>
+                <button 
+                  onClick={() => openBureaucracyTab('faq')} 
+                  className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+                >
+                  &raquo; Interactive FAQ
+                </button>
+                <button 
+                  onClick={() => openBureaucracyTab('docs')} 
+                  className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+                >
+                  &raquo; Slippage Shield
+                </button>
+                <button 
+                  onClick={() => openBureaucracyTab('docs')} 
+                  className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+                >
+                  &raquo; MT5 Setup
+                </button>
+              </div>
+            </div>
+
+            {/* Column 3: Regulatory Compliance Hub ('compliance' tab) */}
+            <div className="md:col-span-4 space-y-3 text-left">
+              <h4 className="text-[10.5px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 select-none">
+                <Scale className="w-3.5 h-3.5" /> REGULATORY COMPLIANCE
+              </h4>
+              <p className="text-[9.5px] text-white/30 leading-relaxed select-none">
+                Institutional risk controls operating under MiFID II and CFTC sovereign data protection frameworks.
+              </p>
+              <div className="flex flex-wrap gap-x-3 gap-y-2 text-[10px]">
+                <button 
+                  onClick={() => openBureaucracyTab('compliance')} 
+                  className="hover:text-emerald-300 text-white/50 transition-colors cursor-pointer flex items-center gap-1 font-bold hover:underline"
+                >
+                  &raquo; MiFID Compliance
+                </button>
+                <button 
+                  onClick={() => openBureaucracyTab('risk')} 
+                  className="hover:text-amber-400 text-white/50 transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+                >
+                  &raquo; Risk Disclosure
+                </button>
+                <button 
+                  onClick={() => openBureaucracyTab('privacy')} 
+                  className="hover:text-teal-400 text-white/50 transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+                >
+                  &raquo; Privacy Charter
+                </button>
+                <button 
+                  onClick={() => openBureaucracyTab('terms')} 
+                  className="hover:text-blue-400 text-white/50 transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+                >
+                  &raquo; Terms & Mandates
+                </button>
+                <button 
+                  onClick={() => openBureaucracyTab('cookies')} 
+                  className="hover:text-emerald-300 text-white/50 transition-colors cursor-pointer flex items-center gap-1 hover:underline"
+                >
+                  &raquo; Cookie Policy
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Bottom Bar: Fiduciary safeguard & Ping Speed + copyright */}
+          <div className="pt-6 flex flex-col lg:flex-row items-center justify-between gap-4 text-[10px] text-white/30">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center space-x-2 select-none">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                <span>Fiduciary Account Capital Protected by Fixed fractional (Max 1% SL invalidate) rules</span>
+              </div>
+              
+              {/* Latency Monitor */}
+              <div className="flex flex-wrap items-center gap-2 lg:gap-3.5 lg:border-l lg:border-white/10 lg:pl-4">
+                <div className="flex items-center space-x-2 select-none">
+                  {mt5Ping > 45 ? (
+                    <Wifi className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                  ) : (
+                    <Wifi className="w-3.5 h-3.5 text-emerald-400 opacity-70" />
+                  )}
+                  <span className="text-white/40">MT5 Bridge Ping:</span>
+                  <span id="mt5-ping-value" className={`font-bold ${isTestingPing ? 'text-indigo-400 animate-pulse' : mt5Ping > 45 ? 'text-rose-400 font-extrabold animate-pulse' : 'text-emerald-400'}`}>
+                    {isTestingPing ? 'pinging...' : `${mt5Ping}ms`}
+                  </span>
                 </div>
-              )}
 
-              {/* Re-test speed button */}
-              <button
-                onClick={handleTestPingSpeed}
-                disabled={isTestingPing}
-                className="hover:text-white transition-colors duration-200 uppercase text-[9px] tracking-wider border border-white/15 bg-white/[0.02] px-1.5 py-0.5 rounded cursor-pointer disabled:opacity-50"
-                title="Conduct instantaneous packet Round-Trip speed evaluation test"
-              >
-                Test Speed
-              </button>
+                <div className="relative flex h-2 w-2">
+                  {mt5Ping > 45 ? (
+                    <>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </>
+                  )}
+                </div>
 
-              {/* Mock high-latency toggle for audit demonstration */}
-              <button
-                onClick={() => setIsSimulatingSpike(!isSimulatingSpike)}
-                className={`transition-colors duration-200 uppercase text-[9px] tracking-wider border px-1.5 py-0.5 rounded cursor-pointer ${
-                  isSimulatingSpike 
-                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-300 hover:text-rose-200' 
-                    : 'border-white/10 bg-white/[0.01] hover:text-white'
-                }`}
-                title="Mock system packet delay spike to verify safeguard warnings"
-              >
-                {isSimulatingSpike ? 'Stop Spike' : 'Mock Spike'}
-              </button>
+                {mt5Ping > 45 && (
+                  <div className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 text-[9px] text-rose-300 font-bold tracking-tight animate-pulse uppercase">
+                    <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
+                    <span>Latency warning threshold exceeded (Limit: 45ms)</span>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleTestPingSpeed}
+                  disabled={isTestingPing}
+                  className="hover:text-white transition-colors duration-200 uppercase text-[9px] tracking-wider border border-white/15 bg-white/[0.02] px-1.5 py-0.5 rounded cursor-pointer disabled:opacity-50"
+                  title="Conduct instantaneous packet Round-Trip speed evaluation test"
+                >
+                  Test Speed
+                </button>
+
+                <button
+                  onClick={() => setIsSimulatingSpike(!isSimulatingSpike)}
+                  className={`transition-colors duration-200 uppercase text-[9px] tracking-wider border px-1.5 py-0.5 rounded cursor-pointer ${
+                    isSimulatingSpike 
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-300 hover:text-rose-200' 
+                      : 'border-white/10 bg-white/[0.01] hover:text-white'
+                  }`}
+                  title="Mock system packet delay spike to verify safeguard warnings"
+                >
+                  {isSimulatingSpike ? 'Stop Spike' : 'Mock Spike'}
+                </button>
+              </div>
+            </div>
+
+            <div className="text-center lg:text-right select-none text-[9.5px]">
+              <span>MTXquant Quantitative Terminal &copy; 2026. Aligned with Elegant Dark guidelines.</span>
             </div>
           </div>
-          <div>
-            <span>Apex Quantitative Terminal &copy; 2026. Aligned with Elegant Dark guidelines.</span>
-          </div>
+
         </div>
       </footer>
       </div>
@@ -2033,7 +3046,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 </span>
               )}
             </div>
-            <span className="text-xs font-mono font-bold tracking-tight uppercase">AI Advisor</span>
+            <span className="text-xs font-mono font-bold tracking-tight uppercase">MTX AI</span>
           </button>
         </div>
       )}
@@ -2351,11 +3364,9 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-white/5 pb-4">
                   <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded bg-indigo-600 flex items-center justify-center font-black text-white text-sm shadow-[0_0_10px_#4f46e5]">
-                      Ω
-                    </div>
+                    <MTXquantLogo size={32} />
                     <span className="text-xs font-bold uppercase tracking-wider text-white">
-                      APEX QUANT<span className="text-indigo-400 font-extrabold">.AI</span>
+                      MTXQUANT<span className="text-indigo-400 font-extrabold">.AI</span>
                     </span>
                   </div>
                   <button
@@ -2414,13 +3425,20 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   </span>
                 </div>
                 <div className="text-[8px] font-mono text-white/20">
-                  APEX GATEWAY S9 &middot; BUILD 4022
+                  MTXQUANT GATEWAY S9 &middot; BUILD 4108
                 </div>
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
+
+      {/* Bureaucracy & Legal Compliance Dialog */}
+      <BureaucracyModal 
+        isOpen={isBureaucracyModalOpen} 
+        onClose={() => setIsBureaucracyModalOpen(false)} 
+        initialTab={bureaucracyActiveTab}
+      />
 
     </div>
   );

@@ -599,8 +599,12 @@ export default function CorrelationHeatmap({ trades }: CorrelationHeatmapProps) 
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         const data = payload[0].payload;
+                        let borderStyling = 'border-indigo-500/50 border-l-3 border-l-indigo-500';
+                        if (data.status === 'CRITICAL') borderStyling = 'border-rose-500/50 border-l-3 border-l-rose-500';
+                        else if (data.status === 'WARNING') borderStyling = 'border-amber-500/50 border-l-3 border-l-amber-500';
+                        else if (data.status === 'HEDGED') borderStyling = 'border-emerald-500/50 border-l-3 border-l-emerald-500';
                         return (
-                          <div className="bg-black/95 border border-white/10 p-2.5 rounded shadow-xl text-[10px] font-mono">
+                          <div className={`bg-[#0c0c0e] border ${borderStyling} p-2.5 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.95)] text-[10px] font-mono`}>
                             <span className="text-white font-bold block border-b border-white/5 pb-1 select-none">{data.name}</span>
                             <div className="mt-1 space-y-0.5 text-white/70">
                               <p>Correlation Coeff: <span className="font-bold text-indigo-400">{data.r >= 0 ? `+${data.r}` : data.r}</span></p>

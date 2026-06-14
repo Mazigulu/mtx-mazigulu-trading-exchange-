@@ -277,7 +277,7 @@ export default function TradeExplainability({
           </div>
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-white font-mono flex items-center gap-1.5">
-              <span>Apex Core Signal Insights & Explainability</span>
+              <span>MTXquant Core Signal Insights & Explainability</span>
             </h3>
             <p className="text-[10px] text-white/40 mt-0.5">Demystifying black-box models. Fully auditable institutional reasoning matrix.</p>
           </div>
@@ -325,7 +325,7 @@ export default function TradeExplainability({
 
         {/* Signal state indicator */}
         <div className="text-right">
-          <span className="text-[9.5px] uppercase tracking-wider block text-white/30 font-bold font-mono">Core Apex Recommendation</span>
+          <span className="text-[9.5px] uppercase tracking-wider block text-white/30 font-bold font-mono">Core MTX Recommendation</span>
           <span className={`text-xs font-mono font-black uppercase ${
             signalInsights.action === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
           }`}>
@@ -385,7 +385,7 @@ export default function TradeExplainability({
                   <span className="text-[10px] font-black uppercase tracking-wider">Bullish Vector Confirmed</span>
                 </div>
                 <p className="text-[10px] text-white/60 leading-normal font-sans font-medium">
-                  Apex models predict price expansion towards major premium liquidity pools. Upward movement conforms to prevailing structure.
+                  MTXquant models predict price expansion towards major premium liquidity pools. Upward movement conforms to prevailing structure.
                 </p>
                 <div className="bg-emerald-500/5 border border-emerald-500/10 p-2 rounded text-[9px] text-emerald-300 flex justify-between items-center">
                   <span>Target Zone:</span>
@@ -399,7 +399,7 @@ export default function TradeExplainability({
                   <span className="text-[10px] font-black uppercase tracking-wider">Bearish Vector Confirmed</span>
                 </div>
                 <p className="text-[10px] text-white/60 leading-normal font-sans font-medium">
-                  Apex models predict price displacement targeting discount stop-loss levels. Downward movement aligns with structural supply.
+                  MTXquant models predict price displacement targeting discount stop-loss levels. Downward movement aligns with structural supply.
                 </p>
                 <div className="bg-rose-500/5 border border-rose-500/10 p-2 rounded text-[9px] text-rose-300 flex justify-between items-center">
                   <span>Target Zone:</span>
@@ -413,7 +413,7 @@ export default function TradeExplainability({
                   <span className="text-[10px] font-black uppercase tracking-wider text-purple-300">No Clear Signal (Sideways)</span>
                 </div>
                 <p className="text-[10px] text-white/60 leading-normal font-sans font-medium">
-                  Apex models identify range-bound consolidation with high consolidation entropy. Refrain from active position loading.
+                  MTXquant models identify range-bound consolidation with high consolidation entropy. Refrain from active position loading.
                 </p>
                 <div className="bg-purple-500/5 border border-purple-500/10 p-2 rounded text-[9px] text-purple-300 flex justify-between items-center">
                   <span>System Bias:</span>

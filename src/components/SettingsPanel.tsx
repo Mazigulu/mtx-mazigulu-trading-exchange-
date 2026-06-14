@@ -26,6 +26,7 @@ import {
   Target
 } from 'lucide-react';
 import Mt5BridgeGuide from './Mt5BridgeGuide';
+import QuickKeysPanel from './QuickKeysPanel';
 
 interface ConnectionState {
   brokerServer: string;
@@ -640,7 +641,7 @@ export default function SettingsPanel() {
           <div className="bg-[#0c0c0e] border border-white/5 p-4 rounded-lg italic text-[10.5px] font-mono leading-relaxed text-slate-300 space-y-2">
             <h4 className="font-bold text-indigo-400 not-italic uppercase font-mono text-[9px] tracking-widest flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              Apex Guard Security Protocol
+              MTXquant Guard Security Protocol
             </h4>
             <p>
               Your terminal communicates directly with the Python broker-bridge interface via bidirectional SSL webhooks. All execution requests are encrypted using military-grade AES-GCM and invalidated immediately upon transmission. No private keys are ever stored on cloud servers.
@@ -650,6 +651,9 @@ export default function SettingsPanel() {
         </div>
 
       </div>
+
+      {/* Hotkeys & Quick Keys Configuration Panel */}
+      <QuickKeysPanel />
 
       {/* Embedded direct developer MT5 Bridge reference guidelines */}
       <div className="bg-[#0a0a0b] border border-white/5 rounded-lg p-5">

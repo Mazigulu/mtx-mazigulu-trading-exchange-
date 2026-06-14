@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { MarketSymbol, MarketMetrics } from '../types';
-import { Bot, User, Send, Sparkles, AlertCircle, HelpCircle, ArrowRight, X } from 'lucide-react';
+import { Bot, User, Send, Sparkles, AlertCircle, HelpCircle, ArrowRight, X, Radio, ShieldAlert } from 'lucide-react';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -24,6 +24,130 @@ export default function AdvisorChat({ symbol, metrics, onClose, messages, setMes
   const [inputMsg, setInputMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const [isObserveMode, setIsObserveMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('apex_advisor_observe_mode');
+      return saved === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+
+  const toggleObserveMode = () => {
+    const nextVal = !isObserveMode;
+    setIsObserveMode(nextVal);
+    try {
+      localStorage.setItem('apex_advisor_observe_mode', String(nextVal));
+    } catch (_) {}
+
+    // Push immediate status feedback directly as assistance message
+    if (nextVal) {
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: `🛡️ **Wait & Observe Mode Engaged**: Silent diagnostic scanning initialized. All discretionary trade signals (FVG mitigations, EMA pullbacks, RSI divergence trackers) are **suppressed** to screen out noise. MTX AI is focusing exclusively on high-dispersion **Institutional Liquidity Sweeps**.`
+        }
+      ]);
+    } else {
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: `📡 **Wait & Observe Mode Decycled**: Standard dual-channel sweeps and discretionary trade alert feeds are now restored.`
+        }
+      ]);
+    }
+  };
+
+  // Monitor background algorithmic news, trade alerts, and sweep signals
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const simulatedAlerts = [
+        {
+          isCritical: false,
+          isSweep: false,
+          text: `⚡ **ALGORITHMIC TRADE ALERT [DISCRETIONARY]**\n- **Asset**: \`${symbol}\`\n- **Signal**: 5m FVG Structural Mitigation Retest\n- **Severity**: LOW\n- **Action**: Monitor local candlestick closes.`
+        },
+        {
+          isCritical: false,
+          isSweep: false,
+          text: `⚡ **EMA REBOUND ALERT [DISCRETIONARY]**\n- **Asset**: \`${symbol}\`\n- **Signal**: 15m 50-EMA Pullback alignment\n- **Severity**: LOW\n- **Action**: Look for discretionary reaction trigger.`
+        },
+        {
+          isCritical: true,
+          isSweep: true,
+          text: `🔥 **INSTITUTIONAL SWEEP ALERT [CRITICAL]**\n- **Asset**: \`${symbol}\`\n- **Signal**: Daily Session Swing Low Sweep (SSL Captured)\n- **Severity**: CRITICAL (Institutional Sweep)\n- **L2 Vol**: 1,640 Lots\n- **Action**: Watch for high-displacement impulse to validate bullish order block.`
+        },
+        {
+          isCritical: false,
+          isSweep: false,
+          text: `⚡ **DIVERGENCE THRESHOLD ALERT [DISCRETIONARY]**\n- **Asset**: \`GOLD/USD\`\n- **Signal**: H4 Overbought RSI Exhaustion\n- **Severity**: MEDIUM\n- **Action**: Moderate potential for pullback scale exhaustion.`
+        },
+        {
+          isCritical: true,
+          isSweep: true,
+          text: `🔥 **INSTITUTIONAL SWEEP ALERT [CRITICAL]**\n- **Asset**: \`${symbol}\`\n- **Signal**: London Session Swing High Sweep (BSL Captured)\n- **Severity**: CRITICAL (Institutional Sweep)\n- **L2 Vol**: 1,280 Lots\n- **Action**: Retest point of origin. Watch for low-timeframe Market Structure Shift (MSS).`
+        },
+        {
+          isCritical: true,
+          isSweep: true,
+          text: `🔥 **INSTITUTIONAL SWEEP ALERT [CRITICAL]**\n- **Asset**: \`BTC/USDT\`\n- **Signal**: Retail Double Bottom Hunt completed (SSL Sweep)\n- **Severity**: CRITICAL (Institutional Sweep)\n- **L2 Vol**: 2,340 Lots\n- **Action**: Clean systemic capture of retail stop losses. Ready for impulse.`
+        }
+      ];
+
+      const alert = simulatedAlerts[Math.floor(Math.random() * simulatedAlerts.length)];
+
+      // Check current observe mode state filters
+      if (isObserveMode) {
+        if (!alert.isCritical || !alert.isSweep) {
+          console.log(`[MTX AI Advisor] Suppressed non-critical alert in Wait & Observe Mode.`);
+          return; // Suppress it completely
+        }
+      }
+
+      // Prepend to messages array
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: alert.text
+        }
+      ]);
+
+      // Sound retro advisor alerts
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          if (alert.isCritical) {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(540, ctx.currentTime);
+            osc.frequency.linearRampToValueAtTime(780, ctx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.04, ctx.currentTime);
+          } else {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(380, ctx.currentTime);
+            osc.frequency.linearRampToValueAtTime(420, ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.02, ctx.currentTime);
+          }
+          
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.25);
+        }
+      } catch (_) {}
+
+    }, 32000); // Poll and push every 32 seconds to avoid excessive flood
+
+    return () => clearInterval(interval);
+  }, [isObserveMode, symbol]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -149,7 +273,7 @@ export default function AdvisorChat({ symbol, metrics, onClose, messages, setMes
               <Bot className="w-5 h-5 text-indigo-400" />
             </div>
             <div>
-              <h4 className="font-semibold text-white text-sm md:text-base font-sans">Institutional Advisor Chat</h4>
+              <h4 className="font-semibold text-white text-sm md:text-base font-sans">MTX AI Chat</h4>
               <p className="text-xs text-white/40 font-mono uppercase tracking-tight">Trading Bible & ICT Guidance</p>
             </div>
           </div>
@@ -163,13 +287,47 @@ export default function AdvisorChat({ symbol, metrics, onClose, messages, setMes
                 id="close-advisor-chat-btn"
                 onClick={onClose}
                 className="p-1 px-1.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded text-white/50 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
-                title="Minimize Adviser Chat"
+                title="Minimize MTX AI Chat"
               >
                 <X className="w-3 h-3 text-white" />
               </button>
             )}
           </div>
         </div>
+
+        {/* Wait & Observe Mode Toggle Panel */}
+        <div id="observe-mode-toggle-panel" className="flex items-center justify-between mt-3 bg-[#0c0c0e]/95 border border-white/5 rounded px-2.5 py-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+          <div className="flex items-center space-x-2">
+            <Radio className={`w-3.5 h-3.5 ${isObserveMode ? 'text-amber-400 animate-pulse' : 'text-white/30'}`} />
+            <div>
+              <span className="text-[10px] text-white/90 font-mono font-bold block leading-tight">Wait & Observe Mode</span>
+              <span className="text-[8px] text-white/40 font-sans block">Focus only on Institutional Sweeps</span>
+            </div>
+          </div>
+          <button
+            id="btn-observe-mode-toggle"
+            onClick={toggleObserveMode}
+            className={`px-2.5 py-0.5 rounded text-[8px] font-mono font-extrabold border transition-all cursor-pointer ${
+              isObserveMode
+                ? 'bg-amber-500/15 border-amber-500/25 text-amber-400 hover:bg-amber-500/25'
+                : 'bg-white/5 border-white/10 text-white/40 hover:text-white/70 hover:bg-white/10'
+            }`}
+            title="Suppress non-critical trade alerts and focus on Sweep signals"
+          >
+            {isObserveMode ? 'ACTIVE' : 'DECYCLED'}
+          </button>
+        </div>
+
+        {/* Observation Mode Active Status Bar */}
+        {isObserveMode && (
+          <div id="observe-mode-status-bar" className="bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 mt-2 rounded flex items-center justify-between text-[9px] font-mono text-amber-400 animate-pulse">
+            <div className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-ping" />
+              <span className="font-extrabold uppercase tracking-wider">Observation Mode Active</span>
+            </div>
+            <span className="text-[7.5px] bg-amber-400/20 px-1 py-0.5 rounded text-amber-300 font-extrabold font-mono tracking-tight">SWE_ONLY</span>
+          </div>
+        )}
 
         {/* Hot Key Queries Area */}
         <div className="flex flex-wrap gap-2 mt-3 border-b border-white/10 pb-3">

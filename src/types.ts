@@ -81,6 +81,7 @@ export interface Trade {
   sentimentRating?: string; // journal sentiment, e.g. '1'-'5', 'HAPPY', 'ANXIOUS', etc.
   screenshot?: string; // base64 encoded data-URL or image URL
   pnlTrajectory?: { minute: number; pnl: number }[];
+  marketNote?: string;
 }
 
 export interface NewsEvent {
@@ -122,5 +123,15 @@ export interface BreachEvent {
   exposure: number;
   pnlAtBreach: number;
   reason: string;
+}
+
+export interface PriceAlert {
+  id: string;
+  symbol: MarketSymbol;
+  targetPrice: number;
+  condition: 'ABOVE' | 'BELOW';
+  isTriggered: boolean;
+  createdAt: string;
+  triggeredAt?: string;
 }
 

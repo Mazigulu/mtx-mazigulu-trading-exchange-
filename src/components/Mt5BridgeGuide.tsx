@@ -109,7 +109,7 @@ def execute_mt5_trade(symbol, side, entry, sl, tp, risk_pct=0.01):
         "tp": tp,
         "deviation": 20,
         "magic": 234567,
-        "comment": "Apex FVG-OB Swing Trade",
+        "comment": "MTXquant FVG-OB Swing Trade",
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_IOC,
     }

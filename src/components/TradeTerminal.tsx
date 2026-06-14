@@ -99,6 +99,19 @@ export default function TradeTerminal({
   const [stopLoss, setStopLoss] = useState(metrics.currentPrice * 0.99);
   const [takeProfit, setTakeProfit] = useState(metrics.currentPrice * 1.03);
   const [reason, setReason] = useState('4H Order Block validation + ICT FVG open convergence matching Higher Timeframe Daily Bias');
+  const [marketNote, setMarketNote] = useState(() => {
+    try {
+      return localStorage.getItem('apex_predefined_market_note') || 'Bullish divergence conforming to larger HTF expansion framework.';
+    } catch {
+      return 'Bullish divergence conforming to larger HTF expansion framework.';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_predefined_market_note', marketNote);
+    } catch (_) {}
+  }, [marketNote]);
 
   const [executing, setExecuting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -203,6 +216,7 @@ export default function TradeTerminal({
           reason,
           confidence,
           confluences: selectedConfluences,
+          marketNote,
         }),
       });
 
@@ -435,7 +449,7 @@ export default function TradeTerminal({
             setIsScanning(false);
             
             // Set access logs success
-            setScanStatusLog("BIOMETRIC ACCESS CONFIRMED. DEPLOYING AI ADVISOR SYSTEM...");
+            setScanStatusLog("BIOMETRIC ACCESS CONFIRMED. DEPLOYING MTX AI SYSTEM...");
             
             // Turn on Live Execution Mode and close modal after a short Delay!
             setTimeout(() => {
@@ -508,14 +522,15 @@ export default function TradeTerminal({
                 stopLoss,
                 takeProfit,
                 size: calculatedPositionSize || 1.0,
-                reason: `⚡ AI Advisor Automated Execution: Triggered on validated signal high-confluence parameters (${confidence}% Confidence level).`,
+                reason: `⚡ MTX AI Automated Execution: Triggered on validated signal high-confluence parameters (${confidence}% Confidence level).`,
                 confidence,
                 confluences: selectedConfluences,
+                marketNote: `${marketNote} (AI Executed Mode)`,
               }),
             });
 
             if (res.ok) {
-              setAiTradeSuccessAlert(`AI Advisor executed ${aiSide} position on ${symbol} at $${entryPrice} for ${calculatedPositionSize} Lots!`);
+              setAiTradeSuccessAlert(`MTX AI executed ${aiSide} position on ${symbol} at $${entryPrice} for ${calculatedPositionSize} Lots!`);
               setTimeout(() => setAiTradeSuccessAlert(null), 8000);
               onTradeExecuted();
             }
@@ -606,7 +621,7 @@ export default function TradeTerminal({
 
           {/* AI Advisor Execution Alert Banner */}
           {aiTradeSuccessAlert && (
-            <div id="ai-trade-success-alert" className="mt-3.5 p-3.5 bg-emerald-950/25 border border-emerald-500/30 rounded text-emerald-300 text-[11px] leading-relaxed flex flex-col space-y-2 relative overflow-hidden">
+            <div id="ai-trade-success-alert" className="mt-3.5 p-3.5 bg-[#071911] border border-emerald-500/50 rounded text-emerald-300 text-[11px] leading-relaxed flex flex-col space-y-2 relative overflow-hidden">
               <div className="flex items-start space-x-2">
                 <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5 animate-spin" />
                 <div className="flex-1">
@@ -763,8 +778,28 @@ export default function TradeTerminal({
                 value={reason}
                 rows={2}
                 onChange={(e) => setReason(e.target.value)}
-                className="w-full bg-[#050505] border border-white/10 text-white/60 px-3 py-2 rounded focus:outline-none focus:border-indigo-500"
+                className="w-full bg-[#050505] border border-white/10 text-white/60 px-3 py-2 rounded focus:outline-none focus:border-indigo-500 font-sans"
               />
+            </div>
+
+            <div className="p-3 bg-indigo-500/[0.02] border border-indigo-500/10 rounded-lg space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-indigo-300 block text-[10.5px] uppercase font-mono font-bold tracking-tight">
+                  Pre-defined Market Note (Entry Reasoning)
+                </label>
+                <span className="text-[8.5px] text-indigo-400/70 font-mono font-semibold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/10">PERSISTENT</span>
+              </div>
+              <textarea
+                id="market-note-textarea"
+                value={marketNote}
+                rows={2}
+                onChange={(e) => setMarketNote(e.target.value)}
+                placeholder="Pre-define reasoning to automatically stamp it on any trades executed via Terminal, Chart, or Ladder..."
+                className="w-full bg-[#050505] border border-indigo-500/20 hover:border-indigo-500/35 focus:border-indigo-500 text-white/90 px-3 py-2 rounded focus:outline-none placeholder-white/25 text-xs tracking-tight font-sans leading-normal focus:ring-1 focus:ring-indigo-500/10"
+              />
+              <span className="text-[8.5px] text-white/30 font-sans leading-normal block">
+                🔒 Stored in local browser safety storage. Stamps automatically onto your live ledger for journal self-auditing.
+              </span>
             </div>
 
             {/* ICT Audit and Confidence Score Block */}
@@ -985,9 +1020,11 @@ export default function TradeTerminal({
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: '#0c0c0c',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '4px',
+                          backgroundColor: '#0c0c0e',
+                          border: '1px solid rgba(99, 102, 241, 0.4)',
+                          borderLeft: '3px solid #6366f1',
+                          borderRadius: '6px',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
                           fontSize: '10px',
                           fontFamily: 'monospace',
                           color: '#fff',
@@ -1063,9 +1100,11 @@ export default function TradeTerminal({
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: '#0c0c0c',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '4px',
+                          backgroundColor: '#0c0c0e',
+                          border: '1px solid rgba(16, 185, 129, 0.4)',
+                          borderLeft: '3px solid #10b981',
+                          borderRadius: '6px',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
                           fontSize: '10px',
                           fontFamily: 'monospace',
                           color: '#fff',

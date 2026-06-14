@@ -139,8 +139,12 @@ export default function CumulativeDepthChart({ symbol, orderBook }: CumulativeDe
       const showBid = isBidRange && typeof data.cumulativeBid === 'number' && data.cumulativeBid > 0;
       const showAsk = !isBidRange && typeof data.cumulativeAsk === 'number' && data.cumulativeAsk > 0;
 
+      const accentBorder = isBidRange 
+        ? 'border-emerald-500/50 border-l-2 border-l-emerald-400' 
+        : 'border-rose-500/50 border-l-2 border-l-rose-400';
+
       return (
-        <div className="bg-[#0b0b0f] border border-white/10 p-3 rounded-lg shadow-2xl font-mono text-[10.5px] text-white/90 space-y-1.5 min-w-[210px]">
+        <div className={`bg-[#0c0c0e] border ${accentBorder} p-3 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.85)] font-mono text-[10.5px] text-white/90 space-y-1.5 min-w-[210px]`}>
           <div className="flex items-center justify-between border-b border-white/5 pb-1 block mb-1">
             <span className="text-white/40 uppercase tracking-widest text-[8.5px]">Price level</span>
             <span className="text-[#a5b4fc] font-black">{data.price.toFixed(priceDecimals)}</span>

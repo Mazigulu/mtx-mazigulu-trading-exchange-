@@ -770,7 +770,7 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
 
   const downloadCSVReport = () => {
     const lines = [
-      'APEX RISK MANAGEMENT - COMPLIANCE REVIEW REPORT',
+      'MTXQUANT RISK MANAGEMENT - COMPLIANCE REVIEW REPORT',
       `Report Generated At,${new Date().toISOString()}`,
       `Risk Threshold Limit,${alertThreshold.toFixed(2)}%`,
       `Current Portfolio Risk,${riskMetrics.portfolioRiskPercent.toFixed(2)}%`,
@@ -819,7 +819,7 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Apex_Risk_Compliance_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `MTXquant_Risk_Compliance_Report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1216,7 +1216,7 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
 
         {/* --- DYNAMIC BREACH ALARM BANNER ZONE --- */}
         {riskMetrics.portfolioRiskPercent > alertThreshold && !dismissedActiveAlert ? (
-          <div className="mt-4 p-4 bg-gradient-to-r from-rose-950/20 via-rose-900/10 to-[#0a0a0b] border border-rose-500/20 rounded-lg animate-pulse relative overflow-hidden">
+          <div className="mt-4 p-4 bg-gradient-to-r from-[#170508] via-[#0d0d10] to-[#0a0a0c] border border-rose-500/50 rounded-lg animate-pulse relative overflow-hidden">
             {/* Linear abstract backdrop highlight */}
             <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-rose-500/5 to-transparent pointer-events-none"></div>
             
@@ -1807,7 +1807,15 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
                         ))}
                       </Pie>
                       <Tooltip 
-                        contentStyle={{ backgroundColor: '#0c0c0d', border: '1px solid rgba(255,255,255,0.1)', fontFamily: 'monospace', fontSize: '10px' }}
+                        contentStyle={{ 
+                          backgroundColor: '#0c0c0e', 
+                          border: '1px solid rgba(99, 102, 241, 0.4)', 
+                          borderLeft: '3px solid #6366f1',
+                          borderRadius: '6px',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
+                          fontFamily: 'monospace', 
+                          fontSize: '10px' 
+                        }}
                         itemStyle={{ color: '#fff' }}
                         formatter={(v: any) => [`$${parseFloat(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 'Exposure']}
                       />
@@ -1909,8 +1917,11 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         const data = payload[0].payload;
+                        const borderStyle = data.isOverLeveraged 
+                          ? 'border-rose-500/50 border-l-3 border-l-rose-500' 
+                          : 'border-emerald-500/50 border-l-3 border-l-emerald-500';
                         return (
-                          <div className="bg-[#0b0b0c] border border-white/10 rounded p-2.5 font-mono text-[10px] space-y-1 shadow-xl">
+                          <div className={`bg-[#0c0c0e] border ${borderStyle} rounded-lg p-2.5 font-mono text-[10px] space-y-1 shadow-[0_12px_32px_rgba(0,0,0,0.95)]`}>
                             <p className="text-white/40 border-b border-white/5 pb-1 font-bold">{data.date}</p>
                             <div className="flex justify-between gap-4">
                               <span className="text-white/60">Leverage:</span>
@@ -1975,7 +1986,7 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-white block">FIDUCIARY CONTROL DEPLOYED</span>
-                  Apex control layers automatically scale order lots when 30-day exposure averages trend upward.
+                  MTXquant control layers automatically scale order lots when 30-day exposure averages trend upward.
                 </div>
               </div>
             </div>
@@ -2118,7 +2129,15 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
                     <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={9} fontFamily="monospace" tickLine={false} />
                     <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} fontFamily="monospace" tickLine={false} tickFormatter={(val) => `${val}%`} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#0c0c0d', border: '1px solid rgba(255,255,255,0.1)', fontFamily: 'monospace', fontSize: 10 }}
+                      contentStyle={{ 
+                        backgroundColor: '#0c0c0e', 
+                        border: '1px solid rgba(99, 102, 241, 0.4)', 
+                        borderLeft: '3px solid #6366f1',
+                        borderRadius: '6px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
+                        fontFamily: 'monospace', 
+                        fontSize: 10 
+                      }}
                       itemStyle={{ color: '#fff' }}
                     />
                     <Bar dataKey="Volatility Factor (%)" fill="#6366f1" radius={[2, 2, 0, 0]}>
@@ -2173,7 +2192,14 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
                       ))}
                     </Pie>
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#0c0c0d', border: '1px solid rgba(255,255,255,0.1)', fontFamily: 'monospace' }}
+                      contentStyle={{ 
+                        backgroundColor: '#0c0c0e', 
+                        border: '1px solid rgba(16, 185, 129, 0.4)', 
+                        borderLeft: '3px solid #10b981',
+                        borderRadius: '6px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
+                        fontFamily: 'monospace' 
+                      }}
                       itemStyle={{ color: '#fff' }}
                       formatter={(v) => `${v}%`}
                     />
@@ -2203,7 +2229,7 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
                   <span>Capital Allocation Philosophy</span>
                 </h4>
                 <p className="text-[10.5px] leading-relaxed text-slate-400 mt-2">
-                  Under the <strong>Apex Institutional Framework</strong>, capital is distributed mathematically prioritizing systemic insulation. 
+                  Under the <strong>MTXquant Institutional Framework</strong>, capital is distributed mathematically prioritizing systemic insulation. 
                   Forex allocations acts as the core liquidity block due to its deep mean reverting nature, while high volatility sectors like Bitcoin 
                   and Precious metals (Gold) are micro-leveraged with stop losses restricted to a <strong>1.0% maximum aggregate drawdown limit</strong>.
                 </p>

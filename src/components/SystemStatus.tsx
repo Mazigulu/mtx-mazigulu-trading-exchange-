@@ -489,7 +489,7 @@ export default function SystemStatus() {
           <div className="flex items-center space-x-2">
             <AlertCircle className="w-4.5 h-4.5 text-indigo-400" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-white font-mono">
-              APEX Diagnostic Fault injection rack
+              MTXQUANT Diagnostic Fault injection rack
             </h3>
           </div>
           <button
@@ -594,7 +594,7 @@ export default function SystemStatus() {
       <div className="bg-[#0a0a0b] border border-white/5 p-4 rounded-lg select-none flex items-center space-x-3.5 text-white/45 text-[10.5px]">
         <AlertCircle className="w-5 h-5 text-indigo-400 shrink-0" />
         <p>
-          APEX algorithmic systems leverage real-time stateful node routing. If a critical gateway's reliability index falls below <strong>95%</strong>, order execution algorithms trigger safe-mode validation routing over backup local virtual bridges instantly, safely preserving active lot exposures.
+          MTXquant algorithmic systems leverage real-time stateful node routing. If a critical gateway's reliability index falls below <strong>95%</strong>, order execution algorithms trigger safe-mode validation routing over backup local virtual bridges instantly, safely preserving active lot exposures.
         </p>
       </div>
 

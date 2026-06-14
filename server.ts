@@ -505,6 +505,25 @@ app.get('/api/market-data', (req, res) => {
   });
 });
 
+// get latest prices for all symbols in the simulator
+app.get('/api/market-prices', (req, res) => {
+  const result: Record<string, number> = {};
+  const symbols = [
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+    'GOLD/USD', 'SILVER/USD', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'US30', 'NAS100', 'GER40', 'SPX500'
+  ];
+  for (const sym of symbols) {
+    const candles = simulator.getCandles(sym as MarketSymbol) || [];
+    if (candles.length > 0) {
+      result[sym] = candles[candles.length - 1].close;
+    } else {
+      result[sym] = 0;
+    }
+  }
+  res.json(result);
+});
+
 // get asset correlation matrix based on past 30 candle closes
 app.get('/api/market-correlation', (req, res) => {
   const symbols: MarketSymbol[] = [
@@ -696,6 +715,269 @@ app.get('/api/forex-factory', (req, res) => {
   res.json(economicEvents);
 });
 
+// Live Institutional News Ticker Cache and Aggregator
+const defaultInstitutionalNews = [
+  {
+    id: "term-1",
+    timestamp: new Date(Date.now() - 4 * 60 * 1000).toLocaleTimeString(),
+    title: "BREAKING: Federal Reserve Meeting Minutes indicate hawkish consensus on holding rates until Q4 inflation moderation.",
+    excerpt: "Federal Open Market Committee members raised concern over robust service-sector wage indices. While some members advocated for structural balance sheet taper adjustments, the consensus remains tilted toward long-term elevation of sovereign cost-of-capital markers.",
+    source: "Apex Intelligence Terminal",
+    impact: "CRITICAL",
+    category: "MACRO",
+    symbol: "GLOBAL",
+    sentiment: "BEARISH",
+    readTimeMins: 3
+  },
+  {
+    id: "term-2",
+    timestamp: new Date(Date.now() - 15 * 60 * 1000).toLocaleTimeString(),
+    title: "ON-CHAIN ALERT: Institutional Whales move over $340M in BTC into high-security offline vaults.",
+    excerpt: "Glassnode metrics indicate the largest single aggregate outflow from public centralized liquid exchange storage pools since early February. Historically, large custody sweeps precede long-term multi-week consolidation expansions.",
+    source: "Interbank Liquidity Scan",
+    impact: "HIGH",
+    category: "CRYPTO",
+    symbol: "BTC/USDT",
+    sentiment: "BULLISH",
+    readTimeMins: 2
+  },
+  {
+    id: "term-3",
+    timestamp: new Date(Date.now() - 32 * 60 * 1000).toLocaleTimeString(),
+    title: "EUROZONE: ECB member Joachim Nagel signals potential pause on upcoming asset purchasing programs.",
+    excerpt: "Deutsche Bundesbank President states inflation pressures inside the Union are moderating, but caution over energy supply shocks dictates a conservative quantitative tightening drawdown pace. Euro currency gains minor traction on sovereign bonds spread narrowing.",
+    source: "Bloomberg Interbank Feed",
+    impact: "MEDIUM",
+    category: "FOREX",
+    symbol: "EUR/USD",
+    sentiment: "NEUTRAL",
+    readTimeMins: 4
+  },
+  {
+    id: "term-4",
+    timestamp: new Date(Date.now() - 48 * 60 * 1000).toLocaleTimeString(),
+    title: "REGULATORY WATCH: CFTC Chairman requests heightened oversight on digital currency clearing structures.",
+    excerpt: "Speaking at the Chicago Derivatives Symposium, the chairman emphasized that current clearing systems lack the localized capital buffers necessary to withstand high-leveraged algorithmic stop runs under stressed liquidity regimes.",
+    source: "Federal Clearing Bulletin",
+    impact: "HIGH",
+    category: "REGULATORY",
+    symbol: "GLOBAL",
+    sentiment: "BEARISH",
+    readTimeMins: 5
+  },
+  {
+    id: "term-5",
+    timestamp: new Date(Date.now() - 75 * 60 * 1000).toLocaleTimeString(),
+    title: "FOREX DATA: USD/JPY slides below 156.00 following suspicious BoJ currency stabilization liquidity bids.",
+    excerpt: "Market makers observed a sudden $4.2B USD block sale of US Treasuries matching Ministry of Finance accounts. Analysts suspect direct market stabilization sweeps are active under official auspices to protect currency floor levels.",
+    source: "Reuters FX Feed",
+    impact: "CRITICAL",
+    category: "FOREX",
+    symbol: "USD/JPY",
+    sentiment: "BEARISH",
+    readTimeMins: 3
+  },
+  {
+    id: "term-6",
+    timestamp: new Date(Date.now() - 110 * 60 * 1000).toLocaleTimeString(),
+    title: "PRECIOUS METALS: Central gold buying reserves expand by record 42 tonnes in monthly sovereign reporting.",
+    excerpt: "Emerging markets sovereign reserves continue aggressive rotation into physical bullion assets. Physical gold premium surges over London paper spot values as physical shipping logistics report congestion bottlenecks.",
+    source: "Sovereign Reserves Registry",
+    impact: "MEDIUM",
+    category: "MACRO",
+    symbol: "GOLD/USD",
+    sentiment: "BULLISH",
+    readTimeMins: 2
+  }
+];
+
+let cachedInstitutionalNews: any[] = [...defaultInstitutionalNews];
+let lastNewsFetchTime = 0;
+
+async function fetchLiveRSSNews(): Promise<any[]> {
+  const feeds = [
+    { url: 'https://www.coindesk.com/arc/outboundfeed/rss/', source: 'CoinDesk', defaultCategory: 'CRYPTO' },
+    { url: 'https://www.cnbc.com/id/15839069/device/rss/rss.html', source: 'CNBC', defaultCategory: 'MACRO' }
+  ];
+  
+  const fetchedAlerts: any[] = [];
+  
+  for (const feed of feeds) {
+    try {
+      // Fetch via rss2json API to keep XML-parsing natively serverless and dependency-free
+      const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`;
+      const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(3500) });
+      if (!response.ok) continue;
+      
+      const data = await response.json();
+      if (data && data.items && Array.isArray(data.items)) {
+        data.items.slice(0, 10).forEach((item: any, idx: number) => {
+          const title = item.title || "";
+          const excerpt = item.description ? item.description.replace(/<[^>]*>/g, '').slice(0, 280) + '...' : "";
+          const id = `rss-${feed.source.toLowerCase()}-${idx}-${Date.now().toString().slice(-4)}`;
+          
+          // Heuristic parser for symbol, categories, impact, and sentiments
+          const lowercaseTitle = title.toLowerCase() + " " + excerpt.toLowerCase();
+          
+          let impact: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
+          if (lowercaseTitle.includes('fed') || lowercaseTitle.includes('fomc') || lowercaseTitle.includes('emergency') || lowercaseTitle.includes('sec ') || lowercaseTitle.includes('rate hike') || lowercaseTitle.includes('crash')) {
+            impact = 'CRITICAL';
+          } else if (lowercaseTitle.includes('inflation') || lowercaseTitle.includes('cpi') || lowercaseTitle.includes('interest rate') || lowercaseTitle.includes('sec') || lowercaseTitle.includes('investigation') || lowercaseTitle.includes('whale') || lowercaseTitle.includes('surge') || lowercaseTitle.includes('regulatory') || lowercaseTitle.includes('spot etf')) {
+            impact = 'HIGH';
+          } else if (lowercaseTitle.includes('gains') || lowercaseTitle.includes('drops') || lowercaseTitle.includes('yield') || lowercaseTitle.includes('treasury') || lowercaseTitle.includes('bank') || lowercaseTitle.includes('pmi')) {
+            impact = 'MEDIUM';
+          }
+          
+          let category: 'MACRO' | 'CRYPTO' | 'FOREX' | 'REGULATORY' | 'LIQUIDITY' = feed.defaultCategory as any;
+          if (lowercaseTitle.includes('sec') || lowercaseTitle.includes('lawsuit') || lowercaseTitle.includes('regulatory') || lowercaseTitle.includes('congress') || lowercaseTitle.includes('bill')) {
+            category = 'REGULATORY';
+          } else if (lowercaseTitle.includes('liquidity') || lowercaseTitle.includes('whale') || lowercaseTitle.includes('outflow') || lowercaseTitle.includes('inflow') || lowercaseTitle.includes('sweep') || lowercaseTitle.includes('block trade')) {
+            category = 'LIQUIDITY';
+          } else if (lowercaseTitle.includes('euro') || lowercaseTitle.includes('yen') || lowercaseTitle.includes('pound') || lowercaseTitle.includes('forex') || lowercaseTitle.includes(' fx ') || lowercaseTitle.includes('boj') || lowercaseTitle.includes('ecb') || lowercaseTitle.includes('boe')) {
+            category = 'FOREX';
+          } else if (lowercaseTitle.includes('bitcoin') || lowercaseTitle.includes('btc') || lowercaseTitle.includes('ethereum') || lowercaseTitle.includes('eth') || lowercaseTitle.includes('solana') || lowercaseTitle.includes('crypto')) {
+            category = 'CRYPTO';
+          }
+          
+          let symbol: string | undefined = undefined;
+          if (lowercaseTitle.includes('bitcoin') || lowercaseTitle.includes('btc')) symbol = 'BTC/USDT';
+          else if (lowercaseTitle.includes('ethereum') || lowercaseTitle.includes('eth')) symbol = 'ETH/USDT';
+          else if (lowercaseTitle.includes('solana') || lowercaseTitle.includes('sol ')) symbol = 'SOL/USDT';
+          else if (lowercaseTitle.includes('euro') || lowercaseTitle.includes('eur')) symbol = 'EUR/USD';
+          else if (lowercaseTitle.includes('pound') || lowercaseTitle.includes('gbp')) symbol = 'GBP/USD';
+          else if (lowercaseTitle.includes('yen') || lowercaseTitle.includes('jpy')) symbol = 'USD/JPY';
+          else if (lowercaseTitle.includes('gold') || lowercaseTitle.includes('bullion')) symbol = 'GOLD/USD';
+          else if (lowercaseTitle.includes('silver') || lowercaseTitle.includes('xag')) symbol = 'SILVER/USD';
+          else if (lowercaseTitle.includes('nas100') || lowercaseTitle.includes('nasdaq')) symbol = 'NAS100';
+          else if (lowercaseTitle.includes('spx') || lowercaseTitle.includes('s&p 500')) symbol = 'SPX500';
+          else if (lowercaseTitle.includes('dow ') || lowercaseTitle.includes('us30')) symbol = 'US30';
+          
+          let sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
+          if (lowercaseTitle.includes('surge') || lowercaseTitle.includes('rally') || lowercaseTitle.includes('gain') || lowercaseTitle.includes('bullish') || lowercaseTitle.includes('soar') || lowercaseTitle.includes('all-time high')) {
+            sentiment = 'BULLISH';
+          } else if (lowercaseTitle.includes('drop') || lowercaseTitle.includes('slide') || lowercaseTitle.includes('bearish') || lowercaseTitle.includes('plunge') || lowercaseTitle.includes('crash') || lowercaseTitle.includes('fears') || lowercaseTitle.includes('slump')) {
+            sentiment = 'BEARISH';
+          }
+          
+          const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
+          
+          fetchedAlerts.push({
+            id,
+            timestamp: pubDate.toLocaleTimeString(),
+            title,
+            excerpt,
+            source: `${feed.source} News Feed`,
+            impact,
+            category,
+            symbol: symbol || 'GLOBAL',
+            sentiment,
+            readTimeMins: Math.max(1, Math.ceil(excerpt.split(' ').length / 150)),
+            url: item.link
+          });
+        });
+      }
+    } catch (e) {
+      console.warn(`Failed fetching RSS from ${feed.source}:`, e);
+    }
+  }
+  
+  return fetchedAlerts;
+}
+
+// Global variable containing dynamic simulator incremental bulletins
+const simulatorMacroBullets = [
+  {
+    title: "MACRO MONITOR: Retail sales report exceeds Wall Street expectations, triggering bond yields elevation.",
+    excerpt: "US census bureau data indicates a +0.6% mom surge across major retail subcategories. Positive retail performance decreases probability of immediate easing moves by policy leaders, stabilizing indices under high-rate duration pressure.",
+    source: "Federal Reserve Board Monitor",
+    impact: "HIGH",
+    category: "MACRO",
+    symbol: "GLOBAL",
+    sentiment: "BULLISH"
+  },
+  {
+    title: "LIQUIDITY RUN: Standard Chartered reports aggressive aggregate sell blocks on spot EUR/USD pairs.",
+    excerpt: "Institutional orderbooks clocked a consecutive line of 1,200 Lot sweep blocks on the Chicago Mercantile Exchange. High density limits are consolidating around retail stop-pools down near the 1.0820 support band.",
+    source: "Liquidity Pulse Engine",
+    impact: "CRITICAL",
+    category: "LIQUIDITY",
+    symbol: "EUR/USD",
+    sentiment: "BEARISH"
+  },
+  {
+    title: "WHALE TRANSACTIONS: Spot Bitcoin exchange inventories record largest supply cliff drop in 4 months.",
+    excerpt: "Aggregated wallet tracers noted that a private asset management trust withdrew 4,120 BTC in sequential batches of 100 BTC. Decreases in liquid availability historically set the stage for major supply-squeeze breakouts.",
+    source: "Glassnode On-Chain Stream",
+    impact: "HIGH",
+    category: "LIQUIDITY",
+    symbol: "BTC/USDT",
+    sentiment: "BULLISH"
+  },
+  {
+    title: "REGULATORY BULLETIN: SEC schedules private enforcement hearing addressing spot crypto derivatives pools.",
+    excerpt: "Regulatory counsel requests detailed audits from secondary clearing houses regarding default collateral protection structures. Elevated compliance scrutiny has induced a temporary decrease in liquid orderbook thickness.",
+    source: "Apex Sovereign Agency Room",
+    impact: "HIGH",
+    category: "REGULATORY",
+    symbol: "GLOBAL",
+    sentiment: "BEARISH"
+  }
+];
+
+// Helper to inject a dynamic simulated bulletin into queue periodically
+function injectSimulatedHeadline() {
+  try {
+    const rawBullet = simulatorMacroBullets[Math.floor(Math.random() * simulatorMacroBullets.length)];
+    const id = `sim-${Date.now()}`;
+    const newHeadline = {
+      id,
+      timestamp: new Date().toLocaleTimeString(),
+      title: rawBullet.title,
+      excerpt: rawBullet.excerpt,
+      source: "Apex Terminal Flash Alerts",
+      impact: rawBullet.impact,
+      category: rawBullet.category,
+      symbol: rawBullet.symbol,
+      sentiment: rawBullet.sentiment,
+      readTimeMins: Math.floor(Math.random() * 3) + 2
+    };
+
+    // Prepend to cached list
+    cachedInstitutionalNews.unshift(newHeadline);
+    if (cachedInstitutionalNews.length > 50) {
+      cachedInstitutionalNews = cachedInstitutionalNews.slice(0, 50);
+    }
+  } catch (err) {
+    console.warn("Failsafe: error injecting news bulletin:", err);
+  }
+}
+
+// Periodically generate simulated market announcements every 45s to reflect live trading atmosphere
+setInterval(injectSimulatedHeadline, 45000);
+
+// News ticker API route
+app.get('/api/institutional-news', async (req, res) => {
+  try {
+    const now = Date.now();
+    // Throttle real RSS refetches to at most once every 60 seconds to safeguard system throughput
+    if (now - lastNewsFetchTime > 60000) {
+      lastNewsFetchTime = now;
+      const liveRSS = await fetchLiveRSSNews();
+      if (liveRSS && liveRSS.length > 0) {
+        // Merge without duplicates based on title similarity
+        const existingTitles = new Set(cachedInstitutionalNews.map(item => item.title.trim().toLowerCase()));
+        const uniqueRSS = liveRSS.filter(item => !existingTitles.has(item.title.trim().toLowerCase()));
+        
+        cachedInstitutionalNews = [...uniqueRSS, ...cachedInstitutionalNews].slice(0, 60);
+      }
+    }
+    res.json(cachedInstitutionalNews);
+  } catch (e: any) {
+    console.error('Error in /api/institutional-news:', e);
+    res.status(500).json({ error: 'News server offline.' });
+  }
+});
+
 // Get historical risk breaches
 app.get('/api/risk/breaches', (req, res) => {
   checkForNewBreaches();
@@ -756,7 +1038,7 @@ app.get('/api/trades', (req, res) => {
 
 // Enter a trade
 app.post('/api/trades', (req, res) => {
-  const { symbol, side, entryPrice, stopLoss, takeProfit, size, reason, confidence, confluences } = req.body;
+  const { symbol, side, entryPrice, stopLoss, takeProfit, size, reason, confidence, confluences, marketNote } = req.body;
   if (!symbol || !side || !entryPrice || !stopLoss || !takeProfit || !size) {
     res.status(400).json({ error: 'Missing trade parameters.' });
     return;
@@ -776,7 +1058,8 @@ app.post('/api/trades', (req, res) => {
     timestamp: new Date().toISOString(),
     reason: reason || 'Entered via strategy trigger',
     confidence: confidence !== undefined ? parseFloat(confidence) : undefined,
-    confluences: Array.isArray(confluences) ? confluences : undefined
+    confluences: Array.isArray(confluences) ? confluences : undefined,
+    marketNote: marketNote || ''
   };
 
   trades.push(newTrade);

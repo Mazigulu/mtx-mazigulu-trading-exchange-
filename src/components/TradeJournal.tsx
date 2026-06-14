@@ -21,15 +21,17 @@ import {
   Eye,
   FileText,
   AlertTriangle,
-  Lightbulb
+  Lightbulb,
+  Play
 } from 'lucide-react';
 
 interface TradeJournalProps {
   trades: Trade[];
   onTradeUpdated: () => void;
+  onReplayTrade?: (trade: Trade) => void;
 }
 
-export default function TradeJournal({ trades, onTradeUpdated }: TradeJournalProps) {
+export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: TradeJournalProps) {
   // Only interested in CLOSED trades for journal self-review
   const closedTrades = useMemo(() => {
     return trades
@@ -362,6 +364,20 @@ export default function TradeJournal({ trades, onTradeUpdated }: TradeJournalPro
 
                     {/* Badge for tags or annotations completed */}
                     <div className="flex items-center space-x-1.5">
+                      {onReplayTrade && (
+                        <button
+                          id={`btn-replay-trade-${t.id}`}
+                          title="Jump historical replay engine to this trade open timestamp"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onReplayTrade(t);
+                          }}
+                          className="px-1.5 py-0.5 bg-indigo-500/15 hover:bg-indigo-600/30 text-indigo-300 hover:text-white rounded text-[7.5px] font-mono font-bold flex items-center space-x-0.5 border border-indigo-500/25 hover:border-indigo-500/45 cursor-pointer transition-all"
+                        >
+                          <Play className="w-2.5 h-2.5 fill-current" />
+                          <span>REPLAY</span>
+                        </button>
+                      )}
                       {t.screenshot && (
                         <span className="p-0.5 bg-indigo-500/20 text-indigo-400 rounded" title="Screenshot Attached">
                           <Camera className="w-2.5 h-2.5" />
@@ -437,6 +453,28 @@ export default function TradeJournal({ trades, onTradeUpdated }: TradeJournalPro
                 <span className={`text-xs font-black ${selectedTrade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
                   {selectedTrade.pnl >= 0 ? '+' : ''}${selectedTrade.pnl.toFixed(2)}
                 </span>
+              </div>
+            </div>
+
+            {/* Entry Reasoning and Pre-defined Market Note Block */}
+            <div className="bg-[#09090d] border border-indigo-500/15 rounded p-4 flex flex-col gap-2">
+              <h5 className="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5 pb-2 border-b border-white/5">
+                <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                Pre-defined Entry reasoning & Note
+              </h5>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
+                <div>
+                  <span className="text-[8px] font-mono text-white/30 uppercase tracking-tight block">Automated Strategy Reason:</span>
+                  <p className="text-[10px] text-white/70 font-sans leading-relaxed italic mt-1 bg-black/20 p-2.5 border border-white/5 rounded">
+                    {selectedTrade.reason || 'No strategy template reason defined.'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[8px] font-mono text-indigo-400/80 uppercase tracking-tight block font-bold">Pre-defined Market Note:</span>
+                  <p className="text-[10.5px] text-indigo-200 font-sans leading-relaxed font-semibold mt-1 bg-indigo-500/5 p-2.5 border border-indigo-500/10 rounded break-words">
+                    {selectedTrade.marketNote || 'No pre-defined market entry note was supplied.'}
+                  </p>
+                </div>
               </div>
             </div>
 

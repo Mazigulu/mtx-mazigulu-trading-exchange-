@@ -1,6 +1,6 @@
 {
-  "name": "Apex Trading Agent",
-  "description": "Advanced institutional swing trading agent based on The Trading Bible and ICT concepts with real-time news filters and order flow indicators.",
+  "name": "MTXquant Trading Agent",
+  "description": "Advanced institutional quantitative swing trading agent based on Inner Circle Trader concepts with real-time news filters and order flow indicators.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

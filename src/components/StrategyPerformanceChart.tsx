@@ -54,7 +54,7 @@ const STRATEGIES: Record<StrategyId, StrategyDetail> = {
     id: 'ALL',
     name: 'All Integrated Strategies',
     description: 'Aggregated view comparing FVG Mitigation, Order Block, Liquidity Hunt and Combo algorithm metrics.',
-    creator: 'Apex Core AI',
+    creator: 'MTXquant Core',
     timeframe: 'Multi-Timeframe',
     winRate: 61.2,
     avgRR: 1.95,
@@ -63,9 +63,9 @@ const STRATEGIES: Record<StrategyId, StrategyDetail> = {
   },
   APEX_COMBO: {
     id: 'APEX_COMBO',
-    name: 'Apex Confluence Multi-Heuristic',
+    name: 'MTXquant Confluence Multi-Heuristic',
     description: 'Ensemble algorithm combining multiple structural confirmation signals to trade under high confidence flags.',
-    creator: 'Apex Quant Labs',
+    creator: 'MTXquant Labs',
     timeframe: 'H1 / H4',
     winRate: 68.5,
     avgRR: 2.30,
@@ -156,11 +156,11 @@ export default function StrategyPerformanceChart() {
         'Fair Value Gap': d.FVG_win,
         'Order Block': d.OB_win,
         'Liquidity Sweep': d.SWEEP_win,
-        'Apex Combo': d.APEX_win,
+        'MTXquant Combo': d.APEX_win,
         'Fair Value Gap R:R': d.FVG_rr,
         'Order Block R:R': d.OB_rr,
         'Liquidity Sweep R:R': d.SWEEP_rr,
-        'Apex Combo R:R': d.APEX_rr,
+        'MTXquant Combo R:R': d.APEX_rr,
       };
     });
   }, [selectedStrategy]);
@@ -207,7 +207,7 @@ export default function StrategyPerformanceChart() {
             className="bg-[#121214] border border-white/10 text-xs text-white/90 px-2.5 py-1.5 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
           >
             <option value="ALL">Compare All Strategies</option>
-            <option value="APEX_COMBO">Apex Confluence (68.5%)</option>
+            <option value="APEX_COMBO">MTXquant Confluence (68.5%)</option>
             <option value="FVG">ICT Fair Value Gap (58.0%)</option>
             <option value="OB">ICT Order Block Zone (60.5%)</option>
             <option value="SWEEP">Liquidity Hunter (54.2%)</option>
@@ -321,7 +321,7 @@ export default function StrategyPerformanceChart() {
                 </span>
                 {selectedStrategy === 'ALL' ? (
                   <span>
-                    Comparative mode displays epochs E1 to E15 showing performance iterations. The ensemble <strong>Apex Multi-Heuristic</strong> algorithm outperforms individual modules by combining spatial confirmations with strict trend filtering.
+                    Comparative mode displays epochs E1 to E15 showing performance iterations. The ensemble <strong>MTXquant Multi-Heuristic</strong> algorithm outperforms individual modules by combining spatial confirmations with strict trend filtering.
                   </span>
                 ) : selectedStrategy === 'APEX_COMBO' ? (
                   <span>
@@ -408,7 +408,15 @@ export default function StrategyPerformanceChart() {
                     tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
                   />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#09090b', borderColor: 'rgba(255,255,255,0.1)', fontSize: '10px', fontFamily: 'monospace' }}
+                    contentStyle={{ 
+                      backgroundColor: '#0c0c0e', 
+                      border: '1px solid rgba(99, 102, 241, 0.4)', 
+                      borderLeft: '3px solid #6366f1',
+                      borderRadius: '6px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
+                      fontSize: '10px', 
+                      fontFamily: 'monospace' 
+                    }}
                     itemStyle={{ color: '#ffffff' }}
                   />
                   <Legend 
@@ -423,14 +431,14 @@ export default function StrategyPerformanceChart() {
                       <Line type="monotone" dataKey="Fair Value Gap" stroke={getStrategyColor('FVG')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
                       <Line type="monotone" dataKey="Order Block" stroke={getStrategyColor('OB')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
                       <Line type="monotone" dataKey="Liquidity Sweep" stroke={getStrategyColor('SWEEP')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="Apex Combo" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="MTXquant Combo" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
                     </>
                   ) : (
                     <>
                       <Line type="monotone" dataKey="Fair Value Gap R:R" name="Fair Value Gap R:R" stroke={getStrategyColor('FVG')} strokeWidth={1.5} dot={{ r: 1.5 }} />
                       <Line type="monotone" dataKey="Order Block R:R" name="Order Block R:R" stroke={getStrategyColor('OB')} strokeWidth={1.5} dot={{ r: 1.5 }} />
                       <Line type="monotone" dataKey="Liquidity Sweep R:R" name="Liquidity Sweep R:R" stroke={getStrategyColor('SWEEP')} strokeWidth={1.5} dot={{ r: 1.5 }} />
-                      <Line type="monotone" dataKey="Apex Combo R:R" name="Apex Combo R:R" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} />
+                      <Line type="monotone" dataKey="MTXquant Combo R:R" name="MTXquant Combo R:R" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} />
                     </>
                   )}
                 </LineChart>
@@ -467,7 +475,15 @@ export default function StrategyPerformanceChart() {
                   />
 
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#09090b', borderColor: 'rgba(255,255,255,0.1)', fontSize: '10px', fontFamily: 'monospace' }}
+                    contentStyle={{ 
+                      backgroundColor: '#0c0c0e', 
+                      border: '1px solid rgba(245, 158, 11, 0.4)', 
+                      borderLeft: '3px solid #f59e0b',
+                      borderRadius: '6px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
+                      fontSize: '10px', 
+                      fontFamily: 'monospace' 
+                    }}
                   />
                   <Legend 
                     verticalAlign="top" 

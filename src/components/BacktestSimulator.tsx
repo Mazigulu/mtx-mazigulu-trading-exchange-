@@ -858,7 +858,7 @@ export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbol
                 onChange={(e) => setStrategyType(e.target.value)}
                 className="w-full bg-[#050505] border border-white/10 text-white px-3 py-2 rounded text-xs focus:outline-none focus:border-indigo-500 font-bold"
               >
-                <option value="COMBO">Apex Confluence Strategy (All Heuristics)</option>
+                <option value="COMBO">MTXquant Confluence Strategy (All Heuristics)</option>
                 <option value="FVG">ICT Fair Value Gap (FVG Touch Entries)</option>
                 <option value="OB">ICT Order Block Bounce (Zone Retests)</option>
                 <option value="SWEEP">Liquidity Hunts (Daily Session Highs/Lows)</option>
@@ -983,9 +983,15 @@ export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbol
                     tickFormatter={(val) => `$${val}`}
                   />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#050505', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '4px' }}
+                    contentStyle={{ 
+                      backgroundColor: '#0c0c0e', 
+                      borderColor: 'rgba(99, 102, 241, 0.4)', 
+                      borderLeft: '3px solid #6366f1',
+                      borderRadius: '6px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.85)'
+                    }}
                     labelStyle={{ fontFamily: 'monospace', fontWeight: 'bold', color: 'white', fontSize: '11px' }}
-                    itemStyle={{ fontFamily: 'monospace', fontSize: '11px', color: '#818cf8' }}
+                    itemStyle={{ fontFamily: 'monospace', fontSize: '11px', color: '#a5b4fc' }}
                     formatter={(val: number) => [`$${val.toLocaleString()}`, 'Equity Balance']}
                   />
                   <Area type="monotone" dataKey="equity" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#equityGradient)" />

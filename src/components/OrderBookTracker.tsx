@@ -120,8 +120,11 @@ export default function OrderBookTracker({ symbol, orderBook }: OrderBookTracker
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const isExcessBid = data.delta >= 0;
+      const accentBorder = isExcessBid 
+        ? 'border-emerald-500/50 border-l-2 border-l-emerald-400' 
+        : 'border-rose-500/50 border-l-2 border-l-rose-400';
       return (
-        <div className="bg-[#0b0b0e] border border-white/10 p-3 rounded shadow-xl font-mono text-[11px] space-y-1.5 text-white">
+        <div className={`bg-[#0c0c0e] border ${accentBorder} p-3 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.85)] font-mono text-[11px] space-y-1.5 text-white`}>
           <p className="text-gray-400 font-bold tracking-tight uppercase border-b border-white/5 pb-1 block mb-1">
             Book Offset: {data.level}
           </p>
@@ -150,8 +153,11 @@ export default function OrderBookTracker({ symbol, orderBook }: OrderBookTracker
       const data = payload[0].payload;
       const isBid = data.BidVolume > 0;
       const formattedPrice = data.price;
+      const accentBorder = isBid 
+        ? 'border-emerald-500/50 border-l-2 border-l-emerald-400' 
+        : 'border-rose-500/50 border-l-2 border-l-rose-400';
       return (
-        <div className="bg-[#0b0b0e] border border-white/10 p-3 rounded shadow-xl font-mono text-[11px] text-white">
+        <div className={`bg-[#0c0c0e] border ${accentBorder} p-3 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.85)] font-mono text-[11px] text-white`}>
           <p className="text-gray-400 font-bold border-b border-white/5 pb-1 mb-1 text-center">
             Price Level: {formattedPrice}
           </p>

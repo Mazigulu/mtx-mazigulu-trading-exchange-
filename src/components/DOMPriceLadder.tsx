@@ -402,6 +402,11 @@ export default function DOMPriceLadder({
     const orderTypeLabel = customPrice !== undefined ? 'LIMIT' : 'MARKET';
     const reasonText = `${orderTypeLabel} entry executed via MT5 DOM Price Ladder at price ${activeEntryPrice.toFixed(config.decimals)}. Auto SL (${stopLossPips} pips), TP (${takeProfitPips} pips).`;
 
+    let userMarketNote = '';
+    try {
+      userMarketNote = localStorage.getItem('apex_predefined_market_note') || '';
+    } catch (_) {}
+
     try {
       const res = await fetch('/api/trades', {
         method: 'POST',
@@ -421,7 +426,8 @@ export default function DOMPriceLadder({
             'MT5 Depth Of Market execution',
             'Order Flow Liquidity Confirmation',
             `${bidRatio}% Bid-to-Ask Imbalance Bias`
-          ]
+          ],
+          marketNote: userMarketNote ? `${userMarketNote} (DOM Execution)` : 'Entered via MT5 Price Ladder.',
         }),
       });
 

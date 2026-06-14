@@ -29,7 +29,7 @@ body.light-theme {
 }
 
 /* Base Wrapper Adjustments */
-body.light-theme #apex-app-root {
+body.light-theme #mtxquant-app-root {
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
 }
