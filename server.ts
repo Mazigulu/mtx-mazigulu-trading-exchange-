@@ -388,30 +388,49 @@ function checkAndAutoCloseTrades(): void {
     if (t.status === 'CLOSED') return t;
     
     const metrics = simulator.getMarketMetrics(t.symbol);
-    const curPrice = metrics.currentPrice;
+    const curPrice = metrics ? metrics.currentPrice : t.entryPrice;
+    
+    // Auto-Break-Even Check
+    let currentStopLoss = t.stopLoss;
+    let autoBeTriggered = t.autoBreakEvenTriggered;
+    let currentReason = t.reason || '';
+
+    if (t.autoBreakEvenProfitPct && !autoBeTriggered) {
+      const pnlMultiplier = t.side === 'BUY' ? 1 : -1;
+      const priceDiff = curPrice - t.entryPrice;
+      const profitPct = (priceDiff / t.entryPrice) * 100 * pnlMultiplier;
+
+      if (profitPct >= t.autoBreakEvenProfitPct) {
+        currentStopLoss = t.entryPrice;
+        autoBeTriggered = true;
+        changed = true;
+        currentReason = `${currentReason} [Auto-Break-Even: SL moved to entry price ${t.entryPrice} because trade hit target profit of ${t.autoBreakEvenProfitPct}%]`.trim();
+      }
+    }
+
     let shouldClose = false;
     let triggerPrice = curPrice;
-    let reason = '';
+    let closingReason = '';
 
     if (t.side === 'BUY') {
-      if (curPrice <= t.stopLoss) {
+      if (curPrice <= currentStopLoss) {
         shouldClose = true;
-        triggerPrice = t.stopLoss;
-        reason = `Auto Closed: SL hit at ${t.stopLoss}`;
+        triggerPrice = currentStopLoss;
+        closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
       } else if (curPrice >= t.takeProfit) {
         shouldClose = true;
         triggerPrice = t.takeProfit;
-        reason = `Auto Closed: TP hit at ${t.takeProfit}`;
+        closingReason = `Auto Closed: TP hit at ${t.takeProfit}`;
       }
     } else { // SELL
-      if (curPrice >= t.stopLoss) {
+      if (curPrice >= currentStopLoss) {
         shouldClose = true;
-        triggerPrice = t.stopLoss;
-        reason = `Auto Closed: SL hit at ${t.stopLoss}`;
+        triggerPrice = currentStopLoss;
+        closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
       } else if (curPrice <= t.takeProfit) {
         shouldClose = true;
         triggerPrice = t.takeProfit;
-        reason = `Auto Closed: TP hit at ${t.takeProfit}`;
+        closingReason = `Auto Closed: TP hit at ${t.takeProfit}`;
       }
     }
 
@@ -435,7 +454,18 @@ function checkAndAutoCloseTrades(): void {
         exitPrice: parseFloat(triggerPrice.toFixed(t.symbol === 'USD/JPY' ? 2 : t.symbol === 'BTC/USDT' ? 1 : 5)),
         pnl: parseFloat(rawPnl.toFixed(2)),
         exitTimestamp: new Date().toISOString(),
-        reason
+        reason: closingReason,
+        stopLoss: currentStopLoss,
+        autoBreakEvenTriggered: autoBeTriggered
+      };
+    }
+
+    if (currentStopLoss !== t.stopLoss || autoBeTriggered !== t.autoBreakEvenTriggered) {
+      return {
+        ...t,
+        stopLoss: currentStopLoss,
+        autoBreakEvenTriggered: autoBeTriggered,
+        reason: currentReason
       };
     }
 
@@ -1038,7 +1068,7 @@ app.get('/api/trades', (req, res) => {
 
 // Enter a trade
 app.post('/api/trades', (req, res) => {
-  const { symbol, side, entryPrice, stopLoss, takeProfit, size, reason, confidence, confluences, marketNote } = req.body;
+  const { symbol, side, entryPrice, stopLoss, takeProfit, size, reason, confidence, confluences, marketNote, autoBreakEvenProfitPct } = req.body;
   if (!symbol || !side || !entryPrice || !stopLoss || !takeProfit || !size) {
     res.status(400).json({ error: 'Missing trade parameters.' });
     return;
@@ -1059,7 +1089,9 @@ app.post('/api/trades', (req, res) => {
     reason: reason || 'Entered via strategy trigger',
     confidence: confidence !== undefined ? parseFloat(confidence) : undefined,
     confluences: Array.isArray(confluences) ? confluences : undefined,
-    marketNote: marketNote || ''
+    marketNote: marketNote || '',
+    autoBreakEvenProfitPct: autoBreakEvenProfitPct !== undefined ? parseFloat(autoBreakEvenProfitPct) : undefined,
+    autoBreakEvenTriggered: autoBreakEvenProfitPct !== undefined ? false : undefined
   };
 
   trades.push(newTrade);

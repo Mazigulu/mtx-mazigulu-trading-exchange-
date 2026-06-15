@@ -34,11 +34,29 @@ export default function AdvisorChat({ symbol, metrics, onClose, messages, setMes
     }
   });
 
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const saved = localStorage.getItem('apex_advisor_observe_mode');
+        const boolVal = saved === 'true';
+        setIsObserveMode(boolVal);
+      } catch (_) {}
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('observe_mode_changed', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('observe_mode_changed', handleStorageChange);
+    };
+  }, []);
+
   const toggleObserveMode = () => {
     const nextVal = !isObserveMode;
     setIsObserveMode(nextVal);
     try {
       localStorage.setItem('apex_advisor_observe_mode', String(nextVal));
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('observe_mode_changed'));
     } catch (_) {}
 
     // Push immediate status feedback directly as assistance message

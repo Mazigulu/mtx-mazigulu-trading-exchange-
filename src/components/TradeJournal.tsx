@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Trade, MarketSymbol } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Trade, MarketSymbol, getSymbolCorrelations } from '../types';
 import { 
   BookOpen, 
   Camera, 
@@ -58,6 +58,15 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
   // Tag filter selection state
   const [selectedTagFilter, setSelectedTagFilter] = useState<string>('ALL');
 
+  // Pagination states
+  const [journalPage, setJournalPage] = useState(1);
+  const journalItemsPerPage = 5;
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setJournalPage(1);
+  }, [selectedTagFilter]);
+
   // List of all distinct strategy tags for dropdown
   const allAvailableTags = useMemo(() => {
     const tagSet = new Set<string>();
@@ -98,6 +107,12 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
       });
     });
   }, [closedTrades, selectedTagFilter]);
+
+  const totalJournalPages = Math.ceil(filteredClosedTrades.length / journalItemsPerPage);
+  const paginatedClosedTrades = useMemo(() => {
+    const startIndex = (journalPage - 1) * journalItemsPerPage;
+    return filteredClosedTrades.slice(startIndex, startIndex + journalItemsPerPage);
+  }, [filteredClosedTrades, journalPage]);
 
   // When a trade is clicked, populate the editor form
   const handleSelectTrade = (trade: Trade) => {
@@ -313,7 +328,7 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
               </p>
             </div>
           ) : (
-            filteredClosedTrades.map((t) => {
+            paginatedClosedTrades.map((t) => {
               const profitColor = t.pnl >= 0 ? 'text-emerald-400' : 'text-rose-500';
               const ratingPreset = sentimentPresets.find(p => p.value === t.sentimentRating);
               const isSelected = selectedTrade?.id === t.id;
@@ -369,8 +384,8 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
                           id={`btn-replay-trade-${t.id}`}
                           title="Jump historical replay engine to this trade open timestamp"
                           onClick={(e) => {
-                            e.stopPropagation();
-                            onReplayTrade(t);
+                             e.stopPropagation();
+                             onReplayTrade(t);
                           }}
                           className="px-1.5 py-0.5 bg-indigo-500/15 hover:bg-indigo-600/30 text-indigo-300 hover:text-white rounded text-[7.5px] font-mono font-bold flex items-center space-x-0.5 border border-indigo-500/25 hover:border-indigo-500/45 cursor-pointer transition-all"
                         >
@@ -403,6 +418,37 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
             })
           )}
         </div>
+
+        {/* Modular Pagination Controls */}
+        {totalJournalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-3 select-none font-mono">
+            <button
+              onClick={() => setJournalPage(prev => Math.max(1, prev - 1))}
+              disabled={journalPage === 1}
+              className={`px-2.5 py-1 text-[9px] font-bold rounded border transition-colors ${
+                journalPage === 1
+                  ? 'border-white/5 text-white/20 cursor-not-allowed bg-transparent'
+                  : 'border-white/10 text-white/70 hover:text-white hover:bg-white/5 bg-black/20'
+              }`}
+            >
+              ◀ PREV
+            </button>
+            <span className="text-[10px] text-white/50">
+              Page <span className="text-white font-extrabold">{journalPage}</span> of <span className="text-white">{totalJournalPages}</span>
+            </span>
+            <button
+              onClick={() => setJournalPage(prev => Math.min(totalJournalPages, prev + 1))}
+              disabled={journalPage === totalJournalPages}
+              className={`px-2.5 py-1 text-[9px] font-bold rounded border transition-colors ${
+                journalPage === totalJournalPages
+                  ? 'border-white/5 text-white/20 cursor-not-allowed bg-transparent'
+                  : 'border-white/10 text-white/70 hover:text-white hover:bg-white/5 bg-black/20'
+              }`}
+            >
+              NEXT ▶
+            </button>
+          </div>
+        )}
       </div>
 
       {/* RIGHT COLUMN: Review Interface / Form Workspace */}
@@ -449,10 +495,72 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
                 <span className="text-xs text-indigo-400">{mockRiskRewardRatio}</span>
               </div>
               <div>
-                <span className="text-[8.5px] text-white/30 uppercase tracking-tight block">PnL Realized</span>
+                <span className="text-[8.5px] text-white/30 tracking-tight block">PnL Realized</span>
                 <span className={`text-xs font-black ${selectedTrade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
                   {selectedTrade.pnl >= 0 ? '+' : ''}${selectedTrade.pnl.toFixed(2)}
                 </span>
+              </div>
+            </div>
+
+            {/* Trade Correlation Strength Module */}
+            <div className="bg-[#0b0c10]/90 border border-white/5 rounded p-4 flex flex-col gap-3 font-sans">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <h5 className="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-indigo-400 animate-pulse animate-duration-1000 shrink-0" />
+                  Asset Correlation Strength Matrix
+                </h5>
+                <span className="text-[8px] font-mono text-white/35 uppercase">
+                  Co-movement alignment relative to {selectedTrade.symbol}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                {getSymbolCorrelations(selectedTrade.symbol).map((cor) => {
+                  const isPositive = cor.coefficient >= 0;
+                  const isStrong = Math.abs(cor.coefficient) >= 0.7;
+                  const absPct = Math.round(Math.abs(cor.coefficient) * 100);
+
+                  // Styling determinations
+                  let badgeBg = 'bg-white/5 text-white/50 border-white/10';
+                  let progressBg = 'bg-white/10';
+                  if (isStrong) {
+                    badgeBg = isPositive 
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25 font-black shadow-[0_0_8px_rgba(16,185,129,0.1)]' 
+                      : 'bg-rose-500/10 text-rose-450 border-rose-500/25 font-black shadow-[0_0_8px_rgba(244,63,94,0.1)]';
+                    progressBg = isPositive ? 'bg-emerald-500/40' : 'bg-rose-500/40';
+                  } else if (Math.abs(cor.coefficient) >= 0.3) {
+                    badgeBg = isPositive
+                      ? 'bg-emerald-500/5 text-emerald-300 border-emerald-500/15'
+                      : 'bg-rose-500/5 text-rose-300 border-rose-500/15';
+                    progressBg = isPositive ? 'bg-emerald-500/20' : 'bg-rose-500/20';
+                  }
+
+                  return (
+                    <div 
+                      key={cor.symbol}
+                      className="p-2.5 bg-black/40 border border-white/5 hover:border-white/10 transition-all rounded flex flex-col justify-between"
+                      title={cor.description}
+                    >
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="text-[10px] font-mono font-bold text-white/90">{cor.symbol}</span>
+                        <span className={`text-[8.5px] font-mono px-1.5 py-0.5 rounded border uppercase ${badgeBg}`}>
+                          {isPositive ? '+' : ''}{cor.coefficient.toFixed(2)}
+                        </span>
+                      </div>
+
+                      {/* Small inline visual progress bar */}
+                      <div className="w-full bg-white/[0.03] h-1 rounded overflow-hidden mt-2 mb-1">
+                        <div 
+                          className={`h-full rounded-full transition-all ${progressBg}`}
+                          style={{ width: `${absPct}%` }}
+                        />
+                      </div>
+
+                      <div className="text-[7.5px] font-sans text-white/35 mt-1 leading-normal text-ellipsis overflow-hidden">
+                        {cor.description}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

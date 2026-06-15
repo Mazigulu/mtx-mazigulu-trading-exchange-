@@ -40,6 +40,145 @@ export default function TradeTerminal({
   const [authError, setAuthError] = useState<string | null>(null);
   const [aiTradeSuccessAlert, setAiTradeSuccessAlert] = useState<string | null>(null);
 
+  // Wait & Observe Mode States & Storage Sync
+  const [isObserveMode, setIsObserveMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('apex_advisor_observe_mode');
+      return saved === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+
+  const toggleObserveMode = () => {
+    const nextVal = !isObserveMode;
+    setIsObserveMode(nextVal);
+    try {
+      localStorage.setItem('apex_advisor_observe_mode', String(nextVal));
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('observe_mode_changed'));
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const saved = localStorage.getItem('apex_advisor_observe_mode');
+        setIsObserveMode(saved === 'true');
+      } catch (_) {}
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('observe_mode_changed', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('observe_mode_changed', handleStorageChange);
+    };
+  }, []);
+
+  const [terminalSignals, setTerminalSignals] = useState<Array<{
+    id: string;
+    timestamp: string;
+    symbol: string;
+    type: 'SWEEP_BSL' | 'SWEEP_SSL' | 'DISCRETIONARY_EMA' | 'DISCRETIONARY_FVG' | 'DISCRETIONARY_RSI';
+    label: string;
+    details: string;
+    volume?: string;
+    severity: 'CRITICAL' | 'LOW' | 'MEDIUM';
+  }>>([
+    {
+      id: 'sig-1',
+      timestamp: new Date(Date.now() - 35000).toLocaleTimeString(),
+      symbol: symbol,
+      type: 'DISCRETIONARY_EMA',
+      label: 'Discretionary 15m EMA Pullback',
+      details: 'Price reacting of local 50 EMA boundary.',
+      severity: 'LOW'
+    },
+    {
+      id: 'sig-2',
+      timestamp: new Date(Date.now() - 95000).toLocaleTimeString(),
+      symbol: symbol,
+      type: 'SWEEP_SSL',
+      label: 'Institutional Sweep (SSL Captured)',
+      details: 'High-dispersion raid completed on sell-side stops.',
+      volume: '1,540 Lots',
+      severity: 'CRITICAL'
+    },
+    {
+      id: 'sig-3',
+      timestamp: new Date(Date.now() - 180000).toLocaleTimeString(),
+      symbol: symbol,
+      type: 'DISCRETIONARY_FVG',
+      label: 'Discretionary 5m FVG Invalidation',
+      details: 'Price broke below order book density threshold.',
+      severity: 'LOW'
+    },
+    {
+      id: 'sig-4',
+      timestamp: new Date(Date.now() - 300000).toLocaleTimeString(),
+      symbol: symbol,
+      type: 'SWEEP_BSL',
+      label: 'Institutional Sweep (BSL Captured)',
+      details: 'Clean systemic grab of retail buy stops.',
+      volume: '2,180 Lots',
+      severity: 'CRITICAL'
+    }
+  ]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const types: Array<'SWEEP_BSL' | 'SWEEP_SSL' | 'DISCRETIONARY_EMA' | 'DISCRETIONARY_FVG' | 'DISCRETIONARY_RSI'> = [
+        'SWEEP_BSL', 'SWEEP_SSL', 'DISCRETIONARY_EMA', 'DISCRETIONARY_FVG', 'DISCRETIONARY_RSI'
+      ];
+      const randomType = types[Math.floor(Math.random() * types.length)];
+      
+      let label = '';
+      let details = '';
+      let severity: 'CRITICAL' | 'LOW' | 'MEDIUM' = 'LOW';
+      let volume: string | undefined = undefined;
+
+      if (randomType === 'SWEEP_BSL') {
+        label = 'Institutional Sweep (BSL Captured)';
+        details = 'Premium liquidity pool breached and absorbed.';
+        volume = `${Math.floor(Math.random() * 1200) + 800} Lots`;
+        severity = 'CRITICAL';
+      } else if (randomType === 'SWEEP_SSL') {
+        label = 'Institutional Sweep (SSL Captured)';
+        details = 'Discount liquidity pool captured with aggressive matching orders.';
+        volume = `${Math.floor(Math.random() * 1500) + 1000} Lots`;
+        severity = 'CRITICAL';
+      } else if (randomType === 'DISCRETIONARY_EMA') {
+        label = 'Discretionary EMA Rebound';
+        details = 'Tested and rejected the short-term trend boundary.';
+        severity = 'LOW';
+      } else if (randomType === 'DISCRETIONARY_FVG') {
+        label = 'Discretionary FVG Void Mitigation';
+        details = 'Inefficiency filled at standard liquidity balance.';
+        severity = 'MEDIUM';
+      } else {
+        label = 'Discretionary RSI Exhaustion';
+        details = 'Oversold tracking metric reached local peak.';
+        severity = 'LOW';
+      }
+
+      setTerminalSignals(prev => [
+        {
+          id: `terminal-sig-${Date.now()}`,
+          timestamp: new Date().toLocaleTimeString(),
+          symbol: symbol,
+          type: randomType,
+          label,
+          details,
+          volume,
+          severity
+        },
+        ...prev
+      ].slice(0, 30));
+    }, 12000);
+
+    return () => clearInterval(interval);
+  }, [symbol]);
+
   const performanceStats = useMemo(() => {
     const completed = trades.filter((t) => t.status === 'CLOSED');
     if (completed.length === 0) {
@@ -115,6 +254,10 @@ export default function TradeTerminal({
 
   const [executing, setExecuting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Auto-Break-Even Strategy States
+  const [autoBreakEvenEnabled, setAutoBreakEvenEnabled] = useState<boolean>(false);
+  const [autoBreakEvenProfitPct, setAutoBreakEvenProfitPct] = useState<string>('1.0');
 
   const [confidence, setConfidence] = useState<number>(75);
   const [selectedConfluences, setSelectedConfluences] = useState<string[]>([]);
@@ -217,6 +360,7 @@ export default function TradeTerminal({
           confidence,
           confluences: selectedConfluences,
           marketNote,
+          autoBreakEvenProfitPct: autoBreakEvenEnabled ? parseFloat(autoBreakEvenProfitPct) : undefined,
         }),
       });
 
@@ -526,6 +670,7 @@ export default function TradeTerminal({
                 confidence,
                 confluences: selectedConfluences,
                 marketNote: `${marketNote} (AI Executed Mode)`,
+                autoBreakEvenProfitPct: autoBreakEvenEnabled ? parseFloat(autoBreakEvenProfitPct) : undefined,
               }),
             });
 
@@ -547,6 +692,34 @@ export default function TradeTerminal({
 
   return (
     <div id="trade-terminal-root" className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-[#050505]/20">
+      {/* Observation Mode Active Status Bar */}
+      {isObserveMode && (
+        <div id="observation-mode-status-bar" className="lg:col-span-12 bg-indigo-950/20 border border-indigo-500/30 rounded-lg p-3.5 px-4.5 flex items-center justify-between animate-fadeIn shadow-[0_0_12px_rgba(99,102,241,0.1)]">
+          <div className="flex items-center space-x-3">
+            <div className="relative flex items-center justify-center">
+              <span className="flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500 shadow-[0_0_6px_#6366f1]"></span>
+              </span>
+            </div>
+            <div className="flex flex-col md:flex-row md:items-center md:gap-3">
+              <span className="text-[11px] font-mono font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 inline text-indigo-400 animate-pulse" />
+                Observation Mode Active
+              </span>
+              <span className="text-[9.5px] text-white/50 font-sans leading-none">
+                • Non-essential warnings silenced. Filtering for high-dispersion Institutional Liquidity Sweeps (BSL/SSL).
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center space-x-1.5 font-mono text-[8.5px]">
+            <span className="text-indigo-400 font-extrabold uppercase bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded animate-pulse">
+              Observing {symbol}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Risk Sizing & Execution Panel */}
       <div className="lg:col-span-5 bg-[#080808] border border-white/10 rounded p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between">
         <div>
@@ -616,6 +789,47 @@ export default function TradeTerminal({
             {/* Safe criteria indicator */}
             <div className="text-[9px] text-white/30 leading-snug font-sans bg-[#0c0c0c]/40 p-2 rounded border border-white/5">
               💡 <span className="font-semibold text-white/40">Strategy:</span> Automates entries when selected signals reach <strong className="text-indigo-300 font-bold">≥ 80% confidence</strong>. Protects equity via the Fixed-fractional model.
+            </div>
+          </div>
+
+          {/* WAIT & OBSERVE MODE CONTROLS */}
+          <div id="wait-observe-mode-card" className="mt-4 p-3.5 bg-gradient-to-r from-slate-950/20 via-black/10 to-slate-900/10 border border-white/5 rounded-lg flex flex-col space-y-3 shadow-md">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 bg-indigo-500/10 rounded">
+                  <Eye className={`w-3.5 h-3.5 ${isObserveMode ? 'text-indigo-400 animate-pulse' : 'text-white/45'}`} />
+                </div>
+                <div>
+                  <h5 className="text-[11px] font-mono font-bold uppercase tracking-wider text-white">Wait & Observe</h5>
+                  <span className="text-[8.5px] font-sans text-white/40 block">Silence discretionary trade alert noise</span>
+                </div>
+              </div>
+              
+              {/* Toggle switch Button */}
+              <button
+                id="wait-observe-toggle"
+                type="button"
+                onClick={toggleObserveMode}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  isObserveMode ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'bg-gray-800'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    isObserveMode ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Filter description indicator */}
+            <div className="flex items-center justify-between text-[8.5px] font-mono">
+              <span className="text-white/30">ALERT FILTER DEPTH:</span>
+              <span className={`font-black uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                isObserveMode ? 'text-indigo-300 bg-indigo-500/15 border border-indigo-500/10' : 'text-white/30 bg-white/5'
+              }`}>
+                {isObserveMode ? 'Institutional Sweeps Only' : 'Standard Feed Enabled'}
+              </span>
             </div>
           </div>
 
@@ -771,6 +985,51 @@ export default function TradeTerminal({
               </div>
             </div>
 
+            {/* Auto-Break-Even block */}
+            <div className="bg-[#08080a] border border-white/5 rounded p-3.5 space-y-2 select-none">
+              <div className="flex items-center justify-between">
+                <label className="text-white/80 font-sans font-bold flex items-center gap-2 cursor-pointer text-[10.5px] uppercase tracking-wider">
+                  <input
+                    id="checkbox-auto-break-even"
+                    type="checkbox"
+                    checked={autoBreakEvenEnabled}
+                    onChange={(e) => setAutoBreakEvenEnabled(e.target.checked)}
+                    className="rounded border-white/20 bg-black text-indigo-500 focus:ring-transparent h-4 w-4 cursor-pointer"
+                  />
+                  <span>Auto-Break-Even Strategy</span>
+                </label>
+                <span className={`text-[8.5px] font-mono px-2 py-0.5 rounded font-extrabold uppercase tracking-wide transition-all ${
+                  autoBreakEvenEnabled ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 animate-pulse' : 'bg-white/5 text-white/30 border border-transparent'
+                }`}>
+                  {autoBreakEvenEnabled ? 'ARMED' : 'OFF'}
+                </span>
+              </div>
+              
+              {autoBreakEvenEnabled && (
+                <div className="space-y-2 pt-1 transition-all duration-300">
+                  <p className="text-[10px] font-sans text-white/40 leading-normal">
+                    Secure capital automatically. Once the active trade reaches this profit target (%), the stop-loss is shifted instantly to its entry price.
+                  </p>
+                  <div className="flex items-center gap-2 font-sans">
+                    <span className="text-[10.5px] text-white/50 tracking-tight shrink-0">Trigger Profit Target:</span>
+                    <div className="relative flex-1 max-w-[110px]">
+                      <input
+                        id="input-auto-be-profit-pct"
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        value={autoBreakEvenProfitPct}
+                        onChange={(e) => setAutoBreakEvenProfitPct(e.target.value)}
+                        className="w-full bg-[#030304] border border-white/15 text-indigo-300 font-mono text-xs px-2.5 py-1 rounded outline-none focus:border-indigo-500/40 pr-6"
+                        placeholder="1.0"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-white/30 font-bold">%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="text-white/35 block uppercase mb-1 font-sans tracking-tight">Sustainment / Logic details</label>
               <textarea
@@ -874,7 +1133,7 @@ export default function TradeTerminal({
           </div>
 
           {/* Trend alignment alert warning */}
-          {((side === 'BUY' && metrics.dailyBias === 'BEARISH') || (side === 'SELL' && metrics.dailyBias === 'BULLISH')) && (
+          {!isObserveMode && ((side === 'BUY' && metrics.dailyBias === 'BEARISH') || (side === 'SELL' && metrics.dailyBias === 'BULLISH')) && (
             <div id="trend-misalignment-alert" className="mt-3.5 p-3.5 bg-yellow-950/20 border border-yellow-500/20 rounded text-yellow-300/80 text-[10.5px] leading-relaxed flex items-start space-x-2">
               <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
               <p>
@@ -889,6 +1148,74 @@ export default function TradeTerminal({
               <span>{errorMsg}</span>
             </div>
           )}
+
+          {/* REAL-TIME SYSTEM SIGNAL MONITOR & PRIORITIZATION FEED */}
+          <div id="system-signal-monitor-card" className="mt-4 p-4 bg-[#070709] border border-white/5 rounded flex flex-col space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-white/[0.04]">
+              <div className="flex items-center space-x-1.5 font-sans">
+                <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                <h5 className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/70">
+                  Signal & Watchtower Stream
+                </h5>
+              </div>
+              <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                isObserveMode ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse' : 'bg-white/5 text-white/40'
+              }`}>
+                {isObserveMode ? 'OBSERVI-MODE ACTIVE' : 'FULL FEED'}
+              </span>
+            </div>
+
+            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+              {terminalSignals.filter(s => !isObserveMode || s.type === 'SWEEP_BSL' || s.type === 'SWEEP_SSL').length === 0 ? (
+                <div className="text-center py-6 text-white/35 text-[9.5px] italic font-sans">
+                  Waiting for high-dispersion sweeps on {symbol}...
+                </div>
+              ) : (
+                terminalSignals
+                  .filter(s => !isObserveMode || s.type === 'SWEEP_BSL' || s.type === 'SWEEP_SSL')
+                  .map((sig) => {
+                    const isSweep = sig.type === 'SWEEP_BSL' || sig.type === 'SWEEP_SSL';
+                    return (
+                      <div 
+                        key={sig.id} 
+                        className={`p-2.5 rounded border transition-all ${
+                          isSweep 
+                            ? 'bg-indigo-950/20 border-indigo-500/20 shadow-[0_0_8px_rgba(99,102,241,0.03)]' 
+                            : 'bg-[#040405] border-white/[0.03]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[9.5px] font-mono font-bold flex items-center gap-1 ${
+                            isSweep ? 'text-indigo-300' : 'text-white/60'
+                          }`}>
+                            {isSweep ? (
+                              <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+                            ) : (
+                              <Activity className="w-3 h-3 text-white/30" />
+                            )}
+                            {sig.label}
+                          </span>
+                          <span className="text-[7.5px] font-mono text-white/30">
+                            {sig.timestamp}
+                          </span>
+                        </div>
+                        <p className="text-[8.5px] text-white/50 mt-1 font-sans leading-normal">
+                          {sig.details}
+                        </p>
+                        {sig.volume && (
+                          <div className="mt-1.5 flex items-center justify-between text-[8px] font-mono">
+                            <span className="text-white/30">DETECTED VOLUME:</span>
+                            <span className="text-indigo-400 font-extrabold bg-indigo-500/10 px-1 py-0.2 rounded">
+                              {sig.volume}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
         </div>
 
         <button
@@ -1165,8 +1492,24 @@ export default function TradeTerminal({
                             {livePnL >= 0 ? `+$${livePnL}` : `-$${Math.abs(livePnL)}`} PnL
                           </span>
                         </div>
-                        <div className="font-mono text-[10px] text-white/50 leading-normal">
-                          Entry: <span className="text-white/80">{t.entryPrice}</span> | SL: <span className="text-rose-400 font-semibold">{t.stopLoss}</span> | TP: <span className="text-emerald-400 font-semibold">{t.takeProfit}</span>
+                        <div className="font-mono text-[10px] text-white/50 leading-normal flex flex-wrap items-center gap-x-2">
+                          <span>Entry: <span className="text-white/80">{t.entryPrice}</span> | SL: <span className="text-rose-400 font-semibold">{t.stopLoss}</span> | TP: <span className="text-emerald-400 font-semibold">{t.takeProfit}</span></span>
+                          {t.autoBreakEvenProfitPct !== undefined && (
+                            <>
+                              <span className="text-white/20">|</span>
+                              {t.autoBreakEvenTriggered ? (
+                                <span className="text-emerald-400 font-extrabold flex items-center gap-0.5 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-400 inline" />
+                                  BE Triggered
+                                </span>
+                              ) : (
+                                <span className="text-indigo-400 font-bold flex items-center gap-0.5 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider">
+                                  <Activity className="w-2.5 h-2.5 text-indigo-400 inline animate-pulse" />
+                                  Auto-BE: +{t.autoBreakEvenProfitPct}%
+                                </span>
+                              )}
+                            </>
+                          )}
                         </div>
                         {/* Active exposure Audit Checklist */}
                         {(t.confidence !== undefined || t.confluences) && (

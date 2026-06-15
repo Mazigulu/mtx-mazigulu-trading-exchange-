@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'motion/react';
-import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent, MarketSymbol } from '../types';
+import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent, MarketSymbol, CorrelationData, getSymbolCorrelations } from '../types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders, Zap, Server, Magnet, Crosshair, Maximize2, Minimize2, ArrowRightLeft, ArrowRight, ChevronDown, Clock, Type } from 'lucide-react';
 import DOMPriceLadder from './DOMPriceLadder';
@@ -588,6 +588,23 @@ export default function ChartContainer({
   const [showOB, setShowOB] = useState(true);
   const [showLiquidityMap, setShowLiquidityMap] = useState(true);
   const [showVolumeProfile, setShowVolumeProfile] = useState(true);
+  const [showVWAP, setShowVWAP] = useState(true);
+  const [showSessions, setShowSessions] = useState(true);
+  const [showOFI, setShowOFI] = useState(true);
+  const [ofiMode, setOfiMode] = useState<'HISTOGRAM' | 'PROFILE'>('HISTOGRAM');
+  const [volumeProfileSide, setVolumeProfileSide] = useState<'LEFT' | 'RIGHT'>('RIGHT');
+  const [hoveredOfiBin, setHoveredOfiBin] = useState<{
+    index: number;
+    minPrice: number;
+    maxPrice: number;
+    buyVolume: number;
+    sellVolume: number;
+    delta: number;
+    imbalancePercent: number;
+    hftIntensity: number;
+    passiveIntensity: number;
+    intensityRating: 'AGGRESSIVE_HFT' | 'PASSIVE_INSTITUTIONAL' | 'BALANCED_LIQUIDITY';
+  } | null>(null);
   const [hoveredProfileBin, setHoveredProfileBin] = useState<{
     index: number;
     minPrice: number;
@@ -763,6 +780,8 @@ export default function ChartContainer({
     createdAt: number;
   }
 
+  const [showTradeStatsOverlay, setShowTradeStatsOverlay] = useState<boolean>(false);
+  const [showCorrelationOverlay, setShowCorrelationOverlay] = useState<boolean>(true);
   const [isDrawingAnnotation, setIsDrawingAnnotation] = useState(false);
   const [chartAnnotations, setChartAnnotations] = useState<ChartAnnotation[]>(() => {
     try {
@@ -1593,6 +1612,118 @@ export default function ChartContainer({
     };
   }, [visibleCandles, priceLimits]);
 
+  // Real-time Order Flow Imbalance (OFI) Calculation
+  const orderFlowImbalanceData = useMemo(() => {
+    if (visibleCandles.length === 0) return null;
+
+    const numBins = 24;
+    const minPrice = priceLimits.min;
+    const maxPrice = priceLimits.max;
+    const range = maxPrice - minPrice;
+    if (range <= 0) return null;
+
+    const binSize = range / numBins;
+
+    // Initialize bins
+    const bins = Array.from({ length: numBins }, (_, i) => {
+      const binMinPrice = minPrice + i * binSize;
+      const binMaxPrice = binMinPrice + binSize;
+      return {
+        index: i,
+        minPrice: binMinPrice,
+        maxPrice: binMaxPrice,
+        buyVolume: 0,
+        sellVolume: 0,
+        delta: 0,
+        imbalancePercent: 0,
+        hftIntensity: 0,
+        passiveIntensity: 0,
+        intensityRating: 'BALANCED_LIQUIDITY' as 'AGGRESSIVE_HFT' | 'PASSIVE_INSTITUTIONAL' | 'BALANCED_LIQUIDITY'
+      };
+    });
+
+    // Distribute fractional volumes specifically aligned with institutional buyer vs seller footprints
+    visibleCandles.forEach((candle, cIdx) => {
+      const volume = candle.volume || 100;
+      const low = candle.low;
+      const high = candle.high;
+      const open = candle.open;
+      const close = candle.close;
+      const isBullish = close >= open;
+
+      // Extract institutional pressure factor based on price action and relative close location inside candle
+      const candleRange = high - low || 1;
+      const closeLocationPercent = (close - low) / candleRange;
+      
+      // Calculate realistic buy/sell split percentage
+      let buyFraction = closeLocationPercent;
+      if (buyFraction < 0.15) buyFraction = 0.15;
+      if (buyFraction > 0.85) buyFraction = 0.85;
+
+      // Inject deterministic high-frequency tick noise for a realistic live-broker environment feel
+      const noise = (Math.sin(cIdx * 987.654 + Date.now() * 0.0001) + 1) / 2 * 0.08 - 0.04;
+      buyFraction = Math.min(0.92, Math.max(0.08, buyFraction + noise));
+      
+      const sellFraction = 1 - buyFraction;
+      const buyVol = volume * buyFraction;
+      const sellVol = volume * sellFraction;
+
+      const span = high - low;
+      if (span <= 0) {
+        const binIdx = Math.min(numBins - 1, Math.max(0, Math.floor((close - minPrice) / binSize)));
+        bins[binIdx].buyVolume += buyVol;
+        bins[binIdx].sellVolume += sellVol;
+      } else {
+        bins.forEach((bin) => {
+          const intersectMin = Math.max(low, bin.minPrice);
+          const intersectMax = Math.min(high, bin.maxPrice);
+          if (intersectMax > intersectMin) {
+            const overlapFraction = (intersectMax - intersectMin) / span;
+            bin.buyVolume += buyVol * overlapFraction;
+            bin.sellVolume += sellVol * overlapFraction;
+          }
+        });
+      }
+    });
+
+    const maxTotalVolume = Math.max(...bins.map((b) => b.buyVolume + b.sellVolume)) || 1;
+
+    // Compute delta, percentage imbalance, and intensity metrics
+    bins.forEach((bin) => {
+      const total = bin.buyVolume + bin.sellVolume;
+      bin.delta = bin.buyVolume - bin.sellVolume;
+      bin.imbalancePercent = total > 0 ? (bin.delta / total) * 100 : 0;
+
+      const imbalanceRatio = total > 0 ? Math.abs(bin.delta) / total : 0;
+      const relativeVol = total / maxTotalVolume;
+
+      // Real-time HFT Aggression: High when directional sweep has high relative volume
+      // Real-time Passive Absorption: High when relative volume is massive, but imbalance ratio is low
+      const computedHft = Math.round(imbalanceRatio * 100);
+      const computedPassive = Math.round((1 - imbalanceRatio) * 100);
+
+      bin.hftIntensity = computedHft;
+      bin.passiveIntensity = computedPassive;
+
+      if (imbalanceRatio >= 0.28 && relativeVol >= 0.15) {
+        bin.intensityRating = 'AGGRESSIVE_HFT';
+      } else if (imbalanceRatio < 0.28 && relativeVol >= 0.40) {
+        bin.intensityRating = 'PASSIVE_INSTITUTIONAL';
+      } else {
+        bin.intensityRating = 'BALANCED_LIQUIDITY';
+      }
+    });
+
+    let maxAbsDelta = Math.max(...bins.map((b) => Math.abs(b.delta)));
+    if (maxAbsDelta <= 0) maxAbsDelta = 1;
+
+    return {
+      bins,
+      maxAbsDelta,
+      maxTotalVolume,
+    };
+  }, [visibleCandles, priceLimits]);
+
   const xStep = useMemo(() => {
     return (width - padding.left - padding.right) / (actualVisibleCount || 1);
   }, [width, actualVisibleCount, padding.left, padding.right]);
@@ -2201,6 +2332,135 @@ export default function ChartContainer({
       .join(' ');
   }, [candles, startIndex, xStep, priceLimits, width, height]);
 
+  // Session overlays for global institutions (Asian, London Killzone, New York Open)
+  const sessionsBlocks = useMemo(() => {
+    if (!actualVisibleCount || !candles.length) return [];
+    
+    interface SessionBlock {
+      startIdx: number;
+      endIdx: number;
+      session: 'ASIA' | 'LONDON' | 'NY';
+      label: string;
+      color: string;
+      textColor: string;
+    }
+
+    const blocks: SessionBlock[] = [];
+    let currentSession: 'ASIA' | 'LONDON' | 'NY' | null = null;
+    let currentStart = startIndex;
+    
+    const endLimit = Math.min(candles.length, startIndex + actualVisibleCount);
+    for (let idx = startIndex; idx < endLimit; idx++) {
+      const details = getIndexTimestampAndHour(idx);
+      if (!details) continue;
+      const { hour } = details;
+      
+      let session: 'ASIA' | 'LONDON' | 'NY' = 'ASIA';
+      if (hour >= 8 && hour < 14) {
+        session = 'LONDON';
+      } else if (hour >= 14 && hour < 22) {
+        session = 'NY';
+      } else {
+        session = 'ASIA';
+      }
+      
+      if (currentSession === null) {
+        currentSession = session;
+        currentStart = idx;
+      } else if (currentSession !== session) {
+        blocks.push({
+          startIdx: currentStart,
+          endIdx: idx - 1,
+          session: currentSession,
+          label: currentSession === 'LONDON' ? 'LONDON SECTOR' : currentSession === 'NY' ? 'US SESSION OPEN' : 'ASIA BREAKOUT RANGE',
+          color: currentSession === 'LONDON' ? 'rgba(99, 102, 241, 0.04)' : currentSession === 'NY' ? 'rgba(245, 158, 11, 0.04)' : 'rgba(20, 184, 166, 0.03)',
+          textColor: currentSession === 'LONDON' ? '#818cf8' : currentSession === 'NY' ? '#fbbf24' : '#2dd4bf'
+        });
+        currentSession = session;
+        currentStart = idx;
+      }
+    }
+    
+    if (currentSession !== null) {
+      blocks.push({
+        startIdx: currentStart,
+        endIdx: endLimit - 1,
+        session: currentSession,
+        label: currentSession === 'LONDON' ? 'LONDON SECTOR' : currentSession === 'NY' ? 'US SESSION OPEN' : 'ASIA BREAKOUT RANGE',
+        color: currentSession === 'LONDON' ? 'rgba(99, 102, 241, 0.04)' : currentSession === 'NY' ? 'rgba(245, 158, 11, 0.04)' : 'rgba(20, 184, 166, 0.03)',
+        textColor: currentSession === 'LONDON' ? '#818cf8' : currentSession === 'NY' ? '#fbbf24' : '#2dd4bf'
+      });
+    }
+    
+    return blocks;
+  }, [startIndex, actualVisibleCount, candles, getIndexTimestampAndHour]);
+
+  // Volume-Weighted Average Price (VWAP) with Standard Deviation bands
+  const vwapData = useMemo(() => {
+    let cumulativeVolumePrice = 0;
+    let cumulativeVolume = 0;
+    
+    // First pass: compute the regular running VWAP
+    const pointsRaw = candles.map((c, idx) => {
+      const typicalPrice = (c.high + c.low + c.close) / 3;
+      const vol = c.volume || 100;
+      cumulativeVolumePrice += typicalPrice * vol;
+      cumulativeVolume += vol;
+      const vwap = cumulativeVolume > 0 ? (cumulativeVolumePrice / cumulativeVolume) : typicalPrice;
+      return { index: idx, vwap, typicalPrice, volume: vol };
+    });
+
+    // Second pass: running variance calculation
+    let cumulativeVolumeVariance = 0;
+    const vwapPoints = pointsRaw.map((p, idx) => {
+      const squaredDiff = Math.pow(p.typicalPrice - p.vwap, 2);
+      cumulativeVolumeVariance += p.volume * squaredDiff;
+      const vwapVariance = cumulativeVolume > 0 ? (cumulativeVolumeVariance / cumulativeVolume) : 0;
+      const vwapStdDev = Math.sqrt(vwapVariance);
+      
+      const c = candles[idx];
+      const minStdDev = (c.high - c.low) * 0.4 || (p.vwap * 0.0008);
+      const stdDev = Math.max(vwapStdDev, minStdDev);
+      
+      const x = getX(idx);
+      const yVwap = getY(p.vwap);
+      const yUpper1 = getY(p.vwap + stdDev * 1.5);
+      const yLower1 = getY(p.vwap - stdDev * 1.5);
+      const yUpper2 = getY(p.vwap + stdDev * 3.0);
+      const yLower2 = getY(p.vwap - stdDev * 3.0);
+
+      return {
+        idx,
+        x,
+        yVwap,
+        yUpper1,
+        yLower1,
+        yUpper2,
+        yLower2,
+        vwap: p.vwap,
+        upper1: p.vwap + stdDev * 1.5,
+        lower1: p.vwap - stdDev * 1.5,
+        upper2: p.vwap + stdDev * 3.0,
+        lower2: p.vwap - stdDev * 3.0
+      };
+    });
+
+    const pathVwap = vwapPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.yVwap}`).join(' ');
+    const pathUpper1 = vwapPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.yUpper1}`).join(' ');
+    const pathLower1 = vwapPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.yLower1}`).join(' ');
+    const pathUpper2 = vwapPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.yUpper2}`).join(' ');
+    const pathLower2 = vwapPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.yLower2}`).join(' ');
+
+    return {
+      points: vwapPoints,
+      pathVwap,
+      pathUpper1,
+      pathLower1,
+      pathUpper2,
+      pathLower2
+    };
+  }, [candles, startIndex, xStep, priceLimits, width, height]);
+
   // Prepare data for the secondary RSI area chart (Recharts)
   const rsiChartData = useMemo(() => {
     return candles.map((c, idx) => ({
@@ -2448,7 +2708,7 @@ export default function ChartContainer({
     setIsDragging(false);
   };
 
-  const activeLayersCount = [showFVG, showOB, showIndicators, showNewsOverlay, showLiquidityMap, showVolumeProfile].filter(Boolean).length;
+  const activeLayersCount = [showFVG, showOB, showIndicators, showNewsOverlay, showLiquidityMap, showVolumeProfile, showTradeStatsOverlay, showCorrelationOverlay, showVWAP, showSessions, showOFI].filter(Boolean).length;
   const isDrawingActive = isDrawingPriceAlert || isDrawingTrendline || isDrawingAnnotation || !showCrosshairTool || isMagnetActive;
   const activeAlertsCount = smartAlerts.filter(a => a.isActive).length;
 
@@ -3173,18 +3433,90 @@ export default function ChartContainer({
                   </span>
                 </button>
 
+                <div id="btn-toggle-volume-profile" className="w-full flex flex-col p-1 rounded hover:bg-white/[0.02] transition-colors">
+                  <div className="flex items-center justify-between w-full px-1 py-0.5">
+                    <button
+                      onClick={() => setShowVolumeProfile(!showVolumeProfile)}
+                      className="flex items-center gap-2 text-[10px] font-sans text-left text-white/80"
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${showVolumeProfile ? 'bg-indigo-300 shadow-[0_0_6px_#a5b4fc]' : 'bg-transparent border border-white/30'}`} />
+                      Volume Profile
+                    </button>
+                    <button
+                      onClick={() => setShowVolumeProfile(!showVolumeProfile)}
+                      className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded cursor-pointer ${showVolumeProfile ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-white/30'}`}
+                    >
+                      {showVolumeProfile ? 'ACTIVE' : 'OFF'}
+                    </button>
+                  </div>
+                  {showVolumeProfile && (
+                    <div className="flex items-center justify-between pt-1 pb-0.5 pl-3.5 pr-1 border-t border-white/[0.03] mt-1">
+                      <span className="text-[8.5px] font-sans text-white/45">Axis Alignment:</span>
+                      <div className="flex items-center border border-white/10 bg-black/50 rounded overflow-hidden">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setVolumeProfileSide('LEFT'); }}
+                          className={`px-1.5 py-0.5 text-[8px] font-mono font-bold transition-all ${volumeProfileSide === 'LEFT' ? 'bg-indigo-600/20 text-indigo-300' : 'text-white/35 hover:text-white/60'}`}
+                        >
+                          Left
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setVolumeProfileSide('RIGHT'); }}
+                          className={`px-1.5 py-0.5 text-[8px] font-mono font-bold transition-all border-l border-white/10 ${volumeProfileSide === 'RIGHT' ? 'bg-indigo-600/20 text-indigo-300' : 'text-white/35 hover:text-white/60'}`}
+                        >
+                          Right
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <button
-                  onClick={() => setShowVolumeProfile(!showVolumeProfile)}
+                  onClick={() => setShowOFI(!showOFI)}
                   className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
                 >
                   <span className="flex items-center gap-2 text-white/80">
-                    <span className={`w-1.5 h-1.5 rounded-full ${showVolumeProfile ? 'bg-indigo-300 shadow-[0_0_6px_#a5b4fc]' : 'bg-transparent border border-white/30'}`} />
-                    Volume Profile
+                    <span className={`w-1.5 h-1.5 rounded-full ${showOFI ? 'bg-[#0284c7] shadow-[0_0_6px_#0284c7]' : 'bg-transparent border border-white/30'}`} />
+                    Order Flow Imbalance (OFI)
                   </span>
-                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showVolumeProfile ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-white/30'}`}>
-                    {showVolumeProfile ? 'ACTIVE' : 'OFF'}
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showOFI ? 'bg-sky-500/20 text-sky-300' : 'bg-white/5 text-white/30'}`}>
+                    {showOFI ? 'ACTIVE' : 'OFF'}
                   </span>
                 </button>
+
+                {showOFI && (
+                  <div className="mx-2 mb-2 p-2 rounded bg-black/40 border border-white/5 flex flex-col gap-1.5 animate-fadeIn">
+                    <div className="flex items-center justify-between text-[8px] font-mono text-white/40">
+                      <span>FLOW INTENSITY HEATMAP</span>
+                      <span className="text-sky-400 font-bold tracking-widest text-[6px] bg-sky-500/10 px-1 rounded animate-pulse">LIVE</span>
+                    </div>
+                    {/* Visual gradient scale */}
+                    <div className="h-1.5 rounded bg-gradient-to-r from-[#0d9488] via-[#0284c7] to-[#ec4899] w-full opacity-80" />
+                    <div className="flex justify-between items-center text-[7px] font-mono leading-none text-white/50 mb-1">
+                      <span className="flex items-center gap-1">🛡️ Passive Limit Base</span>
+                      <span className="flex items-center gap-1">⚡ HFT Sweep Edge</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1.5 pb-0.5 border-t border-white/[0.04] mt-0.5">
+                      <span className="text-[8.5px] font-sans text-white/50">Imbalance Summary:</span>
+                      <div className="flex items-center border border-white/10 bg-black/50 rounded overflow-hidden p-0.5">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOfiMode('HISTOGRAM'); }}
+                          className={`px-1.5 py-0.5 text-[7.5px] font-mono font-bold transition-all rounded-sm ${ofiMode === 'HISTOGRAM' ? 'bg-[#0284c7]/20 text-sky-400 border border-[#0284c7]/30' : 'text-white/40 hover:text-white/70 border border-transparent'}`}
+                          title="Histogram Mode: Delta value at each level"
+                        >
+                          Histogram
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOfiMode('PROFILE'); }}
+                          className={`px-1.5 py-0.5 text-[7.5px] font-mono font-bold transition-all rounded-sm border-l border-white/10 ${ofiMode === 'PROFILE' ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30' : 'text-white/40 hover:text-white/70 border border-transparent'}`}
+                          title="Profile Mode: Cumulative volume profile shaped by delta"
+                        >
+                          Profile Mode
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   onClick={() => setShowNewsOverlay(!showNewsOverlay)}
@@ -3196,6 +3528,60 @@ export default function ChartContainer({
                   </span>
                   <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showNewsOverlay ? 'bg-rose-500/20 text-rose-300' : 'bg-white/5 text-white/30'}`}>
                     {showNewsOverlay ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowSessions(!showSessions)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showSessions ? 'bg-teal-400 shadow-[0_0_6px_#2dd4bf]' : 'bg-transparent border border-white/30'}`} />
+                    Institutional Sessions & Kill-Zones
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showSessions ? 'bg-teal-500/20 text-teal-300' : 'bg-white/5 text-white/30'}`}>
+                    {showSessions ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowVWAP(!showVWAP)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showVWAP ? 'bg-amber-400 shadow-[0_0_6px_#fbbf24]' : 'bg-transparent border border-white/30'}`} />
+                    Institutional VWAP & Bands
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showVWAP ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-white/30'}`}>
+                    {showVWAP ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowTradeStatsOverlay(!showTradeStatsOverlay)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                  id="btn-toggle-trade-stats-overlay"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showTradeStatsOverlay ? 'bg-indigo-400 shadow-[0_0_6px_#818cf8]' : 'bg-transparent border border-white/30'}`} />
+                    Trade Stats Overlay
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showTradeStatsOverlay ? 'bg-indigo-500/10 text-indigo-300' : 'bg-white/5 text-white/30'}`}>
+                    {showTradeStatsOverlay ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowCorrelationOverlay(!showCorrelationOverlay)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                  id="btn-toggle-correlation-overlay"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showCorrelationOverlay ? 'bg-amber-400 shadow-[0_0_6px_#fbbf24]' : 'bg-transparent border border-white/30'}`} />
+                    Correlation Overlay
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showCorrelationOverlay ? 'bg-amber-500/10 text-amber-300' : 'bg-white/5 text-white/30'}`}>
+                    {showCorrelationOverlay ? 'ON' : 'OFF'}
                   </span>
                 </button>
 
@@ -3495,6 +3881,72 @@ export default function ChartContainer({
             <div className="absolute top-4 left-1/2 -track-translate-x-1/2 -translate-x-1/2 z-[110] bg-indigo-600 text-white font-sans text-[10px] font-black px-4 py-2 rounded-full shadow-2xl border border-indigo-400 flex items-center space-x-2 animate-bounce select-none pointer-events-auto">
               <span className="w-2 h-2 rounded-full bg-white animate-ping" />
               <span className="uppercase tracking-wider">Left-click on chart to place a text note (ESC to cancel)</span>
+            </div>
+          )}
+
+          {/* Asset Correlation Strengths Floating Widget */}
+          {showCorrelationOverlay && (
+            <div 
+              id="chart-correlation-strengths-dashboard"
+              className="absolute bottom-16 left-4 z-[95] bg-[#09090b]/95 border border-white/10 hover:border-indigo-500/30 rounded-xl p-3 shadow-2xl font-sans w-52 pointer-events-auto text-left select-none backdrop-blur-md transition-all duration-300"
+            >
+              <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-2">
+                <span className="text-[9px] font-mono font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-indigo-400 shrink-0 select-none animate-pulse" />
+                  Asset Correlations
+                </span>
+                <button 
+                  onClick={() => setShowCorrelationOverlay(false)}
+                  className="text-[12px] font-bold text-white/40 hover:text-white px-1 leading-none cursor-pointer transition-colors"
+                  title="Hide Overlay"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="text-[8px] text-white/35 uppercase tracking-wider mb-2 font-mono flex items-center justify-between">
+                <span>Base Target:</span>
+                <strong className="text-white font-black bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.2 rounded">{symbol}</strong>
+              </div>
+
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin">
+                {getSymbolCorrelations(symbol as MarketSymbol).map((cor) => {
+                  const isPositive = cor.coefficient >= 0;
+                  const isStrong = Math.abs(cor.coefficient) >= 0.7;
+                  const absPct = Math.round(Math.abs(cor.coefficient) * 100);
+
+                  const badgeBg = isStrong
+                    ? (isPositive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25 shadow-[0_0_8px_rgba(16,185,129,0.1)]' : 'bg-rose-500/10 text-rose-450 border-rose-500/25 shadow-[0_0_8px_rgba(244,63,94,0.1)]')
+                    : (isPositive ? 'bg-emerald-500/5 text-emerald-300 border-emerald-500/15' : 'bg-rose-500/5 text-rose-300 border-rose-500/15');
+
+                  const barBg = isStrong
+                    ? (isPositive ? 'bg-emerald-500/40' : 'bg-rose-500/40')
+                    : (isPositive ? 'bg-emerald-500/20' : 'bg-rose-500/20');
+
+                  return (
+                    <div 
+                      key={cor.symbol} 
+                      className="group/item flex flex-col p-1.5 rounded bg-white/[0.01] hover:bg-white/[0.03] border border-transparent hover:border-white/5 transition-all text-[9.5px]"
+                      title={cor.description}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-white/80 font-bold">{cor.symbol}</span>
+                        <span className={`text-[8px] font-mono px-1 py-0.2 rounded border font-bold uppercase transition-transform group-hover/item:scale-105 ${badgeBg}`}>
+                          {isPositive ? '+' : ''}{cor.coefficient.toFixed(2)}
+                        </span>
+                      </div>
+
+                      {/* Small inline visual progress bar */}
+                      <div className="w-full bg-white/[0.03] h-1 rounded overflow-hidden mt-1.5">
+                        <div 
+                          className={`h-full rounded-full transition-all ${barBg}`}
+                          style={{ width: `${absPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -3866,6 +4318,128 @@ export default function ChartContainer({
               {/* D3 visual overlays group container */}
               <g ref={d3ContainerRef} id="d3-visual-overlays-layer" />
 
+              {/* Sessions and Kill Zones Overlays */}
+              {showSessions && sessionsBlocks.map((block, bIdx) => {
+                const sX1 = getX(block.startIdx) - xStep / 2;
+                const sX2 = getX(block.endIdx) + xStep / 2;
+                const rectWidth = sX2 - sX1;
+                const rectHeight = height - padding.top - padding.bottom;
+                if (rectWidth <= 0) return null;
+
+                return (
+                  <g key={`session-block-${bIdx}`} className="pointer-events-none">
+                    {/* Background fill overlay */}
+                    <rect
+                      x={sX1}
+                      y={padding.top}
+                      width={rectWidth}
+                      height={rectHeight}
+                      fill={block.color}
+                    />
+                    {/* Light dotted boundary marker */}
+                    <line
+                      x1={sX1}
+                      y1={padding.top}
+                      x2={sX1}
+                      y2={height - padding.bottom}
+                      stroke={block.textColor}
+                      strokeWidth={0.8}
+                      strokeDasharray="3,3"
+                      opacity={0.35}
+                    />
+                    {/* Label text placed near the top */}
+                    <text
+                      x={sX1 + 5}
+                      y={padding.top + 12}
+                      className="font-mono text-[8px] font-bold tracking-wider"
+                      fill={block.textColor}
+                      opacity={0.55}
+                    >
+                      ● {block.label}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Volume-Weighted Average Price (VWAP) & Bands */}
+              {showVWAP && vwapData.pathVwap && (
+                <g id="institutional-vwap-layer" className="pointer-events-none select-none">
+                  {/* Inner Band 1.5 SD fill */}
+                  {vwapData.points.length > 1 && (
+                    <path
+                      d={`${vwapData.pathUpper1} L ${[...vwapData.points].reverse().map(p => `${p.x} ${p.yLower1}`).join(' ')} Z`}
+                      fill="rgba(99, 102, 241, 0.02)"
+                      stroke="none"
+                    />
+                  )}
+                  
+                  {/* Outer Band 3.0 Standard Deviation (Institutional Liquidity Reversal Limit) */}
+                  <path
+                    d={vwapData.pathUpper2}
+                    fill="none"
+                    stroke="#818cf8"
+                    strokeWidth={0.8}
+                    strokeDasharray="4,6"
+                    opacity={0.4}
+                  />
+                  <path
+                    d={vwapData.pathLower2}
+                    fill="none"
+                    stroke="#818cf8"
+                    strokeWidth={0.8}
+                    strokeDasharray="4,6"
+                    opacity={0.4}
+                  />
+
+                  {/* Mid Band 1.5 Standard Deviation */}
+                  <path
+                    d={vwapData.pathUpper1}
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth={0.8}
+                    strokeDasharray="2,4"
+                    opacity={0.5}
+                  />
+                  <path
+                    d={vwapData.pathLower1}
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth={0.8}
+                    strokeDasharray="2,4"
+                    opacity={0.5}
+                  />
+
+                  {/* Main VWAP Line */}
+                  <path
+                    d={vwapData.pathVwap}
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    opacity={0.85}
+                  />
+
+                  {/* Outer bands labels */}
+                  {vwapData.points.length > 10 && (() => {
+                    const lastPt = vwapData.points[vwapData.points.length - 1];
+                    if (!lastPt || lastPt.x < padding.left || lastPt.x > width - padding.right) return null;
+                    return (
+                      <>
+                        <text x={lastPt.x - 38} y={lastPt.yVwap - 4} className="fill-amber-400 font-bold font-mono text-[7px]" opacity={0.7}>
+                          VWAP
+                        </text>
+                        <text x={lastPt.x - 48} y={lastPt.yUpper2 - 4} className="fill-indigo-400 font-bold font-mono text-[6.5px]" opacity={0.5}>
+                          +3.0 SD BAND
+                        </text>
+                        <text x={lastPt.x - 48} y={lastPt.yLower2 + 8} className="fill-indigo-400 font-bold font-mono text-[6.5px]" opacity={0.5}>
+                          -3.0 SD BAND
+                        </text>
+                      </>
+                    );
+                  })()}
+                </g>
+              )}
+
               {/* Volume Profile Overlay (rendered as a background-midground histogram) */}
               {showVolumeProfile && volumeProfile && (
                 <g id="volume-profile-layer" className="pointer-events-auto">
@@ -3882,6 +4456,20 @@ export default function ChartContainer({
                     const sellWidth = totalBarWidth * (1 - buyFraction);
 
                     const isHovered = hoveredProfileBin?.index === bin.index;
+
+                    const isRightSide = volumeProfileSide === 'RIGHT';
+
+                    const buyX = isRightSide 
+                      ? width - padding.right - buyWidth 
+                      : padding.left;
+                    
+                    const sellX = isRightSide 
+                      ? width - padding.right - totalBarWidth 
+                      : padding.left + buyWidth;
+
+                    const labelX = isRightSide
+                      ? width - padding.right - totalBarWidth - 6
+                      : padding.left + totalBarWidth + 6;
 
                     return (
                       <g 
@@ -3905,7 +4493,7 @@ export default function ChartContainer({
                         {/* Buy volume portion (vivid cyan-green, semi-transparent) */}
                         {buyWidth > 0 && (
                           <rect
-                            x={padding.left}
+                            x={buyX}
                             y={topY}
                             width={buyWidth}
                             height={rectHeight}
@@ -3918,7 +4506,7 @@ export default function ChartContainer({
                         {/* Sell volume portion (vivid rose-red, semi-transparent) */}
                         {sellWidth > 0 && (
                           <rect
-                            x={padding.left + buyWidth}
+                            x={sellX}
                             y={topY}
                             width={sellWidth}
                             height={rectHeight}
@@ -3930,8 +4518,9 @@ export default function ChartContainer({
 
                         {/* Label indicators (HVN/LVN/POC) at the edge of the bar */}
                         {totalBarWidth > 12 && (bin.type === 'HVN' || bin.type === 'LVN') && (
-                          <g transform={`translate(${padding.left + totalBarWidth + 6}, ${topY + (bottomY - topY) / 2 + 3})`}>
+                          <g transform={`translate(${labelX}, ${topY + (bottomY - topY) / 2 + 3})`}>
                             <text
+                              textAnchor={isRightSide ? "end" : "start"}
                               className={`font-mono text-[7px] font-black tracking-wider uppercase select-none ${
                                 bin.isPOC 
                                   ? 'fill-amber-400' 
@@ -4027,6 +4616,225 @@ export default function ChartContainer({
                       </text>
                       <text x={10} y={50} className="fill-emerald-400 font-mono text-[8px] font-bold">
                         BUY {Math.round(hoveredProfileBin.buyVolume).toLocaleString()} <tspan className="fill-white/20">|</tspan> <tspan className="fill-rose-400">SELL {Math.round(hoveredProfileBin.sellVolume).toLocaleString()}</tspan>
+                      </text>
+                    </g>
+                  )}
+                </g>
+              )}
+
+              {/* REAL-TIME ORDER FLOW IMBALANCE (OFI) LAYER */}
+              {showOFI && orderFlowImbalanceData && (
+                <g id="order-flow-imbalance-layer" className="pointer-events-auto">
+                  {/* Dynamic Gradient Defs for each price bin representing 'Order Flow Intensity' heat-map values */}
+                  <defs>
+                    {orderFlowImbalanceData.bins.map((bin) => {
+                      const gradientId = `ofi-intensity-grad-${bin.index}`;
+                      const isBuying = bin.delta >= 0;
+                      const ofiSide = volumeProfileSide === 'RIGHT' ? 'LEFT' : 'RIGHT';
+                      const isRightSide = ofiSide === 'RIGHT';
+
+                      // Direction matches physical base of the profile (passive/resting) to tip of profile (aggressive/momentum sweep)
+                      const x1 = isRightSide ? "100%" : "0%";
+                      const x2 = isRightSide ? "0%" : "100%";
+
+                      // Base limit fills (Teal for Buy block absorption, Crimson for Sell block absorption)
+                      const stopBase = isBuying ? "#0f766e" : "#881337";
+                      // Mid-ground core prices
+                      const stopMid = isBuying ? "#0284c7" : "#e11d48";
+                      // High-Frequency Sweeps limit (Fuchsia / Vivid Orange representing aggression burst)
+                      const stopTip = isBuying ? "#c084fc" : "#ea580c";
+
+                      return (
+                        <linearGradient key={gradientId} id={gradientId} x1={x1} y1="0%" x2={x2} y2="0%">
+                          <stop offset="0%" stopColor={stopBase} />
+                          <stop offset="45%" stopColor={stopMid} />
+                          <stop offset="100%" stopColor={stopTip} />
+                        </linearGradient>
+                      );
+                    })}
+                  </defs>
+
+                  {orderFlowImbalanceData.bins.map((bin) => {
+                    const topY = getY(bin.maxPrice);
+                    const bottomY = getY(bin.minPrice);
+                    const rectHeight = Math.max(1, bottomY - topY - 0.5);
+
+                    const maxOfiWidth = ofiMode === 'PROFILE'
+                      ? (width - padding.left - padding.right) * 0.24
+                      : (width - padding.left - padding.right) * 0.18;
+
+                    // Compute dynamic barWidth based on active OFI view mode
+                    const totalVolume = bin.buyVolume + bin.sellVolume;
+                    const barWidth = ofiMode === 'PROFILE'
+                      ? (totalVolume / (orderFlowImbalanceData.maxTotalVolume || 1)) * maxOfiWidth
+                      : (Math.abs(bin.delta) / orderFlowImbalanceData.maxAbsDelta) * maxOfiWidth;
+
+                    const isHovered = hoveredOfiBin?.index === bin.index;
+                    const ofiSide = volumeProfileSide === 'RIGHT' ? 'LEFT' : 'RIGHT';
+                    const isRightSide = ofiSide === 'RIGHT';
+
+                    const rectX = isRightSide
+                      ? width - padding.right - barWidth
+                      : padding.left;
+
+                    const edgeX = isRightSide
+                      ? width - padding.right - barWidth
+                      : padding.left + barWidth;
+
+                    // Color palette according to institutional buying vs selling pressure
+                    const isBuyingImbalance = bin.delta >= 0;
+                    const barFill = `url(#ofi-intensity-grad-${bin.index})`;
+                    const edgeStroke = isBuyingImbalance ? '#38bdf8' : '#fb7185';
+                    const isHighImbalance = Math.abs(bin.imbalancePercent) >= 28;
+
+                    return (
+                      <g
+                        key={`ofi-bin-${bin.index}`}
+                        className="cursor-crosshair"
+                        onMouseEnter={() => setHoveredOfiBin(bin)}
+                        onMouseLeave={() => setHoveredOfiBin(null)}
+                      >
+                        {/* Background row highlight on hover */}
+                        {isHovered && (
+                          <rect
+                            x={padding.left}
+                            y={topY}
+                            width={width - padding.left - padding.right}
+                            height={Math.max(1, bottomY - topY)}
+                            fill="rgba(14, 165, 233, 0.04)"
+                            className="pointer-events-none"
+                          />
+                        )}
+
+                        {/* Imbalance bar styled with cumulative/histogram width parameters */}
+                        {barWidth > 0 && (
+                          <rect
+                            x={rectX}
+                            y={topY}
+                            width={barWidth}
+                            height={rectHeight}
+                            fill={barFill}
+                            opacity={isHovered ? 0.75 : isHighImbalance ? 0.50 : 0.35}
+                            style={{ transition: 'opacity 0.2s', mixBlendMode: 'screen' }}
+                          />
+                        )}
+
+                        {/* Edge line highlighting footprint precision */}
+                        {barWidth > 0 && (
+                          <line
+                            x1={edgeX}
+                            y1={topY}
+                            x2={edgeX}
+                            y2={topY + rectHeight}
+                            stroke={edgeStroke}
+                            strokeWidth={isHighImbalance ? 1.2 : 0.6}
+                            opacity={isHovered ? 0.9 : 0.55}
+                            style={{ transition: 'opacity 0.2s' }}
+                          />
+                        )}
+
+                        {/* Imbalance percentage / relative size labels inside or near the bar */}
+                        {barWidth > 20 && rectHeight >= 7 && (
+                          <text
+                            x={isRightSide ? edgeX - 4 : edgeX + 4}
+                            y={topY + rectHeight / 2 + 2.5}
+                            textAnchor={isRightSide ? "end" : "start"}
+                            className="font-mono text-[6.5px] font-bold tracking-tight select-none pointer-events-none"
+                            fill={isBuyingImbalance ? '#7dd3fc' : '#fda4af'}
+                            opacity={isHovered ? 1.0 : isHighImbalance ? 0.85 : 0.6}
+                          >
+                            {isHighImbalance ? '⚡' : ''}
+                            {ofiMode === 'PROFILE' ? 'P:' : ''}
+                            {isBuyingImbalance ? '+' : ''}{Math.round(bin.imbalancePercent)}%
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+
+                  {/* High Imbalance Mitigation Lines (Support/Resistance Imbalance bands) */}
+                  {orderFlowImbalanceData.bins.map((bin) => {
+                    const isHighImbalance = Math.abs(bin.imbalancePercent) >= 33;
+                    if (!isHighImbalance) return null;
+
+                    const yCenter = getY((bin.minPrice + bin.maxPrice) / 2);
+                    const isBuying = bin.delta >= 0;
+
+                    return (
+                      <g key={`ofi-mitigation-${bin.index}`} className="pointer-events-none select-none">
+                        <line
+                          x1={padding.left}
+                          y1={yCenter}
+                          x2={width - padding.right}
+                          y2={yCenter}
+                          stroke={isBuying ? '#0284c7' : '#f43f5e'}
+                          strokeWidth={0.5}
+                          strokeDasharray="2,5"
+                          opacity={0.35}
+                        />
+                      </g>
+                    );
+                  })}
+
+                   {/* Floating tooltip overlay for hovered OFI bin stats with complete intensity classification breakdowns */}
+                  {hoveredOfiBin && (
+                    <g
+                      transform={`translate(${Math.max(padding.left + 15, width / 2 - 95)}, ${Math.min(height - padding.bottom - 118, Math.max(padding.top + 10, getY((hoveredOfiBin.minPrice + hoveredOfiBin.maxPrice) / 2) - 55))})`}
+                      className="pointer-events-none select-none"
+                    >
+                      <rect
+                        width={190}
+                        height={112}
+                        rx={6}
+                        fill="#060608"
+                        stroke={ofiMode === 'PROFILE' ? 'rgba(99, 102, 241, 0.45)' : 'rgba(14, 165, 233, 0.45)'}
+                        strokeWidth={1}
+                        style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.85))' }}
+                      />
+                      {/* Left border-like high-contrast highlight accent line */}
+                      <rect
+                        x={0.5}
+                        y={0.5}
+                        width={3}
+                        height={111}
+                        rx={1}
+                        fill={hoveredOfiBin.intensityRating === 'AGGRESSIVE_HFT' ? '#ec4899' : hoveredOfiBin.intensityRating === 'PASSIVE_INSTITUTIONAL' ? '#2dd4bf' : '#38bdf8'}
+                      />
+                      <text x={10} y={15} className="fill-white font-bold font-sans text-[8.5px] uppercase tracking-wide">
+                        {ofiMode === 'PROFILE' 
+                          ? (hoveredOfiBin.intensityRating === 'PASSIVE_INSTITUTIONAL' ? '📊 Cumulative Passive Block' : '📊 Cumulative Momentum Sweep')
+                          : (hoveredOfiBin.intensityRating === 'AGGRESSIVE_HFT'
+                            ? '⚡ High-Frequency Sweep'
+                            : hoveredOfiBin.intensityRating === 'PASSIVE_INSTITUTIONAL'
+                              ? '🛡️ Institutional passive depth'
+                              : '⚖️ Balanced Order Flow')}
+                      </text>
+                      <text x={10} y={28} className="fill-white/60 font-mono text-[8px]">
+                        Price: {hoveredOfiBin.minPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)} - {hoveredOfiBin.maxPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}
+                      </text>
+                      <text x={10} y={39} className="fill-white/65 font-mono text-[8px]">
+                        Delta: <tspan className={hoveredOfiBin.delta >= 0 ? "fill-sky-400 font-bold" : "fill-rose-400 font-bold"}>{hoveredOfiBin.delta >= 0 ? '+' : ''}{Math.round(hoveredOfiBin.delta).toLocaleString()} lots</tspan>
+                      </text>
+                      <text x={10} y={50} className="fill-white/50 font-mono text-[8px]">
+                        Total Vol: <tspan className="fill-white font-black">{Math.round(hoveredOfiBin.buyVolume + hoveredOfiBin.sellVolume).toLocaleString()} lots</tspan> | <tspan className="fill-[#38bdf8]">{(hoveredOfiBin.buyVolume / (hoveredOfiBin.buyVolume + hoveredOfiBin.sellVolume || 1) * 100).toFixed(0)}% Ask</tspan>
+                      </text>
+
+                      {/* HFT Speed aggression slider indicator */}
+                      <text x={10} y={69} className="fill-white/40 font-mono text-[7px] uppercase tracking-wider">HFT Aggressive sweep:</text>
+                      <rect x={105} y={64} width={70} height={4} rx={1.5} fill="rgba(168, 85, 247, 0.15)" />
+                      <rect x={105} y={64} width={70 * (hoveredOfiBin.hftIntensity / 100)} height={4} rx={1.5} fill="#ec4899" />
+                      <text x={181} y={68} className="fill-pink-400 font-bold font-mono text-[7px]" textAnchor="end">{hoveredOfiBin.hftIntensity}%</text>
+
+                      {/* Passive liquidity block absorption slider indicator */}
+                      <text x={10} y={81} className="fill-white/40 font-mono text-[7px] uppercase tracking-wider">Passive block absorption:</text>
+                      <rect x={105} y={76} width={70} height={4} rx={1.5} fill="rgba(45, 212, 191, 0.15)" />
+                      <rect x={105} y={76} width={70 * (hoveredOfiBin.passiveIntensity / 100)} height={4} rx={1.5} fill="#2dd4bf" />
+                      <text x={181} y={80} className="fill-teal-300 font-bold font-mono text-[7px]" textAnchor="end">{hoveredOfiBin.passiveIntensity}%</text>
+
+                      <rect x={10} y={91} width={171} height={1} fill="rgba(255,255,255,0.08)" />
+
+                      <text x={10} y={102} className={`font-mono text-[7px] font-black uppercase tracking-widest ${hoveredOfiBin.intensityRating === 'AGGRESSIVE_HFT' ? 'fill-pink-400' : hoveredOfiBin.intensityRating === 'PASSIVE_INSTITUTIONAL' ? 'fill-teal-400' : 'fill-white/40'}`}>
+                        {ofiMode === 'PROFILE' ? `Zone Interest: ${hoveredOfiBin.intensityRating.replace('_', ' ')}` : `Footprint: ${hoveredOfiBin.intensityRating.replace('_', ' ')}`}
                       </text>
                     </g>
                   )}
@@ -4475,6 +5283,68 @@ export default function ChartContainer({
                       </g>
                     </g>
                   )}
+                </g>
+              );
+            })}
+
+            {/* Price Y-Axis Floating Trade PnL Tags overlay */}
+            {showTradeStatsOverlay && activeSymbolTrades.map((trade) => {
+              const yEntry = getY(trade.entryPrice);
+              const isEntryVisible = yEntry >= padding.top && yEntry <= height - padding.bottom;
+              if (!isEntryVisible) return null;
+
+              const isProfitable = trade.pnl >= 0;
+              const bgColor = isProfitable ? '#064e3b' : '#3f1a1d';
+              const strokeColor = isProfitable ? '#10b981' : '#f43f5e';
+              const textColor = isProfitable ? '#34d399' : '#fda4af';
+              const sign = isProfitable ? '+' : '';
+              const pnlStr = `${sign}$${trade.pnl.toFixed(2)}`;
+
+              const itemWidth = 58;
+              const itemHeight = 12;
+              const rx = 2;
+              const tagX = width - padding.right + 4;
+              const tagY = yEntry - itemHeight / 2;
+
+              return (
+                <g 
+                  key={`trade-axis-tag-${trade.id}`} 
+                  className="font-mono select-none pointer-events-auto cursor-help"
+                  title={`${trade.side} ${trade.size} LOT position floating PnL: ${pnlStr}`}
+                >
+                  {/* Subtle connection horizontal tick line */}
+                  <line
+                    x1={width - padding.right}
+                    y1={yEntry}
+                    x2={tagX}
+                    y2={yEntry}
+                    stroke={strokeColor}
+                    strokeWidth={1}
+                    strokeDasharray="2,2"
+                    opacity={0.8}
+                  />
+                  {/* Outer tag container shape */}
+                  <rect
+                    x={tagX}
+                    y={tagY}
+                    width={itemWidth}
+                    height={itemHeight}
+                    rx={rx}
+                    fill={bgColor}
+                    fillOpacity={0.95}
+                    stroke={strokeColor}
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={tagX + itemWidth / 2}
+                    y={yEntry + 3}
+                    fill={textColor}
+                    fontSize="7.5px"
+                    fontWeight="black"
+                    textAnchor="middle"
+                  >
+                    {pnlStr}
+                  </text>
                 </g>
               );
             })}

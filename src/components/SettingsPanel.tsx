@@ -23,10 +23,52 @@ import {
   Sliders,
   AlertTriangle,
   Bot,
-  Target
+  Target,
+  Save,
+  Layout,
+  Trash2,
+  SlidersHorizontal,
+  Bookmark
 } from 'lucide-react';
 import Mt5BridgeGuide from './Mt5BridgeGuide';
 import QuickKeysPanel from './QuickKeysPanel';
+
+export interface WorkspacePreset {
+  id: string;
+  name: string;
+  isFactory?: boolean;
+  createdAt?: string;
+  layoutState: {
+    showSentimentGauge: boolean;
+    showMarketSentimentHeatmap: boolean;
+    showSweepAlert: boolean;
+    showHeatmap: boolean;
+    showTWVP: boolean;
+    showSessionPerformance: boolean;
+    showPriceAlertsPanel: boolean;
+  };
+}
+
+interface SettingsPanelProps {
+  layoutState?: {
+    showSentimentGauge: boolean;
+    showMarketSentimentHeatmap: boolean;
+    showSweepAlert: boolean;
+    showHeatmap: boolean;
+    showTWVP: boolean;
+    showSessionPerformance: boolean;
+    showPriceAlertsPanel: boolean;
+  };
+  setLayoutState?: {
+    setShowSentimentGauge: (val: boolean) => void;
+    setShowMarketSentimentHeatmap: (val: boolean) => void;
+    setShowSweepAlert: (val: boolean) => void;
+    setShowHeatmap: (val: boolean) => void;
+    setShowTWVP: (val: boolean) => void;
+    setShowSessionPerformance: (val: boolean) => void;
+    setShowPriceAlertsPanel: (val: boolean) => void;
+  };
+}
 
 interface ConnectionState {
   brokerServer: string;
@@ -48,7 +90,7 @@ interface ConnectionState {
   dailyPnLNegativeThreshold?: number;
 }
 
-export default function SettingsPanel() {
+export default function SettingsPanel({ layoutState, setLayoutState }: SettingsPanelProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
@@ -57,6 +99,142 @@ export default function SettingsPanel() {
   const [permission, setPermission] = useState<NotificationPermission>(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
   );
+
+  // Snapshot Snapshot Presets State
+  const [newSnapshotName, setNewSnapshotName] = useState('');
+  const [snapshotFeedback, setSnapshotFeedback] = useState<string | null>(null);
+  const [customPresets, setCustomPresets] = useState<WorkspacePreset[]>(() => {
+    try {
+      const saved = localStorage.getItem('apex_workspace_layout_presets');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.warn('Failed to parse layout presets', e);
+      return [];
+    }
+  });
+
+  const FACTORY_PRESETS: WorkspacePreset[] = [
+    {
+      id: 'factory_unlocked',
+      name: 'Full Analyst Layout',
+      isFactory: true,
+      layoutState: {
+        showSentimentGauge: true,
+        showMarketSentimentHeatmap: true,
+        showSweepAlert: true,
+        showHeatmap: true,
+        showTWVP: true,
+        showSessionPerformance: true,
+        showPriceAlertsPanel: true,
+      }
+    },
+    {
+      id: 'factory_minimalist',
+      name: 'Execution Clean Space',
+      isFactory: true,
+      layoutState: {
+        showSentimentGauge: false,
+        showMarketSentimentHeatmap: false,
+        showSweepAlert: false,
+        showHeatmap: false,
+        showTWVP: false,
+        showSessionPerformance: false,
+        showPriceAlertsPanel: false,
+      }
+    },
+    {
+      id: 'factory_sentiment',
+      name: 'Sentiment & Flows Focus',
+      isFactory: true,
+      layoutState: {
+        showSentimentGauge: true,
+        showMarketSentimentHeatmap: true,
+        showSweepAlert: true,
+        showHeatmap: true,
+        showTWVP: false,
+        showSessionPerformance: false,
+        showPriceAlertsPanel: false,
+      }
+    },
+    {
+      id: 'factory_analysis',
+      name: 'Core Market Analysis',
+      isFactory: true,
+      layoutState: {
+        showSentimentGauge: false,
+        showMarketSentimentHeatmap: false,
+        showSweepAlert: false,
+        showHeatmap: false,
+        showTWVP: true,
+        showSessionPerformance: true,
+        showPriceAlertsPanel: true,
+      }
+    }
+  ];
+
+  const isPresetMatching = (presetState: WorkspacePreset['layoutState']) => {
+    if (!layoutState) return false;
+    return (
+      layoutState.showSentimentGauge === presetState.showSentimentGauge &&
+      layoutState.showMarketSentimentHeatmap === presetState.showMarketSentimentHeatmap &&
+      layoutState.showSweepAlert === presetState.showSweepAlert &&
+      layoutState.showHeatmap === presetState.showHeatmap &&
+      layoutState.showTWVP === presetState.showTWVP &&
+      layoutState.showSessionPerformance === presetState.showSessionPerformance &&
+      layoutState.showPriceAlertsPanel === presetState.showPriceAlertsPanel
+    );
+  };
+
+  const handleSaveSnapshot = () => {
+    if (!newSnapshotName.trim() || !layoutState) return;
+    
+    const newSnapshot: WorkspacePreset = {
+      id: `custom_${Date.now()}`,
+      name: newSnapshotName.trim(),
+      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString(),
+      layoutState: {
+        showSentimentGauge: layoutState.showSentimentGauge,
+        showMarketSentimentHeatmap: layoutState.showMarketSentimentHeatmap,
+        showSweepAlert: layoutState.showSweepAlert,
+        showHeatmap: layoutState.showHeatmap,
+        showTWVP: layoutState.showTWVP,
+        showSessionPerformance: layoutState.showSessionPerformance,
+        showPriceAlertsPanel: layoutState.showPriceAlertsPanel,
+      }
+    };
+
+    const updated = [...customPresets, newSnapshot];
+    setCustomPresets(updated);
+    localStorage.setItem('apex_workspace_layout_presets', JSON.stringify(updated));
+    setNewSnapshotName('');
+    
+    setSnapshotFeedback(`Snapshot "${newSnapshot.name}" saved!`);
+    setTimeout(() => setSnapshotFeedback(null), 3000);
+  };
+
+  const handleLoadSnapshot = (preset: WorkspacePreset) => {
+    if (!setLayoutState) return;
+    
+    setLayoutState.setShowSentimentGauge(preset.layoutState.showSentimentGauge);
+    setLayoutState.setShowMarketSentimentHeatmap(preset.layoutState.showMarketSentimentHeatmap);
+    setLayoutState.setShowSweepAlert(preset.layoutState.showSweepAlert);
+    setLayoutState.setShowHeatmap(preset.layoutState.showHeatmap);
+    setLayoutState.setShowTWVP(preset.layoutState.showTWVP);
+    setLayoutState.setShowSessionPerformance(preset.layoutState.showSessionPerformance);
+    setLayoutState.setShowPriceAlertsPanel(preset.layoutState.showPriceAlertsPanel);
+
+    setSnapshotFeedback(`Loaded "${preset.name}" preset!`);
+    setTimeout(() => setSnapshotFeedback(null), 3000);
+  };
+
+  const handleDeleteSnapshot = (id: string, name: string) => {
+    const updated = customPresets.filter(p => p.id !== id);
+    setCustomPresets(updated);
+    localStorage.setItem('apex_workspace_layout_presets', JSON.stringify(updated));
+    
+    setSnapshotFeedback(`Snapshot "${name}" deleted.`);
+    setTimeout(() => setSnapshotFeedback(null), 3000);
+  };
 
   const [settings, setSettings] = useState<ConnectionState>(() => {
     try {
@@ -634,6 +812,167 @@ export default function SettingsPanel() {
                 )}
               </div>
 
+            </div>
+          </div>
+
+          {/* Card 5: Configuration snapshots and Layout templates */}
+          <div className="bg-[#0a0a0b] border border-white/5 rounded-lg p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3 font-mono">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-1.5 bg-indigo-500/10 border border-indigo-500/25 rounded">
+                  <Layout className="w-4.5 h-4.5 text-indigo-400 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold uppercase text-white tracking-widest">
+                    Workspace Layout Snapshots
+                  </h3>
+                  <p className="text-[10px] text-white/30">Capture or reload custom workspace configurations and widget visibilities.</p>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/10 text-[8.5px] text-indigo-300 font-bold uppercase tracking-widest hidden sm:inline">
+                PRESETS ENGINE
+              </span>
+            </div>
+
+            {/* Snapshot Action Feed / Message Feedback */}
+            {snapshotFeedback && (
+              <div id="snapshot-feedback-banner" className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-mono px-3 py-2 rounded animate-fadeIn flex items-center justify-between select-none">
+                <span>{snapshotFeedback}</span>
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                </span>
+              </div>
+            )}
+
+            {/* Input to save active workspace snapshot */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono font-bold text-white/50 uppercase block">Capture Current Layout State</label>
+              <div className="flex gap-2">
+                <input
+                  id="input-new-snapshot-name"
+                  type="text"
+                  value={newSnapshotName}
+                  onChange={(e) => setNewSnapshotName(e.target.value)}
+                  placeholder="e.g. Clean Charting, Full Intelligence"
+                  className="flex-1 bg-[#050505] border border-white/10 rounded px-2.5 py-1.5 text-xs text-white font-mono placeholder-white/20 outline-none focus:border-indigo-500/40"
+                />
+                <button
+                  id="btn-save-workspace-snapshot"
+                  onClick={handleSaveSnapshot}
+                  disabled={!newSnapshotName.trim() || !layoutState}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-white/5 disabled:text-white/20 disabled:border-transparent text-white border border-indigo-500/30 text-xs font-mono font-bold uppercase rounded transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                  title="Capture current layout configuration as snapshot"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  SNAPSHOT
+                </button>
+              </div>
+              {!layoutState && (
+                <p className="text-[8.5px] text-[#fbbf24]/55 font-mono mt-1 leading-normal uppercase">
+                  Layout state setters are currently loading. Use the factory presets below to toggle components.
+                </p>
+              )}
+            </div>
+
+            {/* Presets and custom snapshots view list */}
+            <div className="space-y-3 pt-2">
+              <div className="text-[9px] font-mono font-bold text-white/40 uppercase tracking-widest border-b border-white/5 pb-1 flex items-center justify-between">
+                <span>Available Layouts</span>
+                <span>Active Status</span>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+                {/* 1. Factory Presets */}
+                {FACTORY_PRESETS.map((p) => {
+                  const isActive = isPresetMatching(p.layoutState);
+                  return (
+                    <div 
+                      key={p.id}
+                      className={`group flex items-center justify-between p-2 rounded border transition-all text-left ${isActive ? 'bg-[#4f46e5]/10 border-indigo-500/35 shadow-[0_0_8px_rgba(99,102,241,0.05)]' : 'bg-white/[0.01] border-white/5 hover:bg-white/[0.03] hover:border-white/15'}`}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[11px] font-mono font-bold text-white group-hover:text-indigo-300 transition-colors uppercase leading-tight">
+                          {p.name}
+                        </span>
+                        <span className="text-[8px] font-mono text-white/30 uppercase">
+                          System Template • factory default
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {isActive ? (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/35 text-[7px] font-mono font-extrabold text-[#10b981] tracking-wider animate-pulse animate-duration-1000">
+                            ACTIVE
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleLoadSnapshot(p)}
+                            disabled={!setLayoutState}
+                            className="px-2 py-0.8 bg-[#0c0c0e] hover:bg-white/5 border border-white/10 text-white font-mono text-[8.5px] uppercase rounded transition-all cursor-pointer disabled:opacity-40"
+                            title="Load preset workspace layout"
+                          >
+                            LOAD
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* 2. Custom Presets */}
+                {customPresets.map((p) => {
+                  const isActive = isPresetMatching(p.layoutState);
+                  return (
+                    <div 
+                      key={p.id}
+                      className={`group flex items-center justify-between p-2 rounded border transition-all text-left ${isActive ? 'bg-[#4f46e5]/10 border-indigo-500/35 shadow-[0_0_8px_rgba(99,102,241,0.05)]' : 'bg-white/[0.01] border-white/5 hover:bg-white/[0.03] hover:border-white/15'}`}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[11px] font-mono font-bold text-indigo-200 group-hover:text-indigo-300 transition-colors uppercase leading-tight">
+                          {p.name}
+                        </span>
+                        <span className="text-[8px] font-mono text-[#fbbf24]/60 uppercase">
+                          User Snapshot • {p.createdAt || 'Saved Preset'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 font-mono">
+                        {isActive && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/35 text-[7px] font-mono font-extrabold text-[#10b981] tracking-wider">
+                            ACTIVE
+                          </span>
+                        )}
+                        
+                        {!isActive && (
+                          <button
+                            onClick={() => handleLoadSnapshot(p)}
+                            disabled={!setLayoutState}
+                            className="px-2 py-0.8 bg-[#0c0c0e] hover:bg-[#312e81]/30 border border-indigo-500/20 text-white font-mono text-[8.5px] uppercase rounded transition-all cursor-pointer disabled:opacity-40"
+                            title="Load layout snapshot configuration"
+                          >
+                            LOAD
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleDeleteSnapshot(p.id, p.name)}
+                          className="p-1 text-white/35 hover:text-rose-500 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 rounded transition-all cursor-pointer"
+                          title="Delete snapshot preset"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {customPresets.length === 0 && (
+                  <div className="text-center py-4 bg-white/[0.01] rounded border border-white/[0.03] text-white/20 font-mono text-[9px] uppercase tracking-wide">
+                    No custom snapshots captured yet.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

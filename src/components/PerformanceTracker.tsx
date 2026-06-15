@@ -307,6 +307,11 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
   const [savingId, setSavingId] = useState<string | null>(null);
   const [journalError, setJournalError] = useState<string | null>(null);
 
+  // Session PnL Heatmap overlay states
+  const [showHeatmapOverlay, setShowHeatmapOverlay] = useState<boolean>(false);
+  const [heatmapMetric, setHeatmapMetric] = useState<'PNL' | 'DRAWDOWN' | 'COUNT'>('PNL');
+  const [selectedHeatmapHour, setSelectedHeatmapHour] = useState<number | null>(null);
+
   const INITIAL_BALANCE = 10000;
 
   // Complete historical timeline of closed trades, combining backend DB and audited history
@@ -334,6 +339,77 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
     // Sort chronologically
     return combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [trades, localOverrides]);
+
+  // Session PnL Heatmap calculations to identify time-based performance, peak and trough drawdowns
+  const sessionHeatmapData = useMemo(() => {
+    const hours = Array.from({ length: 24 }, (_, i) => ({
+      hour: i,
+      trades: [] as Trade[],
+      pnl: 0,
+      drawdown: 0, // deepest drawdown found in this hour
+      count: 0,
+    }));
+
+    let peakEquity = INITIAL_BALANCE;
+    let runningEquity = INITIAL_BALANCE;
+
+    allClosedTradesSorted.forEach((t) => {
+      runningEquity += t.pnl;
+      if (runningEquity > peakEquity) {
+        peakEquity = runningEquity;
+      }
+      const dd = ((peakEquity - runningEquity) / peakEquity) * 100;
+
+      try {
+        const d = new Date(t.timestamp);
+        const hr = d.getUTCHours();
+        if (hr >= 0 && hr < 24) {
+          hours[hr].trades.push(t);
+          hours[hr].pnl += t.pnl;
+          hours[hr].count += 1;
+          if (dd > hours[hr].drawdown) {
+            hours[hr].drawdown = dd;
+          }
+        }
+      } catch (err) {
+        // Safe fallback
+      }
+    });
+
+    const activeHours = hours.filter(h => h.count > 0);
+    let peakPnLHour = -1;
+    let troughPnLHour = -1;
+    let peakDdHour = -1;
+    let minDdHour = -1;
+
+    if (activeHours.length > 0) {
+      // Peak PnL Hour
+      const sortedByPnL = [...activeHours].sort((a, b) => b.pnl - a.pnl);
+      if (sortedByPnL[0] && sortedByPnL[0].pnl > 0) {
+        peakPnLHour = sortedByPnL[0].hour;
+      }
+      if (sortedByPnL[sortedByPnL.length - 1] && sortedByPnL[sortedByPnL.length - 1].pnl < 0) {
+        troughPnLHour = sortedByPnL[sortedByPnL.length - 1].hour;
+      }
+
+      // Drawdown Peak and Troughs
+      const sortedByDd = [...activeHours].sort((a, b) => b.drawdown - a.drawdown);
+      if (sortedByDd[0] && sortedByDd[0].drawdown > 0) {
+        peakDdHour = sortedByDd[0].hour;
+      }
+      if (sortedByDd[sortedByDd.length - 1]) {
+        minDdHour = sortedByDd[sortedByDd.length - 1].hour;
+      }
+    }
+
+    return {
+      hours,
+      peakPnLHour,
+      troughPnLHour,
+      peakDdHour,
+      minDdHour,
+    };
+  }, [allClosedTradesSorted]);
 
   const handleToggleExpand = (trade: Trade) => {
     if (expandedTradeId === trade.id) {
@@ -746,78 +822,316 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
       {/* Interactive Live Equity Curve Plot & Strategy Win-Rate Gauge */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Equity curve panel */}
-        <div className="lg:col-span-6 bg-[#0a0a0b] border border-white/5 p-5 rounded-lg flex flex-col justify-between h-[360px]">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-white font-mono flex items-center space-x-1.5">
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <span>Audited Cumulative Equity Curve ($)</span>
-              </h3>
-              <p className="text-[10px] text-white/40 mt-0.5">Real-time compounded growth from genesis initial $10k account scale.</p>
+        {/* Equity curve / Heatmap panel */}
+        <div id="perf-pnl-interactive-panel" className="lg:col-span-6 bg-[#0a0a0b] border border-white/5 p-5 rounded-lg flex flex-col justify-between h-[360px] relative overflow-hidden">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/[0.03] select-none">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-1 px-1.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[#818cf8]">
+                {showHeatmapOverlay ? (
+                  <Activity className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white font-mono flex items-center space-x-1.5">
+                  <span>{showHeatmapOverlay ? "Session PnL Heatmap" : "Audited Cumulative Equity Curve ($)"}</span>
+                </h3>
+                <p className="text-[9px] text-white/40 mt-0.5">
+                  {showHeatmapOverlay 
+                    ? "Time-based performance heatmap identifying peak return and deepest drawdowns." 
+                    : "Real-time compounded growth from genesis initial $10k account scale."}
+                </p>
+              </div>
             </div>
-            <div className="text-right select-none font-mono">
-              <span className="text-[11px] font-black text-indigo-300 uppercase block tracking-wider">MTXquant High-Frequency core</span>
+
+            <div className="flex items-center bg-[#070709] p-0.5 rounded border border-white/10 text-xs font-mono">
+              <button
+                id="btn-toggle-view-curve"
+                onClick={() => setShowHeatmapOverlay(false)}
+                className={`px-2 py-1 text-[8.5px] font-bold uppercase rounded cursor-pointer transition-all ${
+                  !showHeatmapOverlay
+                    ? "bg-indigo-600/15 border border-indigo-500/35 text-white"
+                    : "bg-transparent border-transparent text-white/35 hover:text-white/70"
+                }`}
+              >
+                Curve
+              </button>
+              <button
+                id="btn-toggle-view-heatmap"
+                onClick={() => { setShowHeatmapOverlay(true); setSelectedHeatmapHour(null); }}
+                className={`px-2 py-1 text-[8.5px] font-bold uppercase rounded cursor-pointer transition-all ${
+                  showHeatmapOverlay
+                    ? "bg-amber-500/15 border border-amber-500/35 text-white"
+                    : "bg-transparent border-transparent text-white/35 hover:text-white/70"
+                }`}
+              >
+                Heatmap
+              </button>
             </div>
           </div>
 
-          <div className="flex-1 w-full text-[10px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={equityCurveData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" opacity={0.03} />
-                <XAxis 
-                  dataKey="index" 
-                  stroke="#ffffff" 
-                  opacity={0.3} 
-                  tickLine={false}
-                  tickFormatter={(val) => val === 0 ? 'Genesis' : `#${val}`}
-                />
-                <YAxis 
-                  stroke="#ffffff" 
-                  opacity={0.3} 
-                  domain={['dataMin - 500', 'dataMax + 500']}
-                  tickLine={false}
-                  tickFormatter={(val) => `$${val}`}
-                />
-                <Tooltip
-                  contentStyle={{ 
-                    backgroundColor: '#0c0c0e', 
-                    border: '1px solid rgba(99, 102, 241, 0.4)', 
-                    borderLeft: '3px solid #6366f1',
-                    borderRadius: '6px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
-                    fontFamily: 'monospace' 
-                  }}
-                  labelStyle={{ color: '#a5b4fc' }}
-                  itemStyle={{ color: '#fff', fontWeight: 'bold' }}
-                  formatter={(value: any, name: any, props: any) => {
-                    if (name === 'balance') return [`$${parseFloat(value).toFixed(2)}`, 'Equity Balance'];
-                    if (name === 'drawdown') return [`${value}%`, 'Drawdown'];
-                    return [value, name];
-                  }}
-                  labelFormatter={(index) => {
-                    const idxStr = Number(index);
-                    if (idxStr === 0) return 'Genesis Capital Block';
-                    const tr = equityCurveData[idxStr];
-                    return `Post-Trade Reference #${index} (${tr ? tr.symbol : '—'})`;
-                  }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="balance" 
-                  stroke="#4f46e5" 
-                  strokeWidth={2.5}
-                  fillOpacity={1} 
-                  fill="url(#equityGradient)" 
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="flex-1 w-full text-[10px] flex flex-col justify-between min-h-0">
+            {!showHeatmapOverlay ? (
+              <div className="flex-1 w-full h-full text-[10px] min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={equityCurveData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" opacity={0.03} />
+                    <XAxis 
+                      dataKey="index" 
+                      stroke="#ffffff" 
+                      opacity={0.3} 
+                      tickLine={false}
+                      tickFormatter={(val) => val === 0 ? 'Genesis' : `#${val}`}
+                    />
+                    <YAxis 
+                      stroke="#ffffff" 
+                      opacity={0.3} 
+                      domain={['dataMin - 500', 'dataMax + 500']}
+                      tickLine={false}
+                      tickFormatter={(val) => `$${val}`}
+                    />
+                    <Tooltip
+                      contentStyle={{ 
+                        backgroundColor: '#0c0c0e', 
+                        border: '1px solid rgba(99, 102, 241, 0.4)', 
+                        borderLeft: '3px solid #6366f1',
+                        borderRadius: '6px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.85)',
+                        fontFamily: 'monospace' 
+                      }}
+                      labelStyle={{ color: '#a5b4fc' }}
+                      itemStyle={{ color: '#fff', fontWeight: 'bold' }}
+                      formatter={(value: any, name: any, props: any) => {
+                        if (name === 'balance') return [`$${parseFloat(value).toFixed(2)}`, 'Equity Balance'];
+                        if (name === 'drawdown') return [`${value}%`, 'Drawdown'];
+                        return [value, name];
+                      }}
+                      labelFormatter={(index) => {
+                        const idxStr = Number(index);
+                        if (idxStr === 0) return 'Genesis Capital Block';
+                        const tr = equityCurveData[idxStr];
+                        return `Post-Trade Reference #${index} (${tr ? tr.symbol : '—'})`;
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="balance" 
+                      stroke="#4f46e5" 
+                      strokeWidth={2.5}
+                      fillOpacity={1} 
+                      fill="url(#equityGradient)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="flex-1 w-full flex flex-col justify-between min-h-0 select-none animate-fadeIn">
+                {/* Metric Selectors bar */}
+                <div className="flex items-center justify-between mb-2 pb-1 font-mono text-[9.5px]">
+                  <div className="flex items-center space-x-1 border border-white/5 bg-black/40 p-0.5 rounded">
+                    <button
+                      onClick={() => { setHeatmapMetric('PNL'); setSelectedHeatmapHour(null); }}
+                      className={`px-2 py-0.5 rounded text-[8.5px] font-bold uppercase tracking-wide transition-all ${
+                        heatmapMetric === 'PNL'
+                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                          : 'text-white/40 hover:text-white/70 shadow-none'
+                      }`}
+                    >
+                      PnL ($)
+                    </button>
+                    <button
+                      onClick={() => { setHeatmapMetric('DRAWDOWN'); setSelectedHeatmapHour(null); }}
+                      className={`px-2 py-0.5 rounded text-[8.5px] font-bold uppercase tracking-wide transition-all ${
+                        heatmapMetric === 'DRAWDOWN'
+                          ? 'bg-rose-500/15 text-rose-455 border border-rose-500/20'
+                          : 'text-white/40 hover:text-white/70 shadow-none'
+                      }`}
+                    >
+                      Drawdown (%)
+                    </button>
+                    <button
+                      onClick={() => { setHeatmapMetric('COUNT'); setSelectedHeatmapHour(null); }}
+                      className={`px-2 py-0.5 rounded text-[8.5px] font-bold uppercase tracking-wide transition-all ${
+                        heatmapMetric === 'COUNT'
+                          ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20'
+                          : 'text-white/40 hover:text-white/70 shadow-none'
+                      }`}
+                    >
+                      Volume
+                    </button>
+                  </div>
+                  <span className="text-white/20 uppercase text-[8.5px] font-extrabold flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-[#fbbf24]" />
+                    <span>UTC Time Intervals (00-23)</span>
+                  </span>
+                </div>
+
+                {/* Heatmap Grid (4 Sessions x 6 Hours) */}
+                <div className="grid grid-rows-4 gap-1 flex-1 min-h-0 max-h-[175px] overflow-y-auto pr-0.5 my-1">
+                  {[
+                    { title: "Asia", hours: [0, 1, 2, 3, 4, 5] },
+                    { title: "LDN", hours: [6, 7, 8, 9, 10, 11] },
+                    { title: "US Over", hours: [12, 13, 14, 15, 16, 17] },
+                    { title: "Late NY", hours: [18, 19, 20, 21, 22, 23] },
+                  ].map((session) => (
+                    <div key={session.title} className="flex items-center gap-2">
+                      {/* Session Label */}
+                      <div className="w-[45px] shrink-0 font-mono text-[8px] tracking-tight uppercase font-extrabold text-[#818cf8]/70">
+                        {session.title}
+                      </div>
+
+                      {/* 6 Hour Cells */}
+                      <div className="grid grid-cols-6 gap-1 w-full">
+                        {session.hours.map((hr) => {
+                          const cell = sessionHeatmapData.hours[hr];
+                          const isSelected = selectedHeatmapHour === hr;
+                          
+                          let cellBg = "bg-[#0b0c0f]/80 border-white/5 text-white/20";
+                          let labelColor = "text-white/30";
+                          let metricText = "—";
+                          let badgeText = "";
+
+                          const isPeakPnL = hr === sessionHeatmapData.peakPnLHour;
+                          const isTroughPnL = hr === sessionHeatmapData.troughPnLHour;
+                          const isPeakDd = hr === sessionHeatmapData.peakDdHour;
+                          const isMinDd = hr === sessionHeatmapData.minDdHour;
+
+                          if (cell.count > 0) {
+                            labelColor = "text-white/60";
+                            if (heatmapMetric === 'PNL') {
+                              metricText = cell.pnl >= 0 
+                                ? `+$${Math.round(cell.pnl)}` 
+                                : `-$${Math.abs(Math.round(cell.pnl))}`;
+
+                              if (cell.pnl > 0) {
+                                if (cell.pnl < 500) cellBg = "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
+                                else if (cell.pnl < 1500) cellBg = "bg-emerald-500/20 border-emerald-500/35 text-emerald-300";
+                                else cellBg = "bg-emerald-500/30 border-emerald-500/50 text-emerald-100 font-bold";
+                              } else {
+                                if (cell.pnl > -500) cellBg = "bg-rose-500/10 border-rose-500/20 text-rose-400";
+                                else if (cell.pnl > -1500) cellBg = "bg-rose-500/20 border-rose-500/35 text-rose-300";
+                                else cellBg = "bg-rose-500/30 border-rose-500/50 text-rose-100 font-bold";
+                              }
+
+                              if (isPeakPnL) badgeText = "★";
+                              else if (isTroughPnL) badgeText = "⚠";
+                            } else if (heatmapMetric === 'DRAWDOWN') {
+                              metricText = `${cell.drawdown.toFixed(2)}%`;
+
+                              if (cell.drawdown < 1.0) cellBg = "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
+                              else if (cell.drawdown < 3.0) cellBg = "bg-amber-500/10 border-amber-500/30 text-amber-300";
+                              else cellBg = "bg-rose-900/20 border-rose-500/40 text-rose-300 font-bold";
+
+                              if (isPeakDd) badgeText = "⚠";
+                              else if (isMinDd) badgeText = "🛡";
+                            } else {
+                              metricText = `${cell.count} Tr`;
+                              cellBg = "bg-indigo-500/10 border border-indigo-500/25 text-indigo-300";
+                            }
+                          }
+
+                          return (
+                            <button
+                              key={hr}
+                              onClick={() => setSelectedHeatmapHour(isSelected ? null : hr)}
+                              className={`relative rounded p-1 border ease-out duration-150 cursor-pointer h-8 flex flex-col justify-between ${cellBg} ${
+                                isSelected ? 'ring-1 ring-amber-500 border-amber-400/60 scale-[1.02] z-10 bg-white/[0.05]' : 'hover:border-white/15'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full text-[6.5px] leading-none text-white/30">
+                                <span className={labelColor}>{String(hr).padStart(2, '0')}:00</span>
+                                {badgeText && (
+                                  <span className={`text-[6.5px] font-extrabold px-0.5 rounded leading-none ${
+                                    badgeText === '★' || badgeText === '🛡' ? 'text-emerald-300' : 'text-rose-455 animate-pulse'
+                                  }`}>
+                                    {badgeText}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[8.5px] font-semibold tracking-tight pb-0.5 break-all truncate text-center w-full">
+                                {metricText}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Inline Heatmap Inspection detailed overlay panel */}
+                <div className="bg-black/60 border border-white/5 rounded px-2.5 py-2 font-mono text-[9px] mt-1.5 leading-relaxed shrink-0 select-none">
+                  {selectedHeatmapHour !== null ? (() => {
+                    const data = sessionHeatmapData.hours[selectedHeatmapHour];
+                    const wins = data.trades.filter(t => t.pnl > 0).length;
+                    const losses = data.trades.filter(t => t.pnl <= 0).length;
+                    const winrate = data.count > 0 ? (wins / data.count) * 100 : 0;
+                    return (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <strong className="text-amber-400 font-bold uppercase">{String(selectedHeatmapHour).padStart(2, '0')}:00 UTC Interval Detail:</strong>
+                          <div className="text-white/80 mt-0.5 flex items-center gap-x-2 flex-wrap">
+                            <span>Trades: <strong className="text-white">{data.count}</strong> ({wins}W - {losses}L)</span>
+                            <span>|</span>
+                            <span>P&L: <strong className={data.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}>${data.pnl.toFixed(0)}</strong></span>
+                            <span>|</span>
+                            <span>Max Drawdown: <strong className="text-rose-300">{data.drawdown.toFixed(2)}%</strong></span>
+                            <span>|</span>
+                            <span>Win Rate: <strong className="text-emerald-400">{winrate.toFixed(0)}%</strong></span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setSelectedHeatmapHour(null)}
+                          className="p-0.5 rounded bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/70"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })() : (() => {
+                    const peakH = sessionHeatmapData.hours[sessionHeatmapData.peakPnLHour];
+                    const troughH = sessionHeatmapData.hours[sessionHeatmapData.troughPnLHour];
+                    const peakDdH = sessionHeatmapData.hours[sessionHeatmapData.peakDdHour];
+
+                    let peakDesc = "No peak pattern discovered.";
+                    let troughDesc = "No critical trough drawdown discovered.";
+
+                    if (peakH && peakH.count > 0) {
+                      peakDesc = `${String(peakH.hour).padStart(2, '0')}:00 UTC Peak ($${Math.round(peakH.pnl)})`;
+                    }
+                    if (peakDdH && peakDdH.count > 0) {
+                      troughDesc = `${String(peakDdH.hour).padStart(2, '0')}:00 UTC Drawdown Trough (-${peakDdH.drawdown.toFixed(1)}%)`;
+                    } else if (troughH && troughH.count > 0) {
+                      troughDesc = `${String(troughH.hour).padStart(2, '0')}:00 UTC Trough (-$${Math.abs(Math.round(troughH.pnl))})`;
+                    }
+
+                    return (
+                      <div className="grid grid-cols-2 gap-3 divide-x divide-white/5 text-[8.5px]">
+                        <div>
+                          <div className="text-emerald-400 font-extrabold uppercase flex items-center gap-1 mb-0.5">
+                            <span>★</span> Peak Session Target
+                          </div>
+                          <span className="text-white/60 block leading-tight truncate" title={peakDesc}>{peakDesc}</span>
+                        </div>
+                        <div className="pl-3">
+                          <div className="text-rose-400 font-extrabold uppercase flex items-center gap-1 mb-0.5 animate-pulse">
+                            <span>⚠</span> Drawdown Trough Point
+                          </div>
+                          <span className="text-white/60 block leading-tight truncate" title={troughDesc}>{troughDesc}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

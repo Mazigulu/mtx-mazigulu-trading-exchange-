@@ -80,7 +80,8 @@ import {
   LogOut,
   Trash2,
   Plus,
-  Sliders
+  Sliders,
+  Newspaper
 } from 'lucide-react';
 
 const emptyPositionsImg = new URL('./assets/images/empty_positions_1781203013885.jpg', import.meta.url).href;
@@ -174,6 +175,7 @@ export default function App() {
   };
 
   const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'INTELLIGENCE' | 'EXECUTION' | 'RISK' | 'RESEARCH' | 'SETTINGS'>('INTELLIGENCE');
+  const [researchSubTab, setResearchSubTab] = useState<'REPLAY' | 'NEWSDESK' | 'LEDGER'>('REPLAY');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isChartExpanded, setIsChartExpanded] = useState(true);
@@ -385,6 +387,17 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
   const [isCompactPositions, setIsCompactPositions] = useState<boolean>(false);
   const [showSessionPerformance, setShowSessionPerformance] = useState<boolean>(true);
   const [showPriceAlertsPanel, setShowPriceAlertsPanel] = useState<boolean>(false);
+  const [lastFetchTime, setLastFetchTime] = useState<Date | null>(() => new Date());
+  const [secondsSinceSync, setSecondsSinceSync] = useState<number>(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (lastFetchTime) {
+        setSecondsSinceSync(Math.floor((Date.now() - lastFetchTime.getTime()) / 1000));
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lastFetchTime]);
   const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>(() => {
     try {
       const stored = localStorage.getItem('priceAlerts');
@@ -809,6 +822,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       } catch (err) {
         console.warn('Failed to sync forex-factory:', err);
       }
+      setLastFetchTime(new Date());
     } catch (e) {
       console.error('Failed syncing live market matrix:', e);
     } finally {
@@ -1529,6 +1543,19 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-indigo-400' : ''}`} />
               </button>
+
+              {/* Dynamic Auto-Sync Elapsed Time Indicator */}
+              <div 
+                id="header-auto-sync-indicator"
+                className="hidden sm:flex items-center space-x-1.5 px-2 bg-white/5 border border-white/10 hover:border-indigo-500/20 rounded h-8 font-mono text-[9px] text-white/55 select-none shrink-0 transition-colors uppercase tracking-tight"
+                title="Auto-Sync: Seconds elapsed since last successful financial market data fetch"
+              >
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                <span>SYNCED: <strong className="font-extrabold text-[#10b981] tabular-nums">{secondsSinceSync || 0}s</strong> ago</span>
+              </div>
               
               {/* Session Time Discipline Indicator - hidden on mobile to avoid row leaks */}
               <button
@@ -2589,240 +2616,404 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               </div>
             ) : activeTab === 'RESEARCH' ? (
               <div id="backtest-workspace" className="animate-fadeIn space-y-6">
-                {/* Historical Replay Engine controls relocated from top of Intelligence */}
-                <div id="intelligence-control-bar" className="bg-[#0c0c0e]/95 border border-white/5 rounded-lg p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 font-mono select-none">
-                  
-                  {/* Left block: Title and Icon */}
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-indigo-500/10 rounded border border-indigo-500/25 text-indigo-400 shrink-0">
-                      <Calendar className="w-4 h-4" />
+                
+                {/* RESEARCH SUBTAB NAV PANEL */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-[#0a0a0c]/90 border border-white/5 rounded-lg p-3 font-mono">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 bg-indigo-500/10 rounded-md border border-indigo-500/20 text-indigo-400">
+                      <Award className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className="text-xs font-bold uppercase text-white tracking-wider">Historical Replay Engine</h3>
-                      <p className="text-[9.5px] text-white/30 font-sans mt-0.5">Focus charts and price ladder metrics on historic key sessions or custom date bounds</p>
+                      <h2 className="text-xs font-black uppercase text-white tracking-widest">RESEARCH DESK</h2>
+                      <p className="text-[9px] text-white/35 font-sans mt-0.5">Modular workspaces for replay simulation, policy news, and historical review</p>
                     </div>
                   </div>
-
-                  {/* Center & Right sections: Preset Session Jumpers & Custom Date Fields */}
-                  <div className="flex flex-wrap items-center gap-3 md:gap-4 flex-1 justify-end">
-                    
-                    {/* Presets Jumper */}
-                    <div className="flex items-center space-x-2">
-                      <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">Sessions:</span>
-                      <select 
-                        id="session-preset-select"
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (!val || candles.length === 0) return;
-                          
-                          let startIdx = 0;
-                          let endIdx = 0;
-                          
-                          if (val === 'london_breakout') {
-                            startIdx = Math.max(0, Math.floor(candles.length * 0.15));
-                            endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.25));
-                          } else if (val === 'ny_reversal') {
-                            startIdx = Math.max(0, Math.floor(candles.length * 0.40));
-                            endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.50));
-                          } else if (val === 'asia_consolidation') {
-                            startIdx = Math.max(0, Math.floor(candles.length * 0.65));
-                            endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.75));
-                          } else if (val === 'fomc_spike') {
-                            startIdx = Math.max(0, Math.floor(candles.length * 0.82));
-                            endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.90));
-                          }
-                          
-                          const startCandle = candles[startIdx];
-                          const endCandle = candles[endIdx];
-                          if (startCandle && endCandle) {
-                            setJumpRange({
-                              start: startCandle.timestamp,
-                              end: endCandle.timestamp,
-                              triggerId: Date.now()
-                            });
-                          }
-                        }}
-                        className="bg-[#050505] text-[11px] text-indigo-300 font-bold border border-white/10 hover:border-indigo-500/30 px-3 py-1.5 rounded cursor-pointer outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/50 transition-all font-mono leading-tight animate-pulse border-indigo-400/30"
-                      >
-                        <option value="">-- Jump to Market Session --</option>
-                        {candles.length > 0 && (
-                          <>
-                            <option value="london_breakout">
-                              🇬🇧 London Breakout Peak ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.15))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
-                            </option>
-                            <option value="ny_reversal">
-                              🇺🇸 NY PM Liquidity Reversal ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.40))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
-                            </option>
-                            <option value="asia_consolidation">
-                              🇯🇵 Tokyo Tight Consolidation ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.65))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
-                            </option>
-                            <option value="fomc_spike">
-                              🔥 FOMC Post-Rate Expansion ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.82))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
-                            </option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-
-                    <div className="h-6 w-[1px] bg-white/10 hidden sm:block" />
-
-                    {/* Custom Date Picker inputs */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="flex items-center space-x-1">
-                        <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">From:</span>
-                        <input 
-                          type="date"
-                          id="replay-date-start"
-                          value={sessionStartDate}
-                          onChange={(e) => setSessionStartDate(e.target.value)}
-                          min={candles.length > 0 ? candles[0].timestamp.substring(0, 10) : ''}
-                          max={candles.length > 0 ? candles[candles.length - 1].timestamp.substring(0, 10) : ''}
-                          className="bg-[#050505] text-[10.5px] text-white/80 border border-white/10 hover:border-white/20 px-2.5 py-1.5 rounded outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 font-mono transition-colors [color-scheme:dark]"
-                        />
-                      </div>
-
-                      <div className="flex items-center space-x-1">
-                        <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">To:</span>
-                        <input 
-                          type="date"
-                          id="replay-date-end"
-                          value={sessionEndDate}
-                          onChange={(e) => setSessionEndDate(e.target.value)}
-                          min={sessionStartDate || (candles.length > 0 ? candles[0].timestamp.substring(0, 10) : '')}
-                          max={candles.length > 0 ? candles[candles.length - 1].timestamp.substring(0, 10) : ''}
-                          className="bg-[#050505] text-[10.5px] text-white/80 border border-white/10 hover:border-white/20 px-2.5 py-1.5 rounded outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 font-mono transition-colors [color-scheme:dark]"
-                        />
-                      </div>
-
-                      {/* Custom Date Picker trigger buttons */}
-                      <div className="flex items-center gap-1.5 ml-1">
+                  <div className="flex items-center bg-[#070709] border border-white/5 rounded-lg p-0.5 gap-1 self-end sm:self-auto overflow-x-auto max-w-full">
+                    {[
+                      { id: 'REPLAY', label: '📊 Simulation & Replay' },
+                      { id: 'NEWSDESK', label: '📰 Dedicated News Desk' },
+                      { id: 'LEDGER', label: '📜 Trade History Ledger' }
+                    ].map((st) => {
+                      const active = researchSubTab === st.id;
+                      return (
                         <button
-                          id="btn-apply-replay-range"
-                          onClick={() => {
-                            if (!sessionStartDate || !sessionEndDate) return;
-                            setJumpRange({
-                              start: `${sessionStartDate}T00:00:00.000Z`,
-                              end: `${sessionEndDate}T23:59:59.999Z`,
-                              triggerId: Date.now()
-                            });
-                          }}
-                          disabled={!sessionStartDate || !sessionEndDate}
-                          className={`px-3 py-1.5 rounded font-mono text-[10px] font-bold tracking-tight border h-[34px] flex items-center justify-center cursor-pointer transition-all ${
-                            sessionStartDate && sessionEndDate
-                              ? 'bg-indigo-600 border-indigo-500 hover:bg-indigo-500 text-white shadow-md active:scale-95'
-                              : 'bg-[#050505] border-white/5 text-white/20 cursor-not-allowed'
+                          key={st.id}
+                          onClick={() => setResearchSubTab(st.id as any)}
+                          className={`px-3 py-1.5 text-[9.5px] font-bold uppercase rounded-md tracking-wider transition-all cursor-pointer whitespace-nowrap ${
+                            active
+                              ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30 font-black shadow-[0_0_8px_rgba(99,102,241,0.12)]'
+                              : 'text-white/40 hover:text-white/70 border border-transparent'
                           }`}
                         >
-                          APPLY
+                          {st.label}
                         </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                        <button
-                          id="btn-reset-replay-view"
-                          onClick={() => {
-                            setSessionStartDate('');
-                            setSessionEndDate('');
-                            const selectEl = document.getElementById('session-preset-select') as HTMLSelectElement;
-                            if (selectEl) selectEl.value = '';
+                {researchSubTab === 'REPLAY' && (
+                  <div className="space-y-6 animate-fadeIn">
+                    {/* Historical Replay Engine controls relocated from top of Intelligence */}
+                    <div id="intelligence-control-bar" className="bg-[#0c0c0e]/95 border border-white/5 rounded-lg p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 font-mono select-none">
+                      
+                      {/* Left block: Title and Icon */}
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-indigo-500/10 rounded border border-indigo-500/25 text-indigo-400 shrink-0">
+                          <Calendar className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-xs font-bold uppercase text-white tracking-wider">Historical Replay Engine</h3>
+                          <p className="text-[9.5px] text-white/30 font-sans mt-0.5">Focus charts and price ladder metrics on historic key sessions or custom date bounds</p>
+                        </div>
+                      </div>
+
+                      {/* Center & Right sections: Preset Session Jumpers & Custom Date Fields */}
+                      <div className="flex flex-wrap items-center gap-3 md:gap-4 flex-1 justify-end">
+                        
+                        {/* Presets Jumper */}
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">Sessions:</span>
+                          <select 
+                            id="session-preset-select"
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (!val || candles.length === 0) return;
+                              
+                              let startIdx = 0;
+                              let endIdx = 0;
+                              
+                              if (val === 'london_breakout') {
+                                startIdx = Math.max(0, Math.floor(candles.length * 0.15));
+                                endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.25));
+                              } else if (val === 'ny_reversal') {
+                                startIdx = Math.max(0, Math.floor(candles.length * 0.40));
+                                endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.50));
+                              } else if (val === 'asia_consolidation') {
+                                startIdx = Math.max(0, Math.floor(candles.length * 0.65));
+                                endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.75));
+                              } else if (val === 'fomc_spike') {
+                                startIdx = Math.max(0, Math.floor(candles.length * 0.82));
+                                endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.90));
+                              }
+                              
+                              const startCandle = candles[startIdx];
+                              const endCandle = candles[endIdx];
+                              if (startCandle && endCandle) {
+                                setJumpRange({
+                                  start: startCandle.timestamp,
+                                  end: endCandle.timestamp,
+                                  triggerId: Date.now()
+                                });
+                              }
+                            }}
+                            className="bg-[#050505] text-[11px] text-indigo-300 font-bold border border-white/10 hover:border-indigo-500/30 px-3 py-1.5 rounded cursor-pointer outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/50 transition-all font-mono leading-tight border-indigo-400/30"
+                          >
+                            <option value="">-- Jump to Market Session --</option>
+                            {candles.length > 0 && (
+                              <>
+                                <option value="london_breakout">
+                                  🇬🇧 London Breakout Peak ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.15))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
+                                </option>
+                                <option value="ny_reversal">
+                                  🇺🇸 NY PM Liquidity Reversal ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.40))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
+                                </option>
+                                <option value="asia_consolidation">
+                                  🇯🇵 Tokyo Tight Consolidation ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.65))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
+                                </option>
+                                <option value="fomc_spike">
+                                  🔥 FOMC Post-Rate Expansion ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.82))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
+                                </option>
+                              </>
+                            )}
+                          </select>
+                        </div>
+
+                        <div className="h-6 w-[1px] bg-white/10 hidden sm:block" />
+
+                        {/* Custom Date Picker inputs */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center space-x-1">
+                            <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">From:</span>
+                            <input 
+                              type="date"
+                              id="replay-date-start"
+                              value={sessionStartDate}
+                              onChange={(e) => setSessionStartDate(e.target.value)}
+                              min={candles.length > 0 ? candles[0].timestamp.substring(0, 10) : ''}
+                              max={candles.length > 0 ? candles[candles.length - 1].timestamp.substring(0, 10) : ''}
+                              className="bg-[#050505] text-[10.5px] text-white/80 border border-white/10 hover:border-white/20 px-2.5 py-1.5 rounded outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 font-mono transition-colors [color-scheme:dark]"
+                            />
+                          </div>
+
+                          <div className="flex items-center space-x-1">
+                            <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">To:</span>
+                            <input 
+                              type="date"
+                              id="replay-date-end"
+                              value={sessionEndDate}
+                              onChange={(e) => setSessionEndDate(e.target.value)}
+                              min={sessionStartDate || (candles.length > 0 ? candles[0].timestamp.substring(0, 10) : '')}
+                              max={candles.length > 0 ? candles[candles.length - 1].timestamp.substring(0, 10) : ''}
+                              className="bg-[#050505] text-[10.5px] text-white/80 border border-white/10 hover:border-white/20 px-2.5 py-1.5 rounded outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 font-mono transition-colors [color-scheme:dark]"
+                            />
+                          </div>
+
+                          {/* Custom Date Picker trigger buttons */}
+                          <div className="flex items-center gap-1.5 ml-1">
+                            <button
+                              id="btn-apply-replay-range"
+                              onClick={() => {
+                                if (!sessionStartDate || !sessionEndDate) return;
+                                setJumpRange({
+                                  start: `${sessionStartDate}T00:00:00.000Z`,
+                                  end: `${sessionEndDate}T23:59:59.999Z`,
+                                  triggerId: Date.now()
+                                });
+                              }}
+                              disabled={!sessionStartDate || !sessionEndDate}
+                              className={`px-3 py-1.5 rounded font-mono text-[10px] font-bold tracking-tight border h-[34px] flex items-center justify-center cursor-pointer transition-all ${
+                                sessionStartDate && sessionEndDate
+                                  ? 'bg-indigo-600 border-indigo-500 hover:bg-indigo-500 text-white shadow-md active:scale-95'
+                                  : 'bg-[#050505] border-white/5 text-white/20 cursor-not-allowed'
+                              }`}
+                            >
+                              APPLY
+                            </button>
+
+                            <button
+                              id="btn-reset-replay-view"
+                              onClick={() => {
+                                setSessionStartDate('');
+                                setSessionEndDate('');
+                                const selectEl = document.getElementById('session-preset-select') as HTMLSelectElement;
+                                if (selectEl) selectEl.value = '';
+                                
+                                setJumpRange(null);
+                                setResetChartKey(prev => prev + 1);
+                              }}
+                              title="Return to the latest live ticker session"
+                              className="px-2.5 py-1.5 bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/10 text-white/70 hover:text-white rounded font-mono text-[10px] font-bold tracking-tight h-[34px] flex items-center justify-center cursor-pointer transition-all"
+                            >
+                              LIVE
+                            </button>
+                          </div>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                    <StrategyPerformanceChart />
+                    <BacktestSimulator selectedSymbol={symbol} onSymbolChange={(sym) => setSymbol(sym)} />
+                  </div>
+                )}
+
+                {researchSubTab === 'NEWSDESK' && (
+                  <div className="space-y-6 animate-fadeIn">
+                    
+                    {/* Dedicated news desk side-by-side bento block */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      
+                      <div className="lg:col-span-8 space-y-6">
+                        {/* Quick-action Filter Bar to Declutter Workspace */}
+                        <div id="research-quick-filters" className="bg-[#0c0c0e]/95 border border-white/5 rounded-lg p-3 md:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono select-none">
+                          <div className="flex items-center space-x-2">
+                            <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                            <div>
+                              <span className="text-xs font-bold uppercase text-white tracking-wider block">Workspace Filtration</span>
+                              <span className="text-[9px] text-white/30 font-sans block mt-0.5 font-medium">Toggle visibility of specific intelligence widgets to optimize workspace layout</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* Sentiment Gauge Toggle */}
+                            <button
+                              id="toggle-sentiment-gauge"
+                              onClick={() => setShowSentimentGauge(!showSentimentGauge)}
+                              className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                showSentimentGauge 
+                                  ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300' 
+                                  : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${showSentimentGauge ? 'bg-indigo-400' : 'bg-transparent border border-white/20'}`} />
+                              SENTIMENT GAUGE
+                            </button>
+
+                            {/* Market Sentiment Heatmap Toggle */}
+                            <button
+                              id="toggle-market-sentiment-heatmap"
+                              onClick={() => setShowMarketSentimentHeatmap(!showMarketSentimentHeatmap)}
+                              className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                showMarketSentimentHeatmap 
+                                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-300' 
+                                  : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${showMarketSentimentHeatmap ? 'bg-amber-400' : 'bg-transparent border border-white/20'}`} />
+                              SENTIMENT HEATMAP
+                            </button>
+
+                            {/* Sweep Alert Toggle */}
+                            <button
+                              id="toggle-sweep-alerts"
+                              onClick={() => setShowSweepAlert(!showSweepAlert)}
+                              className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                showSweepAlert 
+                                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' 
+                                  : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${showSweepAlert ? 'bg-emerald-400' : 'bg-transparent border border-white/20'}`} />
+                              SWEEP ALERTS
+                            </button>
+
+                            {/* Heatmap Toggle */}
+                            <button
+                              id="toggle-correlation-heatmap"
+                              onClick={() => setShowHeatmap(!showHeatmap)}
+                              className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                showHeatmap 
+                                  ? 'bg-rose-500/10 border-rose-500/25 text-rose-300' 
+                                  : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${showHeatmap ? 'bg-rose-400' : 'bg-transparent border border-white/20'}`} />
+                              CORRELATION HEATMAP
+                            </button>
+                          </div>
+                        </div>
+
+                        <InstitutionalNewsTicker />
+
+                        {showSentimentGauge && <InstitutionalSentimentGauge />}
+                        {showMarketSentimentHeatmap && <MarketSentimentHeatmap />}
+                        {showSweepAlert && <InstitutionalSweepAlert />}
+                        {showHeatmap && <CorrelationHeatmap trades={trades} />}
+                      </div>
+
+                      {/* Right: Dedicated macromonitor policy panel */}
+                      <div className="lg:col-span-4 bg-[#0c0c0e]/95 border border-white/5 p-4 rounded-lg space-y-4 font-mono select-none flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center space-x-2 pb-2.5 border-b border-white/5">
+                            <div className="p-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded text-indigo-400">
+                              <Newspaper className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                              <h4 className="text-[10px] font-bold uppercase text-white tracking-widest">CENTRAL BANK INTEL RADAR</h4>
+                              <p className="text-[8.5px] text-white/35 font-sans mt-0.5">Policy rate & transcription analyzer</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3.5 mt-3 text-[10.5px]">
                             
-                            setJumpRange(null);
-                            setResetChartKey(prev => prev + 1);
-                          }}
-                          title="Return to the latest live ticker session"
-                          className="px-2.5 py-1.5 bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/10 text-white/70 hover:text-white rounded font-mono text-[10px] font-bold tracking-tight h-[34px] flex items-center justify-center cursor-pointer transition-all"
-                        >
-                          LIVE
-                        </button>
+                            {/* Fed */}
+                            <div className="p-3 bg-black/40 border border-white/5 rounded space-y-1.5 transition-all hover:bg-black/60">
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="font-extrabold text-white">🇺🇸 Federal Reserve (Fed)</span>
+                                <span className="text-[8px] px-1.5 py-0.2.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded font-bold uppercase">5.50% Rate</span>
+                              </div>
+                              <p className="text-[8.5px] text-white/50 leading-relaxed font-sans italic">
+                                "Our guidance remains deeply data-dependent as we analyze core PCE persistence before adjustments."
+                              </p>
+                              <div className="flex justify-between items-center text-[8px] pt-1 text-white/30 border-t border-white/5">
+                                <span>SKEW: <strong className="text-yellow-505 text-amber-400 font-extrabold">+0.30 (HAWKISH)</strong></span>
+                                <span>SPEAKER: POWELL</span>
+                              </div>
+                              <div className="w-full bg-white/5 h-1 rounded overflow-hidden relative">
+                                <div className="absolute top-0 bottom-0 left-1/2 bg-amber-400" style={{ left: '65%', width: '3px' }} />
+                                <div className="absolute top-0 bottom-0 left-1/2 bg-white/20 w-[1px]" />
+                              </div>
+                            </div>
+
+                            {/* ECB */}
+                            <div className="p-3 bg-black/40 border border-white/5 rounded space-y-1.5 transition-all hover:bg-black/60">
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="font-extrabold text-white">🇪🇺 European Central Bank</span>
+                                <span className="text-[8px] px-1.5 py-0.2.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded font-bold uppercase">4.00% Rate</span>
+                              </div>
+                              <p className="text-[8.5px] text-white/50 leading-relaxed font-sans italic">
+                                "Domestic wage convergence points toward subsequent rate modifications within the summer horizon."
+                              </p>
+                              <div className="flex justify-between items-center text-[8px] pt-1 text-white/30 border-t border-white/5">
+                                <span>SKEW: <strong className="text-emerald-400 font-extrabold">-0.45 (DOVISH)</strong></span>
+                                <span>SPEAKER: LAGARDE</span>
+                              </div>
+                              <div className="w-full bg-white/5 h-1 rounded overflow-hidden relative">
+                                <div className="absolute top-0 bottom-0 right-1/2 bg-emerald-400" style={{ right: '72.5%', width: '3px' }} />
+                                <div className="absolute top-0 bottom-0 left-1/2 bg-white/20 w-[1px]" />
+                              </div>
+                            </div>
+
+                            {/* BOJ */}
+                            <div className="p-3 bg-black/40 border border-white/5 rounded space-y-1.5 transition-all hover:bg-black/60">
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="font-extrabold text-white">🇯🇵 Bank of Japan (BoJ)</span>
+                                <span className="text-[8px] px-1.5 py-0.2.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded font-bold uppercase">0.25% Rate</span>
+                              </div>
+                              <p className="text-[8.5px] text-white/50 leading-relaxed font-sans italic">
+                                "Orderly wage metrics suggest immediate acceleration when primary inflation scales settle above our parameters."
+                              </p>
+                              <div className="flex justify-between items-center text-[8px] pt-1 text-white/30 border-t border-white/5">
+                                <span>SKEW: <strong className="text-rose-400 font-bold">+0.70 (HAWKISH)</strong></span>
+                                <span>SPEAKER: UEDA</span>
+                              </div>
+                              <div className="w-full bg-white/5 h-1 rounded overflow-hidden relative">
+                                <div className="absolute top-0 bottom-0 left-1/2 bg-rose-400" style={{ left: '85%', width: '3px' }} />
+                                <div className="absolute top-0 bottom-0 left-1/2 bg-white/20 w-[1px]" />
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+
+                        {/* Bulletin update message */}
+                        <div className="mt-4 p-3 bg-amber-500/5 hover:bg-amber-500/10 transition-colors border border-amber-500/15 rounded text-[9.5px]">
+                          <span className="text-amber-400 font-black uppercase tracking-wider block">⚠️ POLICY RISK ALERT</span>
+                          <p className="text-[9px] text-[#e5e5e5]/60 leading-normal font-sans mt-0.5">
+                            Speeches could spike standard spreads during the active London close. Place bracket protection on all manual sessions.
+                          </p>
+                        </div>
+
                       </div>
 
                     </div>
 
                   </div>
+                )}
 
-                </div>
-
-                {/* Quick-action Filter Bar to Declutter Workspace */}
-                <div id="research-quick-filters" className="bg-[#0c0c0e]/95 border border-white/5 rounded-lg p-3 md:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono select-none">
-                  <div className="flex items-center space-x-2">
-                    <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                    <div>
-                      <span className="text-xs font-bold uppercase text-white tracking-wider block">Workspace Filtration</span>
-                      <span className="text-[9px] text-white/30 font-sans block mt-0.5">Toggle visibility of specific intelligence widgets to optimize workspace layout</span>
-                    </div>
+                {researchSubTab === 'LEDGER' && (
+                  <div className="space-y-6 animate-fadeIn">
+                    <PerformanceTracker trades={trades} onTradeUpdated={fetchMarketData} />
+                    <TradeJournal trades={trades} onTradeUpdated={fetchMarketData} onReplayTrade={handleReplayClosedTrade} />
                   </div>
+                )}
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Sentiment Gauge Toggle */}
-                    <button
-                      id="toggle-sentiment-gauge"
-                      onClick={() => setShowSentimentGauge(!showSentimentGauge)}
-                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                        showSentimentGauge 
-                          ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300' 
-                          : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${showSentimentGauge ? 'bg-indigo-400' : 'bg-transparent border border-white/20'}`} />
-                      SENTIMENT GAUGE
-                    </button>
-
-                    {/* Market Sentiment Heatmap Toggle */}
-                    <button
-                      id="toggle-market-sentiment-heatmap"
-                      onClick={() => setShowMarketSentimentHeatmap(!showMarketSentimentHeatmap)}
-                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                        showMarketSentimentHeatmap 
-                          ? 'bg-amber-500/10 border-amber-500/25 text-amber-300' 
-                          : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${showMarketSentimentHeatmap ? 'bg-amber-400' : 'bg-transparent border border-white/20'}`} />
-                      SENTIMENT HEATMAP
-                    </button>
-
-                    {/* Sweep Alert Toggle */}
-                    <button
-                      id="toggle-sweep-alerts"
-                      onClick={() => setShowSweepAlert(!showSweepAlert)}
-                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                        showSweepAlert 
-                          ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' 
-                          : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${showSweepAlert ? 'bg-emerald-400' : 'bg-transparent border border-white/20'}`} />
-                      SWEEP ALERTS
-                    </button>
-
-                    {/* Heatmap Toggle */}
-                    <button
-                      id="toggle-correlation-heatmap"
-                      onClick={() => setShowHeatmap(!showHeatmap)}
-                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                        showHeatmap 
-                          ? 'bg-rose-500/10 border-rose-500/25 text-rose-300' 
-                          : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${showHeatmap ? 'bg-rose-400' : 'bg-transparent border border-white/20'}`} />
-                      CORRELATION HEATMAP
-                    </button>
-                  </div>
-                </div>
-
-                <InstitutionalNewsTicker />
-
-                {showSentimentGauge && <InstitutionalSentimentGauge />}
-                {showMarketSentimentHeatmap && <MarketSentimentHeatmap />}
-                {showSweepAlert && <InstitutionalSweepAlert />}
-                {showHeatmap && <CorrelationHeatmap trades={trades} />}
-                <StrategyPerformanceChart />
-                <BacktestSimulator selectedSymbol={symbol} onSymbolChange={(sym) => setSymbol(sym)} />
-                <PerformanceTracker trades={trades} onTradeUpdated={fetchMarketData} />
-                <TradeJournal trades={trades} onTradeUpdated={fetchMarketData} onReplayTrade={handleReplayClosedTrade} />
               </div>
             ) : (
               <div id="settings-direct-control-workspace" className="animate-fadeIn">
-                <SettingsPanel />
+                <SettingsPanel 
+                  layoutState={{
+                    showSentimentGauge,
+                    showMarketSentimentHeatmap,
+                    showSweepAlert,
+                    showHeatmap,
+                    showTWVP,
+                    showSessionPerformance,
+                    showPriceAlertsPanel,
+                  }}
+                  setLayoutState={{
+                    setShowSentimentGauge,
+                    setShowMarketSentimentHeatmap,
+                    setShowSweepAlert,
+                    setShowHeatmap,
+                    setShowTWVP,
+                    setShowSessionPerformance,
+                    setShowPriceAlertsPanel,
+                  }}
+                />
               </div>
             )}
           </>
