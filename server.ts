@@ -39,7 +39,35 @@ function readTrades(): Trade[] {
       fs.writeFileSync(DB_FILE, JSON.stringify([], null, 2));
       return [];
     }
-    return JSON.parse(data) as Trade[];
+    const parsed = JSON.parse(data) as Trade[];
+    let changed = false;
+    const enriched = parsed.map(trade => {
+      let isLocalModified = false;
+      if (trade.latency === undefined) {
+        const seedVal = parseInt(trade.id.replace(/\D/g, '') || '0') || 42;
+        const isSpike = (seedVal % 10) === 0 || (seedVal % 7) === 0;
+        trade.latency = isSpike 
+          ? 46 + (seedVal % 85)
+          : 18 + (seedVal % 27);
+        isLocalModified = true;
+      }
+      if (trade.slippage === undefined) {
+        const seedVal = parseInt(trade.id.replace(/\D/g, '') || '0') || 42;
+        const isSpike = (seedVal % 10) === 0 || (seedVal % 7) === 0;
+        trade.slippage = isSpike
+          ? parseFloat((0.8 + (seedVal % 15) / 10).toFixed(2))
+          : parseFloat(((seedVal % 5) / 10).toFixed(2));
+        isLocalModified = true;
+      }
+      if (isLocalModified) {
+        changed = true;
+      }
+      return trade;
+    });
+    if (changed) {
+      fs.writeFileSync(DB_FILE, JSON.stringify(enriched, null, 2));
+    }
+    return enriched;
   } catch (error) {
     console.error('Error reading trades DB, resetting to empty list:', error);
     try {
@@ -392,8 +420,78 @@ function checkAndAutoCloseTrades(): void {
     
     // Auto-Break-Even Check
     let currentStopLoss = t.stopLoss;
+    let currentTakeProfit = t.takeProfit;
     let autoBeTriggered = t.autoBreakEvenTriggered;
     let currentReason = t.reason || '';
+
+    // Initialize or update trailing peaks and troughs
+    let maxPrice = t.maxPriceReached ?? curPrice;
+    let minPrice = t.minPriceReached ?? curPrice;
+
+    if (curPrice > maxPrice) {
+      maxPrice = curPrice;
+      changed = true;
+    }
+    if (curPrice < minPrice) {
+      minPrice = curPrice;
+      changed = true;
+    }
+
+    // Trailing Stop Loss (TSL) Logic
+    if (t.trailingStopActive && t.trailingStopDistance) {
+      const dist = t.trailingStopDistance;
+      if (t.side === 'BUY') {
+        const potentialSL = maxPrice - dist;
+        if (potentialSL > currentStopLoss) {
+          const precision = t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5;
+          currentStopLoss = parseFloat(potentialSL.toFixed(precision));
+          changed = true;
+          currentReason = `${currentReason} [Trailing SL raised to ${currentStopLoss} tracking peak ${maxPrice.toFixed(precision)}]`.trim();
+        }
+      } else { // SELL
+        const potentialSL = minPrice + dist;
+        if (potentialSL < currentStopLoss) {
+          const precision = t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5;
+          currentStopLoss = parseFloat(potentialSL.toFixed(precision));
+          changed = true;
+          currentReason = `${currentReason} [Trailing SL lowered to ${currentStopLoss} tracking trough ${minPrice.toFixed(precision)}]`.trim();
+        }
+      }
+    }
+
+    // Self-Adjusting Take Profit (TTP) Logic
+    if (t.trailingTakeProfitActive) {
+      if (t.side === 'BUY') {
+        const targetDistance = t.takeProfit - t.entryPrice;
+        // Trigger if price is within 15% of the take-profit target
+        const triggerThreshold = t.takeProfit - (targetDistance * 0.15);
+        if (curPrice >= triggerThreshold && currentTakeProfit === t.takeProfit) {
+          const extension = targetDistance * 0.5;
+          const precision = t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5;
+          const newTP = parseFloat((t.takeProfit + extension).toFixed(precision));
+          const newSL = parseFloat((t.takeProfit - (targetDistance * 0.05)).toFixed(precision)); // locks index at 95% of original TP target
+          
+          currentTakeProfit = newTP;
+          currentStopLoss = newSL;
+          changed = true;
+          currentReason = `${currentReason} [Self-Adjusting TP: Extended target to ${newTP} and locked trade profit SL at ${newSL}]`.trim();
+        }
+      } else { // SELL
+        const targetDistance = t.entryPrice - t.takeProfit;
+        const triggerThreshold = t.takeProfit + (targetDistance * 0.15);
+        if (curPrice <= triggerThreshold && currentTakeProfit === t.takeProfit) {
+          const extension = targetDistance * 0.5;
+          const precision = t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5;
+          const newTP = parseFloat((t.takeProfit - extension).toFixed(precision));
+          const newSL = parseFloat((t.takeProfit + (targetDistance * 0.05)).toFixed(precision));
+          
+          currentTakeProfit = newTP;
+          currentStopLoss = newSL;
+          changed = true;
+          currentReason = `${currentReason} [Self-Adjusting TP: Extended target to ${newTP} and locked trade profit SL at ${newSL}]`.trim();
+        }
+      }
+    }
 
     if (t.autoBreakEvenProfitPct && !autoBeTriggered) {
       const pnlMultiplier = t.side === 'BUY' ? 1 : -1;
@@ -417,20 +515,20 @@ function checkAndAutoCloseTrades(): void {
         shouldClose = true;
         triggerPrice = currentStopLoss;
         closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
-      } else if (curPrice >= t.takeProfit) {
+      } else if (curPrice >= currentTakeProfit) {
         shouldClose = true;
-        triggerPrice = t.takeProfit;
-        closingReason = `Auto Closed: TP hit at ${t.takeProfit}`;
+        triggerPrice = currentTakeProfit;
+        closingReason = `Auto Closed: TP hit at ${currentTakeProfit}`;
       }
     } else { // SELL
       if (curPrice >= currentStopLoss) {
         shouldClose = true;
         triggerPrice = currentStopLoss;
         closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
-      } else if (curPrice <= t.takeProfit) {
+      } else if (curPrice <= currentTakeProfit) {
         shouldClose = true;
-        triggerPrice = t.takeProfit;
-        closingReason = `Auto Closed: TP hit at ${t.takeProfit}`;
+        triggerPrice = currentTakeProfit;
+        closingReason = `Auto Closed: TP hit at ${currentTakeProfit}`;
       }
     }
 
@@ -451,20 +549,32 @@ function checkAndAutoCloseTrades(): void {
       return {
         ...t,
         status: 'CLOSED' as const,
-        exitPrice: parseFloat(triggerPrice.toFixed(t.symbol === 'USD/JPY' ? 2 : t.symbol === 'BTC/USDT' ? 1 : 5)),
+        exitPrice: parseFloat(triggerPrice.toFixed(t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5)),
         pnl: parseFloat(rawPnl.toFixed(2)),
         exitTimestamp: new Date().toISOString(),
         reason: closingReason,
         stopLoss: currentStopLoss,
+        takeProfit: currentTakeProfit,
+        maxPriceReached: maxPrice,
+        minPriceReached: minPrice,
         autoBreakEvenTriggered: autoBeTriggered
       };
     }
 
-    if (currentStopLoss !== t.stopLoss || autoBeTriggered !== t.autoBreakEvenTriggered) {
+    if (
+      currentStopLoss !== t.stopLoss || 
+      currentTakeProfit !== t.takeProfit || 
+      autoBeTriggered !== t.autoBreakEvenTriggered ||
+      maxPrice !== t.maxPriceReached ||
+      minPrice !== t.minPriceReached
+    ) {
       return {
         ...t,
         stopLoss: currentStopLoss,
+        takeProfit: currentTakeProfit,
         autoBreakEvenTriggered: autoBeTriggered,
+        maxPriceReached: maxPrice,
+        minPriceReached: minPrice,
         reason: currentReason
       };
     }
@@ -1014,6 +1124,78 @@ app.get('/api/risk/breaches', (req, res) => {
   res.json(readBreaches());
 });
 
+// Get paginated CLOSED trades history
+app.get('/api/trades/history', (req, res) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 5;
+    const tag = (req.query.tag as string) || 'ALL';
+
+    const rawTrades = readTrades();
+    let closed = rawTrades.filter(t => t.status === 'CLOSED');
+
+    // Sort: most recent exit first
+    closed.sort((a, b) => {
+      const timeA = a.exitTimestamp ? new Date(a.exitTimestamp).getTime() : new Date(a.timestamp).getTime();
+      const timeB = b.exitTimestamp ? new Date(b.exitTimestamp).getTime() : new Date(b.timestamp).getTime();
+      return timeB - timeA;
+    });
+
+    // Tag filtration
+    if (tag !== 'ALL') {
+      closed = closed.filter(t => {
+        if (!t.tags) return false;
+        return t.tags.some(tg => {
+          let cleaned = tg.trim();
+          if (!cleaned.startsWith('#')) {
+            cleaned = '#' + cleaned;
+          }
+          return cleaned.toLowerCase() === tag.toLowerCase();
+        });
+      });
+    }
+
+    const total = closed.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIndex = (page - 1) * limit;
+    const paginated = closed.slice(startIndex, startIndex + limit);
+
+    // Collect available tags across all closed trades
+    const tagSet = new Set<string>();
+    tagSet.add('#ICT_Setup');
+    tagSet.add('#NewsEvent');
+    tagSet.add('#MeanReversion');
+    tagSet.add('#TrendFollowing');
+    tagSet.add('#Breakout');
+
+    rawTrades.forEach(t => {
+      if (t.status === 'CLOSED' && t.tags) {
+        t.tags.forEach(tg => {
+          let cleaned = tg.trim();
+          if (cleaned) {
+            if (!cleaned.startsWith('#')) {
+              cleaned = '#' + cleaned;
+            }
+            tagSet.add(cleaned);
+          }
+        });
+      }
+    });
+
+    res.json({
+      trades: paginated,
+      total,
+      totalPages,
+      page,
+      limit,
+      allTags: Array.from(tagSet)
+    });
+  } catch (err: any) {
+    console.error('Error fetching trade history:', err);
+    res.status(500).json({ error: 'Server error retrieving trade history.' });
+  }
+});
+
 // Get Trades list
 app.get('/api/trades', (req, res) => {
   checkAndAutoCloseTrades();
@@ -1074,6 +1256,19 @@ app.post('/api/trades', (req, res) => {
     return;
   }
 
+  // Generate simulated execution efficiency metrics for the MT5 bridge
+  // ~17% rate of latency spikes above the 45ms bridge health threshold
+  const isSpike = Math.random() < 0.17;
+  const simulatedLatency = isSpike 
+    ? Math.floor(46 + Math.random() * 95) // 46ms to 140ms
+    : Math.floor(18 + Math.random() * 26); // 18ms to 44ms (healthy)
+  
+  // Slippage is correlated with latency. Higher latency = more slippage
+  const baseSlippage = isSpike 
+    ? 0.7 + Math.random() * 1.6 // 0.7 to 2.3 pips/points
+    : Math.random() * 0.45; // 0.0 to 0.45 pips/points (excellent)
+  const simulatedSlippage = parseFloat(baseSlippage.toFixed(2));
+
   const trades = readTrades();
   const newTrade: Trade = {
     id: `trade-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -1091,7 +1286,9 @@ app.post('/api/trades', (req, res) => {
     confluences: Array.isArray(confluences) ? confluences : undefined,
     marketNote: marketNote || '',
     autoBreakEvenProfitPct: autoBreakEvenProfitPct !== undefined ? parseFloat(autoBreakEvenProfitPct) : undefined,
-    autoBreakEvenTriggered: autoBreakEvenProfitPct !== undefined ? false : undefined
+    autoBreakEvenTriggered: autoBreakEvenProfitPct !== undefined ? false : undefined,
+    latency: req.body.latency !== undefined ? parseFloat(req.body.latency) : simulatedLatency,
+    slippage: req.body.slippage !== undefined ? parseFloat(req.body.slippage) : simulatedSlippage
   };
 
   trades.push(newTrade);
@@ -1136,6 +1333,140 @@ app.post('/api/trades/:id/close', (req, res) => {
   trade.exitPrice = price;
   trade.pnl = parseFloat(rawPnl.toFixed(2));
   trade.exitTimestamp = new Date().toISOString();
+
+  trades[tradeIndex] = trade;
+  writeTrades(trades);
+  res.json(trade);
+});
+
+// Partial profit taking on a trade (e.g. close percentage of position size at current price)
+app.post('/api/trades/:id/partial-close', (req, res) => {
+  const { id } = req.params;
+  const ratio = req.body.ratio !== undefined ? parseFloat(req.body.ratio) : 0.5; // default to 50% partial close
+
+  const trades = readTrades();
+  const tradeIndex = trades.findIndex(t => t.id === id);
+
+  if (tradeIndex === -1) {
+    res.status(404).json({ error: 'Trade not found.' });
+    return;
+  }
+
+  const trade = trades[tradeIndex];
+  if (trade.status === 'CLOSED') {
+    res.status(400).json({ error: 'Trade already closed.' });
+    return;
+  }
+
+  const price = simulator.getMarketMetrics(trade.symbol).currentPrice;
+  const pnlMultiplier = trade.side === 'BUY' ? 1 : -1;
+  const priceDiff = price - trade.entryPrice;
+
+  // Calculate sizes
+  const closedSize = Math.max(0.01, parseFloat((trade.size * ratio).toFixed(2)));
+  const remainingSize = Math.max(0, parseFloat((trade.size - closedSize).toFixed(2)));
+
+  // simple pip value conversion for closed portion
+  let rawPnl = 0;
+  if (trade.symbol === 'BTC/USDT') {
+    rawPnl = priceDiff * closedSize * pnlMultiplier;
+  } else if (trade.symbol === 'USD/JPY') {
+    rawPnl = (priceDiff / 0.01) * closedSize * 0.1 * pnlMultiplier;
+  } else {
+    rawPnl = (priceDiff / 0.0001) * closedSize * 1.0 * pnlMultiplier;
+  }
+  const closedPnl = parseFloat(rawPnl.toFixed(2));
+
+  // If remaining size is close to zero, close the entire trade instead
+  if (remainingSize <= 0.01) {
+    trade.status = 'CLOSED' as 'CLOSED';
+    trade.exitPrice = price;
+    trade.exitTimestamp = new Date().toISOString();
+    
+    // Total PnL gets calculated on the original size
+    let fullRawPnl = 0;
+    if (trade.symbol === 'BTC/USDT') {
+      fullRawPnl = priceDiff * trade.size * pnlMultiplier;
+    } else if (trade.symbol === 'USD/JPY') {
+      fullRawPnl = (priceDiff / 0.01) * trade.size * 0.1 * pnlMultiplier;
+    } else {
+      fullRawPnl = (priceDiff / 0.0001) * trade.size * 1.0 * pnlMultiplier;
+    }
+    trade.pnl = parseFloat(fullRawPnl.toFixed(2));
+    if (trade.annotation) {
+      trade.annotation = `${trade.annotation} | Full Close via target liquidation.`;
+    } else {
+      trade.annotation = 'Locked via target liquidation.';
+    }
+    trades[tradeIndex] = trade;
+  } else {
+    // Reduce open position's size
+    trade.size = remainingSize;
+    if (!trade.annotation) {
+      trade.annotation = `Reduced size from ${(remainingSize + closedSize).toFixed(2)} to ${remainingSize.toFixed(2)} (${(ratio * 100).toFixed(0)}% partial close).`;
+    } else {
+      trade.annotation += ` | Part-closed ${(ratio * 100).toFixed(0)}%.`;
+    }
+    trades[tradeIndex] = trade;
+
+    // Create a new CLOSED transaction representing the closed portion
+    const partialId = `${trade.id}-p-${Date.now()}`;
+    const closedTrade: Trade = {
+      ...trade,
+      id: partialId,
+      status: 'CLOSED' as 'CLOSED',
+      size: closedSize,
+      exitPrice: price,
+      pnl: closedPnl,
+      exitTimestamp: new Date().toISOString(),
+      annotation: `Partial Profit Taking (${(ratio * 100).toFixed(0)}% of exposure closed, Parent: ${trade.id})`
+    };
+    trades.push(closedTrade);
+  }
+
+  writeTrades(trades);
+  res.json(trade);
+});
+
+// Update trade parameters dynamically (Stop-Loss, Take-Profit, Trailing Stops/Take-Profit)
+app.post('/api/trades/:id/update-params', (req, res) => {
+  const { id } = req.params;
+  const { 
+    stopLoss, 
+    takeProfit, 
+    trailingStopActive, 
+    trailingStopDistance, 
+    trailingTakeProfitActive,
+    trailingTakeProfitDistance
+  } = req.body;
+
+  const trades = readTrades();
+  const tradeIndex = trades.findIndex(t => t.id === id);
+
+  if (tradeIndex === -1) {
+    res.status(404).json({ error: 'Trade not found.' });
+    return;
+  }
+
+  const trade = trades[tradeIndex];
+  if (trade.status === 'CLOSED') {
+    res.status(400).json({ error: 'Cannot update parameters on completed trades.' });
+    return;
+  }
+
+  if (stopLoss !== undefined) trade.stopLoss = parseFloat(stopLoss);
+  if (takeProfit !== undefined) trade.takeProfit = parseFloat(takeProfit);
+  if (trailingStopActive !== undefined) trade.trailingStopActive = !!trailingStopActive;
+  if (trailingStopDistance !== undefined) trade.trailingStopDistance = parseFloat(trailingStopDistance);
+  if (trailingTakeProfitActive !== undefined) trade.trailingTakeProfitActive = !!trailingTakeProfitActive;
+  if (trailingTakeProfitDistance !== undefined) trade.trailingTakeProfitDistance = parseFloat(trailingTakeProfitDistance);
+
+  // When trailing parameters are updated or toggled, initialize maxPrice/minPrice to actual currency metrics if undefined
+  const metrics = simulator.getMarketMetrics(trade.symbol);
+  const curPrice = metrics ? metrics.currentPrice : trade.entryPrice;
+  
+  if (trade.maxPriceReached === undefined) trade.maxPriceReached = curPrice;
+  if (trade.minPriceReached === undefined) trade.minPriceReached = curPrice;
 
   trades[tradeIndex] = trade;
   writeTrades(trades);
@@ -1547,6 +1878,437 @@ Provide a beautiful, highly professional and detailed narrative outlining the ex
       isLive: false,
       err: err.message
     });
+  }
+});
+
+// AI Trader Composer: Draft multi-leg setups from natural language (Strictly Server-Side)
+app.post('/api/gemini/compose', async (req, res) => {
+  const { prompt, currentSymbol, currentPrice, strategyProfile, metrics } = req.body;
+
+  if (!prompt) {
+    res.status(400).json({ error: 'Prompt is required' });
+    return;
+  }
+
+  const symbol = currentSymbol || 'EUR/USD';
+  
+  // Calculate intelligence pillars on-the-fly for the prompt context
+  const hasMetrics = metrics && typeof metrics.atr === 'number';
+  const liveAtr = hasMetrics ? metrics.atr : (symbol.includes('USDT') ? 450 : symbol.includes('JPY') ? 0.35 : 0.0035);
+  const liveRsi = hasMetrics ? metrics.rsi : 50;
+  const liveTrend = hasMetrics ? metrics.trend : 'NEUTRAL';
+  const liveBias = hasMetrics ? metrics.dailyBias : 'BULLISH';
+  const price = currentPrice || (hasMetrics ? metrics.currentPrice : (symbol.includes('USDT') ? 64000 : 1.0850));
+
+  // Pillar 1: Liquidity Sweep Map
+  const pdh = price + liveAtr * 1.25;
+  const pdl = price - liveAtr * 1.4;
+  const londonH = price + liveAtr * 0.65;
+  const nyL = price - liveAtr * 0.95;
+
+  // Pillar 2: Capital Regime
+  let score = 50;
+  if (liveRsi > 70 || liveRsi < 30) score += 20;
+  if (liveTrend !== 'NEUTRAL') score += 15;
+  let regimeType = 'MEAN REVERTING';
+  if (score > 75) regimeType = 'VOLATILITY TREND RUN';
+  else if (score < 35) regimeType = 'CONGESTION SQUEEZE';
+
+  // Pillar 3: Intermarket Confluence Match
+  let dxyBias = 'NEUTRAL';
+  let matchPct = 78;
+  if (symbol === 'USD/JPY') {
+    dxyBias = liveBias === 'BULLISH' ? 'UPWARD BIAS' : 'DOWNWARD BIAS';
+    matchPct = 84;
+  } else if (symbol.includes('USDT')) {
+    dxyBias = 'DXY LIQUIDITY CAPTURE';
+    matchPct = 91;
+  } else {
+    dxyBias = liveBias === 'BULLISH' ? 'DOWNWARD BIAS' : 'UPWARD BIAS';
+    matchPct = 72;
+  }
+
+  // Pillar 4: OB Invalidation cushions
+  const cushionBuffer = liveAtr * 1.2;
+  const lowerBoundInvalidation = price - cushionBuffer;
+  const upperBoundInvalidation = price + cushionBuffer;
+
+  // Multi-leg compound mock structure depending on symbol and instructions
+  const getSimulatedDraft = (noticeMsg = '') => {
+    const isSell = /sell|short|bear|down/i.test(prompt);
+    const side = isSell ? 'SELL' : 'BUY';
+    const isCrypto = /btc|eth|sol/i.test(symbol);
+    const defaultLot = isCrypto ? 0.1 : 1.5;
+    
+    // Calculate entry stops targets
+    const tickSign = side === 'BUY' ? 1 : -1;
+    const isScalpingActive = strategyProfile === 'SCALPING';
+    
+    // For scalping, we force wider ATR/swing offset to fit the Institutional Swing rules
+    const offset = isScalpingActive ? (price * 0.008) : (price * 0.003); // ~80 pips for compliance swing vs ~30 pips
+    const isGrid = /grid|ladder|multi/i.test(prompt);
+    const isHedged = /hedge|cover|protect|ratio/i.test(prompt);
+
+    const orders = [];
+    
+    if (isGrid) {
+      // 3-step grid ladder
+      for (let i = 0; i < 3; i++) {
+        const entryOffset = -1 * tickSign * (price * 0.001 * (i + 1));
+        const entry = parseFloat((price + entryOffset).toFixed(isCrypto ? 2 : 5));
+        const sl = parseFloat((entry - tickSign * offset).toFixed(isCrypto ? 2 : 5));
+        const tp = parseFloat((entry + tickSign * offset * 2.2).toFixed(isCrypto ? 2 : 5));
+        orders.push({
+          symbol: symbol as MarketSymbol,
+          side: side as 'BUY' | 'SELL',
+          entryPrice: entry,
+          stopLoss: sl,
+          takeProfit: tp,
+          size: parseFloat((defaultLot * (1 - i * 0.2)).toFixed(2)),
+          reason: isScalpingActive 
+            ? `Compliance Sanitized: swing grid leg #${i + 1} (H4 timeframe anchor)`
+            : `AI Multi-Grid Leg #${i + 1} (${prompt.slice(0, 15)}...)`
+        });
+      }
+    } else {
+      // Single leg or standard bracket
+      const sl = parseFloat((price - tickSign * offset).toFixed(isCrypto ? 2 : 5));
+      const tp = parseFloat((price + tickSign * offset * 2.5).toFixed(isCrypto ? 2 : 5));
+      orders.push({
+        symbol: symbol as MarketSymbol,
+        side: side as 'BUY' | 'SELL',
+        entryPrice: price,
+        stopLoss: sl,
+        takeProfit: tp,
+        size: defaultLot,
+        reason: isScalpingActive 
+          ? `Compliance Sanitized: H4 trend swing anchor`
+          : `AI Composer Core Position (${prompt.slice(0, 20)}...)`
+      });
+
+      // Add a smart hedge if user requested hedging
+      if (isHedged) {
+        const hedgeSymbol = symbol === 'EUR/USD' ? 'USD/JPY' : symbol === 'BTC/USDT' ? 'ETH/USDT' : 'EUR/USD';
+        const hedgeSide = side === 'BUY' ? 'BUY' : 'SELL'; // co-trending or inversely correlated
+        const hedgePrice = hedgeSymbol === 'USD/JPY' ? 154.50 : hedgeSymbol === 'ETH/USDT' ? 2450.00 : 1.0850;
+        const hedgeOffset = hedgePrice * (isScalpingActive ? 0.009 : 0.004);
+        orders.push({
+          symbol: hedgeSymbol as MarketSymbol,
+          side: hedgeSide as 'BUY' | 'SELL',
+          entryPrice: hedgePrice,
+          stopLoss: parseFloat((hedgePrice - (hedgeSide === 'BUY' ? 1 : -1) * hedgeOffset).toFixed(hedgeSymbol === 'USD/JPY' ? 2 : 5)),
+          takeProfit: parseFloat((hedgePrice + (hedgeSide === 'BUY' ? 1 : -1) * hedgeOffset * 2.0).toFixed(hedgeSymbol === 'USD/JPY' ? 2 : 5)),
+          size: parseFloat((defaultLot * 0.6).toFixed(2)),
+          reason: `AI Bracket Protection Hedge (${hedgeSymbol} Proxy)`
+        });
+      }
+    }
+
+    const explanationPrefix = isScalpingActive
+      ? `[COMPLIANCE NOTICE: SCALPING BLOCKED] All client-initiated scalp orders are automatically sanitized to H4/D1 Swing structures under Rule IRB-91. `
+      : (noticeMsg ? `[Simulated] ` : '');
+
+    return {
+      orders,
+      reasoningExplanation: `${explanationPrefix}Constructed compound ${side.toLowerCase()} blueprint. The requested portfolio setup was evaluated under ${isScalpingActive ? 'Strict Swing-Only safety limits' : 'standard signal guidelines'}. Wider risk targets deployed representing ${isSell ? 'Premium margin resistance' : 'Discount mitigation pools'}.`,
+      totalRisk: `${(orders.length * 0.5).toFixed(1)}% total systemic equity risk (1% fixed fraction lock)`,
+      confluences: isScalpingActive 
+        ? ['Rule IRB-91 Compliance Override Filter', 'High-Timeframe Liquidity Block Mitigation', 'Average True Range (ATR) SL safety mapping']
+        : ['Structural directional bias alignment', 'Average True Range (ATR) SL safety mapping', 'Fair Value Gap mitigation fill indicator']
+    };
+  };
+
+  const client = getGeminiClient();
+  if (!client) {
+    res.json(getSimulatedDraft('Offline simulation active: GEMINI_API_KEY is not defined.'));
+    return;
+  }
+
+  try {
+    let systemInstruction = `
+You are the APEX MTX-QUANT Institutional Strategy Composer with embedded 4-tier analytics decision brain-power.
+Your job is to read user trading instructions, evaluate the LIVE 4-pillar system intelligence metrics below, and respond with a highly precise trade layout JSON object.
+
+LIVE INTELLIGENCE PILLARS DATA for ${symbol}:
+--------------------------------------------------
+Pillar 1: Liquidity Sweep Map & Volume Imbalances:
+- PDH Sweep resistance level: ${pdh.toFixed(5)}
+- PDL Sweep support level: ${pdl.toFixed(5)}
+- London session High: ${londonH.toFixed(5)}
+- NY session Low: ${nyL.toFixed(5)}
+
+Pillar 2: Capital Regime Classifier:
+- Current Regime: ${regimeType} (Volatility stress level: ${score}/100)
+
+Pillar 3: Intermarket Confluence Match:
+- DXY Dollar Index proxy bias: ${dxyBias}
+- Macro Confluence Strength: ${matchPct}%
+
+Pillar 4: Order Block Invalidation Cushion:
+- Safety Margin ATR buffer size: ${cushionBuffer.toFixed(5)} (Stops must be padded by at least this amount to survive wick sweeps)
+- Upper safety boundary: ${upperBoundInvalidation.toFixed(5)}
+- Lower safety boundary: ${lowerBoundInvalidation.toFixed(5)}
+--------------------------------------------------
+
+CONSTRAINTS & RULES:
+- You MUST act as the FINAL DECISION LAYER. Take these 4 analytic pillars into account when setting stopLoss and takeProfit values.
+- For BUY positions, your stopLoss MUST be set below the Lower safety boundary (${lowerBoundInvalidation.toFixed(5)}).
+- For SELL positions, your stopLoss MUST be set above the Upper safety boundary (${upperBoundInvalidation.toFixed(5)}).
+- Under 'MEAN REVERTING' regime, place conservative takeProfit steps targets. Under 'VOLATILITY TREND RUN', write wider targets conforming to momentum continuation.
+- In each order's 'reason' text, you MUST explicitly comment on how the 4-tier intelligence values (like PDH/PDL sweeps or ATR cushions) justified that leg's execution parameter decisions!
+
+JSON scheme matches this exactly:
+{
+  "orders": [
+    {
+      "symbol": "${symbol}" (must strictly match system symbol names),
+      "side": "BUY" or "SELL",
+      "entryPrice": number,
+      "stopLoss": number,
+      "takeProfit": number,
+      "size": number,
+      "reason": "text explanation citing specific analytic pillars"
+    }
+  ],
+  "reasoningExplanation": "Detailed analytic desk decision narrative synthesis combining regime, macro, and OB cushions",
+  "totalRisk": "text describing calculated lot metric fractions",
+  "confluences": ["string list of system confluences based on pillars"]
+}
+
+Available symbols: "EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "EUR/GBP", "GOLD/USD", "SILVER/USD", "BTC/USDT", "ETH/USDT", "SOL/USDT", "US30", "NAS100", "GER40", "SPX500".
+Current symbol is: ${symbol}. Current symbol price is: ${price}.
+
+Return ONLY the raw valid JSON block. Do not wrap in markdown tags like \`\`\`json. Keep numbers realistic, with standard Forex pips (5 decimal places, e.g. 1.08345) and gold/crypto (2 decimal places, e.g. 2350.50). Place Stop Losses and Take Profits logically depending on side!
+`;
+
+    if (strategyProfile === 'SCALPING') {
+      systemInstruction += `
+
+CRITICAL COMPLIANCE DIRECTIVE: The user has activated a 'Scalping' strategy profile, but this platform is STRICTLY an Institutional Swing platform. You MUST reject all short-term/scalping mechanics (e.g. 1-minute, 5-minute charts, 5-pip stop losses, tick-scalping, high frequency trades). Modify the draft orders to use Institutional Swing parameters (4-Hour to Daily swing levels, wider ATR stop losses of 40-100 pips, and larger swing take profits of 100-300 pips) instead.
+In the reasoningExplanation field, you MUST prepend this compliance notice: "[COMPLIANCE WARNING: SCALPING BLOCKED] This platform is strictly restricted to Institutional Swing positions. Under Rule IRB-91, high frequency scalping orders are automatically overridden to H4/D1 Swing profiles to mitigate systemic leverage risk."
+`;
+    }
+
+    const result = await generateContentWithRetry(client, {
+      model: 'gemini-3.5-flash',
+      contents: [{ role: 'user', parts: [{ text: `Generate trade layout for prompt: "${prompt}". Current asset is ${symbol} priced at ${price}.` }] }],
+      config: {
+        systemInstruction,
+        temperature: 0.1,
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const parsed = JSON.parse(result.text);
+    res.json(parsed);
+
+  } catch (error: any) {
+    console.warn('Composer AI endpoint fallback:', error.message || error);
+    res.json(getSimulatedDraft(`API fallback active (${error.message || 'connection bypass'}).`));
+  }
+});
+
+// AI Script Compiler: Generate MQL5 Expert Advisor and TradingView Pine Script (Strictly Server-Side)
+app.post('/api/gemini/compile', async (req, res) => {
+  const { prompt, strategyProfile } = req.body;
+
+  if (!prompt) {
+    res.status(400).json({ error: 'Prompt is required' });
+    return;
+  }
+
+  const getSimulatedCode = (noticeMsg = '') => {
+    const isEma = /ema|sma|moving|cross/i.test(prompt);
+    const isRsi = /rsi|oscillator|overbought/i.test(prompt);
+    const isScalpingActive = strategyProfile === 'SCALPING';
+
+    const title = isEma ? "EMA_Trend_Tracker_EA" : isRsi ? "RSI_Divergence_Exhaustion_EA" : "Apex_Grid_Liquidity_EA";
+
+    const complianceNotice = isScalpingActive
+      ? `// [COMPLIANCE OVERRIDE - RULE IRB-91] Scalping Mode sanitized & de-scaled.
+// All short-term HFT/scalp target boundaries have been automatically upgraded to H4 Swing levels.\n\n`
+      : '';
+
+    const mqlCode = `${complianceNotice}//+------------------------------------------------------------------+
+//|                                                 ${title}.mq5 |
+//|                                  Copyright 2026, Apex Quant Labs |
+//|                                             https://apex.quant   |
+//+------------------------------------------------------------------+
+#property copyright   "Copyright 2026, Apex Quant Labs"
+#property link        "https://apex.quant"
+#property version     "1.00"
+#property description "Cursor-composed institutional agent with safety locks"
+#property strict
+
+//--- Input parameters
+input group "=== Strategy Parameters ==="
+input int      InpFastPeriod     = 14;       // Fast Indicator Period
+input int      InpSlowPeriod     = 50;       // Slow Indicator Period
+input double   InpLotSize        = 0.10;     // Standard Exec Lot size
+input int      InpStopLossPips   = ${isScalpingActive ? '800' : '220'};      // Stop Loss (points, pips * 10)
+input int      InpTakeProfitPips = ${isScalpingActive ? '2000' : '500'};     // Take Profit (points)
+
+input group "=== Custom Risk Logic ==="
+input double   MaxDailyHedgeLoss = 2.0;      // Maximum loss percentage (%)
+input ENUM_TIMEFRAMES InpTimeframe = PERIOD_H4; // Forced Swing Timeframe bias
+
+//--- Global Variables
+int      fastHandle;
+int      slowHandle;
+datetime lastBarTime;
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   Print("Initializing Apex AI Agentic Engine: ${title}...");
+   
+   // Create handles for indicators
+   fastHandle = iMA(_Symbol, InpTimeframe, InpFastPeriod, 0, MODE_EMA, PRICE_CLOSE);
+   slowHandle = iMA(_Symbol, InpTimeframe, InpSlowPeriod, 0, MODE_EMA, PRICE_CLOSE);
+   
+   if(fastHandle == INVALID_HANDLE || slowHandle == INVALID_HANDLE)
+   {
+      Print("Error: Indicator initialization failed. Bridge abort.");
+      return(INIT_FAILED);
+   }
+   
+   lastBarTime = 0;
+   Print("${title} Agent ready for real-time MT5 bridge pipeline.");
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Safe high-timeframe bar checks
+   datetime currentBarTime = iTime(_Symbol, InpTimeframe, 0);
+   if(currentBarTime == lastBarTime) return; // run on bar close
+   
+   double fastValue[], slowValue[];
+   ArraySetAsSeries(fastValue, true);
+   ArraySetAsSeries(slowValue, true);
+   
+   if(CopyBuffer(fastHandle, 0, 0, 2, fastValue) < 2 ||
+      CopyBuffer(slowHandle, 0, 0, 2, slowValue) < 2)
+   {
+      return;
+   }
+   
+   // Check crossover triggers
+   bool buyTrigger  = (fastValue[0] > slowValue[0]) && (fastValue[1] <= slowValue[1]);
+   bool sellTrigger = (fastValue[0] < slowValue[0]) && (fastValue[1] >= slowValue[1]);
+   
+   if(buyTrigger)
+   {
+      Print("[AI TRIGGER] Bullish trend crossover caught. Dispatching Buy lots with target TP:" + IntegerToString(InpTakeProfitPips));
+   }
+   else if(sellTrigger)
+   {
+      Print("[AI TRIGGER] Bearish trend crossover caught. Dispatching Sell lots with stop protection.");
+   }
+   
+   lastBarTime = currentBarTime;
+}`;
+
+    const pineCode = `${complianceNotice}//@version=5
+strategy("${title}", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=1.0)
+
+// --- Inputs ---
+fastLen = input.int(14, title="Fast Line Length", group="Moving Averages")
+slowLen = input.int(50, title="Slow Line Length", group="Moving Averages")
+stopPerc = input.float(${isScalpingActive ? '3.5' : '1.5'}, title="Stop Loss (%)", group="Risk Filters")
+takePerc = input.float(${isScalpingActive ? '8.5' : '3.5'}, title="Take Profit (%)", group="Risk Filters")
+
+// --- Calculations ---
+fastEMA = ta.ema(close, fastLen)
+slowEMA = ta.ema(close, slowLen)
+
+// --- Visual Plots ---
+plot(fastEMA, color=color.indigo, linewidth=2, title="AI Fast Line")
+plot(slowEMA, color=color.rose, linewidth=2, title="AI Slow Line")
+
+// --- Signals ---
+buySignal  = ta.crossover(fastEMA, slowEMA)
+sellSignal = ta.crossunder(fastEMA, slowEMA)
+
+// --- Logic Execution ---
+if (buySignal)
+    strategy.entry("AI-Long", strategy.long, comment="Apex Bullish Entry")
+    strategy.exit("Close-Long", "AI-Long", loss=close * (stopPerc / 100) / syminfo.mintick, profit=close * (takePerc / 100) / syminfo.mintick)
+
+if (sellSignal)
+    strategy.entry("AI-Short", strategy.short, comment="Apex Bearish Entry")
+    strategy.exit("Close-Short", "AI-Short", loss=close * (stopPerc / 100) / syminfo.mintick, profit=close * (takePerc / 100) / syminfo.mintick)
+`;
+
+    const explanationPrefix = isScalpingActive
+      ? `[COMPLIANCE OVERRIDE - SCALPING SANITIZED] All scalp parameters parsed from the prompt were modified. EA logic is calibrated to Period H4 with extended swing parameters per compliance bylaws. `
+      : (noticeMsg ? `[Simulated Model Guidance]\n` : '');
+
+    return {
+      mql5Code: mqlCode,
+      pineCode: pineCode,
+      explanation: `${explanationPrefix}This automated advisor uses **EMA dynamic structures** as the main filter. When the fast line crosses the slow line, we dispatch trades with built-in slippage tolerance protections. Risk calculations are constrained strictly to 1.5% of equity per trade block.`,
+      parameters: [
+        { name: "InpFastPeriod", val: "14", desc: "Fast indicator boundary" },
+        { name: "InpSlowPeriod", val: "50", desc: "Slow baseline filter" },
+        { name: "InpStopLossPips", val: isScalpingActive ? "800" : "220", desc: "Safety stop loss limit (points)" },
+        { name: "InpTakeProfitPips", val: isScalpingActive ? "2000" : "500", desc: "Target limit (points)" }
+      ]
+    };
+  };
+
+  const client = getGeminiClient();
+  if (!client) {
+    res.json(getSimulatedCode('Offline simulation active: GEMINI_API_KEY is not defined.'));
+    return;
+  }
+
+  try {
+    let systemInstruction = `
+You are the Apex Institutional Code Sandbox Compiler.
+Your job is to read user inquiries about trading strategies or scripts (e.g. "EMA 20 cross", "RSI divergence scalper") and generate an Expert Advisor script in MQL5 (MetaTrader 5) and TradingView Pine Script v5.
+Respond with a strict, beautifully structured JSON object containing exactly these keys:
+{
+  "mql5Code": "write highly polished, realistic, compile-ready MQL5 code here as a single string",
+  "pineCode": "write highly polished, valid Pine Script v5 code here as a single string",
+  "explanation": "short markdown bullet explanation of strategy logic and how parameters align with institutional ICT or trade bible ideas",
+  "parameters": [
+    { "name": "parameter name", "val": "default value", "desc": "description of use" }
+  ]
+}
+
+Ensure the code has appropriate structure, parameters, comments, input variables, handles, and logic block definitions. Avoid mock syntax, keep it completely compilable! Keep output clean and valid JSON. Do not wrap in markdown \`\`\`json tags. Run raw string escaping where needed.
+`;
+
+    if (strategyProfile === 'SCALPING') {
+      systemInstruction += `
+
+CRITICAL COMPLIANCE DIRECTIVE: The user has activated a 'Scalping' strategy profile, but this platform is STRICTLY an Institutional Swing platform. You MUST reject all short-term/scalping parameters (e.g. tight 5-pip stop losses, fast EMA crosses under 1-minute or 5-minute timeframes, HFT/scalp triggers). Ensure your generated MQL5 code and TradingView Pine Script code strictly utilize 4-Hour / H4 or Daily timeframe filters, wider institutional swing parameters (at least 50-150 pips stop losses), and long-term trend following indicators.
+Prepend a prominent block comment stating that the advisor was automatically compliance-realigned to Swing trading. In the explanation field, explain that scalping strategy parameters were blocked and migrated to Institutional Swing per IRB-91 risk rules.
+`;
+    }
+
+    const result = await generateContentWithRetry(client, {
+      model: 'gemini-3.5-flash',
+      contents: [{ role: 'user', parts: [{ text: `Generate compilable trading script for: "${prompt}"` }] }],
+      config: {
+        systemInstruction,
+        temperature: 0.15,
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const parsed = JSON.parse(result.text);
+    res.json(parsed);
+
+  } catch (error: any) {
+    console.warn('Compiler AI endpoint fallback:', error.message || error);
+    res.json(getSimulatedCode(`API fallback active (${error.message || 'connection bypass'}).`));
   }
 });
 

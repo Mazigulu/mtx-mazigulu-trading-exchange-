@@ -77,8 +77,8 @@ const SYMBOL_CONFIGS: Record<MarketSymbol, {
     decimals: 5,
     averageRange: 0.0008,
     driftFactor: 0.0015,
-    flagF1: '🇪🇺',
-    flagF2: '🇺🇸',
+    flagF1: '',
+    flagF2: '',
     newsEvents: [
       { hourIndex: 38, title: 'European Core CPI Flash Estimate (Inflation Spike)', movementInPips: -35, impact: 'HIGH' },
       { hourIndex: 82, title: 'US Federal Reserve Interest Rate Decision (FOMC Hawkes)', movementInPips: 65, impact: 'HIGH' },
@@ -763,7 +763,7 @@ export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbol
               onChange={(e) => handleSymbolChangeInner(e.target.value as MarketSymbol)}
               className="bg-[#0c0c0c] border border-white/10 hover:border-white/25 text-white text-xs font-mono font-bold uppercase rounded px-3 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
-              <option value="EUR/USD">🇪🇺🇺🇸 EUR/USD (Euro)</option>
+              <option value="EUR/USD">EUR/USD (Euro)</option>
               <option value="GBP/USD">🇬🇧🇺🇸 GBP/USD (Cable)</option>
               <option value="USD/JPY">🇺🇸🇯🇵 USD/JPY (Yen)</option>
               <option value="BTC/USDT">🪙🇺🇸 BTC/USDT (Bitcoin)</option>

@@ -220,6 +220,71 @@ export default function InstitutionalNewsTicker() {
   return (
     <div id="institutional-news-ticker-card" className="bg-[#0c0c0e]/95 border border-white/5 rounded-lg p-5 md:p-6 flex flex-col justify-between h-auto mt-6">
       
+      {/* Live Bloomberg-Style Infinite Scrolling News Ribbon */}
+      {news.length > 0 && (
+        <div id="live-news-marquee-tape" className="w-full bg-[#050507] border border-white/5 rounded-md py-2.5 overflow-hidden mb-5 relative flex items-center select-none shadow-[inset_0_1px_4px_rgba(255,255,255,0.02)] group">
+          {/* Tape Header Label Tag */}
+          <div className="absolute left-0 top-0 bottom-0 bg-red-600/90 px-3 flex items-center text-[8.5px] font-mono font-black text-white shrink-0 z-10 tracking-widest uppercase border-r border-[#0c0c0e] shadow-[3px_0_10px_rgba(0,0,0,0.6)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping mr-1.5" />
+            LIVE REUTERS TAPE
+          </div>
+          
+          {/* Inner Marquee Container */}
+          <div className="flex w-full pl-36 overflow-hidden relative">
+            <div className="animate-marquee-smooth flex gap-8 whitespace-nowrap text-[9px] font-mono font-bold tracking-tight">
+              {[...news, ...news].map((item, idx) => {
+                const isCritical = item.impact === 'CRITICAL';
+                const isHigh = item.impact === 'HIGH';
+                const colorClass = isCritical 
+                  ? 'text-rose-400 font-extrabold shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse' 
+                  : isHigh 
+                  ? 'text-amber-400' 
+                  : item.impact === 'MEDIUM' 
+                  ? 'text-sky-400' 
+                  : 'text-white/45';
+                  
+                return (
+                  <button
+                    key={`${item.id}-marquee-${idx}`}
+                    onClick={() => setSelectedArticle(item)}
+                    className="hover:text-indigo-400 cursor-pointer flex items-center gap-2 focus:outline-none transition-colors"
+                    title="Click to view full direct briefing"
+                  >
+                    <span className={`px-1.5 py-0.5 rounded text-[7.5px] font-black leading-none border ${
+                      isCritical 
+                        ? 'bg-rose-500/15 border-rose-500/30 text-rose-400' 
+                        : isHigh 
+                        ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+                        : 'bg-white/5 border-white/5 text-white/45'
+                    }`}>
+                      {item.impact}
+                    </span>
+                    <span className="text-white/30 uppercase text-[8px] tracking-wider font-semibold">{item.source}:</span>
+                    <span className={`${colorClass} hover:underline`}>{item.title}</span>
+                    <span className="text-white/20 px-1 font-normal">&middot;&middot;&middot;&middot;</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          
+          {/* CSS Animation style injection */}
+          <style dangerouslySetInnerHTML={{ __html: `
+            @keyframes marquee {
+              0% { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+            .animate-marquee-smooth {
+              display: flex;
+              animation: marquee 50s linear infinite;
+            }
+            .animate-marquee-smooth:hover {
+              animation-play-state: paused;
+            }
+          `}} />
+        </div>
+      )}
+      
       {/* 1. Header Toolbar Component */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-indigo-500/10 pb-4 mb-4 gap-3">
         <div className="flex items-center space-x-3">

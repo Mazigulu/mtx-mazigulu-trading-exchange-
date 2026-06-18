@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'motion/react';
-import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent, MarketSymbol, CorrelationData, getSymbolCorrelations } from '../types';
+import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent, MarketSymbol, CorrelationData, getSymbolCorrelations, PriceAlert } from '../types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders, Zap, Server, Magnet, Crosshair, Maximize2, Minimize2, ArrowRightLeft, ArrowRight, ChevronDown, Clock, Type } from 'lucide-react';
 import DOMPriceLadder from './DOMPriceLadder';
@@ -47,7 +47,7 @@ const FEED_SOURCES: Record<string, string> = {
 };
 
 const FLAG_EMOJIS: Record<string, { f1: string; f2: string }> = {
-  'EUR/USD': { f1: '🇪🇺', f2: '🇺🇸' },
+  'EUR/USD': { f1: '', f2: '' },
   'GBP/USD': { f1: '🇬🇧', f2: '🇺🇸' },
   'USD/JPY': { f1: '🇺🇸', f2: '🇯🇵' },
   'AUD/USD': { f1: '🇦🇺', f2: '🇺🇸' },
@@ -209,6 +209,8 @@ interface ChartContainerProps {
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   onSymbolChange?: (sym: MarketSymbol) => void;
+  priceAlerts?: PriceAlert[];
+  onDeletePriceAlert?: (id: string) => void;
 }
 
 export default function ChartContainer({
@@ -229,6 +231,8 @@ export default function ChartContainer({
   isExpanded = false,
   onToggleExpand,
   onSymbolChange,
+  priceAlerts = [],
+  onDeletePriceAlert,
 }: ChartContainerProps) {
   const [hoveredCandle, setHoveredCandle] = useState<Candlestick | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -584,13 +588,13 @@ export default function ChartContainer({
       setTimeout(() => setOneClickStatus(null), 3000);
     }
   };
-  const [showFVG, setShowFVG] = useState(true);
-  const [showOB, setShowOB] = useState(true);
-  const [showLiquidityMap, setShowLiquidityMap] = useState(true);
-  const [showVolumeProfile, setShowVolumeProfile] = useState(true);
-  const [showVWAP, setShowVWAP] = useState(true);
-  const [showSessions, setShowSessions] = useState(true);
-  const [showOFI, setShowOFI] = useState(true);
+  const [showFVG, setShowFVG] = useState(false);
+  const [showOB, setShowOB] = useState(false);
+  const [showLiquidityMap, setShowLiquidityMap] = useState(false);
+  const [showVolumeProfile, setShowVolumeProfile] = useState(false);
+  const [showVWAP, setShowVWAP] = useState(false);
+  const [showSessions, setShowSessions] = useState(false);
+  const [showOFI, setShowOFI] = useState(false);
   const [ofiMode, setOfiMode] = useState<'HISTOGRAM' | 'PROFILE'>('HISTOGRAM');
   const [volumeProfileSide, setVolumeProfileSide] = useState<'LEFT' | 'RIGHT'>('RIGHT');
   const [hoveredOfiBin, setHoveredOfiBin] = useState<{
@@ -619,8 +623,8 @@ export default function ChartContainer({
   const [cursorPrice, setCursorPrice] = useState<number | null>(null);
   const [cursorX, setCursorX] = useState<number | null>(null);
   const [cursorTime, setCursorTime] = useState<string | null>(null);
-  const [showIndicators, setShowIndicators] = useState(true);
-  const [showNewsOverlay, setShowNewsOverlay] = useState(true);
+  const [showIndicators, setShowIndicators] = useState(false);
+  const [showNewsOverlay, setShowNewsOverlay] = useState(false);
   const [hoveredNews, setHoveredNews] = useState<{
     id: string;
     x: number;
@@ -781,7 +785,7 @@ export default function ChartContainer({
   }
 
   const [showTradeStatsOverlay, setShowTradeStatsOverlay] = useState<boolean>(false);
-  const [showCorrelationOverlay, setShowCorrelationOverlay] = useState<boolean>(true);
+  const [showCorrelationOverlay, setShowCorrelationOverlay] = useState<boolean>(false);
   const [isDrawingAnnotation, setIsDrawingAnnotation] = useState(false);
   const [chartAnnotations, setChartAnnotations] = useState<ChartAnnotation[]>(() => {
     try {
@@ -2718,10 +2722,10 @@ export default function ChartContainer({
   const chartMainContent = (
     <div 
       id="chart-container-root" 
-      className={`bg-[#080808] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative z-15 transition-all duration-300 select-none ${
+      className={`bg-[#080808] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative transition-all duration-300 select-none ${
         isFullscreen 
           ? 'fixed inset-0 z-[99999999] w-screen h-screen !max-w-none !max-h-none !rounded-none p-0 m-0 flex flex-col overflow-hidden bg-[#050505]' 
-          : 'overflow-hidden'
+          : `z-[155] ${isAssetSelectorOpen || isTimeframeSelectorOpen || isLayersDropdownOpen || isDrawDropdownOpen ? 'overflow-visible' : 'overflow-hidden'}`
       }`}
       style={shouldUseFallbackAbsolute ? { 
         position: 'absolute', 
@@ -2776,11 +2780,13 @@ export default function ChartContainer({
           {/* Left Hand Indicator: Pair and Info Stream */}
           <div className="flex items-center justify-center sm:justify-start space-x-3 w-full sm:w-auto text-center sm:text-left">
             {/* Overlapping Flags Representation - integrated cleanly */}
-          <div className="relative w-8 h-8 items-center shrink-0 hidden sm:flex bg-white/[0.03] border border-white/5 rounded-full justify-center">
-            <span className="text-[15px] absolute select-none drop-shadow-sm filter saturate-125">
-              {symbolEmoji.f1}
-            </span>
-          </div>
+          {symbolEmoji.f1 && (
+            <div className="relative w-8 h-8 items-center shrink-0 hidden sm:flex bg-white/[0.03] border border-white/5 rounded-full justify-center">
+              <span className="text-[15px] absolute select-none drop-shadow-sm filter saturate-125">
+                {symbolEmoji.f1}
+              </span>
+            </div>
+          )}
           <div className="flex flex-col items-center sm:items-start">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 font-sans leading-none">
               {/* Forward-extending Asset Selection Menu */}
@@ -2792,7 +2798,9 @@ export default function ChartContainer({
                   className={`group font-mono font-black text-[13px] md:text-[14px] text-white tracking-tight flex items-center gap-2.5 bg-neutral-900/90 border border-white/10 hover:border-indigo-500/40 hover:bg-neutral-850 transition-all px-3 py-2 rounded-lg select-none cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.5)] ${isAssetSelectorOpen ? 'ring-1 ring-indigo-500/30 border-indigo-500/30' : ''}`}
                 >
                   <span className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-xs filter saturate-110 drop-shadow-sm select-none">{symbolEmoji.f1} {symbolEmoji.f2}</span>
+                    {(symbolEmoji.f1 || symbolEmoji.f2) && (
+                      <span className="text-xs filter saturate-110 drop-shadow-sm select-none">{symbolEmoji.f1} {symbolEmoji.f2}</span>
+                    )}
                     <span className="text-white hover:text-indigo-300 font-bold tracking-wider">{symbol}</span>
                   </span>
                   <ChevronDown className={`w-3.5 h-3.5 text-white/40 group-hover:text-indigo-400 transition-transform duration-300 ${isAssetSelectorOpen ? 'rotate-180 text-indigo-400' : ''}`} />
@@ -2803,7 +2811,7 @@ export default function ChartContainer({
                     <>
                       {/* Transparent global click-away backdrop */}
                       <div 
-                        className="fixed inset-0 z-[100] bg-transparent"
+                        className="fixed inset-0 z-[490] bg-transparent"
                         onClick={() => setIsAssetSelectorOpen(false)}
                       />
                       
@@ -2813,7 +2821,7 @@ export default function ChartContainer({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 12, scale: 0.97 }}
                         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                        className="absolute left-0 mt-3 w-[34rem] max-w-[calc(100vw-24px)] z-[101] bg-[#0c0c0c] border border-white/15 rounded-xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.95)] flex min-h-[250px] overflow-hidden"
+                        className="absolute left-0 mt-3 w-[34rem] max-w-[calc(100vw-24px)] z-[500] bg-[#0c0c0c] border border-white/15 rounded-xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.95)] flex min-h-[250px] overflow-hidden"
                       >
                         {/* Categories panel (Left Column) */}
                         <div className="w-[165px] border-r border-white/10 bg-[#050505] p-2.5 shrink-0 flex flex-col space-y-1 select-none">
@@ -2900,7 +2908,9 @@ export default function ChartContainer({
                                       >
                                         <div className="flex items-center justify-between w-full">
                                           <span className="text-[11px] font-mono font-bold tracking-tight uppercase flex items-center gap-1.5">
-                                            <span className="text-[13px] filter saturate-110 drop-shadow-sm select-none">{flags.f1} {flags.f2}</span>
+                                            {(flags.f1 || flags.f2) && (
+                                              <span className="text-[13px] filter saturate-110 drop-shadow-sm select-none">{flags.f1} {flags.f2}</span>
+                                            )}
                                             {sym}
                                           </span>
                                           {selected ? (
@@ -2946,7 +2956,7 @@ export default function ChartContainer({
                     <>
                       {/* Transparent click-away backdrop */}
                       <div 
-                        className="fixed inset-0 z-[100] bg-transparent"
+                        className="fixed inset-0 z-[490] bg-transparent"
                         onClick={() => setIsTimeframeSelectorOpen(false)}
                       />
                       
@@ -2956,7 +2966,7 @@ export default function ChartContainer({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.97 }}
                         transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                        className="absolute left-0 mt-2 w-44 z-[101] bg-[#0c0c0c] border border-white/15 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.95)] p-1.5 space-y-0.5 text-left"
+                        className="absolute left-0 mt-2 w-44 z-[500] bg-[#0c0c0c] border border-white/15 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.95)] p-1.5 space-y-0.5 text-left"
                       >
                         <div className="text-[8px] font-mono font-bold tracking-widest text-white/20 uppercase px-2 py-1 select-none border-b border-white/5 mb-1 flex items-center gap-1.5">
                           <Clock className="w-2.5 h-2.5 text-indigo-400/80" />
@@ -3262,7 +3272,7 @@ export default function ChartContainer({
                   </span>
                   
                   {/* Hover Tooltip Details for Trend Bias & Gauge & Alarm */}
-                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0a0a0c] border border-white/25 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.95)] text-left leading-tight z-[250] w-[270px] pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
+                  <div className="absolute top-full left-0 mt-2 p-3 bg-[#0a0a0c] border border-white/25 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.95)] text-left leading-tight z-[250] w-[270px] pointer-events-none group-hover:pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 text-[10px] font-mono">
                     <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
                       <span className="text-white font-bold text-[9.5px] flex items-center gap-1.5">
                         <TrendingUp className="w-3.5 h-3.5 text-indigo-400" /> Institutional Bias Audit
@@ -3374,7 +3384,7 @@ export default function ChartContainer({
             {isLayersDropdownOpen && (
               <div 
                 id="dropdown-layers-menu"
-                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d] border border-white/20 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.95)] z-50 p-1.5 space-y-0.5"
+                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d] border border-white/20 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.95)] z-[500] p-1.5 space-y-0.5"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-b border-white/5 mb-1.5">
@@ -3637,7 +3647,7 @@ export default function ChartContainer({
             {isDrawDropdownOpen && (
               <div 
                 id="dropdown-draw-menu"
-                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d] border border-white/20 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.95)] z-50 p-1.5 space-y-0.5"
+                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d] border border-white/20 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.95)] z-[500] p-1.5 space-y-0.5"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-b border-white/5 mb-1.5">
@@ -3817,56 +3827,6 @@ export default function ChartContainer({
                     <Maximize2 className="w-3.5 h-3.5 text-white/70 group-hover:scale-105" />
                   )}
                 </button>
-
-                {/* Info values element */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-[#050505]/95 border border-white/10 px-3 py-1 rounded-lg font-mono text-[10.5px] shadow-lg pointer-events-none select-none">
-                  {hoveredCandle ? (
-                    <>
-                      <span className="text-white/40 font-mono flex items-center leading-none">Time: <span className="text-indigo-400 font-bold ml-1">{formatIndexTime(hoveredCandle.timestamp)}</span></span>
-                      <span className="text-white/40 font-mono flex items-center leading-none font-bold font-bold font-semibold font-semibold font-extrabold font-extrabold">O: <span className={`ml-1 font-bold ${hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}`}>{hoveredCandle.open.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
-                      <span className="text-white/40 font-mono flex items-center leading-none font-semibold">H: <span className="text-white/95 ml-1 font-semibold">{hoveredCandle.high.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
-                      <span className="text-white/40 font-mono flex items-center leading-none">L: <span className="text-white/95 ml-1 font-semibold">{hoveredCandle.low.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
-                      <span className="text-white/40 font-mono flex items-center leading-none font-bold">C: <span className={`ml-1 font-bold ${hoveredCandle.close >= hoveredCandle.open ? 'text-emerald-400' : 'text-rose-400'}`}>{hoveredCandle.close.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}</span></span>
-                      <span className="text-white/40 font-mono flex items-center leading-none">V: <span className="text-white/60 ml-1 font-semibold">{hoveredCandle.volume.toLocaleString()}</span></span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-indigo-400 font-extrabold uppercase font-sans text-[10px] tracking-wider pr-2 border-r border-white/10 flex items-center gap-1.5 shrink-0">
-                        <span className="relative flex h-1.5 w-1.5 shrink-0">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-70"></span>
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#6366f1] bg-indigo-500"></span>
-                        </span>
-                        {symbol} Feed
-                      </span>
-                      {candles.length > 0 && (() => {
-                        const lastCandle = candles[candles.length - 1];
-                        const isGreen = lastCandle.close >= lastCandle.open;
-                        const format = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
-                        return (
-                          <>
-                            <span className="text-white/40 font-mono flex items-center leading-none font-semibold">O: <span className={`ml-1 ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>{lastCandle.open.toFixed(format)}</span></span>
-                            <span className="text-white/40 font-mono flex items-center leading-none font-semibold">H: <span className="text-white/95 ml-1 font-semibold">{lastCandle.high.toFixed(format)}</span></span>
-                            <span className="text-white/40 font-mono flex items-center leading-none">L: <span className="text-white/95 ml-1 font-semibold">{lastCandle.low.toFixed(format)}</span></span>
-                            <span className="text-white/40 font-mono flex items-center leading-none font-bold">C: <span className={`ml-1 ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>{lastCandle.close.toFixed(format)}</span></span>
-                            <span className="text-white/40 font-mono flex items-center leading-none font-semibold">V: <span className="text-white/60 ml-1 font-semibold">{lastCandle.volume.toLocaleString()}</span></span>
-                            {imminentHighImpactNews.length > 0 && (
-                              <>
-                                <span className="text-white/30 px-1 font-bold">|</span>
-                                <div className="flex items-center space-x-1.5 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded text-[8px] text-rose-300 font-sans font-bold tracking-tight animate-pulse pointer-events-auto cursor-help" title="IMMINENT MACRO DATA INBOUND">
-                                  <span className="relative flex h-1.5 w-1.5 shrink-0">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
-                                  </span>
-                                  <span className="font-mono uppercase font-black text-[7px]">🚨 {imminentHighImpactNews[0].currency} {imminentHighImpactNews[0].title} MACRO RISK INBOUND</span>
-                                </div>
-                              </>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </>
-                  )}
-                </div>
               </div>
 
           {/* Draw Mode Info Ribbon overlaying chart */}
@@ -5665,6 +5625,81 @@ export default function ChartContainer({
                           ×
                         </text>
                       </g>
+                    </g>
+                  </g>
+                );
+              })
+            }
+
+            {/* Custom Active, Non-Triggered Parent Price Targets Overlay */}
+            {priceAlerts && priceAlerts
+              .filter(alert => alert.symbol === symbol && !alert.isTriggered)
+              .map(alert => {
+                const yPos = getY(alert.targetPrice);
+                const isVisible = yPos >= padding.top && yPos <= height - padding.bottom;
+                if (!isVisible) return null;
+
+                const displayFormat = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
+
+                return (
+                  <g key={`prop-price-alert-${alert.id}`} className="font-sans select-none pointer-events-auto">
+                    {/* Dash/Dot line indicator */}
+                    <line
+                      x1={padding.left}
+                      y1={yPos}
+                      x2={width - padding.right}
+                      y2={yPos}
+                      stroke="#818cf8"
+                      strokeWidth={1.5}
+                      strokeDasharray="5,3"
+                      className="animate-pulse"
+                    />
+
+                    {/* Badge */}
+                    <g className="cursor-pointer hover:brightness-110 transition-all">
+                      <rect
+                        x={padding.left + 8}
+                        y={yPos - 8}
+                        width={140}
+                        height={16}
+                        rx={3}
+                        fill="#050510"
+                        stroke="#818cf8"
+                        strokeWidth={1}
+                        className="backdrop-blur"
+                      />
+                      <text
+                        x={padding.left + 16}
+                        y={yPos + 4}
+                        fill="#a5b4fc"
+                        fontSize="8px"
+                        fontWeight="black"
+                        className="font-mono uppercase tracking-wider"
+                      >
+                        🔔 TARGET ({alert.condition}) @ {alert.targetPrice.toFixed(displayFormat)}
+                      </text>
+
+                      {/* Delete button ("X") */}
+                      {onDeletePriceAlert && (
+                        <g
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onDeletePriceAlert(alert.id);
+                          }}
+                          className="hover:scale-110 transition-transform cursor-pointer pointer-events-auto"
+                          title="Delete target alert"
+                        >
+                          <circle cx={padding.left + 135} cy={yPos} r={5} fill="#ef4444" />
+                          <text
+                            x={padding.left + 135}
+                            y={yPos + 2.5}
+                            style={{ fontSize: '7px', fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }}
+                          >
+                            ×
+                          </text>
+                        </g>
+                      )}
                     </g>
                   </g>
                 );

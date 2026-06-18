@@ -12,12 +12,14 @@ import EconomicCalendar from './components/EconomicCalendar';
 import OrderBookTracker from './components/OrderBookTracker';
 import CumulativeDepthChart from './components/CumulativeDepthChart';
 import Mt5BridgeGuide from './components/Mt5BridgeGuide';
-import TradeTerminal from './components/TradeTerminal';
 import BacktestSimulator from './components/BacktestSimulator';
-import PerformanceTracker from './components/PerformanceTracker';
-import RiskDashboard from './components/RiskDashboard';
+
+const TradeTerminal = React.lazy(() => import('./components/TradeTerminal'));
+const PerformanceTracker = React.lazy(() => import('./components/PerformanceTracker'));
+const RiskDashboard = React.lazy(() => import('./components/RiskDashboard'));
 import SystemStatus from './components/SystemStatus';
 import TradeExplainability from './components/TradeExplainability';
+import AnalyticDeskIntelligence from './components/AnalyticDeskIntelligence';
 import CorrelationMatrix from './components/CorrelationMatrix';
 import CorrelationHeatmap from './components/CorrelationHeatmap';
 import InstitutionalSentimentGauge from './components/InstitutionalSentimentGauge';
@@ -33,6 +35,10 @@ import StrategyPerformanceChart from './components/StrategyPerformanceChart';
 import { TradePositionRowItem } from './components/TradePositionRowItem';
 import { BureaucracyModal } from './components/BureaucracyModal';
 import LoginPage from './components/LoginPage';
+import NewsDesk from './components/NewsDesk';
+import AiCopilotWorkspace from './components/AiCopilotWorkspace';
+import InstitutionalFlowWidget from './components/InstitutionalFlowWidget';
+import RiskExposureJournal from './components/RiskExposureJournal';
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
 import { 
@@ -61,6 +67,8 @@ import {
   Menu,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Camera,
   Timer,
   Filter,
@@ -81,8 +89,21 @@ import {
   Trash2,
   Plus,
   Sliders,
-  Newspaper
+  Newspaper,
+  Sparkles
 } from 'lucide-react';
+
+const TerminalWorkspaceLoader = () => (
+  <div className="flex flex-col items-center justify-center min-h-[400px] border border-white/5 rounded-lg bg-[#070709]/80 p-8 space-y-4 font-mono w-full">
+    <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
+      <RefreshCw className="w-5 h-5 text-indigo-400 animate-spin" />
+    </div>
+    <div className="flex flex-col items-center space-y-1">
+      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Syncing Workspace Component</span>
+      <span className="text-[8px] text-white/30 uppercase tracking-wider">Establishing secure data channels...</span>
+    </div>
+  </div>
+);
 
 const emptyPositionsImg = new URL('./assets/images/empty_positions_1781203013885.jpg', import.meta.url).href;
 
@@ -174,8 +195,8 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'INTELLIGENCE' | 'EXECUTION' | 'RISK' | 'RESEARCH' | 'SETTINGS'>('INTELLIGENCE');
-  const [researchSubTab, setResearchSubTab] = useState<'REPLAY' | 'NEWSDESK' | 'LEDGER'>('REPLAY');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'INTELLIGENCE' | 'EXECUTION' | 'RISK' | 'RESEARCH' | 'SETTINGS' | 'NEWS' | 'COPILOT'>('INTELLIGENCE');
+  const [researchSubTab, setResearchSubTab] = useState<'REPLAY' | 'LEDGER' | 'RISK_EXPOSURE'>('REPLAY');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isChartExpanded, setIsChartExpanded] = useState(true);
@@ -382,6 +403,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
   const [newsEvents, setNewsEvents] = useState<NewsEvent[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [expandedTradeIds, setExpandedTradeIds] = useState<Record<string, boolean>>({});
+  const [activeTradePageIndex, setActiveTradePageIndex] = useState<number>(0);
   const [positionSort, setPositionSort] = useState<'PROFITABLE' | 'MARGIN' | 'DURATION'>('PROFITABLE');
   const [positionFilter, setPositionFilter] = useState<'ALL' | 'WINNING' | 'LOSING'>('ALL');
   const [isCompactPositions, setIsCompactPositions] = useState<boolean>(false);
@@ -864,6 +886,24 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
     }
   };
 
+  const handleUpdateTradeParams = async (id: string, params: Partial<Trade>) => {
+    try {
+      const res = await fetch(`/api/trades/${id}/update-params`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      if (res.ok) {
+        fetchMarketData();
+      } else {
+        const data = await res.json();
+        console.error('Failed to update trade parameters:', data.error);
+      }
+    } catch (err) {
+      console.error('Error updating trade parameters:', err);
+    }
+  };
+
   const handleEmergencyCloseAll = async () => {
     const openPositions = trades.filter((t) => t.status === 'OPEN');
     if (openPositions.length === 0) {
@@ -902,6 +942,44 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       fetchMarketData();
     } catch (error) {
       console.error('Failed emergency close all execution:', error);
+    }
+  };
+
+  const handlePartialCloseAll = async (ratio = 0.5) => {
+    const openPositions = trades.filter((t) => t.status === 'OPEN');
+    if (openPositions.length === 0) {
+      setEmergencyCloseStatus({
+        show: true,
+        count: 0,
+        pnl: 0,
+        timestamp: new Date().toLocaleTimeString(),
+      });
+      return;
+    }
+
+    try {
+      const estimatedPnl = openPositions.reduce((sum, t) => sum + (t.pnl * ratio), 0);
+      
+      await Promise.all(
+        openPositions.map((trade) =>
+          fetch(`/api/trades/${trade.id}/partial-close`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ratio }),
+          })
+        )
+      );
+
+      setEmergencyCloseStatus({
+        show: true,
+        count: openPositions.length,
+        pnl: estimatedPnl,
+        timestamp: new Date().toLocaleTimeString(),
+      });
+
+      fetchMarketData();
+    } catch (error) {
+      console.error('Failed partial profit taking execution:', error);
     }
   };
 
@@ -1368,8 +1446,8 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       {/* Retractable Left-Hand Side Menu Navigation - Hidden on mobile screens */}
       <aside
         id="reproducible-side-nav"
-        className={`fixed inset-y-0 left-0 z-40 bg-[#080808] border-r border-white/10 flex-col justify-between transition-all duration-300 ease-in-out hidden md:flex ${
-          isSidebarExpanded ? 'w-64 shadow-[10px_0_35px_rgba(0,0,0,0.7)]' : 'w-16 shadow-none'
+        className={`fixed inset-y-0 left-0 z-[300] bg-[#080808] border-r border-white/10 flex-col justify-between transition-all duration-300 ease-in-out hidden md:flex ${
+          isSidebarExpanded ? 'w-52 shadow-[10px_0_35px_rgba(0,0,0,0.7)]' : 'w-16 shadow-none'
         }`}
         onMouseEnter={() => setIsSidebarExpanded(true)}
         onMouseLeave={() => setIsSidebarExpanded(false)}
@@ -1407,9 +1485,11 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
             <nav className="space-y-2 px-2.5">
               {[
                 { id: 'INTELLIGENCE', label: 'Intelligence', icon: Bot },
+                { id: 'COPILOT', label: 'MTX Engine', icon: Sparkles },
                 { id: 'DASHBOARD', label: 'Dashboard', icon: Layers },
                 { id: 'EXECUTION', label: 'Execution', icon: Activity },
                 { id: 'RISK', label: 'Risk Desk', icon: ShieldAlert },
+                { id: 'NEWS', label: 'News Desk', icon: Newspaper },
                 { id: 'RESEARCH', label: 'Research', icon: Award },
                 { id: 'SETTINGS', label: 'Settings', icon: Settings }
               ].map((item) => {
@@ -1476,7 +1556,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
         className="flex-1 flex flex-col min-w-0 min-h-screen transition-all duration-300 ease-in-out justify-between pl-0 pb-16 md:pb-0 md:pl-16"
       >
         {/* Top Status Header Bar */}
-        <header className="border-b border-white/10 bg-[#080808]/80 backdrop-blur sticky top-0 z-30">
+        <header className="border-b border-white/10 bg-[#080808]/80 backdrop-blur sticky top-0 z-[180]">
           <div className="max-w-[1400px] mx-auto px-3 md:px-6 py-3 flex items-center justify-between gap-4">
             
             {/* Mobile Brand Logo & Active Sub-Workspace Label Badge */}
@@ -1503,7 +1583,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               <div className="hidden md:flex items-center space-x-2.5">
                 <span className="text-[10px] text-white/30 uppercase font-mono tracking-wider font-bold">Active Workspace:</span>
                 <span className="px-2.5 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] text-indigo-400 font-mono font-bold uppercase tracking-wider">
-                  {activeTab === 'RISK' ? 'Risk Desk' : activeTab}
+                  {activeTab === 'RISK' ? 'Risk Desk' : activeTab === 'NEWS' ? 'News Desk' : activeTab}
                 </span>
               </div>
             </div>
@@ -1670,7 +1750,16 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               </div>
             )}
 
-            {activeTab === 'DASHBOARD' ? (
+            {activeTab === 'COPILOT' ? (
+              <div id="mtx-engine-workspace-deck" className="space-y-6">
+                <AiCopilotWorkspace
+                  symbol={symbol}
+                  metrics={metrics}
+                  onTradeExecuted={fetchMarketData}
+                  trades={trades}
+                />
+              </div>
+            ) : activeTab === 'DASHBOARD' ? (
               <div id="desk-grid-grid" className="space-y-6">
                 
                 {/* 1. Dynamic Overview Telemetry Cards */}
@@ -2461,30 +2550,89 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
                           {systemDashboardSummary.activeTradesCount === 0 && (
                             <button 
-                              onClick={() => setActiveTab('EXECUTION')} 
+                              onClick={() => {
+                                console.log('[NAVIGATION] Opening Execution Terminal...');
+                                setActiveTab('EXECUTION');
+                              }}
                               className="px-3.5 py-1.5 text-[9px] uppercase font-mono font-extrabold text-indigo-400 hover:text-white bg-indigo-500/10 hover:bg-indigo-600/30 border border-indigo-500/20 hover:border-indigo-500/40 rounded transition-all tracking-wider cursor-pointer"
                             >
                               Open trading interface &rarr;
                             </button>
                           )}
                         </div>
-                      ) : (
-                        <div className={`${isCompactPositions ? 'space-y-1.5' : 'space-y-3'} relative`}>
-                          <AnimatePresence initial={false}>
-                            {sortedActivePositions.map(trade => (
-                              <TradePositionRowItem
-                                key={trade.id}
-                                trade={trade}
-                                isExpanded={!!expandedTradeIds[trade.id]}
-                                onToggleExpand={toggleTradeExpand}
-                                onQuickClose={handleQuickCloseTrade}
-                                formatOpenDuration={formatOpenDuration}
-                                isCompact={isCompactPositions}
-                              />
-                            ))}
-                          </AnimatePresence>
-                        </div>
-                      )}
+                      ) : (() => {
+                        const totalActivePos = sortedActivePositions.length;
+                        const safePageIndex = Math.max(0, Math.min(activeTradePageIndex, totalActivePos - 1));
+                        const displayedTrade = sortedActivePositions[safePageIndex];
+
+                        return (
+                          <div className="space-y-4">
+                            {/* Pagination Controls Row */}
+                            <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 px-3 py-2 rounded-lg font-mono text-[10.5px]">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                                <span className="text-white/40 uppercase font-black">Coexposures Decoded:</span>
+                                <span className="text-white font-extrabold text-[11px]">
+                                  Position {safePageIndex + 1} of {totalActivePos}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-1.5 select-none">
+                                <button
+                                  onClick={() => setActiveTradePageIndex(prev => Math.max(0, prev - 1))}
+                                  disabled={safePageIndex === 0}
+                                  className={`p-1.5 rounded border transition-colors flex items-center justify-center ${
+                                    safePageIndex === 0 
+                                      ? 'bg-transparent border-white/5 text-white/15 cursor-not-allowed' 
+                                      : 'bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-white/20 cursor-pointer'
+                                  }`}
+                                  title="Previous Active Position"
+                                >
+                                  <ChevronLeft className="w-3.5 h-3.5" />
+                                </button>
+                                
+                                <button
+                                  onClick={() => setActiveTradePageIndex(prev => Math.min(totalActivePos - 1, prev + 1))}
+                                  disabled={safePageIndex >= totalActivePos - 1}
+                                  className={`p-1.5 rounded border transition-colors flex items-center justify-center ${
+                                    safePageIndex >= totalActivePos - 1 
+                                      ? 'bg-transparent border-white/5 text-white/15 cursor-not-allowed' 
+                                      : 'bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-white/20 cursor-pointer'
+                                  }`}
+                                  title="Next Active Position"
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Self-contained Active Card Area, fully stretched */}
+                            <div className="relative min-h-[140px] flex flex-col justify-stretch">
+                              <AnimatePresence mode="wait">
+                                {displayedTrade && (
+                                  <motion.div
+                                    key={displayedTrade.id}
+                                    initial={{ opacity: 0, x: 15 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -15 }}
+                                    className="w-full h-full flex-1"
+                                  >
+                                    <TradePositionRowItem
+                                      trade={displayedTrade}
+                                      isExpanded={true}
+                                      onToggleExpand={() => {}}
+                                      onQuickClose={handleQuickCloseTrade}
+                                      formatOpenDuration={formatOpenDuration}
+                                      isCompact={false}
+                                      onUpdateParams={handleUpdateTradeParams}
+                                    />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <SystemStatus />
@@ -2514,6 +2662,15 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                       showTWVP={showTWVP}
                       isExpanded={true}
                       onSymbolChange={setSymbol}
+                      priceAlerts={priceAlerts}
+                      onDeletePriceAlert={(id) => {
+                        setPriceAlerts(prev => prev.filter(a => a.id !== id));
+                        const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
+                        setMqlConsoleLogs(prev => [
+                          ...prev,
+                          `${timeStr}.444 [ALERT DELETED] Cleared monitor ID ${id}.`
+                        ].slice(-150));
+                      }}
                     />
                   </div>
                 )}
@@ -2540,6 +2697,16 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                             setShowTWVP(false);
                             setResetChartKey(prev => prev + 1);
                           }}
+                        />
+                      </div>
+                    )}
+
+                    {metrics && (
+                      <div className="hidden md:block animate-fadeIn">
+                        <AnalyticDeskIntelligence
+                          symbol={symbol}
+                          metrics={metrics}
+                          trades={trades}
                         />
                       </div>
                     )}
@@ -2573,12 +2740,14 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   <div className="xl:col-span-9 space-y-6">
                     {/* Positions manager */}
                     {metrics && (
-                      <TradeTerminal
-                        symbol={symbol}
-                        metrics={metrics}
-                        onTradeExecuted={fetchMarketData}
-                        trades={trades}
-                      />
+                      <React.Suspense fallback={<TerminalWorkspaceLoader />}>
+                        <TradeTerminal
+                          symbol={symbol}
+                          metrics={metrics}
+                          onTradeExecuted={fetchMarketData}
+                          trades={trades}
+                        />
+                      </React.Suspense>
                     )}
                   </div>
 
@@ -2612,7 +2781,17 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               </div>
             ) : activeTab === 'RISK' ? (
               <div id="risk-workspace" className="animate-fadeIn space-y-6">
-                {metrics && <RiskDashboard trades={trades} symbol={symbol} />}
+                {metrics && (
+                  <React.Suspense fallback={<TerminalWorkspaceLoader />}>
+                    <RiskDashboard 
+                      trades={trades} 
+                      symbol={symbol} 
+                      onEmergencyCloseAll={handleEmergencyCloseAll}
+                      onPartialCloseAll={handlePartialCloseAll}
+                      onRefreshTrades={handleManualRefresh}
+                    />
+                  </React.Suspense>
+                )}
               </div>
             ) : activeTab === 'RESEARCH' ? (
               <div id="backtest-workspace" className="animate-fadeIn space-y-6">
@@ -2625,14 +2804,14 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                     </div>
                     <div>
                       <h2 className="text-xs font-black uppercase text-white tracking-widest">RESEARCH DESK</h2>
-                      <p className="text-[9px] text-white/35 font-sans mt-0.5">Modular workspaces for replay simulation, policy news, and historical review</p>
+                      <p className="text-[9px] text-white/35 font-sans mt-0.5">Modular workspaces for replay simulation and historical review</p>
                     </div>
                   </div>
                   <div className="flex items-center bg-[#070709] border border-white/5 rounded-lg p-0.5 gap-1 self-end sm:self-auto overflow-x-auto max-w-full">
                     {[
                       { id: 'REPLAY', label: '📊 Simulation & Replay' },
-                      { id: 'NEWSDESK', label: '📰 Dedicated News Desk' },
-                      { id: 'LEDGER', label: '📜 Trade History Ledger' }
+                      { id: 'LEDGER', label: '📜 Trade History Ledger' },
+                      { id: 'RISK_EXPOSURE', label: '📉 Risk Exposure Journal' }
                     ].map((st) => {
                       const active = researchSubTab === st.id;
                       return (
@@ -2805,192 +2984,41 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
                     </div>
 
+                    <InstitutionalFlowWidget
+                      symbol={symbol}
+                      candles={candles}
+                      metrics={metrics}
+                    />
                     <StrategyPerformanceChart />
                     <BacktestSimulator selectedSymbol={symbol} onSymbolChange={(sym) => setSymbol(sym)} />
                   </div>
                 )}
 
-                {researchSubTab === 'NEWSDESK' && (
-                  <div className="space-y-6 animate-fadeIn">
-                    
-                    {/* Dedicated news desk side-by-side bento block */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                      
-                      <div className="lg:col-span-8 space-y-6">
-                        {/* Quick-action Filter Bar to Declutter Workspace */}
-                        <div id="research-quick-filters" className="bg-[#0c0c0e]/95 border border-white/5 rounded-lg p-3 md:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono select-none">
-                          <div className="flex items-center space-x-2">
-                            <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                            <div>
-                              <span className="text-xs font-bold uppercase text-white tracking-wider block">Workspace Filtration</span>
-                              <span className="text-[9px] text-white/30 font-sans block mt-0.5 font-medium">Toggle visibility of specific intelligence widgets to optimize workspace layout</span>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            {/* Sentiment Gauge Toggle */}
-                            <button
-                              id="toggle-sentiment-gauge"
-                              onClick={() => setShowSentimentGauge(!showSentimentGauge)}
-                              className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                                showSentimentGauge 
-                                  ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300' 
-                                  : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
-                              }`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${showSentimentGauge ? 'bg-indigo-400' : 'bg-transparent border border-white/20'}`} />
-                              SENTIMENT GAUGE
-                            </button>
-
-                            {/* Market Sentiment Heatmap Toggle */}
-                            <button
-                              id="toggle-market-sentiment-heatmap"
-                              onClick={() => setShowMarketSentimentHeatmap(!showMarketSentimentHeatmap)}
-                              className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                                showMarketSentimentHeatmap 
-                                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-300' 
-                                  : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
-                              }`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${showMarketSentimentHeatmap ? 'bg-amber-400' : 'bg-transparent border border-white/20'}`} />
-                              SENTIMENT HEATMAP
-                            </button>
-
-                            {/* Sweep Alert Toggle */}
-                            <button
-                              id="toggle-sweep-alerts"
-                              onClick={() => setShowSweepAlert(!showSweepAlert)}
-                              className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                                showSweepAlert 
-                                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' 
-                                  : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
-                              }`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${showSweepAlert ? 'bg-emerald-400' : 'bg-transparent border border-white/20'}`} />
-                              SWEEP ALERTS
-                            </button>
-
-                            {/* Heatmap Toggle */}
-                            <button
-                              id="toggle-correlation-heatmap"
-                              onClick={() => setShowHeatmap(!showHeatmap)}
-                              className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                                showHeatmap 
-                                  ? 'bg-rose-500/10 border-rose-500/25 text-rose-300' 
-                                  : 'bg-white/5 border-white/5 text-white/30 hover:text-white/60'
-                              }`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${showHeatmap ? 'bg-rose-400' : 'bg-transparent border border-white/20'}`} />
-                              CORRELATION HEATMAP
-                            </button>
-                          </div>
-                        </div>
-
-                        <InstitutionalNewsTicker />
-
-                        {showSentimentGauge && <InstitutionalSentimentGauge />}
-                        {showMarketSentimentHeatmap && <MarketSentimentHeatmap />}
-                        {showSweepAlert && <InstitutionalSweepAlert />}
-                        {showHeatmap && <CorrelationHeatmap trades={trades} />}
-                      </div>
-
-                      {/* Right: Dedicated macromonitor policy panel */}
-                      <div className="lg:col-span-4 bg-[#0c0c0e]/95 border border-white/5 p-4 rounded-lg space-y-4 font-mono select-none flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center space-x-2 pb-2.5 border-b border-white/5">
-                            <div className="p-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded text-indigo-400">
-                              <Newspaper className="w-3.5 h-3.5" />
-                            </div>
-                            <div>
-                              <h4 className="text-[10px] font-bold uppercase text-white tracking-widest">CENTRAL BANK INTEL RADAR</h4>
-                              <p className="text-[8.5px] text-white/35 font-sans mt-0.5">Policy rate & transcription analyzer</p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-3.5 mt-3 text-[10.5px]">
-                            
-                            {/* Fed */}
-                            <div className="p-3 bg-black/40 border border-white/5 rounded space-y-1.5 transition-all hover:bg-black/60">
-                              <div className="flex justify-between items-center text-[10px]">
-                                <span className="font-extrabold text-white">🇺🇸 Federal Reserve (Fed)</span>
-                                <span className="text-[8px] px-1.5 py-0.2.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded font-bold uppercase">5.50% Rate</span>
-                              </div>
-                              <p className="text-[8.5px] text-white/50 leading-relaxed font-sans italic">
-                                "Our guidance remains deeply data-dependent as we analyze core PCE persistence before adjustments."
-                              </p>
-                              <div className="flex justify-between items-center text-[8px] pt-1 text-white/30 border-t border-white/5">
-                                <span>SKEW: <strong className="text-yellow-505 text-amber-400 font-extrabold">+0.30 (HAWKISH)</strong></span>
-                                <span>SPEAKER: POWELL</span>
-                              </div>
-                              <div className="w-full bg-white/5 h-1 rounded overflow-hidden relative">
-                                <div className="absolute top-0 bottom-0 left-1/2 bg-amber-400" style={{ left: '65%', width: '3px' }} />
-                                <div className="absolute top-0 bottom-0 left-1/2 bg-white/20 w-[1px]" />
-                              </div>
-                            </div>
-
-                            {/* ECB */}
-                            <div className="p-3 bg-black/40 border border-white/5 rounded space-y-1.5 transition-all hover:bg-black/60">
-                              <div className="flex justify-between items-center text-[10px]">
-                                <span className="font-extrabold text-white">🇪🇺 European Central Bank</span>
-                                <span className="text-[8px] px-1.5 py-0.2.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded font-bold uppercase">4.00% Rate</span>
-                              </div>
-                              <p className="text-[8.5px] text-white/50 leading-relaxed font-sans italic">
-                                "Domestic wage convergence points toward subsequent rate modifications within the summer horizon."
-                              </p>
-                              <div className="flex justify-between items-center text-[8px] pt-1 text-white/30 border-t border-white/5">
-                                <span>SKEW: <strong className="text-emerald-400 font-extrabold">-0.45 (DOVISH)</strong></span>
-                                <span>SPEAKER: LAGARDE</span>
-                              </div>
-                              <div className="w-full bg-white/5 h-1 rounded overflow-hidden relative">
-                                <div className="absolute top-0 bottom-0 right-1/2 bg-emerald-400" style={{ right: '72.5%', width: '3px' }} />
-                                <div className="absolute top-0 bottom-0 left-1/2 bg-white/20 w-[1px]" />
-                              </div>
-                            </div>
-
-                            {/* BOJ */}
-                            <div className="p-3 bg-black/40 border border-white/5 rounded space-y-1.5 transition-all hover:bg-black/60">
-                              <div className="flex justify-between items-center text-[10px]">
-                                <span className="font-extrabold text-white">🇯🇵 Bank of Japan (BoJ)</span>
-                                <span className="text-[8px] px-1.5 py-0.2.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded font-bold uppercase">0.25% Rate</span>
-                              </div>
-                              <p className="text-[8.5px] text-white/50 leading-relaxed font-sans italic">
-                                "Orderly wage metrics suggest immediate acceleration when primary inflation scales settle above our parameters."
-                              </p>
-                              <div className="flex justify-between items-center text-[8px] pt-1 text-white/30 border-t border-white/5">
-                                <span>SKEW: <strong className="text-rose-400 font-bold">+0.70 (HAWKISH)</strong></span>
-                                <span>SPEAKER: UEDA</span>
-                              </div>
-                              <div className="w-full bg-white/5 h-1 rounded overflow-hidden relative">
-                                <div className="absolute top-0 bottom-0 left-1/2 bg-rose-400" style={{ left: '85%', width: '3px' }} />
-                                <div className="absolute top-0 bottom-0 left-1/2 bg-white/20 w-[1px]" />
-                              </div>
-                            </div>
-
-                          </div>
-                        </div>
-
-                        {/* Bulletin update message */}
-                        <div className="mt-4 p-3 bg-amber-500/5 hover:bg-amber-500/10 transition-colors border border-amber-500/15 rounded text-[9.5px]">
-                          <span className="text-amber-400 font-black uppercase tracking-wider block">⚠️ POLICY RISK ALERT</span>
-                          <p className="text-[9px] text-[#e5e5e5]/60 leading-normal font-sans mt-0.5">
-                            Speeches could spike standard spreads during the active London close. Place bracket protection on all manual sessions.
-                          </p>
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  </div>
-                )}
-
                 {researchSubTab === 'LEDGER' && (
                   <div className="space-y-6 animate-fadeIn">
-                    <PerformanceTracker trades={trades} onTradeUpdated={fetchMarketData} />
+                    <React.Suspense fallback={<TerminalWorkspaceLoader />}>
+                      <PerformanceTracker trades={trades} onTradeUpdated={fetchMarketData} />
+                    </React.Suspense>
                     <TradeJournal trades={trades} onTradeUpdated={fetchMarketData} onReplayTrade={handleReplayClosedTrade} />
                   </div>
                 )}
 
+                {researchSubTab === 'RISK_EXPOSURE' && (
+                  <div className="animate-fadeIn">
+                    <RiskExposureJournal trades={trades} />
+                  </div>
+                )}
+
+              </div>
+            ) : activeTab === 'NEWS' ? (
+              <div id="news-workspace" className="animate-fadeIn space-y-6">
+                {/* Unified News Desk Workspace: Bloomberg Ticker Ribbon & Live Institutional Briefings */}
+                <div id="news-ticker-container" className="animate-fadeIn">
+                  <InstitutionalNewsTicker />
+                </div>
+                
+                {/* Full Dedicated News board & Impact predictive scanner */}
+                <NewsDesk />
               </div>
             ) : (
               <div id="settings-direct-control-workspace" className="animate-fadeIn">
@@ -3502,12 +3530,14 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       </AnimatePresence>
 
       {/* Mobile Sticky Bottom Navigation Dock */}
-      <nav id="mobile-sticky-bottom-nav" className="fixed bottom-0 left-0 right-0 z-40 bg-[#080808]/95 backdrop-blur-md border-t border-white/10 flex md:hidden items-center justify-around py-1.5 px-2 safe-bottom">
+      <nav id="mobile-sticky-bottom-nav" className="fixed bottom-0 left-0 right-0 z-[300] bg-[#080808]/95 backdrop-blur-md border-t border-white/10 flex md:hidden items-center justify-around py-1.5 px-2 safe-bottom">
         {[
           { id: 'INTELLIGENCE', label: 'Intel', icon: Bot },
+          { id: 'COPILOT', label: 'MTX Eng', icon: Sparkles },
           { id: 'DASHBOARD', label: 'Dash', icon: Layers },
           { id: 'EXECUTION', label: 'Exec', icon: Activity },
           { id: 'RISK', label: 'Risk', icon: ShieldAlert },
+          { id: 'NEWS', label: 'News', icon: Newspaper },
           { id: 'RESEARCH', label: 'Research', icon: Award },
           { id: 'SETTINGS', label: 'Settings', icon: Settings }
         ].map((item) => {
@@ -3540,7 +3570,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm md:hidden"
+              className="fixed inset-0 z-[400] bg-black/65 backdrop-blur-sm md:hidden"
             />
             
             {/* Drawer */}
@@ -3549,7 +3579,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed inset-y-0 left-0 w-72 z-55 bg-[#080808] border-r border-white/10 p-5 flex flex-col justify-between md:hidden shadow-[8px_0_32px_rgba(0,0,0,0.85)]"
+              className="fixed inset-y-0 left-0 w-72 z-[410] bg-[#080808] border-r border-white/10 p-5 flex flex-col justify-between md:hidden shadow-[8px_0_32px_rgba(0,0,0,0.85)]"
             >
               <div className="space-y-6">
                 {/* Header */}
@@ -3572,9 +3602,11 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 <nav className="space-y-1.5">
                   {[
                     { id: 'INTELLIGENCE', label: 'Intelligence Workspace', icon: Bot, desc: 'Trend Bias, Gaps, Order Blocks' },
+                    { id: 'COPILOT', label: 'MTX Engine Workspace', icon: Sparkles, desc: 'Cursor Multi-leg Composer & Compiler' },
                     { id: 'DASHBOARD', label: 'General Dashboard', icon: Layers, desc: 'Portfolio PnL & Health' },
                     { id: 'EXECUTION', label: 'Execution Terminal', icon: Activity, desc: 'Manual & EA Order Panel' },
                     { id: 'RISK', label: 'Risk Desk Management', icon: ShieldAlert, desc: 'Leverage, Limits & Heatmap' },
+                    { id: 'NEWS', label: 'Dedicated News Desk', icon: Newspaper, desc: 'External feeds & global risk announcements' },
                     { id: 'RESEARCH', label: 'Research & Calendar', icon: Award, desc: 'Economic events & insights' },
                     { id: 'SETTINGS', label: 'System Settings', icon: Settings, desc: 'API, alerts & notification settings' }
                   ].map((item) => {

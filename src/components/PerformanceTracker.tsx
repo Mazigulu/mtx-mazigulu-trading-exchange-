@@ -38,7 +38,9 @@ import {
   XAxis, 
   YAxis, 
   Tooltip, 
-  CartesianGrid 
+  CartesianGrid,
+  ComposedChart,
+  Line
 } from 'recharts';
 
 interface PerformanceTrackerProps {
@@ -672,6 +674,103 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
     });
   }, [allClosedTradesSorted]);
 
+  // Drawdown Duration & Risk Resilience Analysis
+  const drawdownDurationData = useMemo(() => {
+    let currentBalance = INITIAL_BALANCE;
+    let peak = INITIAL_BALANCE;
+    let peakTimestamp = allClosedTradesSorted[0]?.timestamp || new Date().toISOString();
+    let drawdownStartTimestamp: string | null = null;
+
+    const data = allClosedTradesSorted.map((t, i) => {
+      currentBalance += t.pnl;
+      let inDrawdown = false;
+      let durationHours = 0;
+      let durationMinutes = 0;
+
+      if (currentBalance >= peak) {
+        // Recovery or new high peak achieved
+        peak = currentBalance;
+        peakTimestamp = t.exitTimestamp || t.timestamp;
+        drawdownStartTimestamp = null;
+      } else {
+        inDrawdown = true;
+        if (!drawdownStartTimestamp) {
+          drawdownStartTimestamp = peakTimestamp;
+        }
+        
+        // Compute duration from drawdownStartTimestamp to this trade's exit timestamp
+        const start = new Date(drawdownStartTimestamp).getTime();
+        const end = new Date(t.exitTimestamp || t.timestamp).getTime();
+        const diffMs = end - start;
+        if (diffMs > 0) {
+          durationMinutes = Math.round(diffMs / 60000);
+          durationHours = parseFloat((diffMs / 3600000).toFixed(1));
+        }
+      }
+
+      const ddPct = ((peak - currentBalance) / peak) * 100;
+
+      return {
+        index: i + 1,
+        tradeId: t.id,
+        symbol: t.symbol,
+        pnl: t.pnl,
+        equity: currentBalance,
+        peak: peak,
+        drawdownPct: parseFloat(ddPct.toFixed(2)),
+        durationHours: inDrawdown ? durationHours : 0,
+        durationMinutes: inDrawdown ? durationMinutes : 0,
+        formattedDuration: inDrawdown 
+          ? (durationHours >= 1 ? `${durationHours}h` : `${durationMinutes}m`) 
+          : '0m'
+      };
+    });
+
+    return data;
+  }, [allClosedTradesSorted]);
+
+  // Derived statistics for drawdown times and general recovery resilience
+  const drawdownDurationStats = useMemo(() => {
+    const activeDrawdowns = drawdownDurationData.filter(d => d.durationHours > 0);
+    if (activeDrawdowns.length === 0) {
+      return {
+        maxDurationHours: 0,
+        avgDurationHours: 0,
+        recoveryCyclesCount: 0,
+        resilienceGrade: 'Excellent (A+)'
+      };
+    }
+
+    const maxDurationHours = Math.max(...activeDrawdowns.map(d => d.durationHours));
+    const avgDurationHours = parseFloat((activeDrawdowns.reduce((sum, d) => sum + d.durationHours, 0) / activeDrawdowns.length).toFixed(1));
+
+    // Calculate number of completed recovery cycles (where we went from inDrawdown to recovered/peak)
+    let recoveryCyclesCount = 0;
+    let wasInDrawdown = false;
+    drawdownDurationData.forEach(d => {
+      const inDrawdownNow = d.drawdownPct > 0;
+      if (wasInDrawdown && !inDrawdownNow) {
+        recoveryCyclesCount++;
+      }
+      wasInDrawdown = inDrawdownNow;
+    });
+
+    // Resilience Grade logic
+    let resilienceGrade = 'Elite Institutional (Grade A+)';
+    if (maxDurationHours > 48) {
+      resilienceGrade = 'Macro Hedged (Grade B)';
+    } else if (maxDurationHours > 24) {
+      resilienceGrade = 'Aggressive Intra-day (Grade A)';
+    }
+
+    return {
+      maxDurationHours,
+      avgDurationHours,
+      recoveryCyclesCount,
+      resilienceGrade
+    };
+  }, [drawdownDurationData]);
+
   // List of trades filtered by strategy
   const strategyFilteredTrades = useMemo(() => {
     return allClosedTradesSorted.filter((t) => {
@@ -1274,6 +1373,178 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
           </div>
         </div>
 
+      </div>
+
+      {/* SECTION 2.5: DRAWDOWN DURATION & RISK RESILIENCE SUITE */}
+      <div id="drawdown-duration-analytics" className="bg-[#0a0a0b] border border-white/5 p-5 rounded-lg">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-5 select-none">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-white font-mono flex items-center space-x-2">
+              <Clock className="w-4 h-4 text-rose-400" />
+              <span>Session Drawdown Duration & Risk Resilience</span>
+            </h3>
+            <p className="text-[10px] text-white/40 mt-0.5">
+              Tracks continuous underwater periods (depth & duration) to measure risk-management recovery efficiency.
+            </p>
+          </div>
+          
+          {/* Quick Metrics Badge Row */}
+          <div className="flex flex-wrap gap-2 text-[9.5px] font-mono">
+            <div className="bg-black/30 border border-white/5 px-2.5 py-1.5 rounded flex items-center gap-1.5">
+              <span className="text-white/35 font-medium uppercase font-sans">Peak Underwater Epoch:</span>
+              <strong className="text-rose-455 font-extrabold">{drawdownDurationStats.maxDurationHours}h</strong>
+            </div>
+            <div className="bg-black/30 border border-white/5 px-2.5 py-1.5 rounded flex items-center gap-1.5">
+              <span className="text-white/35 font-medium uppercase font-sans">Avg Recovery Velocity:</span>
+              <strong className="text-[#a855f7] font-extrabold">{drawdownDurationStats.avgDurationHours}h</strong>
+            </div>
+            <div className="bg-black/30 border border-white/5 px-2.5 py-1.5 rounded flex items-center gap-1.5">
+              <span className="text-white/35 font-medium uppercase font-sans">Completed Cycles:</span>
+              <strong className="text-emerald-400 font-extrabold">{drawdownDurationStats.recoveryCyclesCount}</strong>
+            </div>
+            <div className="bg-[#111115] border border-indigo-500/10 px-2.5 py-1.5 rounded flex items-center gap-1.5">
+              <span className="text-white/35 font-medium uppercase font-sans">Resilience:</span>
+              <strong className="text-indigo-300 font-black">{drawdownDurationStats.resilienceGrade}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Chart Component Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left Explanation Cards */}
+          <div className="lg:col-span-1 space-y-3.5 select-none self-center">
+            <div className="bg-black/40 border border-white/5 p-3.5 rounded-lg space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-rose-400 uppercase tracking-wider font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                <span>Risk Exposure Threshold</span>
+              </div>
+              <p className="text-[10px] text-white/50 leading-relaxed font-sans font-medium">
+                Sustained underwater durations over 24 hours indicate structural session alignment errors, high systemic news exposure, or delayed manual invalidation.
+              </p>
+            </div>
+
+            <div className="bg-black/40 border border-white/5 p-3.5 rounded-lg space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 uppercase tracking-wider font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Resilience Grading Principle</span>
+              </div>
+              <p className="text-[10px] text-white/50 leading-relaxed font-sans font-medium">
+                Elite grading <span className="text-indigo-300 font-bold">(Grade A+)</span> demonstrates prompt stop-execution and quick local cycle recovery, bypassing psychological revenge-trading pitfalls.
+              </p>
+            </div>
+          </div>
+
+          {/* Drawdown Duration Sub-chart */}
+          <div className="lg:col-span-3 h-[220px] bg-[#050505] p-3 border border-white/5 rounded-lg relative">
+            <div className="absolute top-3.5 right-4 flex items-center gap-3.5 text-[8px] font-mono text-white/30 z-10 select-none">
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-1.5 bg-indigo-500/10 border border-indigo-500/25 rounded-sm" /> Continuous Drawdown Dur (Left Y-Axis)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-0.5 bg-rose-500" /> Drawdown Percent (Right Y-Axis)
+              </span>
+            </div>
+
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={drawdownDurationData} margin={{ top: 18, right: -5, left: -22, bottom: -5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" />
+                <XAxis 
+                  dataKey="index" 
+                  stroke="rgba(255,255,255,0.12)"
+                  tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }} 
+                  tickFormatter={(v) => `#${v}`}
+                />
+                
+                {/* Left Y-Axis - Duration in Hours */}
+                <YAxis 
+                  yAxisId="left"
+                  orientation="left"
+                  stroke="#818cf8"
+                  tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }} 
+                  tickFormatter={(v) => `${v}h`}
+                />
+
+                {/* Right Y-Axis - Drawdown Depth Percent */}
+                <YAxis 
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#ef4444"
+                  domain={[0, 'auto']}
+                  tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }} 
+                  tickFormatter={(v) => `-${v}%`}
+                />
+
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgba(10, 10, 12, 0.95)',
+                    borderColor: 'rgba(255, 255, 255, 0.08)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    fontFamily: 'monospace',
+                    fontSize: '9.5px',
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.6)'
+                  }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const d = payload[0].payload;
+                      return (
+                        <div className="space-y-1.5 font-mono">
+                          <p className="text-[8.5px] font-black uppercase text-indigo-400 tracking-wider">
+                            🛡 Post-Trade Reference #{d.index}
+                          </p>
+                          <div className="border-t border-white/5 pt-1.5 mt-1 space-y-1">
+                            <div className="flex justify-between items-center text-[9px] gap-6">
+                              <span className="text-white/40">Market Asset:</span>
+                              <span className="text-white font-extrabold">{d.symbol}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[9px] gap-6">
+                              <span className="text-white/40">Trade Result:</span>
+                              <span className={`font-extrabold ${d.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                                {d.pnl >= 0 ? '+' : ''}${d.pnl.toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-[9px] gap-6">
+                              <span className="text-white/40">Drawdown Depth:</span>
+                              <span className="text-rose-455 font-extrabold">{d.drawdownPct}%</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[9px] gap-6">
+                              <span className="text-indigo-300 font-bold">Continuous underwater time:</span>
+                              <span className="text-indigo-400 font-black">{d.formattedDuration}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+
+                {/* Duration Bar */}
+                <Bar 
+                  yAxisId="left"
+                  dataKey="durationHours" 
+                  name="Drawdown Hours" 
+                  fill="rgba(99, 102, 241, 0.15)"
+                  stroke="rgba(129, 140, 248, 0.45)"
+                  barSize={16}
+                  radius={[2, 2, 0, 0]}
+                />
+
+                {/* Drawdown Curve Line */}
+                <Line 
+                  yAxisId="right"
+                  type="monotone" 
+                  dataKey="drawdownPct" 
+                  name="Drawdown Depth (%)" 
+                  stroke="#ef4444" 
+                  strokeWidth={2}
+                  dot={{ r: 2.5, fill: '#ef4444', strokeWidth: 0 }}
+                  activeDot={{ r: 4, fill: '#f43f5e' }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
 
       {/* Auditable audited Historical Ledger List */}

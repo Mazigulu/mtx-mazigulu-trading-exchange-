@@ -28,7 +28,9 @@ import {
   Layout,
   Trash2,
   SlidersHorizontal,
-  Bookmark
+  Bookmark,
+  TrendingUp,
+  CloudLightning
 } from 'lucide-react';
 import Mt5BridgeGuide from './Mt5BridgeGuide';
 import QuickKeysPanel from './QuickKeysPanel';
@@ -88,6 +90,7 @@ interface ConnectionState {
   dailyPnLAlertEnabled?: boolean;
   dailyPnLPositiveThreshold?: number;
   dailyPnLNegativeThreshold?: number;
+  copilotStrategyProfile?: 'SWING' | 'SCALPING';
 }
 
 export default function SettingsPanel({ layoutState, setLayoutState }: SettingsPanelProps) {
@@ -258,6 +261,7 @@ export default function SettingsPanel({ layoutState, setLayoutState }: SettingsP
           dailyPnLAlertEnabled: false,
           dailyPnLPositiveThreshold: 2000,
           dailyPnLNegativeThreshold: -1000,
+          copilotStrategyProfile: 'SWING',
           ...JSON.parse(saved)
         };
       }
@@ -282,6 +286,7 @@ export default function SettingsPanel({ layoutState, setLayoutState }: SettingsP
       dailyPnLAlertEnabled: false,
       dailyPnLPositiveThreshold: 2000,
       dailyPnLNegativeThreshold: -1000,
+      copilotStrategyProfile: 'SWING',
     };
   });
 
@@ -548,6 +553,74 @@ export default function SettingsPanel({ layoutState, setLayoutState }: SettingsP
               <p className="text-[9.5px] text-white/30 leading-relaxed font-mono">
                 API keys are dynamically fed from your secure workspace parameters to keep them protected from browser scraping.
               </p>
+            </div>
+          </div>
+
+          {/* Card 3.5: AI Copilot Strategy Profile Selector */}
+          <div className="bg-[#0a0a0b] border border-white/5 rounded-lg p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-1.5 bg-[#4f46e5]/10 border border-indigo-500/25 rounded">
+                  <SlidersHorizontal className="w-4.5 h-4.5 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold uppercase text-white tracking-widest font-mono">
+                    MTX Engine Strategy profile
+                  </h3>
+                  <p className="text-[10px] text-white/30">Set active strategy profile parameters for Signal Evaluation & Code Composer.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  id="settings-profile-swing-btn"
+                  onClick={() => setSettings({ ...settings, copilotStrategyProfile: 'SWING' })}
+                  className={`px-3 py-3 rounded border font-mono font-bold text-xs uppercase flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                    (settings.copilotStrategyProfile ?? 'SWING') === 'SWING'
+                      ? 'bg-[#4f46e5]/10 text-indigo-300 border-indigo-500/45 shadow-[0_0_12px_rgba(99,102,241,0.1)] font-extrabold'
+                      : 'bg-black/30 text-white/40 border-white/5 hover:border-white/10 hover:text-white/60'
+                  }`}
+                >
+                  <TrendingUp className={`w-4 h-4 ${(settings.copilotStrategyProfile ?? 'SWING') === 'SWING' ? 'text-indigo-400' : 'text-white/30'}`} />
+                  <span>Institutional Swing</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="settings-profile-scalping-btn"
+                  onClick={() => setSettings({ ...settings, copilotStrategyProfile: 'SCALPING' })}
+                  className={`px-3 py-3 rounded border font-mono font-bold text-xs uppercase flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                    settings.copilotStrategyProfile === 'SCALPING'
+                      ? 'bg-rose-950/20 text-rose-400 border-rose-500/45 shadow-[0_0_12px_rgba(244,63,94,0.1)] font-extrabold'
+                      : 'bg-black/30 text-white/40 border-white/5 hover:border-rose-500/10 hover:text-white/60'
+                  }`}
+                >
+                  <CloudLightning className={`w-4 h-4 ${settings.copilotStrategyProfile === 'SCALPING' ? 'text-rose-450 animate-pulse' : 'text-white/30'}`} />
+                  <span>Scalping Mode</span>
+                </button>
+              </div>
+
+              {/* Dynamic contextual notice matching institutional swing rules */}
+              <div className="p-3 bg-[#030304] border border-white/5 rounded font-mono text-[9.5px] leading-relaxed">
+                {(settings.copilotStrategyProfile ?? 'SWING') === 'SWING' ? (
+                  <div className="flex items-start gap-2 text-indigo-450 leading-relaxed text-[10px]">
+                    <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-indigo-405" />
+                    <span>
+                      <strong>SWING BIAS ACTIVE:</strong> The AI engine will utilize HTF trend-following logic (H4/D1 structures), premium/discount order blocks, and risk-managed stop buffers. This aligns precisely with institutional capital safety policies.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 text-rose-450 leading-relaxed text-[10px] animate-fadeIn">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-405 animate-pulse" />
+                    <span>
+                      <strong>COMPLIANCE POLICY EXPIRED / WARNING:</strong> We are strictly an institutional swing platform. High-frequency scalping under M1/M5 is prohibited. AI signal evaluations are restricted; any scalp actions will be automatically modified to Swing targets by the risk core.
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

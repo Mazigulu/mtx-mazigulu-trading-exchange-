@@ -84,6 +84,14 @@ export interface Trade {
   marketNote?: string;
   autoBreakEvenProfitPct?: number;
   autoBreakEvenTriggered?: boolean;
+  latency?: number; // MT5 bridge latency in ms
+  slippage?: number; // MT5 trade slippage in pips/points
+  trailingStopActive?: boolean;
+  trailingStopDistance?: number;
+  trailingTakeProfitActive?: boolean;
+  trailingTakeProfitDistance?: number;
+  maxPriceReached?: number;
+  minPriceReached?: number;
 }
 
 export interface NewsEvent {

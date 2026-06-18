@@ -246,6 +246,52 @@ export default function TradeTerminal({
     }
   });
 
+  // ATR Position Size Calculator States
+  const [atrMultiplier, setAtrMultiplier] = useState<number>(2.0);
+  const [atrRiskPct, setAtrRiskPct] = useState<number>(1.0); // Defaults to 1.0 (1% model)
+  const [atrTpMultiplier, setAtrTpMultiplier] = useState<number>(4.0); // Defaults to 4.0 for a 1:2 default RR (2x ATR SL, 4x ATR TP)
+
+  const calculatedAtrSlDistance = useMemo(() => {
+    return metrics.atr * atrMultiplier;
+  }, [metrics.atr, atrMultiplier]);
+
+  const recommendedAtrStopLoss = useMemo(() => {
+    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    if (side === 'BUY') {
+      return parseFloat((entryPrice - calculatedAtrSlDistance).toFixed(decimalLimit));
+    } else {
+      return parseFloat((entryPrice + calculatedAtrSlDistance).toFixed(decimalLimit));
+    }
+  }, [entryPrice, calculatedAtrSlDistance, side, symbol]);
+
+  const recommendedAtrTakeProfit = useMemo(() => {
+    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    const tpDistance = metrics.atr * atrTpMultiplier;
+    if (side === 'BUY') {
+      return parseFloat((entryPrice + tpDistance).toFixed(decimalLimit));
+    } else {
+      return parseFloat((entryPrice - tpDistance).toFixed(decimalLimit));
+    }
+  }, [entryPrice, metrics.atr, atrTpMultiplier, side, symbol]);
+
+  const calculatedAtrPositionSize = useMemo(() => {
+    if (calculatedAtrSlDistance === 0) return 0;
+    const riskDollar = accountBalance * (atrRiskPct / 100);
+    let units = riskDollar / calculatedAtrSlDistance;
+    if (symbol === 'BTC/USDT') {
+      return parseFloat(units.toFixed(3));
+    } else {
+      const contractUnits = units / 100000;
+      return parseFloat(contractUnits.toFixed(2));
+    }
+  }, [accountBalance, atrRiskPct, calculatedAtrSlDistance, symbol]);
+
+  const handleApplyAtrParameters = () => {
+    setRiskPct(atrRiskPct);
+    setStopLoss(recommendedAtrStopLoss);
+    setTakeProfit(recommendedAtrTakeProfit);
+  };
+
   useEffect(() => {
     try {
       localStorage.setItem('apex_predefined_market_note', marketNote);
@@ -580,6 +626,51 @@ export default function TradeTerminal({
       pnl: parseFloat((pnlMap[day] || 0).toFixed(2)),
     }));
   }, [closedTrades]);
+
+  const tradeEfficiencyMetrics = useMemo(() => {
+    // filter trades with latency information
+    const tradesWithMetrics = trades.filter(t => t.latency !== undefined);
+    const count = tradesWithMetrics.length;
+
+    if (count === 0) {
+      return {
+        ratio: 100,
+        avgLatency: 0,
+        avgSlippage: 0,
+        healthyCount: 0,
+        breachedCount: 0,
+        healthyPct: 100,
+        breachedTrades: []
+      };
+    }
+
+    const sumLatency = tradesWithMetrics.reduce((s, t) => s + (t.latency || 0), 0);
+    const sumSlippage = tradesWithMetrics.reduce((s, t) => s + (t.slippage || 0), 0);
+    const avgLatency = sumLatency / count;
+    const avgSlippage = sumSlippage / count;
+
+    // Target is 45ms
+    const healthyList = tradesWithMetrics.filter(t => (t.latency || 0) <= 45);
+    const breachedList = tradesWithMetrics.filter(t => (t.latency || 0) > 45);
+    
+    // Latency Score: 100% at <=20ms, decreasing to 0% at 150ms
+    const latencyScore = Math.max(0, Math.min(100, 100 - (avgLatency - 20) * (100 / 130)));
+    // Slippage Score: 100% at 0.0 pips, decreasing to 0% at 2.5 pips
+    const slippageScore = Math.max(0, Math.min(100, 100 - (avgSlippage / 2.5) * 100));
+
+    // Weighted score: 50% latency, 50% slippage
+    const ratio = latencyScore * 0.5 + slippageScore * 0.5;
+
+    return {
+      ratio,
+      avgLatency,
+      avgSlippage,
+      healthyCount: healthyList.length,
+      breachedCount: breachedList.length,
+      healthyPct: (healthyList.length / count) * 100,
+      breachedTrades: breachedList
+    };
+  }, [trades]);
 
   // Biometric scanning timer simulation loop
   useEffect(() => {
@@ -983,6 +1074,150 @@ export default function TradeTerminal({
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* VOLATILITY-BASED POSITION SIZE CALCULATOR */}
+            <div id="atr-position-size-calculator" className="bg-[#08080c] border border-indigo-500/20 hover:border-indigo-500/30 rounded-lg p-4 space-y-3.5 select-none transition-colors">
+              <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                <div className="flex items-center space-x-1.5">
+                  <Calculator className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-indigo-300">
+                    ATR Volatility Sizer
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1 text-[9px] font-mono text-white/50 bg-indigo-500/10 border border-indigo-500/15 px-2 py-0.5 rounded">
+                  <span>ATR:</span>
+                  <span className="font-bold text-white">{metrics.atr.toFixed(5)}</span>
+                  <span className="text-white/30">|</span>
+                  <span className="font-bold text-indigo-300">
+                    {symbol === 'USD/JPY' ? (metrics.atr * 100).toFixed(1) : symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? metrics.atr.toFixed(1) : (metrics.atr * 10000).toFixed(1)} {symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? 'USD' : 'pips'}
+                  </span>
+                </div>
+              </div>
+
+              {/* SL Multiplier Selectors */}
+              <div className="space-y-1.5 font-sans">
+                <div className="flex justify-between items-center text-[9.5px]">
+                  <span className="text-white/45 uppercase font-semibold">Stop Loss Distance (Multiplier)</span>
+                  <span className="font-mono text-indigo-400 font-bold">{atrMultiplier.toFixed(1)}x ATR</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1 text-[9.5px]">
+                  {[1.5, 2.0, 2.5, 3.0].map((m) => (
+                    <button
+                      key={`atr-mult-btn-${m}`}
+                      type="button"
+                      onClick={() => setAtrMultiplier(m)}
+                      className={`py-1 rounded border font-mono font-bold transition-all cursor-pointer ${
+                        atrMultiplier === m
+                          ? 'bg-indigo-600 border-indigo-500 text-white font-black shadow-lg shadow-indigo-500/10'
+                          : 'bg-black/35 border-white/5 hover:border-white/10 text-white/40 hover:text-white/70'
+                      }`}
+                    >
+                      {m.toFixed(1)}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Risk Percentage Toggle - Recommended 1% Model */}
+              <div className="space-y-1.5 font-sans">
+                <div className="flex justify-between items-center text-[9.5px]">
+                  <span className="text-white/45 uppercase font-semibold">Risk Model (1% Recommended)</span>
+                  <span className="font-mono text-[#888888] font-bold">
+                    <span className="text-indigo-400 font-extrabold">{atrRiskPct.toFixed(1)}%</span> of Balance
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1 text-[9.5px]">
+                  {[0.5, 1.0, 1.5, 2.0].map((r) => (
+                    <button
+                      key={`atr-risk-btn-${r}`}
+                      type="button"
+                      onClick={() => setAtrRiskPct(r)}
+                      className={`py-1 rounded border font-mono font-bold transition-all relative cursor-pointer ${
+                        atrRiskPct === r
+                          ? 'bg-indigo-600 border-indigo-500 text-white font-black shadow-lg shadow-indigo-500/10'
+                          : 'bg-black/35 border-white/5 hover:border-white/10 text-white/40 hover:text-white/70'
+                      }`}
+                    >
+                      {r.toFixed(1)}%
+                      {r === 1.0 && (
+                        <span className="absolute -top-1 right-0 bg-emerald-500 text-[6.5px] text-black font-sans font-black px-0.5 rounded leading-none uppercase tracking-tight scale-90">
+                          Rec
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* TP Reward Ratio Multipliers */}
+              <div className="space-y-1.5 font-sans">
+                <div className="flex justify-between items-center text-[9.5px]">
+                  <span className="text-white/45 uppercase font-semibold">Take Profit Target (TP Multiplier)</span>
+                  <span className="font-mono text-indigo-400 font-bold">{atrTpMultiplier.toFixed(1)}x ATR</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1 text-[9.5px]">
+                  {[2.0, 3.0, 4.0, 6.0].map((tp) => (
+                    <button
+                      key={`atr-tp-btn-${tp}`}
+                      type="button"
+                      onClick={() => setAtrTpMultiplier(tp)}
+                      className={`py-1 rounded border font-mono font-bold transition-all cursor-pointer ${
+                        atrTpMultiplier === tp
+                          ? 'bg-indigo-600 border-indigo-500 text-white font-black shadow-lg shadow-indigo-500/10 relative z-10'
+                          : 'bg-black/35 border-white/5 hover:border-white/10 text-white/40 hover:text-white/70'
+                      }`}
+                    >
+                      {tp.toFixed(1)}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* live computations display box */}
+              <div className="p-3 bg-black/45 border border-white/[0.04] rounded space-y-2 text-[10px] font-mono leading-relaxed text-left">
+                <div className="flex justify-between items-center text-white/30">
+                  <span>Balance:</span>
+                  <span className="text-white/70">${accountBalance.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center text-white/30 font-semibold">
+                  <span>Risk Cash Sized:</span>
+                  <span className="text-rose-400 font-bold">${(accountBalance * (atrRiskPct / 100)).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-white/30 border-t border-white/5 pt-1.5">
+                  <span>SL Point Distance:</span>
+                  <span className="text-white/80">
+                    {calculatedAtrSlDistance.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)}
+                    <span className="text-white/30 ml-1">
+                      ({symbol === 'USD/JPY' ? (calculatedAtrSlDistance * 100).toFixed(1) : symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? `$${calculatedAtrSlDistance.toFixed(1)}` : (calculatedAtrSlDistance * 10000).toFixed(1)} {symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? 'USD' : 'pips'})
+                    </span>
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-white/30">
+                  <span>Proposed Sizing:</span>
+                  <span className="text-indigo-400 font-black text-xs">
+                    {calculatedAtrPositionSize} {symbol === 'BTC/USDT' ? 'BTC' : 'LOTS'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-white/30 pt-1 border-t border-white/5">
+                  <span>Suggested SL Level:</span>
+                  <span className="text-red-400 font-bold">{recommendedAtrStopLoss}</span>
+                </div>
+                <div className="flex justify-between items-center text-white/30 font-semibold">
+                  <span>Suggested TP Level:</span>
+                  <span className="text-emerald-400 font-bold">{recommendedAtrTakeProfit}</span>
+                </div>
+              </div>
+
+              {/* Apply Button */}
+              <button
+                type="button"
+                onClick={handleApplyAtrParameters}
+                className="w-full py-1.5 md:py-2 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-300 hover:text-white border border-indigo-500/25 hover:border-indigo-500/30 rounded text-xs font-bold font-mono uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center justify-center space-x-1.5 shadow"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Apply ATR Sizing & Levels</span>
+              </button>
             </div>
 
             {/* Auto-Break-Even block */}
@@ -1463,6 +1698,114 @@ export default function TradeTerminal({
             </div>
           </div>
 
+          {/* Real-time MT5 Bridge Trade Efficiency Ratio Widget */}
+          <div id="trade-efficiency-ratio-widget" className="mt-4 p-4 bg-gradient-to-br from-[#0c0c0e] to-[#070709] border border-white/5 rounded-lg">
+            <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-3">
+              <h5 className="text-[10px] uppercase font-bold text-white/40 font-mono tracking-wider flex items-center">
+                <Cpu className="w-3.5 h-3.5 mr-1.5 text-[#34d399] animate-pulse" />
+                MT5 Bridge Efficiency Recon
+              </h5>
+              <span className="text-[8px] font-mono text-[#34d399] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-[#10b981]/15 border border-[#10b981]/25">
+                Real-Time telemetry
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+              {/* Score Dial / Ring Meter */}
+              <div className="md:col-span-4 flex flex-col items-center justify-center p-3 text-center bg-black/40 border border-white/5 rounded-md relative overflow-hidden">
+                <div className="relative w-16 h-16 flex items-center justify-center">
+                  <svg className="w-full h-full transform -rotate-90">
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="28"
+                      className="stroke-white/[0.04]"
+                      strokeWidth="4"
+                      fill="transparent"
+                    />
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="28"
+                      className="stroke-[#10b981] transition-all duration-1000"
+                      strokeWidth="4"
+                      fill="transparent"
+                      strokeDasharray={`${2 * Math.PI * 28}`}
+                      strokeDashoffset={`${2 * Math.PI * 28 * (1 - tradeEfficiencyMetrics.ratio / 100)}`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span id="efficiency-score-value" className="text-sm font-mono font-black text-white leading-none">
+                      {tradeEfficiencyMetrics.ratio.toFixed(1)}%
+                    </span>
+                    <span className="text-[6.5px] text-white/35 font-mono uppercase font-black tracking-tighter mt-0.5">
+                      EFFICIENCY
+                    </span>
+                  </div>
+                </div>
+                <span className={`text-[8.5px] font-mono font-bold uppercase mt-2 ${
+                  tradeEfficiencyMetrics.ratio >= 85 ? 'text-emerald-400' : tradeEfficiencyMetrics.ratio >= 70 ? 'text-amber-400' : 'text-rose-400'
+                }`}>
+                  {tradeEfficiencyMetrics.ratio >= 85 ? '■ OPTIMAL ROUTING' : tradeEfficiencyMetrics.ratio >= 70 ? '▲ REGULAR JITTER' : '✕ HIGH SLIPPAGE'}
+                </span>
+              </div>
+
+              {/* Performance stats split */}
+              <div className="md:col-span-8 flex flex-col justify-between space-y-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 bg-black/20 border border-white/5 rounded">
+                    <span className="text-[8px] text-white/30 uppercase font-mono block">Avg Latency</span>
+                    <div id="telemetry-avg-latency" className={`text-xs font-mono font-bold mt-1 ${
+                      tradeEfficiencyMetrics.avgLatency <= 45 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}>
+                      {tradeEfficiencyMetrics.avgLatency.toFixed(1)} ms
+                    </div>
+                    <span className="text-[7px] text-white/20 font-mono">Target: &lt;45ms</span>
+                  </div>
+
+                  <div className="p-2 bg-black/20 border border-white/5 rounded">
+                    <span className="text-[8px] text-white/30 uppercase font-mono block">Avg Slippage</span>
+                    <div id="telemetry-avg-slippage" className="text-xs font-mono font-bold mt-1 text-sky-400">
+                      {tradeEfficiencyMetrics.avgSlippage.toFixed(2)} pips
+                    </div>
+                    <span className="text-[7px] text-white/20 font-mono">Simulated DOM</span>
+                  </div>
+
+                  <div className="p-2 bg-black/20 border border-white/5 rounded">
+                    <span className="text-[8px] text-white/30 uppercase font-mono block">Target Health</span>
+                    <div id="telemetry-health-pct" className={`text-xs font-mono font-bold mt-1 ${
+                      tradeEfficiencyMetrics.healthyPct >= 80 ? 'text-emerald-400' : tradeEfficiencyMetrics.healthyPct >= 65 ? 'text-amber-400' : 'text-rose-400'
+                    }`}>
+                      {tradeEfficiencyMetrics.healthyPct.toFixed(1)}%
+                    </div>
+                    <span className="text-[7px] text-white/20 font-mono">In-target rate</span>
+                  </div>
+                </div>
+
+                {/* Latency Breaches Warnings Banner */}
+                <div className="p-2 bg-black/30 border border-white/5 rounded flex items-center justify-between text-[9px] font-mono leading-none">
+                  <div className="flex items-center space-x-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      tradeEfficiencyMetrics.breachedCount > 0 ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+                    }`}></span>
+                    <span className="text-white/50 uppercase text-[8px]">Breaches (&gt;45ms):</span>
+                    <span id="telemetry-breached-count" className={`font-black uppercase tracking-wide px-1 rounded ${
+                      tradeEfficiencyMetrics.breachedCount > 0 ? 'text-amber-300 bg-amber-500/10' : 'text-emerald-300 bg-emerald-500/10'
+                    }`}>
+                      {tradeEfficiencyMetrics.breachedCount} {tradeEfficiencyMetrics.breachedCount === 1 ? 'trade' : 'trades'}
+                    </span>
+                  </div>
+                  {tradeEfficiencyMetrics.breachedCount > 0 && (
+                    <span className="text-amber-400/90 font-bold tracking-tighter uppercase animate-pulse text-[8px]">
+                      ⚠️ HIGHLIGHTED BELOW
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-4">
             <h5 className="text-[11px] uppercase font-bold text-white/40 font-mono mb-2 tracking-wider flex items-center">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-2 animate-pulse shadow-[0_0_8px_#10b981]"></span>
@@ -1638,7 +1981,7 @@ export default function TradeTerminal({
                           </div>
 
                           {/* Audit details block beneath desktop row */}
-                          {(t.confidence !== undefined || t.confluences) && (
+                          {(t.confidence !== undefined || t.confluences || t.latency !== undefined) && (
                             <div className="mt-2 pt-2 border-t border-white/[0.04] flex items-center justify-between text-[10px]">
                               <div className="flex flex-wrap items-center gap-1.5">
                                 {t.confidence !== undefined && (
@@ -1652,6 +1995,22 @@ export default function TradeTerminal({
                                     ✓ {conf}
                                   </span>
                                 ))}
+                                {t.latency !== undefined && (
+                                  <span className={`font-mono text-[9px] px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1 shadow-sm ${
+                                    t.latency > 45 
+                                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/25 animate-pulse'
+                                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  }`} title={t.latency > 45 ? "EXCEEDED 45ms HEALTH TARGET" : "MT5 Bridge Healthy"}>
+                                    <Cpu className="w-2.5 h-2.5" />
+                                    {t.latency}ms Latency {t.latency > 45 && '⚠️'}
+                                  </span>
+                                )}
+                                {t.slippage !== undefined && (
+                                  <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 font-extrabold flex items-center gap-0.5 shadow-sm">
+                                    <ArrowRightLeft className="w-2.5 h-2.5 text-sky-450" />
+                                    Slippage: {t.slippage} {t.symbol.includes('JPY') || t.symbol.includes('GOLD') ? 'pips' : 'points'}
+                                  </span>
+                                )}
                               </div>
                               {t.reason && (
                                 <span className="text-[9.5px] text-white/40 italic font-serif max-w-[30%] truncate" title={t.reason}>
@@ -1711,6 +2070,27 @@ export default function TradeTerminal({
                                 </span>
                               </div>
                             </div>
+
+                            {/* Bridge execution quality inside mobile card */}
+                            {(t.latency !== undefined || t.slippage !== undefined) && (
+                              <div className="col-span-2 border-t border-white/5 pt-1.5 mt-1 flex items-center justify-between font-mono">
+                                <span className="text-[8.5px] text-white/30 uppercase leading-none">MT5 Bridge Quality</span>
+                                <div className="flex items-center space-x-1.5">
+                                  {t.latency !== undefined && (
+                                    <span className={`text-[8.5px] px-1 py-0.5 rounded font-bold leading-none ${
+                                      t.latency > 45 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/10 animate-pulse' : 'bg-emerald-500/10 text-emerald-400'
+                                    }`}>
+                                      {t.latency}ms {t.latency > 45 && '⚠️'}
+                                    </span>
+                                  )}
+                                  {t.slippage !== undefined && (
+                                    <span className="text-[8.5px] px-1 py-0.5 rounded bg-sky-500/10 text-sky-400 font-bold leading-none">
+                                      {t.slippage}p
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
  
                           {/* Action Outcome Indicator with Confidence Badge */}

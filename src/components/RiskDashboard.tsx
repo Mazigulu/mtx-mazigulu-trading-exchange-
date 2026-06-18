@@ -32,7 +32,10 @@ import {
   Gem,
   Globe,
   Download,
-  Check
+  Check,
+  Trophy,
+  Sliders,
+  BellRing
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -53,6 +56,7 @@ import CorrelationMatrix from './CorrelationMatrix';
 import MarketSentimentHeatmap from './MarketSentimentHeatmap';
 import HistoricalBreachLog from './HistoricalBreachLog';
 import CorrelationHeatmap from './CorrelationHeatmap';
+import PortfolioCorrelationWidget from './PortfolioCorrelationWidget';
 
 interface RiskTooltipProps {
   title: string;
@@ -97,6 +101,9 @@ function RiskTooltip({ title, description, formula, align = 'center' }: RiskTool
 interface RiskDashboardProps {
   trades: Trade[];
   symbol: MarketSymbol;
+  onEmergencyCloseAll?: () => void;
+  onPartialCloseAll?: (ratio?: number) => void;
+  onRefreshTrades?: () => void;
 }
 
 const renderSectorIcon = (iconName: string) => {
@@ -108,11 +115,48 @@ const renderSectorIcon = (iconName: string) => {
   }
 };
 
-export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
+export default function RiskDashboard({ 
+  trades, 
+  symbol, 
+  onEmergencyCloseAll, 
+  onPartialCloseAll,
+  onRefreshTrades
+}: RiskDashboardProps) {
   const INITIAL_BALANCE = 10000;
   const [activeSubTab, setActiveSubTab] = useState<'EXPOSURE' | 'STRESS_TESTS' | 'CORRELATION_SENTIMENT'>('EXPOSURE');
   const [showRebalancePanel, setShowRebalancePanel] = useState(false);
   const [simulatedRebalanceCompleted, setSimulatedRebalanceCompleted] = useState(false);
+
+  // Custom states for automated 'Lock-In Profits' feature
+  const [lockInProfits, setLockInProfits] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('apex_lock_in_profits');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [autoLockedTradeIds, setAutoLockedTradeIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('apex_auto_locked_trade_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [autoLockLogs, setAutoLockLogs] = useState<{ id: string; symbol: string; size: number; pnl: number; time: string }[]>(() => {
+    try {
+      const saved = localStorage.getItem('apex_auto_lock_logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [isExecutingAutoLock, setIsExecutingAutoLock] = useState<boolean>(false);
+  const [showAutoLockHistory, setShowAutoLockHistory] = useState<boolean>(false);
 
   const getTradeRiskUSD = (t: Trade) => {
     const slDistance = Math.abs(t.entryPrice - t.stopLoss);
@@ -160,6 +204,52 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
 
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [dismissedActiveAlert, setDismissedActiveAlert] = useState<boolean>(false);
+  const [dismissedProfitAlert, setDismissedProfitAlert] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('apex_dismissed_profit_alert_date');
+      const todayStr = new Date().toISOString().split('T')[0];
+      return saved === todayStr;
+    } catch {}
+    return false;
+  });
+
+  // Custom Daily Profit Target features
+  const [dailyProfitTarget, setDailyProfitTarget] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('apex_daily_profit_target');
+      if (saved !== null) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    } catch {}
+    return 1000; // default $1000 profit target
+  });
+
+  const [notificationPermissionGranted, setNotificationPermissionGranted] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission === 'granted';
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_daily_profit_target', dailyProfitTarget.toString());
+    } catch (e) {
+      console.error('Error saving daily profit target:', e);
+    }
+    // Automatically re-enable alerts/suggestions when user adjusts their target
+    setDismissedProfitAlert(false);
+  }, [dailyProfitTarget]);
+
+  const requestNotificationPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      const permission = await Notification.requestPermission();
+      setNotificationPermissionGranted(permission === 'granted');
+    } else {
+      alert("This browser does not support desktop notifications.");
+    }
+  };
 
   // Strategy limit state per asset class with dynamic local persistence
   const [assetClassLimits, setAssetClassLimits] = useState<Record<string, number>>(() => {
@@ -227,6 +317,20 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
     return Object.values(assetClassBreaches).some(b => b === true);
   }, [assetClassBreaches]);
 
+  const openRR = useMemo(() => {
+    let totalTargetRR = 0;
+    let validRRCounts = 0;
+    openTrades.forEach((t) => {
+      const slDist = Math.abs(t.entryPrice - t.stopLoss);
+      const tpDist = Math.abs(t.takeProfit - t.entryPrice);
+      if (slDist > 0 && tpDist > 0) {
+        totalTargetRR += tpDist / slDist;
+        validRRCounts++;
+      }
+    });
+    return validRRCounts > 0 ? totalTargetRR / validRRCounts : 0.0;
+  }, [openTrades]);
+
   // Dynamic Open Risk & Leverage calculation
   const riskMetrics = useMemo(() => {
     let totalRiskAtStake = 0;
@@ -258,6 +362,101 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
       activeLevers: openTrades.length,
     };
   }, [openTrades, simulatedRebalanceCompleted]);
+
+  // Sum closed trades plus open trades PnL
+  const dailyProfitToday = useMemo(() => {
+    const closedPnl = trades.filter(t => t.status === 'CLOSED').reduce((acc, t) => acc + t.pnl, 0);
+    const openPnl = openTrades.reduce((acc, t) => acc + t.pnl, 0);
+    return closedPnl + openPnl;
+  }, [trades, openTrades]);
+
+  useEffect(() => {
+    if (dailyProfitToday >= dailyProfitTarget && dailyProfitTarget > 0) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const alertedDate = localStorage.getItem('apex_alerted_profit_target_date');
+      
+      if (alertedDate !== todayStr) {
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+          if (Notification.permission === 'granted') {
+            const notification = new Notification("🏆 Daily Profit Target Reached!", {
+              body: `Incredible! Your daily profit of $${dailyProfitToday.toFixed(2)} reached the target of $${dailyProfitTarget.toFixed(2)}. Click here to automatically secure and close all open positions!`,
+              icon: '/favicon.ico',
+              requireInteraction: true
+            });
+            notification.onclick = () => {
+              if (onEmergencyCloseAll) {
+                onEmergencyCloseAll();
+              }
+              window.focus();
+            };
+            localStorage.setItem('apex_alerted_profit_target_date', todayStr);
+          }
+        }
+      }
+    }
+  }, [dailyProfitToday, dailyProfitTarget, onEmergencyCloseAll]);
+
+  // Trigger automatic partial close of all profitable positions when daily target is met & Lock-In is enabled
+  useEffect(() => {
+    let active = true;
+
+    const triggerAutoLock = async () => {
+      const targetTrades = openTrades.filter(t => t.pnl > 0 && !autoLockedTradeIds.includes(t.id));
+      if (targetTrades.length === 0) return;
+
+      setIsExecutingAutoLock(true);
+      const newlyLockedIds = [...autoLockedTradeIds];
+      const newLogs = [...autoLockLogs];
+
+      try {
+        for (const t of targetTrades) {
+          const ratio = 0.5; // partial profit ratio of exactly 50%
+          const res = await fetch(`/api/trades/${t.id}/partial-close`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ratio }),
+          });
+          
+          if (res.ok && active) {
+            newlyLockedIds.push(t.id);
+            newLogs.unshift({
+              id: `${t.id}-${Date.now()}`,
+              symbol: t.symbol,
+              size: t.size,
+              pnl: t.pnl,
+              time: new Date().toLocaleTimeString(),
+            });
+          }
+        }
+
+        if (active) {
+          setAutoLockedTradeIds(newlyLockedIds);
+          localStorage.setItem('apex_auto_locked_trade_ids', JSON.stringify(newlyLockedIds));
+          
+          setAutoLockLogs(newLogs);
+          localStorage.setItem('apex_auto_lock_logs', JSON.stringify(newLogs));
+
+          if (onRefreshTrades) {
+            onRefreshTrades();
+          }
+        }
+      } catch (error) {
+        console.error('Failed automated lock-in profits partial close:', error);
+      } finally {
+        if (active) {
+          setIsExecutingAutoLock(false);
+        }
+      }
+    };
+
+    if (lockInProfits && dailyProfitToday >= dailyProfitTarget && dailyProfitTarget > 0 && !isExecutingAutoLock) {
+      triggerAutoLock();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [lockInProfits, dailyProfitToday, dailyProfitTarget, openTrades, autoLockedTradeIds, autoLockLogs, isExecutingAutoLock, onRefreshTrades]);
 
   // Dataset for 'Suggest Auto-Rebalance' calculations targeting 1.5% limit
   const rebalanceSuggestions = useMemo(() => {
@@ -1281,6 +1480,300 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
         ) : null}
       </div>
 
+      {/* DAILY PROFIT TARGET LOCK-IN ASSISTANT */}
+      <div id="daily-profit-target-panel" className="bg-[#0a0a0b] border border-white/5 rounded-lg p-5 mt-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-2">
+          {/* Left panel info & Status */}
+          <div className="space-y-1.5 max-w-md">
+            <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-white flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-emerald-400" />
+              <span>Daily Profit Target Assistant</span>
+            </h3>
+            <p className="text-[10px] text-white/40 font-mono">
+              Empower your discipline. Set a dynamic daily profit target. When reached, the system fires native desktop alerts encouraging you to stop trading and lock in your gains.
+            </p>
+            
+            {/* Real-time Status Badge */}
+            <div className="flex items-center gap-2 pt-1 select-none">
+              <span className="text-[9px] text-white/30 uppercase font-mono">Status:</span>
+              {dailyProfitToday >= dailyProfitTarget && dailyProfitTarget > 0 ? (
+                <span className="px-2 py-0.5 rounded text-[9px] font-mono font-black tracking-wide bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 animate-fadeIn">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                  TARGET SECURED! 🏆 Lock profits
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded text-[9px] font-mono font-black tracking-wide bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#3b82f6]"></span>
+                  ACCUMULATING PROGRESS ({dailyProfitTarget > 0 ? ((Math.max(0, dailyProfitToday) / dailyProfitTarget) * 100).toFixed(0) : 0}%)
+                </span>
+              )}
+            </div>
+
+            {/* Desktop Notification Request Button & Automated Toggle */}
+            <div className="pt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={requestNotificationPermission}
+                className={`px-2.5 py-1.5 rounded text-[9px] font-mono font-black uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+                  notificationPermissionGranted
+                    ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-indigo-950/40 hover:bg-indigo-900/40 text-indigo-300 hover:text-white border border-indigo-500/30 hover:border-indigo-500/60'
+                }`}
+                title="Enables native desktop notifications when your daily target PnL is breached"
+              >
+                <BellRing className="w-3.5 h-3.5" />
+                <span>{notificationPermissionGranted ? 'alerts active' : 'enable desktop alerts'}</span>
+              </button>
+
+              {/* AUTOMATED LOCK-IN PROFITS TOGGLE SWITCH */}
+              <button
+                id="lock-in-profits-automation-toggle"
+                type="button"
+                onClick={() => {
+                  const newVal = !lockInProfits;
+                  setLockInProfits(newVal);
+                  try {
+                    localStorage.setItem('apex_lock_in_profits', newVal ? 'true' : 'false');
+                  } catch {}
+                }}
+                className={`px-2.5 py-1.5 rounded text-[9px] font-mono font-black uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+                  lockInProfits 
+                    ? 'bg-emerald-500 text-black border border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' 
+                    : 'bg-[#1a120c] hover:bg-[#251b14] text-amber-500 hover:text-amber-400 border border-amber-500/20 hover:border-amber-500/40'
+                }`}
+                title="Automatically calculates and submits partial close orders for all profitable positions once the daily profit target is reached, rather than just notifying you."
+              >
+                <ShieldCheck className={`w-3.5 h-3.5 ${lockInProfits ? 'stroke-[3px]' : ''}`} />
+                <span>Lock-In Profits: {lockInProfits ? 'ENABLED' : 'DISABLED'}</span>
+              </button>
+              
+              {!notificationPermissionGranted && (
+                <span className="text-[8px] text-rose-400/80 font-mono italic">
+                  *Notifications need permission
+                </span>
+              )}
+            </div>
+
+            {/* Lock-In Profits Automated Status Console */}
+            {lockInProfits && (
+              <div className="pt-3.5 border-t border-white/[0.04] space-y-2.5 mt-2 select-none">
+                <div className="flex items-center justify-between text-[8px] sm:text-[9.5px] font-mono">
+                  <span className="text-white/40 uppercase tracking-widest font-black flex items-center gap-1.5">
+                    <span className={`inline-block h-2 w-2 rounded-full ${isExecutingAutoLock ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
+                    <span>Auto-Lock status: {isExecutingAutoLock ? 'Executing Orders...' : 'Monitoring Live Targets'}</span>
+                  </span>
+                  {autoLockLogs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAutoLockHistory(!showAutoLockHistory)}
+                      className="text-indigo-400 hover:text-indigo-300 transition-colors uppercase font-black text-[8.5px] cursor-pointer"
+                    >
+                      {showAutoLockHistory ? 'Hide History' : `Review History (${autoLockLogs.length})`}
+                    </button>
+                  )}
+                </div>
+
+                {/* Auto Lock History display list */}
+                {showAutoLockHistory && autoLockLogs.length > 0 && (
+                  <div className="bg-[#050506]/90 border border-white/5 rounded p-3 max-h-40 overflow-y-auto space-y-2 font-mono text-[9px]">
+                    <div className="flex justify-between text-[8px] text-white/35 border-b border-white/[0.04] pb-1.5 select-none">
+                      <span>SECURED TRADES HISTORY</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAutoLockLogs([]);
+                          setAutoLockedTradeIds([]);
+                          try {
+                            localStorage.removeItem('apex_auto_lock_logs');
+                            localStorage.removeItem('apex_auto_locked_trade_ids');
+                          } catch {}
+                        }}
+                        className="text-rose-400 hover:text-rose-300 uppercase font-bold cursor-pointer"
+                      >
+                        RESET ENGINE HISTORY
+                      </button>
+                    </div>
+                    <div className="divide-y divide-white/[0.03]">
+                      {autoLockLogs.map((log) => (
+                        <div key={log.id} className="flex items-center justify-between py-2 text-white/85">
+                          <span className="flex items-center gap-2">
+                            <span className="text-emerald-400 font-bold">✓ LOCKED {log.symbol}</span>
+                            <span className="text-white/40">Size: {log.size.toFixed(2)} lots</span>
+                          </span>
+                          <span className="font-bold text-emerald-400">
+                            +${log.pnl.toFixed(2)} PnL secured <span className="text-white/30 text-[8px] font-normal font-sans">({log.time})</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Configuration controls & sliders */}
+          <div className="flex-1 max-w-xl bg-white/[0.02] border border-white/5 rounded-lg p-4 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[11px] font-bold font-mono text-white/80">Profit Target Limit (USD):</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {/* Dollar indicator */}
+                <span className="text-white/30 text-[10.5px] font-mono font-black">$</span>
+                <input 
+                  type="number"
+                  min="50"
+                  max="5000"
+                  step="50"
+                  value={dailyProfitTarget}
+                  onChange={(e) => {
+                    const parsedVal = parseFloat(e.target.value);
+                    if (!isNaN(parsedVal) && parsedVal >= 0) {
+                      setDailyProfitTarget(parsedVal);
+                    }
+                  }}
+                  className="w-20 bg-black/60 border border-white/10 rounded px-2 py-0.5 text-center text-xs font-mono font-black text-emerald-400 focus:outline-none focus:border-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+            </div>
+
+            {/* Slider input */}
+            <div className="space-y-1 bg-black/40 p-2.5 rounded border border-white/5">
+              <input 
+                type="range"
+                min="100"
+                max="3000"
+                step="50"
+                value={dailyProfitTarget}
+                onChange={(e) => {
+                  setDailyProfitTarget(parseInt(e.target.value));
+                }}
+                className="w-full accent-emerald-500 cursor-ew-resize bg-white/5 h-1 rounded-lg"
+              />
+              <div className="flex items-center justify-between text-[8px] font-mono text-white/30 pt-1 select-none">
+                <span>$100 (conservative)</span>
+                <span>$1,500</span>
+                <span>$3,000 (aggressive)</span>
+              </div>
+            </div>
+
+            {/* Real-time PnL Progress Tracker */}
+            <div className="space-y-2 pt-1 border-t border-white/5 select-none text-[10.5px] font-mono">
+              <div className="flex items-center justify-between">
+                <span className="text-white/40">Today's P&L Accumulation:</span>
+                <div className="flex items-baseline gap-1">
+                  <span className={`font-black ${dailyProfitToday >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {dailyProfitToday >= 0 ? '+' : '-'}${Math.abs(dailyProfitToday).toFixed(2)}
+                  </span>
+                  <span className="text-[9px] text-white/35">/ ${dailyProfitTarget.toFixed(2)} Target</span>
+                </div>
+              </div>
+
+              {/* Progress Line */}
+              <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    dailyProfitToday >= dailyProfitTarget ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-indigo-500'
+                  }`}
+                  style={{ width: `${Math.max(0, Math.min(100, (dailyProfitToday / dailyProfitTarget) * 100))}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Target Presets */}
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-[8px] font-mono text-white/30 uppercase tracking-wider">Presets:</span>
+              <div className="flex items-center gap-1.5 flex-1 overflow-x-auto scrollbar-none">
+                {[250, 500, 1000, 1500, 2000].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setDailyProfitTarget(preset)}
+                    className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-bold transition-all select-none cursor-pointer ${
+                      dailyProfitTarget === preset
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-transparent text-white/40 hover:text-white/80 border border-white/5'
+                    }`}
+                  >
+                    ${preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Dynamic Safeguard HUD when target is reached and open positions exist */}
+      {dailyProfitToday >= dailyProfitTarget && dailyProfitTarget > 0 && openTrades.length > 0 && !dismissedProfitAlert && (
+        <div id="discipline-safeguard-hud" className="bg-[#05110d] border border-emerald-500/30 rounded-lg p-5 mt-4 relative overflow-hidden animate-fadeIn select-none">
+          {/* Subtle green ambient backing glow */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 relative z-10">
+            <div className="space-y-1">
+              <span className="text-[9px] uppercase tracking-wider font-mono font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 w-fit">
+                <Trophy className="w-3.5 h-3.5 animate-bounce shrink-0" />
+                Durable Discipline Suggestion Active
+              </span>
+              <h4 className="text-xs font-mono font-extrabold text-white uppercase tracking-wider mt-1.5 flex items-center gap-1.5">
+                Automated Safeguard Action Recommended
+              </h4>
+              <p className="text-[10.5px] text-white/60 font-sans max-w-2xl leading-relaxed">
+                Your daily profit today of <strong className="text-emerald-400 font-mono font-bold">${dailyProfitToday.toFixed(2)}</strong> has surpassed your strict risk-budgeted profit target of <strong className="text-white font-mono font-bold">${dailyProfitTarget.toFixed(2)}</strong>. You currently have <strong className="text-white font-mono font-bold">{openTrades.length} open positions</strong> active. Professional trading rules suggest exiting or executing partial profit taking to lock in your daily gains.
+              </p>
+            </div>
+            
+            {/* Quick Actions Buttons */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0 select-none">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onEmergencyCloseAll) {
+                    onEmergencyCloseAll();
+                  }
+                }}
+                className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-mono font-black text-[10px] uppercase tracking-wider rounded border border-emerald-400/20 shadow-[0_4px_12px_rgba(16,185,129,0.3)] hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
+                title="Closes ALL active positions instantly at current market prices"
+              >
+                💥 Secure & Close All ({openTrades.length})
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  if (onPartialCloseAll) {
+                    onPartialCloseAll(0.5);
+                  }
+                }}
+                className="px-3.5 py-2 bg-emerald-950/60 hover:bg-emerald-900/80 hover:text-white text-emerald-300 font-mono font-black text-[10px] uppercase tracking-wider rounded border border-emerald-500/30 hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
+                title="Reduces the volume size of all open positions by exactly 50%"
+              >
+                ⚖️ 50% Take Profit
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  try {
+                    localStorage.setItem('apex_dismissed_profit_alert_date', todayStr);
+                  } catch {}
+                  setDismissedProfitAlert(true);
+                }}
+                className="px-3 py-2 bg-transparent hover:bg-white/5 text-white/40 hover:text-white/60 font-mono font-bold text-[10px] uppercase tracking-wider rounded border border-white/5 transition-all cursor-pointer"
+                title="Snoozes this advice box until tomorrow"
+              >
+                Snooze
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Primary metric stats bar, sticky on all pages for consistent tracking */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 select-none">
         {/* Metric 1 */}
@@ -1364,6 +1857,170 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
       
       {activeSubTab === 'EXPOSURE' && (
         <div className="space-y-6 animate-fadeIn" id="subtab-exposure-view">
+          
+          {/* RISK-REWARD EFFICIENCY GAUGE CARD */}
+          <div className="bg-[#0a0a0b] border border-indigo-500/10 rounded-lg p-5" id="risk-reward-efficiency-gauge">
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-3.5 mb-4 gap-2">
+              <div className="flex items-center space-x-2">
+                <Scale className="w-4.5 h-4.5 text-indigo-400 shrink-0" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-white font-mono flex items-center gap-1.5">
+                  <span>Risk-Reward Efficiency Gauge</span>
+                  <RiskTooltip 
+                    title="Risk-to-Reward Ratio (R:R)" 
+                    description="Calculates the ratio between the total potential target profit (Reward) and maximum stop-loss threshold (Risk) of all active positions." 
+                    formula="Average R:R = ∑ (TakeProfit - EntryPrice) / ∑ (EntryPrice - StopLoss) for active positions"
+                    align="right"
+                  />
+                </h3>
+              </div>
+              <div className="px-2.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[9.5px] text-indigo-400 font-mono font-semibold">
+                Efficiency Index
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+              {/* Left Dial Indicator */}
+              <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-black/40 rounded-lg border border-white/5 h-full min-h-[170px]">
+                <div className="relative w-40 h-24 overflow-visible">
+                  {(() => {
+                    const hasActiveTrades = openTrades.length > 0;
+                    const displayRR = hasActiveTrades ? openRR : 2.5; // default/demo value 2.5
+                    const maxRR = 5.0;
+                    const rrPercentage = Math.min(100, Math.max(0, (displayRR / maxRR) * 100));
+                    
+                    const r = 45;
+                    const circ = 2 * Math.PI * r;
+                    const needleRotation = -90 + (rrPercentage / 100) * 180;
+                    
+                    return (
+                      <>
+                        <svg width="160" height="100" viewBox="0 0 160 100" className="mx-auto overflow-visible select-none">
+                          {/* Gauge track */}
+                          <path 
+                            d="M 20 80 A 60 60 0 0 1 140 80" 
+                            fill="none" 
+                            stroke="#1e293b" 
+                            strokeWidth="10" 
+                            strokeLinecap="round" 
+                          />
+                          {/* Active colored path split */}
+                          <path 
+                            d="M 20 80 A 60 60 0 0 1 140 80" 
+                            fill="none" 
+                            stroke={
+                              hasActiveTrades === false ? "#6366f1" :
+                              displayRR < 1.0 ? "#f87171" : // red
+                              displayRR < 2.0 ? "#fbbf24" : // amber
+                              displayRR < 3.5 ? "#10b981" : // emerald
+                              "#6366f1" // indigo for highly protective risk ratios
+                            }
+                            strokeWidth="10" 
+                            strokeLinecap="round" 
+                            strokeDasharray={circ / 2}
+                            strokeDashoffset={(circ / 2) * (1 - rrPercentage / 100)}
+                            className="transition-all duration-1000 ease-out"
+                          />
+                          {/* Tick marks */}
+                          <text x="14" y="93" className="text-[9px] fill-white/40 font-mono font-bold text-center">0.0</text>
+                          <text x="74" y="16" className="text-[9px] fill-white/40 font-mono font-bold text-center">2.5</text>
+                          <text x="134" y="93" className="text-[9px] fill-white/40 font-mono font-bold text-center">5.0+</text>
+
+                          {/* Needle group pivot at (80,80) */}
+                          <g transform={`rotate(${needleRotation}, 80, 80)`} className="transition-transform duration-1000 ease-out origin-[80px_80px]">
+                            {/* Line */}
+                            <line x1="80" y1="80" x2="80" y2="25" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+                            {/* Head of pointer */}
+                            <polygon points="80,18 77,28 83,28" fill="#ffffff" />
+                          </g>
+                          {/* Central Hub */}
+                          <circle cx="80" cy="80" r="7" fill="#0f172a" stroke="#6366f1" strokeWidth="2" />
+                          <circle cx="80" cy="80" r="2" fill="#ffffff" />
+                        </svg>
+                      </>
+                    );
+                  })()}
+                </div>
+                {openTrades.length === 0 && (
+                  <div className="text-[8px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 mt-2 rounded border border-indigo-500/20 uppercase tracking-widest text-center">
+                    DEMO MODEL
+                  </div>
+                )}
+              </div>
+
+              {/* Right Analysis Details */}
+              <div className="md:col-span-8 space-y-3 font-mono">
+                {(() => {
+                  const hasActiveTrades = openTrades.length > 0;
+                  const displayRR = hasActiveTrades ? openRR : 2.5;
+                  
+                  return (
+                    <>
+                      <div>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xl font-bold font-mono text-white tracking-tight">
+                            {displayRR > 0 ? `1 : ${displayRR.toFixed(2)}` : 'N/A'}
+                          </span>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${
+                            hasActiveTrades === false ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20' :
+                            displayRR < 1.0 ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                            displayRR < 2.0 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                            'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          }`}>
+                            {hasActiveTrades === false ? 'Standby Mode' :
+                             displayRR < 1.0 ? 'Unfavorable / Hazardous' :
+                             displayRR < 2.0 ? 'Standard Alignment' :
+                             'Highly Efficient ✓'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-white/40 font-mono block mt-0.5">
+                          {hasActiveTrades === false ? 'Average risk target profile of prospective setups' : 'Aggregate live mathematical expectation threshold'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3.5 pt-2.5 border-t border-white/[0.03]">
+                        <div>
+                          <span className="text-white/30 text-[8px] uppercase block font-bold mb-0.5">Evaluation Status</span>
+                          <span className={`text-[9.5px] font-extrabold block ${
+                            hasActiveTrades === false ? 'text-indigo-455' :
+                            displayRR < 1.0 ? 'text-red-400' :
+                            displayRR < 2.0 ? 'text-amber-400' : 'text-emerald-400'
+                          }`}>
+                            {hasActiveTrades === false ? 'Await placements' :
+                             displayRR < 1.0 ? 'Under-hedged' :
+                             displayRR < 2.0 ? 'Balanced' : 'Optimized Yield'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-white/30 text-[8px] uppercase block font-bold mb-0.5">Active Setup Count</span>
+                          <span className="text-[10px] font-bold text-white block">
+                            {openTrades.filter(t => t.stopLoss > 0 && t.takeProfit > 0).length} Positions with Targets
+                          </span>
+                        </div>
+                        <div className="col-span-2 lg:col-span-1">
+                          <span className="text-white/30 text-[8px] uppercase block font-bold mb-0.5">Target Discipline</span>
+                          <span className="text-[10px] font-bold text-indigo-300 block">
+                            {displayRR >= 2.0 ? 'Institutional (>= 1:2)' : 'Retail scale (< 1:2)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] leading-relaxed text-white/50 pt-1 font-sans">
+                        {hasActiveTrades === false ? (
+                          "The dial is currently in standby mode displaying a baseline institutional R:R profile of 1:2.50. Once active positions containing defined Take Profits and Stop Losses are established via the trade terminal, this gauge will mathematically evaluate live account expectancies."
+                        ) : displayRR < 1.0 ? (
+                          "⚠️ WARNING: Your current active average target exposes more capital in Stop-Loss limits than you stand to gain in Take-Profit expectations. To avoid negative mathematical expectancy over high repetitions, consider resizing target margins or widening profit targets."
+                        ) : displayRR < 2.0 ? (
+                          "Your current active average target resides in standard retail channels (1:1 to 1:2). While secure, establishing strategic targets where the reward is twice your downside risk improves system expectancy and protects account resilience against high drawdown phases."
+                        ) : (
+                          "👑 EXCELLENT: Your overall live positions feature a defensive average risk-to-reward ratio. This preserves terminal capital efficiency, meaning you can maintain aggregate profitability even with a win-rate under forty-five percent."
+                        )}
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
           
           {/* STRATEGY ALERT CONFIGURATION PANEL */}
           <div className="bg-[#0a0a0b] border border-amber-500/10 rounded-lg p-5">
@@ -2365,6 +3022,9 @@ export default function RiskDashboard({ trades, symbol }: RiskDashboardProps) {
         <div className="space-y-6 animate-fadeIn" id="subtab-correlation-view">
           {/* Exposure-mapped correlation cluster heatmap and multi-dimensional scatter map */}
           <CorrelationHeatmap trades={trades} />
+
+          {/* New Fiduciary Portfolio Correlation Widget */}
+          <PortfolioCorrelationWidget trades={trades} />
           
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <CorrelationMatrix />

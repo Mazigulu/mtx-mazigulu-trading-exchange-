@@ -486,8 +486,8 @@ export default function TradeExplainability({
           </div>
 
           {/* Active Strategic Portfolio Placements */}
-          <div className="mt-4 pt-3.5 border-t border-white/[0.04] space-y-2.5">
-            <div className="flex items-center justify-between text-[10px] font-mono uppercase font-bold tracking-wider text-indigo-400">
+          <div className="flex-grow flex flex-col mt-4 pt-3.5 border-t border-white/[0.04] space-y-2.5 min-h-[160px]">
+            <div className="flex items-center justify-between text-[10px] font-mono uppercase font-bold tracking-wider text-indigo-400 shrink-0">
               <span className="flex items-center gap-1.5 text-indigo-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
                 Active Strategic Placements ({openPositions.length})
@@ -496,41 +496,41 @@ export default function TradeExplainability({
             </div>
 
             {openPositions.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-6 border border-dashed border-white/5 rounded-lg bg-[#030303]/40">
+              <div className="flex-grow flex flex-col items-center justify-center py-10 border border-dashed border-white/5 rounded-lg bg-[#030303]/40 min-h-[120px]">
                 <span className="text-[10px] text-white/30 font-mono">No active strategic positions held in current session</span>
               </div>
             ) : (
-              <div className="border border-white/5 rounded-lg overflow-hidden max-h-[110px] overflow-y-auto pr-0.5">
+              <div className="flex-grow border border-white/5 rounded-lg overflow-hidden max-h-[320px] overflow-y-auto pr-0.5 min-h-[120px]">
                 <table className="w-full text-left border-collapse text-[9.5px] font-mono leading-tight">
                   <thead>
-                    <tr className="bg-white/[0.02] border-b border-white/5 text-white/30 font-bold">
-                      <th className="py-1.5 px-2">Asset</th>
-                      <th className="py-1.5 px-2 text-center">Type</th>
-                      <th className="py-1.5 px-2 text-right">Size</th>
-                      <th className="py-1.5 px-2 text-right">Entry</th>
-                      <th className="py-1.5 px-2 text-right">Mkt PnL</th>
+                    <tr className="bg-white/[0.02] border-b border-white/5 text-white/30 font-bold sticky top-0 backdrop-blur-md z-10">
+                      <th className="py-2 px-2">Asset</th>
+                      <th className="py-2 px-2 text-center">Type</th>
+                      <th className="py-2 px-2 text-right">Size</th>
+                      <th className="py-2 px-2 text-right">Entry</th>
+                      <th className="py-2 px-2 text-right">Mkt PnL</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[0.02]">
-                    {openPositions.slice(0, 4).map((t) => {
+                    {openPositions.map((t) => {
                       const isWin = t.pnl >= 0;
                       const isCurrent = t.symbol === symbol;
                       return (
                         <tr key={t.id} className={`hover:bg-white/[0.02] transition-colors ${isCurrent ? 'bg-indigo-500/[0.03] text-white' : 'text-white/70'}`}>
-                          <td className="py-1.5 px-2 font-bold flex items-center gap-1">
+                          <td className="py-2 px-2 font-bold flex items-center gap-1">
                             {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>}
                             {t.symbol}
                           </td>
-                          <td className="py-1.5 px-2 text-center">
+                          <td className="py-2 px-2 text-center">
                             <span className={`px-1 py-0.5 rounded font-bold text-[8px] ${
                               t.side === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                             }`}>
                               {t.side}
                             </span>
                           </td>
-                          <td className="py-1.5 px-2 text-right text-white/50">{t.size.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
-                          <td className="py-1.5 px-2 text-right text-white/50">{t.entryPrice.toFixed(t.symbol === 'USD/JPY' ? 2 : t.symbol === 'BTC/USDT' ? 0 : 4)}</td>
-                          <td className={`py-1.5 px-2 text-right font-bold ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          <td className="py-2 px-2 text-right text-white/50">{t.size.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                          <td className="py-2 px-2 text-right text-white/50">{t.entryPrice.toFixed(t.symbol === 'USD/JPY' ? 2 : t.symbol === 'BTC/USDT' ? 0 : 4)}</td>
+                          <td className={`py-2 px-2 text-right font-bold ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {isWin ? '+' : ''}${t.pnl.toFixed(2)}
                           </td>
                         </tr>
