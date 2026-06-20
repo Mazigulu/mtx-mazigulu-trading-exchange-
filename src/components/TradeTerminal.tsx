@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { MarketSymbol, Trade, MarketMetrics } from '../types';
-import { ShieldCheck, ArrowRightLeft, Landmark, Calculator, AlertTriangle, Play, CheckCircle2, History, XCircle, AlertOctagon, Percent, TrendingUp, Activity, Download, Gauge, CheckSquare, Square, Award, Fingerprint, Lock, Unlock, Cpu, RefreshCw, Sparkles, Eye, Check, X, Key, ShieldAlert } from 'lucide-react';
+import { ShieldCheck, ArrowRightLeft, Landmark, Calculator, AlertTriangle, Play, CheckCircle2, History, XCircle, AlertOctagon, Percent, TrendingUp, Activity, Download, Gauge, CheckSquare, Square, Award, Fingerprint, Lock, Unlock, Cpu, RefreshCw, Sparkles, Eye, Check, X, Key, ShieldAlert, Clock, TrendingDown } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 import { getSignalInsights } from './TradeExplainability';
 
@@ -190,6 +190,12 @@ export default function TradeTerminal({
         totalPnL: 0,
         wins: 0,
         losses: 0,
+        profitFactor: 0,
+        maxDrawdown: 0,
+        maxDrawdownPct: 0,
+        avgDurationMs: 0,
+        grossProfit: 0,
+        grossLoss: 0,
       };
     }
 
@@ -200,6 +206,53 @@ export default function TradeTerminal({
     const wins = completed.filter((t) => t.pnl > 0).length;
     const losses = completed.filter((t) => t.pnl < 0).length;
     const winRate = (wins / completed.length) * 100;
+
+    // Gross Profit & Gross Loss
+    const grossProfit = completed.filter((t) => t.pnl > 0).reduce((acc, t) => acc + t.pnl, 0);
+    const grossLoss = Math.abs(completed.filter((t) => t.pnl < 0).reduce((acc, t) => acc + t.pnl, 0));
+    const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? Infinity : 0);
+
+    // Max Drawdown calculation based on standard 10,000 baseline
+    const sortedCompleted = [...completed].sort((a, b) => {
+      const timeA = new Date(a.exitTimestamp || a.timestamp).getTime();
+      const timeB = new Date(b.exitTimestamp || b.timestamp).getTime();
+      return timeA - timeB;
+    });
+
+    let balance = 10000;
+    let peak = balance;
+    let maxDrawdown = 0;
+    let maxDrawdownPct = 0;
+
+    sortedCompleted.forEach((trade) => {
+      balance += trade.pnl;
+      if (balance > peak) {
+        peak = balance;
+      }
+      const dd = peak - balance;
+      const ddPct = peak > 0 ? (dd / peak) * 100 : 0;
+      if (dd > maxDrawdown) {
+        maxDrawdown = dd;
+      }
+      if (ddPct > maxDrawdownPct) {
+        maxDrawdownPct = ddPct;
+      }
+    });
+
+    // Average trade duration in milliseconds
+    let totalDurationMs = 0;
+    let validDurationCount = 0;
+    completed.forEach((t) => {
+      if (t.timestamp && t.exitTimestamp) {
+        const start = new Date(t.timestamp).getTime();
+        const end = new Date(t.exitTimestamp).getTime();
+        if (!isNaN(start) && !isNaN(end) && end >= start) {
+          totalDurationMs += (end - start);
+          validDurationCount++;
+        }
+      }
+    });
+    const avgDurationMs = validDurationCount > 0 ? (totalDurationMs / validDurationCount) : 0;
 
     // Standard deviation calculation (trade-by-trade basis)
     let stdDev = 0;
@@ -219,6 +272,12 @@ export default function TradeTerminal({
       totalPnL,
       wins,
       losses,
+      profitFactor,
+      maxDrawdown,
+      maxDrawdownPct,
+      avgDurationMs,
+      grossProfit,
+      grossLoss,
     };
   }, [trades]);
 
@@ -480,6 +539,23 @@ export default function TradeTerminal({
       }
       return `${diffSecs}s`;
     } catch (err) {
+      return '—';
+    }
+  };
+
+  const formatMsDuration = (ms: number) => {
+    if (ms <= 0) return '—';
+    try {
+      const totalSecs = Math.floor(ms / 1000);
+      const totalMins = Math.floor(totalSecs / 60);
+      const totalHours = Math.floor(totalMins / 60);
+      const totalDays = Math.floor(totalHours / 24);
+
+      if (totalDays > 0) return `${totalDays}d ${totalHours % 24}h`;
+      if (totalHours > 0) return `${totalHours}h ${totalMins % 60}m`;
+      if (totalMins > 0) return `${totalMins}m ${totalSecs % 60}s`;
+      return `${totalSecs}s`;
+    } catch (_) {
       return '—';
     }
   };
@@ -1488,7 +1564,7 @@ export default function TradeTerminal({
                 {performanceStats.totalTrades} {performanceStats.totalTrades === 1 ? 'Trade' : 'Trades'}
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {/* Win Rate */}
               <div className="p-2.5 bg-[#080808] border border-white/10 rounded flex flex-col justify-between">
                 <div>
@@ -1534,6 +1610,54 @@ export default function TradeTerminal({
                 </div>
                 <div className={`text-[9.5px] font-mono mt-1 font-bold ${sharpeGrade.color}`}>
                   {sharpeGrade.label}
+                </div>
+              </div>
+
+              {/* Profit Factor */}
+              <div className="p-2.5 bg-[#080808] border border-white/10 rounded flex flex-col justify-between">
+                <div>
+                  <span className="text-[9px] text-[#888888] font-mono uppercase flex items-center">
+                    <Gauge className="w-2.5 h-2.5 mr-1 text-teal-400 shrink-0" />
+                    Profit Factor
+                  </span>
+                  <div className="text-sm font-mono font-bold text-white mt-1.5 leading-none">
+                    {performanceStats.profitFactor === Infinity ? '∞' : performanceStats.profitFactor.toFixed(2)}
+                  </div>
+                </div>
+                <div className="text-[9px] text-white/45 font-mono mt-1 font-semibold truncate">
+                  Gross W: +${performanceStats.grossProfit.toFixed(1)} / L: -${performanceStats.grossLoss.toFixed(1)}
+                </div>
+              </div>
+
+              {/* Max Drawdown */}
+              <div className="p-2.5 bg-[#080808] border border-white/10 rounded flex flex-col justify-between">
+                <div>
+                  <span className="text-[9px] text-[#888888] font-mono uppercase flex items-center">
+                    <TrendingDown className="w-2.5 h-2.5 mr-1 text-rose-400 shrink-0" />
+                    Max Drawdown
+                  </span>
+                  <div className="text-sm font-mono font-bold text-rose-400 mt-1.5 leading-none">
+                    -{performanceStats.maxDrawdownPct.toFixed(2)}%
+                  </div>
+                </div>
+                <div className="text-[9px] text-white/45 font-mono mt-1 font-semibold truncate">
+                  Max: -${performanceStats.maxDrawdown.toFixed(1)}
+                </div>
+              </div>
+
+              {/* Avg Duration */}
+              <div className="p-2.5 bg-[#080808] border border-white/10 rounded flex flex-col justify-between">
+                <div>
+                  <span className="text-[9px] text-[#888888] font-mono uppercase flex items-center">
+                    <Clock className="w-2.5 h-2.5 mr-1 text-amber-400 shrink-0" />
+                    Avg Duration
+                  </span>
+                  <div className="text-sm font-mono font-bold text-white mt-1.5 leading-none">
+                    {formatMsDuration(performanceStats.avgDurationMs)}
+                  </div>
+                </div>
+                <div className="text-[9px] text-white/45 font-mono mt-1 font-semibold truncate">
+                  From {performanceStats.totalTrades} closed trades
                 </div>
               </div>
             </div>

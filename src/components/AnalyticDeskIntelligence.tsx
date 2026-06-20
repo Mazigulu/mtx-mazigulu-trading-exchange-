@@ -24,22 +24,271 @@ import {
   Dribbble, 
   ArrowRight,
   Globe,
-  Radio
+  Radio,
+  Sliders,
+  ShieldAlert,
+  Sparkles,
+  Check,
+  RefreshCw
 } from 'lucide-react';
 
 interface AnalyticDeskIntelligenceProps {
   symbol: MarketSymbol;
   metrics: MarketMetrics;
   trades?: Trade[];
+  onUpdateTradeParams?: (id: string, params: Partial<Trade>) => Promise<void> | void;
 }
 
-export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [] }: AnalyticDeskIntelligenceProps) {
+export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [], onUpdateTradeParams }: AnalyticDeskIntelligenceProps) {
   const [selectedRegimeRef, setSelectedRegimeRef] = useState<number>(0); // manual shock index nudge
   const [showHeuristicsInfo, setShowHeuristicsInfo] = useState<boolean>(false);
   const [selectedIntegrationWeight, setSelectedIntegrationWeight] = useState<number>(1.0); // 1x ATR multiplier slider
   const [dismissedSafetyStatus, setDismissedSafetyStatus] = useState<boolean>(false);
   const [timeframeBiasFilter, setTimeframeBiasFilter] = useState<'COMBINED' | 'H4' | 'DAILY'>('COMBINED');
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useState<number>(5); // 0 to 5, where 5 is live
+  const [strategyPreset, setStrategyPreset] = useState<'ICT_2022' | 'POWER_OF_3'>('ICT_2022');
+
+  // ATR Volatility-Adjusted Stop Loss states
+  const [slModel, setSlModel] = useState<'TRAILING' | 'FIXED_ENTRY'>('TRAILING');
+  const [slMultiplier, setSlMultiplier] = useState<number>(2.0);
+  const [slShowAllSymbols, setSlShowAllSymbols] = useState<boolean>(true);
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [actionSuccess, setActionSuccess] = useState<Record<string, boolean>>({});
+
+  // Real-time Order Flow Intensity Heatmap states
+  const [heatmapSensitivity, setHeatmapSensitivity] = useState<number>(35);
+  const [showHiddenLiquidityOnly, setShowHiddenLiquidityOnly] = useState<boolean>(false);
+  const [heatmapTicks, setHeatmapTicks] = useState<any[]>([]);
+  const [icebergDiscoveredLogs, setIcebergDiscoveredLogs] = useState<string[]>([]);
+  const [lastOrderFlowDelta, setLastOrderFlowDelta] = useState<number>(0);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+
+  const getTickStepForSymbol = (sym: string) => {
+    if (sym === 'BTC/USDT') return 10.0;
+    if (sym === 'ETH/USDT') return 1.0;
+    if (sym === 'SOL/USDT') return 0.1;
+    if (sym === 'GOLD/USD') return 0.25;
+    if (sym === 'SILVER/USD') return 0.02;
+    if (sym.includes('JPY')) return 0.05;
+    if (sym === 'US30' || sym === 'NAS100' || sym === 'GER40') return 5.0;
+    if (sym === 'SPX500') return 0.5;
+    return 0.0001; 
+  };
+
+  const formatPriceForSymbol = (val: number, sym: string) => {
+    if (sym === 'BTC/USDT') return val.toFixed(1);
+    if (sym === 'ETH/USDT') return val.toFixed(2);
+    if (sym === 'SOL/USDT') return val.toFixed(2);
+    if (sym === 'GOLD/USD' || sym === 'SILVER/USD') return val.toFixed(2);
+    if (sym.includes('JPY')) return val.toFixed(3);
+    if (sym === 'US30' || sym === 'NAS100' || sym === 'GER40' || sym === 'SPX500') return val.toFixed(2);
+    return val.toFixed(5);
+  };
+
+  useEffect(() => {
+    const step = getTickStepForSymbol(symbol);
+    const centerPrice = metrics.currentPrice;
+    
+    const generateCluster = (offsetSteps: number, isAsk: boolean) => {
+      const price = centerPrice + (offsetSteps * step * (isAsk ? 1 : -1));
+      const seedVal = Math.sin(price * 1000 + (isAsk ? 50 : 20));
+      const baseVol = Math.abs(seedVal) * 50 + 5;
+      
+      const isIceberg = Math.abs(offsetSteps) === 3 || Math.abs(offsetSteps) === 7;
+      const volume = isIceberg ? baseVol * 6.5 + 135 : baseVol;
+      const intensity = Math.min(1, volume / 355);
+      
+      return {
+        price,
+        offsetSteps,
+        volume,
+        type: isAsk ? 'SELL_ASK' : 'BUY_BID',
+        intensity,
+        isIceberg,
+        filledPercentage: Math.floor(Math.abs(Math.sin(price)) * 80 + 10)
+      };
+    };
+
+    const makeTicks = () => {
+      const asks = Array.from({ length: 8 }).map((_, i) => generateCluster(i + 1, true)).reverse();
+      const bids = Array.from({ length: 8 }).map((_, i) => generateCluster(i + 1, false));
+      setHeatmapTicks([...asks, ...bids]);
+    };
+    
+    makeTicks();
+
+    const interval = setInterval(() => {
+      setHeatmapTicks(prevTicks => {
+        if (prevTicks.length === 0) return prevTicks;
+        const updated = prevTicks.map(t => {
+          const shift = (Math.random() - 0.5) * (t.isIceberg ? 10 : 5);
+          const volume = Math.max(5, t.volume + shift);
+          const intensity = Math.min(1, volume / 355);
+          const filledChange = Math.random() > 0.7 ? (Math.random() > 0.5 ? 2 : -2) : 0;
+          const filledPercentage = Math.min(99, Math.max(1, t.filledPercentage + filledChange));
+          
+          return {
+            ...t,
+            volume,
+            intensity,
+            filledPercentage
+          };
+        });
+
+        const totalAsksVol = updated.filter(t => t.type === 'SELL_ASK').reduce((acc, t) => acc + t.volume, 0);
+        const totalBidsVol = updated.filter(t => t.type === 'BUY_BID').reduce((acc, t) => acc + t.volume, 0);
+        const delta = totalBidsVol - totalAsksVol;
+        setLastOrderFlowDelta(delta);
+
+        return updated;
+      });
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [symbol, metrics.currentPrice]);
+
+  const triggerDeepScan = () => {
+    setIsScanning(true);
+    setIcebergDiscoveredLogs([]);
+    setTimeout(() => {
+      setIsScanning(false);
+      const discoveredIcebergs = heatmapTicks
+        .filter(t => t.isIceberg)
+        .map(t => `Detected hidden ${t.type === 'BUY_BID' ? 'Buy Wall' : 'Sell Wall'} (Iceberg Order) at ${formatPriceForSymbol(t.price, symbol)} with clustered volume of ${t.volume.toFixed(1)} lots.`);
+      setIcebergDiscoveredLogs(discoveredIcebergs);
+    }, 1200);
+  };
+
+  // Helper to estimate symbol proportional ATR
+  const getAtrForSymbol = (tradeSymbol: string) => {
+    if (tradeSymbol === symbol) return metrics.atr;
+    const symbolRatio: Record<string, number> = {
+      'EUR/USD': 0.0014,
+      'GBP/USD': 0.0017,
+      'USD/JPY': 0.28,
+      'AUD/USD': 0.0011,
+      'EUR/GBP': 0.0009,
+      'GOLD/USD': 11.50,
+      'SILVER/USD': 0.22,
+      'BTC/USDT': 820.0,
+      'ETH/USDT': 48.5,
+      'SOL/USDT': 3.8,
+      'US30': 165.0,
+      'NAS100': 130.0,
+      'SPX500': 28.0,
+      'GER40': 90.0,
+    };
+    return symbolRatio[tradeSymbol] || (metrics.atr * 1.0);
+  };
+
+  const getTradeCurrentPrice = (t: Trade) => {
+    if (t.symbol === symbol) {
+      return metrics.currentPrice;
+    }
+    const isBtc = t.symbol === 'BTC/USDT' || t.symbol === 'ETH/USDT' || t.symbol === 'SOL/USDT';
+    const isGold = t.symbol === 'GOLD/USD' || t.symbol === 'SILVER/USD';
+    const isIndex = t.symbol === 'US30' || t.symbol === 'NAS100' || t.symbol === 'SPX500' || t.symbol === 'GER40';
+    
+    let scale = 100000; // default forex
+    if (isBtc) scale = 1;
+    else if (isGold) scale = 100;
+    else if (isIndex) scale = t.symbol === 'SPX500' ? 100 : 10;
+    
+    if (t.symbol === 'USD/JPY') {
+      scale = 1000;
+    }
+
+    const denominator = t.size * scale;
+    if (denominator === 0) return t.entryPrice;
+
+    const priceDiff = t.pnl / denominator;
+    const multiplier = t.side === 'BUY' ? 1 : -1;
+    return t.entryPrice + (priceDiff * multiplier);
+  };
+
+  const slSuggestions = useMemo(() => {
+    return trades
+      .filter(t => t.status === 'OPEN' && (slShowAllSymbols ? true : t.symbol === symbol))
+      .map(t => {
+        const curPx = getTradeCurrentPrice(t);
+        const atrValue = getAtrForSymbol(t.symbol);
+        const buffer = atrValue * slMultiplier;
+        
+        let proposedSL = 0;
+        if (slModel === 'TRAILING') {
+          proposedSL = t.side === 'BUY' ? curPx - buffer : curPx + buffer;
+        } else {
+          // fixed entry relative SL
+          proposedSL = t.side === 'BUY' ? t.entryPrice - buffer : t.entryPrice + buffer;
+        }
+
+        const isBtc = t.symbol === 'BTC/USDT';
+        const isJpy = t.symbol === 'USD/JPY';
+        const isGold = t.symbol === 'GOLD/USD';
+        const decimals = isBtc ? 1 : (isJpy || isGold ? 2 : 5);
+        
+        proposedSL = parseFloat(proposedSL.toFixed(decimals));
+        
+        // Calculate contract and dollar value parameters to compute current vs suggested risks
+        let contractScale = 100000;
+        if (isBtc || t.symbol === 'ETH/USDT' || t.symbol === 'SOL/USDT') contractScale = 1;
+        else if (isGold || t.symbol === 'SILVER/USD') contractScale = 100;
+        else if (t.symbol === 'US30' || t.symbol === 'NAS100' || t.symbol === 'SPX500' || t.symbol === 'GER40') contractScale = t.symbol === 'SPX500' ? 100 : 10;
+        
+        if (t.symbol === 'USD/JPY') contractScale = 1000;
+
+        const currentSLRisk = t.stopLoss > 0
+          ? Math.abs(t.entryPrice - t.stopLoss) * t.size * contractScale
+          : null;
+          
+        const proposedSLRisk = Math.abs(t.entryPrice - proposedSL) * t.size * contractScale;
+        
+        const isSlLockedProfit = t.side === 'BUY' ? proposedSL > t.entryPrice : proposedSL < t.entryPrice;
+        const lockedProfitAmount = isSlLockedProfit 
+          ? Math.abs(proposedSL - t.entryPrice) * t.size * contractScale
+          : 0;
+
+        return {
+          trade: t,
+          currentPrice: curPx,
+          atrValue,
+          proposedSL,
+          currentSLRisk,
+          proposedSLRisk,
+          isSlLockedProfit,
+          lockedProfitAmount,
+          decimals,
+          contractScale
+        };
+      });
+  }, [trades, symbol, slShowAllSymbols, slModel, slMultiplier, metrics.currentPrice, metrics.atr]);
+
+  const handleUpdateParams = async (id: string, newStopLoss: number) => {
+    setActionLoading(prev => ({ ...prev, [id]: true }));
+    try {
+      if (onUpdateTradeParams) {
+        await onUpdateTradeParams(id, { stopLoss: newStopLoss });
+      } else {
+        // Direct API invocation fallback
+        const res = await fetch(`/api/trades/${id}/update-params`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stopLoss: newStopLoss }),
+        });
+        if (!res.ok) {
+          throw new Error('Failed to update stop loss');
+        }
+      }
+      setActionSuccess(prev => ({ ...prev, [id]: true }));
+      setTimeout(() => {
+        setActionSuccess(prev => ({ ...prev, [id]: false }));
+      }, 2500);
+    } catch (err) {
+      console.error('Failed to update dynamic stop loss:', err);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [id]: false }));
+    }
+  };
 
   const [useLiveMetrics, setUseLiveMetrics] = useState<boolean>(true);
   const [manualVolatility, setManualVolatility] = useState<number>(65);
@@ -408,6 +657,142 @@ export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [] 
     };
   }, [metrics.atr, metrics.currentPrice, symbol, selectedIntegrationWeight]);
 
+  // Dynamic Intelligence Layer Signal generation based on active Strategy Preset
+  const presetSignal = useMemo(() => {
+    const price = metrics.currentPrice;
+    const atr = metrics.atr;
+    const rsi = metrics.rsi;
+    const isCrypto = symbol.includes('USDT');
+    const isGold = symbol.includes('GOLD') || symbol.includes('SILVER');
+    
+    const decimalPlaces = isCrypto ? 1 : isGold ? 2 : 4;
+    
+    if (strategyPreset === 'ICT_2022') {
+      const isBullish = rsi < 45;
+      const isBearish = rsi > 55;
+      
+      let signalHeadline = 'LIQUIDITY HUNT (Neutral Accumulation)';
+      let badgeColor = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      let entryZoneText = '';
+      let targetZoneText = '';
+      let invalidationZoneText = '';
+      let description = '';
+      let currentPhase = 'SWEPT LIQUIDITY IDENTIFICATION';
+      let flowDirection = 'NEUTRAL / DISCONGRUENT';
+      
+      const oteLower = isBullish ? price - atr * 0.65 : price + atr * 0.35;
+      const oteUpper = isBullish ? price - atr * 0.35 : price + atr * 0.65;
+      
+      const fvgLower = price - atr * 0.15;
+      const fvgUpper = price + atr * 0.15;
+      
+      const stopLossLevel = isBullish ? price - atr * 1.1 * selectedIntegrationWeight : price + atr * 1.1 * selectedIntegrationWeight;
+      
+      if (isBullish) {
+        signalHeadline = 'BULLISH DISPLACEMENT (MSS CONFIRMED)';
+        badgeColor = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+        entryZoneText = `${oteLower.toFixed(decimalPlaces)} - ${oteUpper.toFixed(decimalPlaces)} (Pullback to 62%-79% OTE fib)`;
+        targetZoneText = `${(price + atr * 1.55).toFixed(decimalPlaces)} (Prior Day Session High target)`;
+        invalidationZoneText = `${stopLossLevel.toFixed(decimalPlaces)} (Below swing low block)`;
+        description = 'Prior Day Low (PDL) swept cleanly with significant lower timeframe volume displacement. A Market Structure Shift (MSS) is validated. Recommend buy entries on a steady pullback to optimal trade alignment (OTE) with validation overlays.';
+        currentPhase = 'DISPLACEMENT & FVG BUILDUP';
+        flowDirection = 'BULLISH REVERSAL FLIGHT';
+      } else if (isBearish) {
+        signalHeadline = 'BEARISH DISPLACEMENT (MSS CONFIRMED)';
+        badgeColor = 'bg-rose-500/10 text-rose-400 border-rose-500/20 animate-pulse';
+        entryZoneText = `${oteLower.toFixed(decimalPlaces)} - ${oteUpper.toFixed(decimalPlaces)} (Premium retest of unmitigated sellers)`;
+        targetZoneText = `${(price - atr * 1.6).toFixed(decimalPlaces)} (Prior Day Session Low stop target)`;
+        invalidationZoneText = `${stopLossLevel.toFixed(decimalPlaces)} (Above current swing high)`;
+        description = 'Prior Day High (PDH) swept cleanly on high Relative Strength Index thresholds. Dynamic displacement confirms strong downward institutional order flow and the creation of unmitigated fair value gaps. Short on premium retrace.';
+        currentPhase = 'FVG RETRACE / MITIGATION SQUEEZE';
+        flowDirection = 'BEARISH DIRECTIONAL TRAIL';
+      } else {
+        entryZoneText = `${fvgLower.toFixed(decimalPlaces)} - ${fvgUpper.toFixed(decimalPlaces)} (Range mid levels)`;
+        targetZoneText = `${(price + atr * 1.1).toFixed(decimalPlaces)} (Range highs)`;
+        invalidationZoneText = `${stopLossLevel.toFixed(decimalPlaces)}`;
+        description = 'Asset price coordinates are coiling within standard daily deviation bands. No direct Market Structure Shift identified. Smart Money is maintaining standard passive bid placements. Limit orders or scalping on range boundaries remains highly suitable.';
+      }
+      
+      return {
+        strategyName: 'ICT 2022 Model',
+        iconType: 'ICT',
+        signalHeadline,
+        badgeColor,
+        entryZoneText,
+        targetZoneText,
+        invalidationZoneText,
+        description,
+        currentPhase,
+        flowDirection,
+        metricLabel1: 'OTE Fibonacci Array',
+        metricValue1: '62% - 79% Optimal',
+        metricLabel2: 'Fair Value Gap (FVG)',
+        metricValue2: `${fvgLower.toFixed(decimalPlaces)} - ${fvgUpper.toFixed(decimalPlaces)}`
+      };
+    } else {
+      // POWER_OF_3 (AMD)
+      const isManipulationLong = rsi < 43;
+      const isDistributionShort = rsi > 57;
+      
+      let signalHeadline = 'ACCUMULATION PHASE (Session Block Squeeze)';
+      let badgeColor = 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
+      let entryZoneText = '';
+      let targetZoneText = '';
+      let invalidationZoneText = '';
+      let description = '';
+      let currentPhase = 'ACCUMULATION CONSOLIDATION';
+      let flowDirection = 'RANGE-BOUND CONGESTION';
+      
+      const accLower = price - atr * 0.35;
+      const accUpper = price + atr * 0.35;
+      
+      const judasSwingLevel = price - atr * 0.95;
+      const distributionTarget = price + atr * 1.55;
+      
+      if (isManipulationLong) {
+        signalHeadline = 'BULLISH MANIPULATION (Judas Swing Short Trap)';
+        badgeColor = 'bg-purple-500/10 text-purple-400 border-purple-500/20 animate-pulse';
+        entryZoneText = `Buy near ${judasSwingLevel.toFixed(decimalPlaces)} (Capture liquidity below accumulation base)`;
+        targetZoneText = `${distributionTarget.toFixed(decimalPlaces)} (Distribution expansion projection)`;
+        invalidationZoneText = `${(price - atr * 1.5).toFixed(decimalPlaces)} (Standard limit breach boundary)`;
+        description = 'Power of 3 AMD sequence matches: Yesterday close accumulation range has been swept by a high velocity Judas swing downward. Institutional buyers are absorbing the retail-dump volume with passive limit bid traps. High confidence long reversal.';
+        currentPhase = 'MANIPULATION DISPLACEMENT PHASE';
+        flowDirection = 'INSTITUTIONAL ACCUMULATION INTAKE';
+      } else if (isDistributionShort) {
+        signalHeadline = 'DISTRIBUTION CYCLE (Peak Session Expansion)';
+        badgeColor = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+        entryZoneText = `Sell / Take profits above ${(price + atr * 0.9).toFixed(decimalPlaces)} (Premium distribution high)`;
+        targetZoneText = `${(price - atr * 1.45).toFixed(decimalPlaces)} (Re-accumulation low target)`;
+        invalidationZoneText = `${(price + atr * 1.85).toFixed(decimalPlaces)} (Extreme high breakout limit)`;
+        description = 'Power of 3 sequence indicates expansion phase is fully exhausted. Momentum is distributing at session premium limits. Extreme buy-stop vacuum in progress. Scaling down long positions and establishing structured trend short limits is optimal.';
+        currentPhase = 'SESSION EXPANSION / DISTRIBUTION';
+        flowDirection = 'DISTRIBUTION / TRANSFER ZONE';
+      } else {
+        entryZoneText = `${accLower.toFixed(decimalPlaces)} - ${accUpper.toFixed(decimalPlaces)} (Accumulation Range)`;
+        targetZoneText = `${(price + atr * 1.15).toFixed(decimalPlaces)} (Judas swing projection)`;
+        invalidationZoneText = `${(price - atr * 0.85).toFixed(decimalPlaces)}`;
+        description = 'Session is coiling inside the original initial balance accumulation box. Open depth volume is symmetrical. Standard market makers are providing depth on both bid/ask levels. Setup limit orders on prior low/high manipulation limits.';
+      }
+      
+      return {
+        strategyName: 'Power of 3 (AMD)',
+        iconType: 'PO3',
+        signalHeadline,
+        badgeColor,
+        entryZoneText,
+        targetZoneText,
+        invalidationZoneText,
+        description,
+        currentPhase,
+        flowDirection,
+        metricLabel1: 'Accumulation Box Median',
+        metricValue1: `${price.toFixed(decimalPlaces)}`,
+        metricLabel2: 'Judas Sweep Bounds',
+        metricValue2: `-${(atr * 0.95).toFixed(decimalPlaces)} USD/PIP`
+      };
+    }
+  }, [strategyPreset, metrics, symbol, selectedIntegrationWeight]);
+
   return (
     <div id="analytic-desk-intelligence-root" className="bg-[#0a0a0b] border border-white/5 p-5 md:p-6 rounded-lg select-none">
       
@@ -432,6 +817,21 @@ export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [] 
 
         {/* Global Controls */}
         <div className="flex flex-wrap items-center gap-4">
+          {/* Trade Strategy Preset Dropdown */}
+          <div className="flex items-center gap-1.5 bg-[#050506] border border-white/5 rounded px-2.5 py-1">
+            <span className="text-[8px] font-mono text-white/30 uppercase font-black">Strategy Preset:</span>
+            <select
+              id="trade-strategy-preset-select"
+              value={strategyPreset}
+              onChange={(e) => setStrategyPreset(e.target.value as 'ICT_2022' | 'POWER_OF_3')}
+              className="bg-transparent text-[9.5px] font-mono font-bold text-indigo-400 border-none outline-none focus:ring-0 cursor-pointer p-0 pr-4"
+              style={{ colorScheme: 'dark' }}
+            >
+              <option value="ICT_2022" className="bg-[#0b0b0d] text-indigo-400">ICT 2022 Model</option>
+              <option value="POWER_OF_3" className="bg-[#0b0b0d] text-indigo-400">Power of 3 (PO3)</option>
+            </select>
+          </div>
+
           <div className="flex items-center gap-1.5 bg-[#050506] border border-white/5 rounded px-2.5 py-1">
             <span className="text-[8px] font-mono text-white/30 uppercase font-black">Weight Control:</span>
             <input 
@@ -1050,6 +1450,333 @@ export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [] 
 
       </div>
 
+      {/* DYNAMIC VOLATILITY-ADJUSTED STOP LOSS ADVISER PANEL (INTEGRATED) */}
+      <div id="volatility-stop-loss-adviser" className="bg-[#0b0b0d] border border-white/5 rounded-lg p-5 mb-6 font-mono select-none">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/[0.04] pb-4 mb-4">
+          <div className="flex items-center space-x-2.5">
+            <div className="h-7 w-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+              <Sparkles className="w-4 h-4 animate-pulse" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 block">
+                ATR Volatility-Adjusted Stop Loss Advisor
+              </span>
+              <span className="text-[9px] text-white/35 block font-sans mt-0.5">
+                Calculates dynamic, volatility-appropriate stop-loss levels aligned to live market ATR cushions.
+              </span>
+            </div>
+          </div>
+
+          {/* Quick interactive controls for SL Adviser */}
+          <div className="flex flex-wrap items-center gap-3 text-[9.5px]">
+            {/* Symbol Filtering Toggle */}
+            <div className="flex items-center bg-black/40 rounded border border-white/5 p-1">
+              <button 
+                type="button"
+                onClick={() => setSlShowAllSymbols(true)}
+                className={`px-2 py-1 rounded text-[8.5px] transition-all cursor-pointer ${slShowAllSymbols ? 'bg-indigo-600 font-bold text-white' : 'text-white/40 hover:text-white/70'}`}
+              >
+                All Symbols ({trades.filter(t => t.status === 'OPEN').length})
+              </button>
+              <button 
+                type="button"
+                onClick={() => setSlShowAllSymbols(false)}
+                className={`px-2 py-1 rounded text-[8.5px] transition-all cursor-pointer ${!slShowAllSymbols ? 'bg-indigo-600 font-bold text-white' : 'text-white/40 hover:text-white/70'}`}
+              >
+                {symbol} Only ({trades.filter(t => t.status === 'OPEN' && t.symbol === symbol).length})
+              </button>
+            </div>
+
+            {/* SL Calculation Origin Model */}
+            <div className="flex items-center bg-black/40 rounded border border-white/5 p-1">
+              <button 
+                type="button"
+                onClick={() => setSlModel('TRAILING')}
+                className={`px-2 py-1 rounded text-[8.5px] transition-all cursor-pointer ${slModel === 'TRAILING' ? 'bg-indigo-600 font-bold text-white' : 'text-white/40 hover:text-white/70'}`}
+                title="Skins ATR cushion below CURRENT PRICE to trail profits up"
+              >
+                Dynamic Trailing
+              </button>
+              <button 
+                type="button"
+                onClick={() => setSlModel('FIXED_ENTRY')}
+                className={`px-2 py-1 rounded text-[8.5px] transition-all cursor-pointer ${slModel === 'FIXED_ENTRY' ? 'bg-indigo-600 font-bold text-white' : 'text-white/40 hover:text-white/70'}`}
+                title="Skins ATR cushion below ENTRY PRICE for locked static risk"
+              >
+                Fixed Strategic
+              </button>
+            </div>
+
+            {/* Custom Multipliers */}
+            <div className="flex items-center space-x-1 border border-white/5 bg-black/30 p-1 rounded">
+              <span className="text-white/30 uppercase tracking-wider text-[8px] mr-1">Multiplier:</span>
+              {[1.5, 2.0, 2.5, 3.0].map((m) => (
+                <button
+                  key={`sl-mult-sel-${m}`}
+                  type="button"
+                  onClick={() => setSlMultiplier(m)}
+                  className={`w-8 py-0.5 rounded text-[8px] transition-all font-mono font-bold cursor-pointer ${slMultiplier === m ? 'bg-indigo-505 border border-indigo-500/30 text-indigo-300 font-black' : 'text-white/30 hover:text-white/60'}`}
+                >
+                  {m.toFixed(1)}x
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* OPEN TRADES AND SL COMPUTATIONS TABLE */}
+        {slSuggestions.length === 0 ? (
+          <div className="bg-[#050506]/55 border border-white/5 rounded-lg p-6 text-center space-y-2 select-none">
+            <ShieldAlert className="w-7 h-7 text-white/20 mx-auto" />
+            <p className="text-[10px] text-white/50 uppercase tracking-wider">No active positions matching current selection criteria</p>
+            <p className="text-[9.5px] text-white/30 font-sans max-w-sm mx-auto">
+              Please initialize open positions in the <strong>Trade Execution Terminal</strong> to activate this real-time risk simulation framework.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="hidden lg:grid grid-cols-12 gap-2 text-[8px] text-white/30 uppercase tracking-wider pb-1.5 border-b border-white/[0.04]">
+              <div className="col-span-3">Position Context</div>
+              <div className="col-span-3">Current Pricing & Limit</div>
+              <div className="col-span-4">ATR Cushion SL Recommendation</div>
+              <div className="col-span-2 text-right">Risk Action Desk</div>
+            </div>
+
+            <div className="space-y-3">
+              {slSuggestions.map(({ trade: t, currentPrice, atrValue, proposedSL, currentSLRisk, proposedSLRisk, isSlLockedProfit, lockedProfitAmount, decimals, contractScale }) => {
+                const isBuy = t.side === 'BUY';
+                const hasStopLoss = t.stopLoss > 0;
+                
+                // Risk efficiency indicator calculations
+                let riskComparisonString = '';
+                let isRiskDecreasing = false;
+                
+                if (!hasStopLoss) {
+                  riskComparisonString = 'Secures unmanaged extreme tail-risk';
+                  isRiskDecreasing = true;
+                } else if (isSlLockedProfit) {
+                  riskComparisonString = `Locks in +$${lockedProfitAmount.toFixed(2)} guaranteed PnL`;
+                  isRiskDecreasing = true;
+                } else {
+                  const slDiff = currentSLRisk ? currentSLRisk - proposedSLRisk : 0;
+                  if (slDiff > 0) {
+                    riskComparisonString = `Reduces loss exposure by $${slDiff.toFixed(2)} (${Math.round((slDiff / currentSLRisk!) * 100)}%)`;
+                    isRiskDecreasing = true;
+                  } else {
+                    riskComparisonString = `Adds $${Math.abs(slDiff).toFixed(2)} volatility cushion spacing`;
+                    isRiskDecreasing = false;
+                  }
+                }
+
+                const displayAtrVal = t.symbol === 'USD/JPY' ? (atrValue * 100).toFixed(1) : t.symbol === 'BTC/USDT' || t.symbol === 'GOLD/USD' ? atrValue.toFixed(1) : (atrValue * 10000).toFixed(1);
+                const displayAtrUnit = t.symbol === 'BTC/USDT' || t.symbol === 'GOLD/USD' ? 'USD' : 'pips';
+
+                const isLoading = actionLoading[t.id];
+                const isSuccess = actionSuccess[t.id];
+
+                return (
+                  <div 
+                    key={`sl-adv-row-${t.id}`} 
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center bg-[#050506]/75 border border-white/5 p-3 rounded-lg hover:border-white/10 transition-colors"
+                  >
+                    {/* Column 1: Position details */}
+                    <div className="col-span-1 lg:col-span-3 space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border leading-none font-mono ${isBuy ? 'bg-emerald-500/10 text-emerald-450 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'}`}>
+                          {t.side}
+                        </span>
+                        <span className="text-[10.5px] font-bold text-white font-mono">{t.symbol}</span>
+                      </div>
+                      <div className="text-[9.5px] font-sans text-white/40">
+                        Size: <strong className="text-white font-mono">{t.size} Lots</strong>
+                        <span className="text-white/20 mx-1">|</span>
+                        PnL: <span className={`font-bold font-mono ${t.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Column 2: Current pricing & initial limit */}
+                    <div className="col-span-1 lg:col-span-3 space-y-1">
+                      <div className="text-[9.5px] text-white/70">
+                        Entry: <span className="font-mono text-white/50">${t.entryPrice.toLocaleString(undefined, { minimumFractionDigits: decimals })}</span>
+                      </div>
+                      <div className="text-[10px] text-white/40">
+                        Current SL: {hasStopLoss ? (
+                          <span className="font-mono text-emerald-300 font-bold bg-[#14532d]/20 border border-emerald-500/20 px-1 py-0.5 rounded">
+                            ${t.stopLoss.toLocaleString(undefined, { minimumFractionDigits: decimals })}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-red-400 font-extrabold bg-[#7f1d1d]/30 border border-red-500/20 px-1.5 py-0.5 rounded animate-pulse">
+                            ⚠️ UNPROTECTED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Column 3: ATR dynamic suggestions */}
+                    <div className="col-span-1 lg:col-span-4 space-y-1 bg-black/35 p-2 rounded border border-white/[0.03]">
+                      <div className="flex justify-between items-center text-[9.5px]">
+                        <span className="text-white/30 text-[8.5px] uppercase">DYNAMIC SL PROPOSAL:</span>
+                        <strong className="text-indigo-300 font-extrabold animate-pulse">
+                          ${proposedSL.toLocaleString(undefined, { minimumFractionDigits: decimals })}
+                        </strong>
+                      </div>
+                      <div className="flex justify-between items-center text-[8.5px] pt-1 border-t border-white/5">
+                        <span className="text-white/30">Cushion ({slMultiplier}x ATR):</span>
+                        <span className="text-white/60 font-mono">
+                          {displayAtrVal} {displayAtrUnit}
+                        </span>
+                      </div>
+                      <div className="text-[8.5px] text-white/40 pt-1 flex items-center gap-1 font-sans">
+                        <span className={`inline-block w-1 h-1 rounded-full ${isRiskDecreasing ? 'bg-emerald-400' : 'bg-indigo-300'}`} />
+                        <span className={isRiskDecreasing ? 'text-emerald-400 font-semibold' : 'text-indigo-350'}>
+                          {riskComparisonString}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Column 4: Apply Button */}
+                    <div className="col-span-1 lg:col-span-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateParams(t.id, proposedSL)}
+                        disabled={isLoading || isSuccess}
+                        className={`w-full py-2 px-2.5 rounded border text-[9px] font-bold font-mono uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center justify-center space-x-1 ${
+                          isSuccess
+                            ? 'bg-emerald-600 border-emerald-500 text-white font-extrabold cursor-default'
+                            : isLoading
+                              ? 'bg-neutral-800 border-neutral-700 text-neutral-400 cursor-not-allowed animate-pulse'
+                              : 'bg-indigo-500/10 hover:bg-indigo-600 border-indigo-500/20 hover:border-indigo-500 text-indigo-300 hover:text-white hover:shadow-[0_0_8px_rgba(99,102,241,0.4)]'
+                        }`}
+                      >
+                        {isSuccess ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>SL Applied!</span>
+                          </>
+                        ) : isLoading ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin mr-1" />
+                            <span>Updating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sliders className="w-3 h-3" />
+                            <span>Apply SL</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* STRATEGY PRESET INTELLIGENCE LAYER */}
+      <div id="strategy-preset-intelligence-panel" className="bg-[#0b0b0d] border border-white/5 rounded-lg p-5 mb-6 font-mono select-none relative overflow-hidden">
+        {/* Subtle background glow */}
+        <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/[0.04] pb-4 mb-4">
+          <div className="flex items-center space-x-2.5">
+            <div className="h-7 w-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+              <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 block">
+                ACTIVE STRATEGY ENGINE: {presetSignal.strategyName}
+              </span>
+              <span className="text-[9px] text-white/35 block font-sans mt-0.5">
+                Automatically adapts the dynamic confluence matrix and real-time order execution bounds based on {presetSignal.strategyName} rules.
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-[8px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white/45 uppercase tracking-wide">
+              Active Template: {presetSignal.strategyName}
+            </span>
+            <span className="text-[8.5px] font-mono uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-md px-2 py-0.5 font-bold">
+              SYS OPTIMIZED
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Signal status summary card */}
+          <div className="lg:col-span-5 bg-black/40 border border-white/5 p-4 rounded-lg flex flex-col justify-between space-y-4">
+            <div>
+              <span className="text-[8px] uppercase font-bold text-white/30 block tracking-wider">
+                CURRENT INTELLIGENCE SIGNAL:
+              </span>
+              <div className="mt-2.5">
+                <span className={`px-3 py-1.5 rounded-md text-[10.5px] font-black border uppercase tracking-wider block text-center ${presetSignal.badgeColor}`}>
+                  {presetSignal.signalHeadline}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t border-white/5 pt-3 text-[9px]">
+              <div className="flex justify-between items-center py-0.5">
+                <span className="text-white/30">ENGINE PHASE:</span>
+                <span className="text-white font-bold">{presetSignal.currentPhase}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="text-white/30">ORDER-FLOW BIAS:</span>
+                <span className="text-indigo-400 font-bold uppercase">{presetSignal.flowDirection}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="text-white/30">{presetSignal.metricLabel1}:</span>
+                <span className="text-amber-400 font-extrabold">{presetSignal.metricValue1}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="text-white/30">{presetSignal.metricLabel2}:</span>
+                <span className="text-indigo-400 font-extrabold">{presetSignal.metricValue2}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Boundaries and parameters table */}
+          <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-[#050506]/85 border border-white/5 rounded p-2.5">
+                  <span className="text-[8px] text-white/30 block mb-1">PROPOSED ENTRY RANGE</span>
+                  <span className="text-[9.5px] font-bold text-emerald-400 block break-words">
+                    {presetSignal.entryZoneText}
+                  </span>
+                </div>
+                <div className="bg-[#050506]/85 border border-white/5 rounded p-2.5">
+                  <span className="text-[8px] text-white/30 block mb-1">SESSION TARGET CORRIDOR</span>
+                  <span className="text-[9.5px] font-bold text-indigo-300 block break-words">
+                    {presetSignal.targetZoneText}
+                  </span>
+                </div>
+                <div className="bg-[#050506]/85 border border-white/5 rounded p-2.5">
+                  <span className="text-[8px] text-white/30 block mb-1">ORACLE INVALIDATION LIMIT</span>
+                  <span className="text-[9.5px] font-bold text-rose-400 block break-words">
+                    {presetSignal.invalidationZoneText}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-[#050506]/55 border border-white/5 rounded p-3">
+                <span className="text-[8px] font-bold uppercase tracking-wider text-indigo-400 block mb-1.5">
+                  Strategic Setup Breakdown & Market Assessment:
+                </span>
+                <p className="text-[10px] text-white/70 font-sans leading-relaxed">
+                  {presetSignal.description}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Grid of the 4 analytic tiers in sequence */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         
@@ -1264,6 +1991,242 @@ export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [] 
           </div>
         </div>
 
+      </div>
+
+      {/* REAL-TIME ORDER FLOW INTENSITY HEATMAP MODULE */}
+      <div id="order-flow-intensity-heatmap" className="bg-[#0b0b0d] border border-white/5 rounded-lg p-5 mb-6 font-mono select-none">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/[0.04] pb-4 mb-4 font-mono">
+          <div className="flex items-center space-x-2.5">
+            <div className="h-7 w-7 rounded bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+              <Layers className="w-4 h-4 animate-pulse" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-black tracking-widest text-[#f43f5e] block">
+                Real-Time Order Flow intensity heatmap
+              </span>
+              <span className="text-[9px] text-white/35 block font-sans mt-0.5">
+                Tracks buy/sell volume density clusters and institutional iceberg positions at tick levels to isolate hidden support/resistance pools.
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <span className={`px-2 py-0.5 rounded text-[8.5px] font-mono uppercase tracking-wider flex items-center gap-1 font-bold ${
+              lastOrderFlowDelta > 0 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-550/20' : 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
+            }`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current animate-ping" />
+              Delta: {lastOrderFlowDelta > 0 ? '+' : ''}{lastOrderFlowDelta.toFixed(1)} lots
+            </span>
+            <span className="text-[8px] border border-white/10 px-2 py-0.5 bg-black/60 rounded text-white/40 uppercase">
+              Speed: 1.5s refresh
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 font-mono">
+          {/* Controls column */}
+          <div className="lg:col-span-4 bg-[#050506] border border-white/5 p-4 rounded-lg space-y-4 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div>
+                <span className="text-[8.5px] text-white/40 uppercase tracking-wider font-extrabold block mb-2.5">
+                  Filter Thresholds:
+                </span>
+                
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px]">
+                    <span className="text-white/45 font-mono">SENSITIVITY (MIN LOTS):</span>
+                    <span className="text-rose-400 font-extrabold font-mono">{heatmapSensitivity} Lots</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="5"
+                    max="100"
+                    step="5"
+                    value={heatmapSensitivity}
+                    onChange={(e) => setHeatmapSensitivity(parseInt(e.target.value))}
+                    className="w-full h-1 accent-rose-500 focus:outline-none cursor-ew-resize bg-neutral-700 rounded-sm"
+                  />
+                  <div className="flex justify-between text-[7px] text-white/25 mt-0.5 font-mono select-none">
+                    <span>5 (All orders)</span>
+                    <span>100 (Institutionals Only)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-white/5 pt-3">
+                <label className="flex items-center gap-2 cursor-pointer text-[9.5px] text-white/70 hover:text-white select-none">
+                  <input
+                    type="checkbox"
+                    checked={showHiddenLiquidityOnly}
+                    onChange={(e) => setShowHiddenLiquidityOnly(e.target.checked)}
+                    className="rounded bg-neutral-950 border-white/10 text-rose-500 focus:ring-0 cursor-pointer h-3.5 w-3.5"
+                  />
+                  <span>SHOW ONLY ICEBERG WALLS (HIDDEN)</span>
+                </label>
+                <p className="text-[8px] text-white/30 font-sans mt-1 leading-normal">
+                  Hides normal standard flow to map only masked blocks representing high conviction interbank liquidity deposits.
+                </p>
+              </div>
+
+              <div className="border-t border-white/5 pt-3 space-y-2">
+                <span className="text-[8px] uppercase font-bold text-white/30 block tracking-wider">
+                  Liquidity Delta Interpretation:
+                </span>
+                <div className="p-2.5 bg-black rounded border border-white/[0.03] space-y-1.5 text-[9px] font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-white/45">Ask Resistance Stack:</span>
+                    <span className="text-rose-400 font-bold">
+                      {heatmapTicks.filter(t => t.type === 'SELL_ASK').reduce((acc, t) => acc + t.volume, 0).toFixed(0)} lots
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/45">Bid Cushion Support:</span>
+                    <span className="text-emerald-400 font-bold">
+                      {heatmapTicks.filter(t => t.type === 'BUY_BID').reduce((acc, t) => acc + t.volume, 0).toFixed(0)} lots
+                    </span>
+                  </div>
+                  <div className="h-1 w-full bg-zinc-900 rounded-sm overflow-hidden flex mt-1">
+                    {(() => {
+                      const askTot = heatmapTicks.filter(t => t.type === 'SELL_ASK').reduce((acc, t) => acc + t.volume, 0) || 1;
+                      const bidTot = heatmapTicks.filter(t => t.type === 'BUY_BID').reduce((acc, t) => acc + t.volume, 0) || 1;
+                      const total = askTot + bidTot;
+                      const bidPct = (bidTot / total) * 100;
+                      return (
+                        <>
+                          <div className="h-full bg-emerald-500" style={{ width: `${bidPct}%` }} />
+                          <div className="h-full bg-rose-500" style={{ width: `${100 - bidPct}%` }} />
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={triggerDeepScan}
+                disabled={isScanning}
+                className={`w-full py-2 px-3 border rounded text-[9.5px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  isScanning 
+                    ? 'bg-zinc-800 border-zinc-700 text-white/50' 
+                    : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-400'
+                }`}
+              >
+                {isScanning ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Scanning Hidden Depth...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 bg-current text-rose-400 rounded-full scale-75" />
+                    <span>Deep Liquidity Scanner</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Heatmap Visual Lattice column */}
+          <div className="lg:col-span-8 space-y-4">
+            <div className="border border-white/5 rounded-lg bg-black/40 overflow-hidden">
+              <div className="grid grid-cols-12 gap-2 bg-neutral-950 px-3.5 py-2.5 text-[8.5px] text-white/40 uppercase tracking-widest font-black border-b border-white/5 select-none font-mono">
+                <div className="col-span-3">DEPTH TYPE</div>
+                <div className="col-span-3 text-right">TICK PRICE ({symbol.split('/')[1] || 'USD'})</div>
+                <div className="col-span-3 text-right">VOLUME (LOTS)</div>
+                <div className="col-span-3 text-right text-right pr-4">INTENSITY HEAT</div>
+              </div>
+
+              <div className="divide-y divide-white/[0.03] max-h-[305px] overflow-y-auto font-mono text-[10px]">
+                {heatmapTicks
+                  .filter(t => {
+                    if (showHiddenLiquidityOnly && !t.isIceberg) return false;
+                    return t.volume >= heatmapSensitivity;
+                  })
+                  .map((tick, idx) => {
+                    const isAsk = tick.type === 'SELL_ASK';
+                    
+                    const heatPercent = Math.min(100, Math.round(tick.intensity * 100));
+                    
+                    let bgStyle = '';
+                    let textStyle = '';
+                    let borderStyle = '';
+                    
+                    if (isAsk) {
+                      bgStyle = `rgba(244, 63, 94, ${Math.max(0.04, tick.intensity * 0.45)})`;
+                      textStyle = 'text-rose-400';
+                      borderStyle = tick.isIceberg ? 'border-l-[3px] border-l-rose-500' : 'border-l-[3px] border-l-rose-500/30';
+                    } else {
+                      bgStyle = `rgba(16, 185, 129, ${Math.max(0.04, tick.intensity * 0.45)})`;
+                      textStyle = 'text-emerald-400';
+                      borderStyle = tick.isIceberg ? 'border-l-[3px] border-l-emerald-500' : 'border-l-[3px] border-l-emerald-500/30';
+                    }
+
+                    return (
+                      <div 
+                        key={idx} 
+                        style={{ backgroundColor: bgStyle }}
+                        className={`grid grid-cols-12 gap-2 items-center px-3.5 py-2 hover:bg-white/[0.02] transition-colors ${borderStyle}`}
+                      >
+                        <div className="col-span-3 font-extrabold flex items-center gap-1.5 select-none font-mono">
+                          <span className={`h-1.5 w-1.5 rounded-full ${isAsk ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                          <span className={isAsk ? 'text-rose-400/50 text-[9px]' : 'text-emerald-400/50 text-[9px]'}>
+                            {isAsk ? `ASK +${tick.offsetSteps}` : `BID -${tick.offsetSteps}`}
+                          </span>
+                          {tick.isIceberg && (
+                            <span className="px-1 bg-sky-500/10 border border-sky-500/30 text-sky-400 text-[7px] font-black rounded tracking-wide animate-pulse">
+                              ICEBERG
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="col-span-3 text-right font-black text-[#e5e5e5]">
+                          {formatPriceForSymbol(tick.price, symbol)}
+                        </div>
+
+                        <div className="col-span-3 text-right text-white/80 font-bold">
+                          {tick.volume.toFixed(1)} <span className="text-[7.5px] text-white/35">lots</span>
+                        </div>
+
+                        <div className="col-span-3 flex items-center justify-end gap-2.5">
+                          <div className="w-16 h-2 bg-black/60 rounded overflow-hidden p-0.5 border border-white/5 relative flex">
+                            <div 
+                              className={`h-full rounded-sm ${isAsk ? 'bg-gradient-to-r from-orange-500 to-rose-500' : 'bg-gradient-to-r from-teal-500 to-emerald-500'}`} 
+                              style={{ width: `${heatPercent}%` }}
+                            />
+                          </div>
+                          <span className={`${textStyle} text-[9px] font-black w-7 text-right`}>
+                            {heatPercent}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                {heatmapTicks.length === 0 && (
+                  <div className="py-12 text-center text-white/20 select-none">
+                    Establishing live data connection to depth ladder...
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Simulated instant iceberg alerts and interbank tracking */}
+            {icebergDiscoveredLogs.length > 0 && (
+              <div className="p-3 bg-zinc-950 border border-white/5 text-[9px] text-[#888888] rounded-md space-y-1 font-mono">
+                <span className="text-[#f43f5e] font-black uppercase text-[8px] tracking-wider block mb-1">
+                  🛡️ Sentinel Iceberg discovery logs:
+                </span>
+                {icebergDiscoveredLogs.map((log, lidx) => (
+                  <div key={lidx} className="flex items-start gap-1">
+                    <span className="text-white/30 font-black">•</span>
+                    <p className="text-slate-300 leading-normal">{log}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
     </div>

@@ -9,7 +9,7 @@ import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'motion/react';
 import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent, MarketSymbol, CorrelationData, getSymbolCorrelations, PriceAlert } from '../types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders, Zap, Server, Magnet, Crosshair, Maximize2, Minimize2, ArrowRightLeft, ArrowRight, ChevronDown, Clock, Type } from 'lucide-react';
+import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders, Zap, Server, Magnet, Crosshair, Maximize2, Minimize2, ArrowRightLeft, ArrowRight, ChevronDown, Clock, Type, Newspaper } from 'lucide-react';
 import DOMPriceLadder from './DOMPriceLadder';
 
 const FRIENDLY_NAMES: Record<string, string> = {
@@ -372,11 +372,15 @@ export default function ChartContainer({
   const processedCandles = useMemo(() => {
     if (!candlesInput || candlesInput.length === 0) return [];
     
+    let result: Candlestick[] = [];
+
     // H4
-    if (selectedTimeframe === 'H4') return candlesInput;
+    if (selectedTimeframe === 'H4') {
+      result = candlesInput.map(c => ({ ...c }));
+    }
     
     // D1: Aggregate every 4 candles into 1 candle to make it feel dense and daily-like
-    if (selectedTimeframe === 'D1') {
+    else if (selectedTimeframe === 'D1') {
       const aggregated: Candlestick[] = [];
       for (let i = 0; i < candlesInput.length; i += 4) {
         const chunk = candlesInput.slice(i, i + 4);
@@ -397,13 +401,13 @@ export default function ChartContainer({
           sma200: chunk[chunk.length - 1].sma200,
         });
       }
-      return aggregated;
+      result = aggregated;
     }
     
     // H1: Subdivide candles visually so they display more ticks/periods (simulated)
-    if (selectedTimeframe === 'H1') {
+    else if (selectedTimeframe === 'H1') {
       const subdivided: Candlestick[] = [];
-      candlesInput.forEach((c, idx) => {
+      candlesInput.forEach((c) => {
         subdivided.push({
           ...c,
           timestamp: c.timestamp,
@@ -411,27 +415,19 @@ export default function ChartContainer({
           high: Math.max(c.open, c.close, (c.open + c.close) / 2),
         });
 
-        // Determine a safe, chronological intermediate timestamp (e.g. 2 hours after the parent)
-        let secondTimestamp = `${c.timestamp}_1h`;
-        const originalDate = new Date(c.timestamp);
-        if (!isNaN(originalDate.getTime())) {
-          const secondDate = new Date(originalDate.getTime() + 2 * 60 * 60 * 1000);
-          secondTimestamp = secondDate.toISOString();
-        }
-
         subdivided.push({
           ...c,
-          timestamp: secondTimestamp,
+          timestamp: c.timestamp,
           open: (c.open + c.close) / 2,
           low: Math.min(c.open, c.close, (c.open + c.close) / 2),
         });
       });
-      return subdivided.slice(-candlesInput.length);
+      result = subdivided.slice(-candlesInput.length);
     }
     
     // M15: Shake prices slightly using a procedural sin pattern representing lower scale turbulence
-    if (selectedTimeframe === 'M15') {
-      return candlesInput.map((c, i) => {
+    else if (selectedTimeframe === 'M15') {
+      result = candlesInput.map((c, i) => {
         const noise = (Math.sin(i) * 0.0004);
         return {
           ...c,
@@ -441,9 +437,31 @@ export default function ChartContainer({
           low: Math.min(c.open, c.close) * (1 - Math.abs(noise)),
         };
       });
+    } else {
+      result = candlesInput.map(c => ({ ...c }));
     }
-    
-    return candlesInput;
+
+    if (result.length === 0) return [];
+
+    // Rewrite timestamps to be aligned perfectly with the active timeframe interval spacing.
+    // This allows the x-axis grid and cursor/RSI overlays to align without distortion or overlap.
+    const lastOriginalCandle = candlesInput[candlesInput.length - 1];
+    const lastTime = new Date(lastOriginalCandle?.timestamp || Date.now()).getTime();
+
+    let intervalMs = 4 * 60 * 60 * 1000; // H4 default
+    if (selectedTimeframe === 'D1') intervalMs = 24 * 60 * 60 * 1000;
+    else if (selectedTimeframe === 'H4') intervalMs = 4 * 60 * 60 * 1000;
+    else if (selectedTimeframe === 'H1') intervalMs = 1 * 60 * 60 * 1000;
+    else if (selectedTimeframe === 'M15') intervalMs = 15 * 60 * 1000;
+
+    return result.map((c, idx) => {
+      const timeOffset = (result.length - 1 - idx) * intervalMs;
+      const computedDate = new Date(lastTime - timeOffset);
+      return {
+        ...c,
+        timestamp: computedDate.toISOString()
+      };
+    });
   }, [candlesInput, selectedTimeframe]);
 
   // All downstream logic relies on candles
@@ -625,6 +643,12 @@ export default function ChartContainer({
   const [cursorTime, setCursorTime] = useState<string | null>(null);
   const [showIndicators, setShowIndicators] = useState(false);
   const [showNewsOverlay, setShowNewsOverlay] = useState(false);
+  const [showHistoricalExecutions, setShowHistoricalExecutions] = useState(true);
+  const [hoveredTrade, setHoveredTrade] = useState<{
+    trade: Trade;
+    x: number;
+    y: number;
+  } | null>(null);
   const [hoveredNews, setHoveredNews] = useState<{
     id: string;
     x: number;
@@ -1098,6 +1122,40 @@ export default function ChartContainer({
       };
     }).filter(item => item.candleIndex !== -1);
   }, [newsEvents, candles, symbol]);
+
+  // Historical trades matched to candlesticks for visual on-chart arrow indicators
+  const tradesWithCandles = useMemo(() => {
+    if (!trades || trades.length === 0 || candles.length === 0) return [];
+
+    const candleIntervalMs = candles.length > 1
+      ? Math.abs(new Date(candles[1].timestamp).getTime() - new Date(candles[0].timestamp).getTime())
+      : 3600000;
+
+    return trades
+      .filter((t) => t.symbol === symbol)
+      .map((t) => {
+        const tradeTime = new Date(t.timestamp).getTime();
+        let bestIndex = -1;
+        let minDiff = Infinity;
+
+        for (let i = 0; i < candles.length; i++) {
+          const candleTime = new Date(candles[i].timestamp).getTime();
+          const diff = Math.abs(tradeTime - candleTime);
+          if (diff < minDiff) {
+            minDiff = diff;
+            bestIndex = i;
+          }
+        }
+
+        const isMatch = bestIndex !== -1 && minDiff <= candleIntervalMs * 4;
+
+        return {
+          trade: t,
+          candleIndex: isMatch ? bestIndex : -1,
+        };
+      })
+      .filter(item => item.candleIndex !== -1);
+  }, [trades, candles, symbol]);
 
   useEffect(() => {
     if (isAlarmEnabled && trendIntensity.percent >= 80) {
@@ -2222,11 +2280,26 @@ export default function ChartContainer({
   const formatIndexTime = (timeStr: string) => {
     try {
       const d = new Date(timeStr);
-      return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${d.getUTCHours()}:00`;
+      const isD1 = selectedTimeframe === 'D1';
+      const datePart = `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+      if (isD1) return datePart;
+      const hourPart = d.getUTCHours().toString().padStart(2, '0');
+      const minutePart = d.getUTCMinutes().toString().padStart(2, '0');
+      return `${datePart} ${hourPart}:${minutePart}`;
     } catch {
       return '';
     }
   };
+
+  const timeframeIntervalMs = useMemo(() => {
+    switch (selectedTimeframe) {
+      case 'D1': return 24 * 60 * 60 * 1000;
+      case 'H4': return 4 * 60 * 60 * 1000;
+      case 'H1': return 1 * 60 * 60 * 1000;
+      case 'M15': return 15 * 60 * 1000;
+      default: return 4 * 60 * 60 * 1000;
+    }
+  }, [selectedTimeframe]);
 
   // Safely extrapolate future timestamps for forecast/shifted bars on the right-hand side of the chart
   const getIndexTimestampAndHour = (idx: number) => {
@@ -2236,8 +2309,8 @@ export default function ChartContainer({
       return { timestamp: c.timestamp, hour: d.getUTCHours() };
     } else if (candles.length > 0) {
       const lastCandle = candles[candles.length - 1];
-      // extrapolate 4 hours per bar
-      const timeDiff = (idx - (candles.length - 1)) * 4 * 60 * 60 * 1000;
+      // extrapolate based on active timeframe interval
+      const timeDiff = (idx - (candles.length - 1)) * timeframeIntervalMs;
       const d = new Date(new Date(lastCandle.timestamp).getTime() + timeDiff);
       return { timestamp: d.toISOString(), hour: d.getUTCHours() };
     }
@@ -2712,7 +2785,7 @@ export default function ChartContainer({
     setIsDragging(false);
   };
 
-  const activeLayersCount = [showFVG, showOB, showIndicators, showNewsOverlay, showLiquidityMap, showVolumeProfile, showTradeStatsOverlay, showCorrelationOverlay, showVWAP, showSessions, showOFI].filter(Boolean).length;
+  const activeLayersCount = [showFVG, showOB, showIndicators, showNewsOverlay, showLiquidityMap, showVolumeProfile, showTradeStatsOverlay, showCorrelationOverlay, showVWAP, showSessions, showOFI, showHistoricalExecutions].filter(Boolean).length;
   const isDrawingActive = isDrawingPriceAlert || isDrawingTrendline || isDrawingAnnotation || !showCrosshairTool || isMagnetActive;
   const activeAlertsCount = smartAlerts.filter(a => a.isActive).length;
 
@@ -3427,6 +3500,20 @@ export default function ChartContainer({
                   </span>
                   <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showIndicators ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-white/30'}`}>
                     {showIndicators ? 'ACTIVE' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setShowHistoricalExecutions(!showHistoricalExecutions)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
+                  title="Toggles historical trade entry/exit execution arrows on chart"
+                >
+                  <span className="flex items-center gap-2 text-white/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${showHistoricalExecutions ? 'bg-indigo-300 shadow-[0_0_6px_#a5b4fc]' : 'bg-transparent border border-white/30'}`} />
+                    Trade Executions (Buy/Sell Arrows)
+                  </span>
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showHistoricalExecutions ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-white/30'}`}>
+                    {showHistoricalExecutions ? 'ACTIVE' : 'OFF'}
                   </span>
                 </button>
 
@@ -4203,14 +4290,28 @@ export default function ChartContainer({
               </g>
             ))}
 
-            {/* Time Grid Lines (every 8 candles, extrapolated safely for shift/forecast bars) */}
+            {/* Time Grid Lines (extrapolated safely for shift/forecast bars) */}
             {(() => {
               const gridLines: React.JSX.Element[] = [];
               if (candles.length === 0) return null;
 
-              // Grid aligns perfectly on multiples of 8 indices
-              const startGridIndex = Math.ceil(startIndex / 8) * 8;
-              for (let idx = startGridIndex; idx <= endIndex; idx += 8) {
+              // Adaptive grid step depending on zoom level to ensure visual clarity and prevent overlapping labels
+              let gridStep = 8;
+              if (actualVisibleCount <= 18) {
+                gridStep = 2;
+              } else if (actualVisibleCount <= 32) {
+                gridStep = 4;
+              } else if (actualVisibleCount <= 60) {
+                gridStep = 8;
+              } else if (actualVisibleCount <= 90) {
+                gridStep = 15;
+              } else {
+                gridStep = 24;
+              }
+
+              // Grid aligns perfectly on multiples of gridStep indices
+              const startGridIndex = Math.ceil(startIndex / gridStep) * gridStep;
+              for (let idx = startGridIndex; idx <= endIndex; idx += gridStep) {
                 const x = getX(idx);
                 if (x < padding.left || x > width - padding.right) continue;
 
@@ -4254,7 +4355,7 @@ export default function ChartContainer({
                           textAnchor="middle"
                           className="fill-white/40 font-mono text-[9px] select-none"
                         >
-                          {formatIndexTime(timestamp).split(' ')[0]} {hour.toString().padStart(2, '0')}:00
+                          {formatIndexTime(timestamp)}
                         </text>
                         {/* Session Dot and Name - perfectly centered with textAnchor="middle" */}
                         <text
@@ -5058,6 +5159,106 @@ export default function ChartContainer({
                       height={height - padding.top - padding.bottom}
                       className="fill-transparent stroke-none cursor-crosshair opacity-0"
                     />
+                  </g>
+                );
+              })}
+
+              {/* Historical Trade Execution Indicator Layer */}
+              {showHistoricalExecutions && tradesWithCandles.map((item, idx) => {
+                const { trade, candleIndex } = item;
+                if (candleIndex < startIndex || candleIndex > endIndex) return null;
+
+                const x = getX(candleIndex);
+                if (x < padding.left || x > width - padding.right) return null;
+
+                const y = getY(trade.entryPrice);
+                const isBuy = trade.side === 'BUY';
+                
+                // Colors match institutional themes: green for Buy, red for Sell
+                const arrowColor = isBuy ? '#10b981' : '#f43f5e';
+                const arrowGlowClass = isBuy 
+                  ? 'drop-shadow-[0_0_6px_rgba(16,185,129,0.7)]' 
+                  : 'drop-shadow-[0_0_6px_rgba(244,63,94,0.7)]';
+
+                // Upward arrow for BUY: apex at (x, y), extends downwards
+                // Downward arrow for SELL: apex at (x, y), extends upwards
+                const arrowPath = isBuy
+                  ? `M ${x} ${y} L ${x - 5} ${y + 9} L ${x - 2} ${y + 9} L ${x - 2} ${y + 16} L ${x + 2} ${y + 16} L ${x + 2} ${y + 9} L ${x + 5} ${y + 9} Z`
+                  : `M ${x} ${y} L ${x - 5} ${y - 9} L ${x - 2} ${y - 9} L ${x - 2} ${y - 16} L ${x + 2} ${y - 16} L ${x + 2} ${y - 9} L ${x + 5} ${y - 9} Z`;
+
+                const labelY = isBuy ? y + 25 : y - 22;
+
+                return (
+                  <g 
+                    key={`chart-trade-${trade.id}-${idx}`} 
+                    className="select-none font-sans cursor-pointer pointer-events-auto transition-all"
+                    onMouseEnter={(e) => {
+                      const svgElement = e.currentTarget.ownerSVGElement;
+                      const svgRect = svgElement?.getBoundingClientRect();
+                      const clientX = e.clientX;
+                      const clientY = e.clientY;
+                      const relativeX = svgRect ? (clientX - svgRect.left) : x;
+                      const relativeY = svgRect ? (clientY - svgRect.top) : y;
+
+                      setHoveredTrade({
+                        trade,
+                        x: relativeX,
+                        y: relativeY,
+                      });
+                    }}
+                    onMouseLeave={() => setHoveredTrade(null)}
+                  >
+                    {/* Glowing highlight anchor circle at entry point */}
+                    <circle 
+                      cx={x} 
+                      cy={y} 
+                      r={4.5} 
+                      fill="transparent" 
+                      stroke={arrowColor} 
+                      strokeWidth={1}
+                      className="animate-pulse"
+                    />
+
+                    {/* Small inner solid point */}
+                    <circle 
+                      cx={x} 
+                      cy={y} 
+                      r={1.8} 
+                      fill={arrowColor} 
+                    />
+
+                    {/* Highly stylized arrow */}
+                    <path
+                      d={arrowPath}
+                      fill={arrowColor}
+                      stroke={isBuy ? '#059669' : '#dc2626'}
+                      strokeWidth={0.8}
+                      className={arrowGlowClass}
+                    />
+
+                    {/* Text Annotation label of execution under/above arrow */}
+                    <rect
+                      x={x - 20}
+                      y={labelY - 5}
+                      width={40}
+                      height={9.5}
+                      rx={1.5}
+                      fill="#0d0d11"
+                      stroke={arrowColor}
+                      strokeWidth={0.4}
+                      opacity={0.85}
+                    />
+                    <text
+                      x={x}
+                      y={labelY + 2.5}
+                      fill={arrowColor}
+                      fontSize="6.5px"
+                      fontWeight="bold"
+                      textAnchor="middle"
+                      className="font-mono tracking-tighter"
+                    >
+                      {trade.side} {trade.size}
+                    </text>
                   </g>
                 );
               })}
@@ -6490,6 +6691,75 @@ export default function ChartContainer({
                     {hoveredNews.trend}
                   </span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Floated Visual Trade Execution Tooltip */}
+          {hoveredTrade && (
+            <div 
+              className={`absolute bg-[#0c0c0e]/95 border ${
+                hoveredTrade.trade.side === 'BUY' 
+                  ? 'border-emerald-500/50 border-l-3 border-l-emerald-500' 
+                  : 'border-rose-500/50 border-l-3 border-l-rose-500'
+              } p-3 rounded-lg shadow-[0_16px_36px_rgba(0,0,0,0.95)] z-[110] font-mono text-[10.5px] text-white select-none pointer-events-none w-[240px]`}
+              style={{ 
+                left: `${Math.min(hoveredTrade.x + 10, width - 260)}px`, 
+                top: `${Math.max(hoveredTrade.y - 120, 10)}px` 
+              }}
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5 font-sans">
+                <div className="flex items-center gap-1.5 font-sans">
+                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                    hoveredTrade.trade.side === 'BUY' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                  }`}>
+                    {hoveredTrade.trade.side}
+                  </span>
+                  <span className="font-extrabold text-white/90 font-sans">{hoveredTrade.trade.symbol}</span>
+                </div>
+                <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                  hoveredTrade.trade.status === 'OPEN' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-neutral-800 text-neutral-400 border border-transparent'
+                }`}>
+                  {hoveredTrade.trade.status}
+                </span>
+              </div>
+              
+              <div className="font-sans font-extrabold text-white/95 text-xs mb-2 flex items-center justify-between">
+                <span>Execution Size:</span>
+                <span className="text-white font-mono">{hoveredTrade.trade.size} Lots</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 bg-[#050505] p-1.5 rounded border border-white/5 mb-2.5 text-center text-[9px]">
+                <div>
+                  <span className="text-white/30 block text-[7.5px] uppercase font-bold font-sans">Entry Price</span>
+                  <span className="font-bold text-white/90">${hoveredTrade.trade.entryPrice.toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5)}</span>
+                </div>
+                <div>
+                  <span className="text-white/30 block text-[7.5px] uppercase font-bold font-sans">Exit Status PnL</span>
+                  <span className={`font-bold font-mono ${hoveredTrade.trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {hoveredTrade.trade.pnl >= 0 ? '+' : ''}${hoveredTrade.trade.pnl.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Technical Confluences / Details */}
+              <div className="pt-1.5 border-t border-white/10 text-[9px]">
+                <div className="text-indigo-400 font-extrabold uppercase text-[8px] tracking-wider mb-1 flex items-center gap-1 font-sans">
+                  <span>🔒</span> INSTITUTIONAL TRADE SPECS
+                </div>
+                <div className="flex items-center justify-between text-[11px] py-0.5">
+                  <span className="text-white/50 font-sans font-medium">SL Limit:</span>
+                  <span className="text-rose-300 font-mono">${hoveredTrade.trade.stopLoss > 0 ? hoveredTrade.trade.stopLoss.toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5) : 'None'}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] py-0.5">
+                  <span className="text-white/50 font-sans font-medium">TP Limit:</span>
+                  <span className="text-emerald-300 font-mono">${hoveredTrade.trade.takeProfit > 0 ? hoveredTrade.trade.takeProfit.toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5) : 'None'}</span>
+                </div>
+                {hoveredTrade.trade.reason && (
+                  <div className="mt-1.5 text-[8.5px] text-white/60 font-sans leading-relaxed border-t border-white/[0.03] pt-1">
+                    <strong className="text-indigo-300 font-sans">Rationale:</strong> {hoveredTrade.trade.reason}
+                  </div>
+                )}
               </div>
             </div>
           )}

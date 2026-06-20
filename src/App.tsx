@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { jsPDF } from 'jspdf';
 import { MarketSymbol, Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, OrderBook, NewsEvent, Trade, PriceAlert } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import ChartContainer from './components/ChartContainer';
@@ -90,7 +91,8 @@ import {
   Plus,
   Sliders,
   Newspaper,
-  Sparkles
+  Sparkles,
+  BarChart3
 } from 'lucide-react';
 
 const TerminalWorkspaceLoader = () => (
@@ -195,8 +197,10 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'INTELLIGENCE' | 'EXECUTION' | 'RISK' | 'RESEARCH' | 'SETTINGS' | 'NEWS' | 'COPILOT'>('INTELLIGENCE');
+  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'INTELLIGENCE' | 'EXECUTION' | 'RISK' | 'RESEARCH' | 'SETTINGS' | 'NEWS' | 'COPILOT' | 'ANALYTICS'>('INTELLIGENCE');
   const [researchSubTab, setResearchSubTab] = useState<'REPLAY' | 'LEDGER' | 'RISK_EXPOSURE'>('REPLAY');
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'PERFORMANCE' | 'STRATEGIES' | 'CORRELATION_SENTIMENT' | 'INSTITUTIONAL'>('PERFORMANCE');
+  const [analyticsCorrelationTab, setAnalyticsCorrelationTab] = useState<'CROSS_ASSET' | 'PORTFOLIO_CLUSTERS'>('CROSS_ASSET');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isChartExpanded, setIsChartExpanded] = useState(true);
@@ -409,6 +413,13 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
   const [isCompactPositions, setIsCompactPositions] = useState<boolean>(false);
   const [showSessionPerformance, setShowSessionPerformance] = useState<boolean>(true);
   const [showPriceAlertsPanel, setShowPriceAlertsPanel] = useState<boolean>(false);
+  const [showBulkAdjustPanel, setShowBulkAdjustPanel] = useState<boolean>(false);
+  const [bulkAdjustTarget, setBulkAdjustTarget] = useState<'SL' | 'TP' | 'BOTH'>('SL');
+  const [bulkAdjustType, setBulkAdjustType] = useState<'PERCENT' | 'POINTS'>('PERCENT');
+  const [bulkAdjustValue, setBulkAdjustValue] = useState<string>('1.5');
+  const [bulkIsSubmitting, setBulkIsSubmitting] = useState<boolean>(false);
+  const [bulkSuccessMessage, setBulkSuccessMessage] = useState<string>('');
+  const [bulkErrorMessage, setBulkErrorMessage] = useState<string>('');
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(() => new Date());
   const [secondsSinceSync, setSecondsSinceSync] = useState<number>(0);
 
@@ -674,6 +685,267 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
     };
   }, [sessionTrades]);
 
+  const handleDownloadSessionPDF = () => {
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      // Dark header block (RGB(10, 10, 12)) for professional cyberpunk-ish branding
+      doc.setFillColor(10, 10, 12);
+      doc.rect(10, 10, 190, 30, 'F');
+      
+      // Top accent bar in Indigo (RGB(99, 102, 241))
+      doc.setFillColor(99, 102, 241);
+      doc.rect(10, 10, 190, 1.5, 'F');
+
+      // Title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(255, 255, 255);
+      doc.text('MTXQUANT TERMINAL', 15, 21);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(129, 140, 248); // indigo-400
+      doc.text('QUANTITATIVE SESSION INTEGRITY AUDIT', 15, 28);
+
+      // Metadata right block
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(156, 163, 175); // gray-400
+      doc.text(`GENERATED: ${new Date().toLocaleString()}`, 132, 21);
+      doc.text(`SESSION START: ${new Date(sessionStartTime.current).toLocaleString()}`, 132, 26);
+      doc.text('STATUS CODE: SYS_VALIDATED', 132, 31);
+
+      // Spacer
+      let currentY = 46;
+
+      // Stats Area background
+      doc.setFillColor(248, 250, 252); // extremely light blue-slate
+      doc.rect(10, currentY, 190, 26, 'F');
+      doc.setDrawColor(226, 232, 240); // borders
+      doc.rect(10, currentY, 190, 26, 'S');
+
+      // Col 1: active duration
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105); // slate-600
+      doc.text('ACTIVE DURATION', 15, currentY + 7);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.text(formatSessionTime(sessionSeconds), 15, currentY + 17);
+
+      // Col 2: session net pnl
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text('SESSION NET PNL', 58, currentY + 7);
+      
+      const pnlNum = sessionStats.totalPnL;
+      const formattedPnL = (pnlNum >= 0 ? '+' : '') + '$' + pnlNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      if (pnlNum >= 0) {
+        doc.setTextColor(16, 185, 129); // emerald
+      } else {
+        doc.setTextColor(244, 63, 94); // rose
+      }
+      doc.text(formattedPnL, 58, currentY + 17);
+
+      // Col 3: activity counts
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text('SESSION ACTIVITY', 110, currentY + 7);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${sessionStats.total} Trades`, 110, currentY + 17);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`(${sessionStats.openCount} Open / ${sessionStats.closedCount} Closed)`, 110, currentY + 22);
+
+      // Col 4: win rate
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text('SESSION WIN RATE', 160, currentY + 7);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${sessionStats.winRate.toFixed(1)}%`, 160, currentY + 17);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`(${sessionStats.winsCount}W - ${sessionStats.lossesCount}L)`, 160, currentY + 22);
+
+      currentY += 32;
+
+      // trading session guard feedback
+      doc.setFillColor(240, 244, 255); // light-indigo tint
+      doc.rect(10, currentY, 190, 20, 'F');
+      doc.setDrawColor(224, 231, 255);
+      doc.rect(10, currentY, 190, 20, 'S');
+
+      // Feedback title and content
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(67, 56, 202); // indigo-700
+      doc.text('TRADING SESSION GUARD ASSESSMENT ADVICE:', 15, currentY + 6);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(51, 65, 85); // slate-700
+      const adviceText = "To maintain top consistency, professional traders cap session lengths to prevent cognitive fatigue and over-trading. Always filter noise using specific strategy profiles (e.g., Optimal Trade Entry or Power-of-Three AMD) and avoid emotional over-exposure.";
+      // text wrapping
+      const splitAdvice = doc.splitTextToSize(adviceText, 180);
+      doc.text(splitAdvice, 15, currentY + 11);
+
+      currentY += 28;
+
+      // Table Title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`TRADES RECORDED THIS SESSION (${sessionTrades.length})`, 10, currentY);
+
+      currentY += 4;
+
+      // Table Header Block
+      doc.setFillColor(30, 41, 59); // dark slate
+      doc.rect(10, currentY, 190, 8, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.text('SYMBOL', 13, currentY + 5.5);
+      doc.text('SIDE', 38, currentY + 5.5);
+      doc.text('ENTRY PRICE', 63, currentY + 5.5);
+      doc.text('EXIT / CURR PRICE', 98, currentY + 5.5);
+      doc.text('SIZE (UNITS)', 138, currentY + 5.5);
+      doc.text('STATUS', 161, currentY + 5.5);
+      doc.text('PNL', 183, currentY + 5.5);
+
+      currentY += 8;
+
+      if (sessionTrades.length === 0) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8.5);
+        doc.setTextColor(148, 163, 184); // slate-400
+        doc.text('No trades were opened or closed during this live trading session.', 15, currentY + 10);
+      } else {
+        sessionTrades.slice().reverse().forEach((trade, index) => {
+          // Check pagination boundaries: page heights is 297mm.
+          // If currentY is going past 270, we transition to a new page
+          if (currentY > 270) {
+            doc.addPage();
+            currentY = 15;
+
+            // Re-render table headers
+            doc.setFillColor(30, 41, 59);
+            doc.rect(10, currentY, 190, 8, 'F');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.setTextColor(255, 255, 255);
+            doc.text('SYMBOL', 13, currentY + 5.5);
+            doc.text('SIDE', 38, currentY + 5.5);
+            doc.text('ENTRY PRICE', 63, currentY + 5.5);
+            doc.text('EXIT / CURR PRICE', 98, currentY + 5.5);
+            doc.text('SIZE (UNITS)', 138, currentY + 5.5);
+            doc.text('STATUS', 161, currentY + 5.5);
+            doc.text('PNL', 183, currentY + 5.5);
+
+            currentY += 8;
+          }
+
+          // Alternating row style
+          if (index % 2 === 0) {
+            doc.setFillColor(248, 250, 252); // soft slate alternate grid rows
+            doc.rect(10, currentY - 4, 190, 6, 'F');
+          }
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          doc.setTextColor(30, 41, 59);
+
+          // Symbol
+          doc.setFont('helvetica', 'bold');
+          doc.text(trade.symbol, 13, currentY);
+
+          // Side
+          doc.setFont('helvetica', 'bold');
+          if (trade.side === 'BUY') {
+            doc.setTextColor(16, 185, 129); // emerald
+          } else {
+            doc.setTextColor(244, 63, 94); // rose
+          }
+          doc.text(trade.side, 38, currentY);
+
+          // Prices
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(30, 41, 59);
+          doc.text(trade.entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }), 63, currentY);
+
+          const exitVal = trade.status === 'CLOSED' && trade.exitPrice
+            ? trade.exitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+            : 'Running...';
+          doc.text(exitVal, 98, currentY);
+
+          // Size
+          doc.text(trade.size.toLocaleString(undefined, { maximumFractionDigits: 3 }), 138, currentY);
+
+          // Status
+          doc.setFont('helvetica', 'bold');
+          if (trade.status === 'OPEN') {
+            doc.setTextColor(79, 70, 229); // indigo
+          } else {
+            doc.setTextColor(100, 116, 139); // slate-500
+          }
+          doc.text(trade.status, 161, currentY);
+
+          // PnL
+          doc.setFont('helvetica', 'bold');
+          if (trade.pnl >= 0) {
+            doc.setTextColor(16, 185, 129);
+            doc.text(`+$${trade.pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 183, currentY);
+          } else {
+            doc.setTextColor(244, 63, 94);
+            doc.text(`-$${Math.abs(trade.pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 183, currentY);
+          }
+
+          currentY += 6;
+        });
+      }
+
+      // Pagination indicators and Watermark on all pages
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(6.5);
+        doc.setTextColor(148, 163, 184); // slate-400
+        
+        // Solid line for footer spacer
+        doc.setDrawColor(241, 245, 249);
+        doc.line(10, 284, 200, 284);
+        
+        doc.text(`MTXquant Session Audit Ledger • Certified Performance Record • Page ${i} of ${totalPages}`, 10, 288);
+        doc.text('Sovereign node validation protocol MTXQUANT • Live performance log audit.', 130, 288);
+      }
+
+      // Trigger automatic save / download
+      doc.save(`MTXquant-SessionSummary-${Date.now()}.pdf`);
+    } catch (e) {
+      console.error("Failed to generate and download session pdf: ", e);
+    }
+  };
+
   const formatOpenDuration = (openedStr: string) => {
     try {
       const start = new Date(openedStr).getTime();
@@ -901,6 +1173,90 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       }
     } catch (err) {
       console.error('Error updating trade parameters:', err);
+    }
+  };
+
+  const handleApplyBulkAdjust = async () => {
+    const valueNum = parseFloat(bulkAdjustValue);
+    if (isNaN(valueNum) || valueNum <= 0) {
+      setBulkErrorMessage('Please enter a valid positive numeric distance.');
+      return;
+    }
+
+    setBulkIsSubmitting(true);
+    setBulkErrorMessage('');
+    setBulkSuccessMessage('');
+
+    try {
+      const targets = sortedActivePositions;
+      if (targets.length === 0) {
+        setBulkErrorMessage('No active visible positions found matching current filter overlay.');
+        setBulkIsSubmitting(false);
+        return;
+      }
+
+      // Loop over targets
+      const updates = targets.map(async (trade) => {
+        const decimals = trade.symbol === 'USD/JPY' || trade.symbol === 'GOLD/USD' ? 2 : trade.symbol === 'BTC/USDT' ? 1 : 5;
+        let distance = 0;
+
+        if (bulkAdjustType === 'PERCENT') {
+          distance = trade.entryPrice * (valueNum / 100);
+        } else {
+          // POINTS / pips
+          // We define appropriate points scale per symbol
+          let multiplier = 0.0001; // default forex
+          if (trade.symbol === 'USD/JPY') multiplier = 0.01;
+          else if (['BTC/USDT', 'GOLD/USD', 'SILVER/USD', 'ETH/USDT', 'SOL/USDT', 'US30', 'NAS100', 'SPX500', 'GER40'].includes(trade.symbol)) {
+            multiplier = 1.0;
+          }
+          distance = valueNum * multiplier;
+        }
+
+        const params: Partial<Trade> = {};
+
+        if (bulkAdjustTarget === 'SL' || bulkAdjustTarget === 'BOTH') {
+          params.stopLoss = trade.side === 'BUY' 
+            ? parseFloat((trade.entryPrice - distance).toFixed(decimals))
+            : parseFloat((trade.entryPrice + distance).toFixed(decimals));
+        }
+
+        if (bulkAdjustTarget === 'TP' || bulkAdjustTarget === 'BOTH') {
+          params.takeProfit = trade.side === 'BUY'
+            ? parseFloat((trade.entryPrice + distance).toFixed(decimals))
+            : parseFloat((trade.entryPrice - distance).toFixed(decimals));
+        }
+
+        // Call individual update API
+        const response = await fetch(`/api/trades/${trade.id}/update-params`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params),
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to update trade ID: ${trade.id}`);
+        }
+        return response;
+      });
+
+      await Promise.all(updates);
+      
+      // Refresh market data / positions
+      fetchMarketData();
+      
+      setBulkSuccessMessage(`Succeeded bulk altering ${targets.length} visibility positions!`);
+      
+      const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
+      setMqlConsoleLogs(prev => [...prev, `${timeStr}.295 [BULK ADJUSTED] Altered ${targets.length} visible coexposures. Target: ${bulkAdjustTarget}, Shift: ${bulkAdjustValue}${bulkAdjustType === 'PERCENT' ? '%' : ' points'}.`].slice(-150));
+
+      setTimeout(() => {
+        setBulkSuccessMessage('');
+      }, 4500);
+    } catch (err: any) {
+      console.error('Error during bulk adjustment:', err);
+      setBulkErrorMessage(`Failed bulk update: ${err.message || 'unknown error'}`);
+    } finally {
+      setBulkIsSubmitting(false);
     }
   };
 
@@ -1489,6 +1845,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 { id: 'DASHBOARD', label: 'Dashboard', icon: Layers },
                 { id: 'EXECUTION', label: 'Execution', icon: Activity },
                 { id: 'RISK', label: 'Risk Desk', icon: ShieldAlert },
+                { id: 'ANALYTICS', label: 'Analytics', icon: BarChart3 },
                 { id: 'NEWS', label: 'News Desk', icon: Newspaper },
                 { id: 'RESEARCH', label: 'Research', icon: Award },
                 { id: 'SETTINGS', label: 'Settings', icon: Settings }
@@ -2132,6 +2489,21 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                             )}
                             <span>{isCompactPositions ? 'Compact On' : 'Compact'}</span>
                           </button>
+
+                          {/* Bulk Adjust SL/TP Action */}
+                          <button
+                            id="btn-toggle-bulk-adjust-sltp"
+                            onClick={() => setShowBulkAdjustPanel(!showBulkAdjustPanel)}
+                            className={`px-2 py-0.5 border rounded transition-all text-[9.5px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
+                              showBulkAdjustPanel
+                                ? 'bg-indigo-500/10 border-indigo-500/35 text-indigo-300 font-extrabold shadow-[0_0_8px_rgba(99,102,241,0.2)]'
+                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
+                            }`}
+                            title="Bulk Adjust Stop Loss & Take Profit across visible positions"
+                          >
+                            <Sliders className={`w-3 h-3 ${showBulkAdjustPanel ? 'text-indigo-300 animate-pulse' : 'text-indigo-400'}`} />
+                            <span>{showBulkAdjustPanel ? 'Bulk Adjust On' : 'Bulk Adjust SL/TP'}</span>
+                          </button>
                         </div>
 
                                          {/* Highly tactual Sort & Dropdown Filter Selection */}
@@ -2488,6 +2860,210 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                         </div>
                       )}
 
+                      {/* Bulk Adjust SL/TP Sub-panel */}
+                      {showBulkAdjustPanel && (
+                        <div id="bulk-adjust-sltp-subpanel" className="mb-4 p-4 bg-[#0d0d11] border border-indigo-500/15 rounded-lg text-xs font-mono animate-fade-in shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-3">
+                            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap">
+                              <Sliders className="w-3.5 h-3.5 text-indigo-450 shrink-0" />
+                              Bulk Adjust SL/TP Action Desk
+                            </span>
+                            <span className="text-[8px] text-white/30 uppercase">
+                              Applies to {sortedActivePositions.length} currently visible positions
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-black/35 p-3 rounded-md border border-white/5 mb-3">
+                            {/* Action Target Selector */}
+                            <div className="sm:col-span-4">
+                              <label className="block text-[8px] text-white/35 uppercase mb-1">Target parameter</label>
+                              <div className="flex bg-[#121217] p-0.5 rounded border border-white/10">
+                                <button
+                                  type="button"
+                                  onClick={() => setBulkAdjustTarget('SL')}
+                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
+                                    bulkAdjustTarget === 'SL' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
+                                  }`}
+                                >
+                                  SL Only
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setBulkAdjustTarget('TP')}
+                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
+                                    bulkAdjustTarget === 'TP' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
+                                  }`}
+                                >
+                                  TP Only
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setBulkAdjustTarget('BOTH')}
+                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
+                                    bulkAdjustTarget === 'BOTH' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
+                                  }`}
+                                >
+                                  Both
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Offset Type: Percentage or Points */}
+                            <div className="sm:col-span-4">
+                              <label className="block text-[8px] text-white/35 uppercase mb-1">Distance type</label>
+                              <div className="flex bg-[#121217] p-0.5 rounded border border-white/10">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setBulkAdjustType('PERCENT');
+                                    setBulkAdjustValue('1.5');
+                                  }}
+                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
+                                    bulkAdjustType === 'PERCENT' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
+                                  }`}
+                                >
+                                  Percentage (%)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setBulkAdjustType('POINTS');
+                                    setBulkAdjustValue('50');
+                                  }}
+                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
+                                    bulkAdjustType === 'POINTS' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
+                                  }`}
+                                >
+                                  Pips / Points
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Distance value input field */}
+                            <div className="sm:col-span-4">
+                              <label className="block text-[8px] text-white/35 uppercase mb-1">
+                                {bulkAdjustType === 'PERCENT' ? 'Percentage Distance (%)' : 'Offset Pips/USD Points'}
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  placeholder={bulkAdjustType === 'PERCENT' ? 'e.g. 1.5' : 'e.g. 50'}
+                                  value={bulkAdjustValue}
+                                  onChange={(e) => {
+                                    setBulkAdjustValue(e.target.value);
+                                    setBulkErrorMessage('');
+                                  }}
+                                  className="w-full bg-[#121217] border border-white/10 rounded px-2.5 py-1 text-[11px] font-bold text-white outline-none focus:border-indigo-500"
+                                />
+                                {bulkAdjustType === 'PERCENT' && (
+                                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-white/30 font-bold">%</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Preview Section - Shows a breakdown of how the values will change */}
+                          {sortedActivePositions.length > 0 && (
+                            <div className="mb-3.5 bg-black/20 rounded p-2.5 border border-white/[0.04]">
+                              <span className="block text-[8.5px] font-extrabold uppercase text-white/40 mb-2">Simulation of proposed limits:</span>
+                              <div className="space-y-1 max-h-32 overflow-y-auto pr-1 select-none scrollbar-thin">
+                                {sortedActivePositions.map(t => {
+                                  const valNum = parseFloat(bulkAdjustValue) || 0;
+                                  const decimals = t.symbol === 'USD/JPY' || t.symbol === 'GOLD/USD' ? 2 : t.symbol === 'BTC/USDT' ? 1 : 5;
+                                  let dist = 0;
+                                  if (bulkAdjustType === 'PERCENT') {
+                                    dist = t.entryPrice * (valNum / 100);
+                                  } else {
+                                    let mult = 0.0001;
+                                    if (t.symbol === 'USD/JPY') mult = 0.01;
+                                    else if (['BTC/USDT', 'GOLD/USD', 'SILVER/USD', 'ETH/USDT', 'SOL/USDT', 'US30', 'NAS100', 'SPX500', 'GER40'].includes(t.symbol)) {
+                                      mult = 1.0;
+                                    }
+                                    dist = valNum * mult;
+                                  }
+
+                                  const isBuy = t.side === 'BUY';
+                                  const slStr = (bulkAdjustTarget === 'SL' || bulkAdjustTarget === 'BOTH') 
+                                    ? (isBuy ? t.entryPrice - dist : t.entryPrice + dist).toFixed(decimals)
+                                    : t.stopLoss > 0 ? t.stopLoss.toFixed(decimals) : 'None';
+                                  const tpStr = (bulkAdjustTarget === 'TP' || bulkAdjustTarget === 'BOTH')
+                                    ? (isBuy ? t.entryPrice + dist : t.entryPrice - dist).toFixed(decimals)
+                                    : t.takeProfit > 0 ? t.takeProfit.toFixed(decimals) : 'None';
+
+                                  return (
+                                    <div key={`bulk-sim-${t.id}`} className="flex items-center justify-between text-[8.5px] border-b border-white/[0.02] pb-1">
+                                      <div className="flex items-center gap-1.5 font-bold">
+                                        <span className={isBuy ? 'text-emerald-450' : 'text-rose-450'}>{t.side}</span>
+                                        <span className="text-white/80">{t.symbol}</span>
+                                      </div>
+                                      <div className="text-white/40 font-mono">
+                                        Entry: <span className="text-white/60">${t.entryPrice.toFixed(decimals)}</span>
+                                        <span className="mx-1">|</span>
+                                        {bulkAdjustTarget !== 'TP' && (
+                                          <>
+                                            Proposed SL: <strong className="text-rose-450 font-bold">${slStr}</strong>
+                                            {bulkAdjustTarget === 'BOTH' && <span className="mx-1">|</span>}
+                                          </>
+                                        )}
+                                        {bulkAdjustTarget !== 'SL' && (
+                                          <>
+                                            Proposed TP: <strong className="text-emerald-400 font-bold">${tpStr}</strong>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Status and Error Messages */}
+                          {bulkErrorMessage && (
+                            <div className="text-[9px] text-rose-400 font-bold mb-2 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                              {bulkErrorMessage}
+                            </div>
+                          )}
+
+                          {bulkSuccessMessage && (
+                            <div className="text-[9px] text-emerald-400 font-bold mb-2 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              {bulkSuccessMessage}
+                            </div>
+                          )}
+
+                          {/* Submit controls */}
+                          <div className="flex items-center justify-end gap-2 text-[10px] pt-1 border-t border-white/5">
+                            <button
+                              type="button"
+                              onClick={() => setShowBulkAdjustPanel(false)}
+                              className="px-2.5 py-1 text-white/40 hover:text-white/80 transition-colors uppercase cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              disabled={bulkIsSubmitting}
+                              onClick={handleApplyBulkAdjust}
+                              className="px-3.5 py-1 bg-indigo-650 hover:bg-indigo-500 text-white font-black border border-indigo-500/20 hover:border-indigo-400 rounded transition-all text-[9.5px] uppercase cursor-pointer disabled:opacity-50 flex items-center gap-1 animate-pulse"
+                            >
+                              {bulkIsSubmitting ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                  <span>Adjusting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Apply Unified Limits</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Health Status Summary Metrics Banner Line */}
                       {systemDashboardSummary.activeTradesCount > 0 && (
                         <div className="mb-4 py-2 px-3 bg-[#0a0a0c] border border-white/10 rounded flex items-center justify-between text-[10px] font-mono select-none animate-fadeIn">
@@ -2707,6 +3283,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                           symbol={symbol}
                           metrics={metrics}
                           trades={trades}
+                          onUpdateTradeParams={handleUpdateTradeParams}
                         />
                       </div>
                     )}
@@ -3006,6 +3583,129 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 {researchSubTab === 'RISK_EXPOSURE' && (
                   <div className="animate-fadeIn">
                     <RiskExposureJournal trades={trades} />
+                  </div>
+                )}
+
+              </div>
+            ) : activeTab === 'ANALYTICS' ? (
+              <div id="analytics-desk-workspace" className="animate-fadeIn space-y-6">
+                
+                {/* ANALYTICS SUBTAB NAV PANEL */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-[#0a0a0c]/90 border border-white/5 rounded-lg p-4 font-mono">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-500/10 rounded-md border border-indigo-500/20 text-indigo-400">
+                      <BarChart3 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xs font-black uppercase text-white tracking-widest text-[#eeeeee]">QUANTITATIVE ANALYTICS HUB</h2>
+                      <p className="text-[9.5px] text-white/35 font-sans mt-0.5">Centralized high-performance exposure dashboards, correlation matrix, and tactical models</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center bg-[#070709] border border-white/5 rounded-lg p-0.5 gap-1 self-end sm:self-auto overflow-x-auto max-w-full">
+                    {[
+                      { id: 'PERFORMANCE', label: '📊 Portfolio & Equity' },
+                      { id: 'STRATEGIES', label: '⚙️ Tactical Strategies' },
+                      { id: 'CORRELATION_SENTIMENT', label: '🌐 Correlation & Sentiment' },
+                      { id: 'INSTITUTIONAL', label: '🏛️ Institutional Book' }
+                    ].map((st) => {
+                      const active = analyticsSubTab === st.id;
+                      return (
+                        <button
+                          key={st.id}
+                          onClick={() => setAnalyticsSubTab(st.id as any)}
+                          className={`px-3.5 py-2 text-[9.5px] font-bold uppercase rounded-md tracking-wider transition-all cursor-pointer whitespace-nowrap ${
+                            active
+                              ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30 font-black shadow-[0_0_8px_rgba(99,102,241,0.12)]'
+                              : 'text-white/40 hover:text-white/70 border border-transparent'
+                          }`}
+                        >
+                          {st.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {analyticsSubTab === 'PERFORMANCE' && (
+                  <div className="space-y-6 animate-fadeIn">
+                    <React.Suspense fallback={<TerminalWorkspaceLoader />}>
+                      <PerformanceTracker trades={trades} onTradeUpdated={fetchMarketData} />
+                    </React.Suspense>
+                  </div>
+                )}
+
+                {analyticsSubTab === 'STRATEGIES' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fadeIn">
+                    <div className="lg:col-span-12 space-y-6">
+                      <StrategyPerformanceChart />
+                    </div>
+                    <div className="lg:col-span-12">
+                      <BacktestSimulator selectedSymbol={symbol} onSymbolChange={(sym) => setSymbol(sym)} />
+                    </div>
+                  </div>
+                )}
+
+                {analyticsSubTab === 'CORRELATION_SENTIMENT' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fadeIn">
+                    <div className="lg:col-span-7 space-y-4">
+                      {/* Sub-correlation Mode Selector */}
+                      <div className="flex items-center justify-between bg-[#0e0e11]/80 border border-white/5 rounded-lg p-3 font-mono">
+                        <span className="text-[10px] text-white/40 uppercase font-black tracking-wider">Correlation Engine Model:</span>
+                        <div className="flex items-center bg-black border border-white/10 rounded-md p-0.5 gap-1 select-none">
+                          <button
+                            onClick={() => setAnalyticsCorrelationTab('CROSS_ASSET')}
+                            className={`px-3 py-1 text-[9px] font-bold uppercase rounded transition-all cursor-pointer ${
+                              analyticsCorrelationTab === 'CROSS_ASSET'
+                                ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/20 font-black'
+                                : 'text-white/40 hover:text-white/75 border border-transparent'
+                            }`}
+                          >
+                            📈 Cross-Asset Pearson Matrix
+                          </button>
+                          <button
+                            onClick={() => setAnalyticsCorrelationTab('PORTFOLIO_CLUSTERS')}
+                            className={`px-3 py-1 text-[9px] font-bold uppercase rounded transition-all cursor-pointer ${
+                              analyticsCorrelationTab === 'PORTFOLIO_CLUSTERS'
+                                ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/20 font-black'
+                                : 'text-white/40 hover:text-white/75 border border-transparent'
+                            }`}
+                          >
+                            💼 Portfolio Trade Clusters
+                          </button>
+                        </div>
+                      </div>
+
+                      {analyticsCorrelationTab === 'CROSS_ASSET' ? (
+                        <div className="animate-fadeIn">
+                          <CorrelationMatrix />
+                        </div>
+                      ) : (
+                        <div className="animate-fadeIn">
+                          <CorrelationHeatmap trades={trades} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="lg:col-span-5">
+                      <MarketSentimentHeatmap />
+                    </div>
+                  </div>
+                )}
+
+                {analyticsSubTab === 'INSTITUTIONAL' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fadeIn">
+                    <div className="lg:col-span-5 space-y-6">
+                      <InstitutionalSentimentGauge />
+                      {metrics && (
+                        <InstitutionalFlowWidget
+                          symbol={symbol}
+                          candles={candles}
+                          metrics={metrics}
+                        />
+                      )}
+                    </div>
+                    <div className="lg:col-span-7">
+                      <InstitutionalSweepAlert />
+                    </div>
                   </div>
                 )}
 
@@ -3467,12 +4167,22 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 <span className="text-[9px] text-white/25 font-mono">
                   Current Session Start: {new Date(sessionStartTime.current).toLocaleTimeString()}
                 </span>
-                <button
-                  onClick={() => setIsSessionSummaryOpen(false)}
-                  className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-500 hover:scale-[1.02] border border-indigo-500/20 text-white text-xs font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer shadow-lg shadow-indigo-600/10"
-                >
-                  Return to Terminal
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    id="download-session-pdf-btn"
+                    onClick={handleDownloadSessionPDF}
+                    className="px-4 py-2 bg-[#1c1c24] hover:bg-[#252530] border border-white/10 hover:border-white/20 text-[#e6e6e6] text-xs font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-2"
+                  >
+                    <Download className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Download Session PDF</span>
+                  </button>
+                  <button
+                    onClick={() => setIsSessionSummaryOpen(false)}
+                    className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-500 hover:scale-[1.02] border border-indigo-500/20 text-white text-xs font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer shadow-lg shadow-indigo-600/10"
+                  >
+                    Return to Terminal
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -3537,6 +4247,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
           { id: 'DASHBOARD', label: 'Dash', icon: Layers },
           { id: 'EXECUTION', label: 'Exec', icon: Activity },
           { id: 'RISK', label: 'Risk', icon: ShieldAlert },
+          { id: 'ANALYTICS', label: 'Analyt', icon: BarChart3 },
           { id: 'NEWS', label: 'News', icon: Newspaper },
           { id: 'RESEARCH', label: 'Research', icon: Award },
           { id: 'SETTINGS', label: 'Settings', icon: Settings }
@@ -3606,6 +4317,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                     { id: 'DASHBOARD', label: 'General Dashboard', icon: Layers, desc: 'Portfolio PnL & Health' },
                     { id: 'EXECUTION', label: 'Execution Terminal', icon: Activity, desc: 'Manual & EA Order Panel' },
                     { id: 'RISK', label: 'Risk Desk Management', icon: ShieldAlert, desc: 'Leverage, Limits & Heatmap' },
+                    { id: 'ANALYTICS', label: 'Analytics Workspace', icon: BarChart3, desc: 'Multi-indicator correlation, tactical & allocation curves' },
                     { id: 'NEWS', label: 'Dedicated News Desk', icon: Newspaper, desc: 'External feeds & global risk announcements' },
                     { id: 'RESEARCH', label: 'Research & Calendar', icon: Award, desc: 'Economic events & insights' },
                     { id: 'SETTINGS', label: 'System Settings', icon: Settings, desc: 'API, alerts & notification settings' }

@@ -8,6 +8,8 @@ import { Trade, MarketSymbol } from '../types';
 import { 
   ShieldCheck, 
   ShieldAlert, 
+  ShieldX,
+  Zap,
   Activity, 
   PieChart as PieIcon, 
   Flame, 
@@ -225,6 +227,28 @@ export default function RiskDashboard({
     return 1000; // default $1000 profit target
   });
 
+  const [maxDailyDrawdownLimit, setMaxDailyDrawdownLimit] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('apex_max_daily_drawdown_limit');
+      if (saved !== null) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    } catch {}
+    return 500; // default $500 max daily drawdown limit (5% of 10k baseline)
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_max_daily_drawdown_limit', maxDailyDrawdownLimit.toString());
+    } catch (e) {
+      console.error('Error saving max daily drawdown limit:', e);
+    }
+  }, [maxDailyDrawdownLimit]);
+
+  const [isLiquidatingWorst, setIsLiquidatingWorst] = useState<boolean>(false);
+  const [liquidationLog, setLiquidationLog] = useState<string | null>(null);
+
   const [notificationPermissionGranted, setNotificationPermissionGranted] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       return Notification.permission === 'granted';
@@ -369,6 +393,62 @@ export default function RiskDashboard({
     const openPnl = openTrades.reduce((acc, t) => acc + t.pnl, 0);
     return closedPnl + openPnl;
   }, [trades, openTrades]);
+
+  // Drawdown Sentinel calculations
+  const drawdownSentinelMetrics = useMemo(() => {
+    const activeOpenLosses = openTrades.reduce((acc, t) => acc + (t.pnl < 0 ? Math.abs(t.pnl) : 0), 0);
+    const closedLossesOnly = trades.filter(t => t.status === 'CLOSED' && t.pnl < 0).reduce((acc, t) => acc + Math.abs(t.pnl), 0);
+    
+    const sortedCompleted = [...trades]
+      .filter(t => t.status === 'CLOSED')
+      .sort((a,b) => {
+        const tA = new Date(a.exitTimestamp || a.timestamp).getTime();
+        const tB = new Date(b.exitTimestamp || b.timestamp).getTime();
+        return tA - tB;
+      });
+
+    let currentBalance = 10000;
+    let peakBalanceToday = 10000;
+    let worstDrawdownUSD = 0;
+
+    sortedCompleted.forEach((trade) => {
+      currentBalance += trade.pnl;
+      if (currentBalance > peakBalanceToday) {
+        peakBalanceToday = currentBalance;
+      }
+      const dd = peakBalanceToday - currentBalance;
+      if (dd > worstDrawdownUSD) {
+        worstDrawdownUSD = dd;
+      }
+    });
+
+    const floatingPnl = openTrades.reduce((acc, t) => acc + t.pnl, 0);
+    const currentEquity = currentBalance + floatingPnl;
+    const peakEquityTotal = Math.max(peakBalanceToday, currentBalance);
+    const currentIntradayDrawdown = Math.max(0, peakEquityTotal - currentEquity);
+
+    const actualDrawdown = Math.max(currentIntradayDrawdown, Math.max(0, -dailyProfitToday));
+    
+    const maxDrawdown = maxDailyDrawdownLimit;
+    const remainingBudget = Math.max(0, maxDrawdown - actualDrawdown);
+    const distanceToLimitPercent = maxDrawdown > 0 ? (remainingBudget / maxDrawdown) * 105 : 100;
+    const clampedDistancePercent = Math.min(100, Math.max(0, distanceToLimitPercent));
+    
+    const riskStatus = 
+      clampedDistancePercent <= 0 ? 'BREACHED' :
+      clampedDistancePercent <= 25 ? 'CRITICAL_BUFFER' :
+      clampedDistancePercent <= 60 ? 'GUARD_WARNING' :
+      'OPTIMAL_SHIELD';
+
+    return {
+      actualDrawdown,
+      remainingBudget,
+      clampedDistancePercent,
+      riskStatus,
+      peakEquityTotal,
+      currentEquity
+    };
+  }, [trades, openTrades, dailyProfitToday, maxDailyDrawdownLimit]);
 
   useEffect(() => {
     if (dailyProfitToday >= dailyProfitTarget && dailyProfitTarget > 0) {
@@ -966,6 +1046,75 @@ export default function RiskDashboard({
     const timer = setTimeout(() => setAllocationPulse(false), 900);
     return () => clearTimeout(timer);
   }, [totalExposureSum]);
+
+  const worstPerformers = useMemo(() => {
+    return [...openTrades]
+      .filter((t) => t.pnl < 0)
+      .sort((a,b) => a.pnl - b.pnl); // Most negative floating PnL first
+  }, [openTrades]);
+
+  const handleLiquidateWorstPerformers = async () => {
+    if (worstPerformers.length === 0) return;
+    setIsLiquidatingWorst(true);
+    setLiquidationLog('Engaging Sentinel Automated Interceptor...');
+
+    // Select the top 1 or 2 worst performing positions contributing most to session volatility
+    const targetToLiquidate = worstPerformers.slice(0, 2);
+    
+    let liquidatedCount = 0;
+    for (const trade of targetToLiquidate) {
+      try {
+        const res = await fetch(`/api/trades/${trade.id}/close`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        if (res.ok) {
+          liquidatedCount++;
+        }
+      } catch (e) {
+        console.error('Error closing trade in liquidation trigger:', e);
+      }
+    }
+
+    setLiquidationLog(`Successfully executed Sentinel liquidation of ${liquidatedCount} worst performing assets.`);
+    setIsLiquidatingWorst(false);
+    if (onRefreshTrades) {
+      onRefreshTrades();
+    }
+    setTimeout(() => {
+      setLiquidationLog(null);
+    }, 4000);
+  };
+
+  const handleLiquidateSinglePosition = async (tradeId: string) => {
+    setIsLiquidatingWorst(true);
+    setLiquidationLog(`Liquidating specific volatility target...`);
+    try {
+      const res = await fetch(`/api/trades/${tradeId}/close`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      if (res.ok) {
+        setLiquidationLog('Position liquidated successfully.');
+      } else {
+        setLiquidationLog('Gateway returned an error executing order close.');
+      }
+    } catch (e) {
+      console.error('Error closing specific trade in sentinel:', e);
+      setLiquidationLog('Failed to connect to liquidation gateway.');
+    }
+    setIsLiquidatingWorst(false);
+    if (onRefreshTrades) {
+      onRefreshTrades();
+    }
+    setTimeout(() => {
+      setLiquidationLog(null);
+    }, 4000);
+  };
 
   const downloadCSVReport = () => {
     const lines = [
@@ -2274,6 +2423,264 @@ export default function RiskDashboard({
                   >
                     +
                   </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* DRAWDOWN SENTINEL MODULE */}
+          <div className="bg-[#0a0a0b] border border-rose-500/15 rounded-lg p-5" id="drawdown-sentinel-module">
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-3.5 mb-4 gap-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-1.5 bg-rose-500/10 rounded border border-rose-500/20 text-rose-400">
+                  <ShieldAlert className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-white font-mono flex items-center gap-1.5">
+                    Drawdown Sentinel Compliance Desk
+                    <RiskTooltip 
+                      title="Drawdown Sentinel" 
+                      description="Monitors session equity peak degradation and handles automatic liquidations when current floating losses approach maximum daily limits to preserve terminal buffer." 
+                      formula="Distance % = Max(0, Max Drawdown Limit - Current Intraday Drawdown) / Max Drawdown Limit"
+                      align="right"
+                    />
+                  </h3>
+                  <span className="text-[9px] text-[#888888] font-mono uppercase block mt-0.5">
+                    Fiduciary Interceptor & Downside Guard
+                  </span>
+                </div>
+              </div>
+
+              {/* Real-time Sentinel Status Pill */}
+              <div className="flex items-center gap-1.5">
+                {drawdownSentinelMetrics.riskStatus === 'BREACHED' && (
+                  <span className="px-2.5 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-[9.5px] text-rose-400 font-mono font-black animate-pulse flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                    🚨 SENTINEL BREACHED
+                  </span>
+                )}
+                {drawdownSentinelMetrics.riskStatus === 'CRITICAL_BUFFER' && (
+                  <span className="px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-[9.5px] text-amber-550 font-mono font-bold flex items-center gap-1.5 animate-pulse">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    ⚠️ CRITICAL SHIELD BUFFER
+                  </span>
+                )}
+                {drawdownSentinelMetrics.riskStatus === 'GUARD_WARNING' && (
+                  <span className="px-2.5 py-1 rounded bg-yellow-500/5 border border-yellow-500/20 text-[9.5px] text-yellow-400 font-mono font-bold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                    🛡️ GUARD ACTIVE
+                  </span>
+                )}
+                {drawdownSentinelMetrics.riskStatus === 'OPTIMAL_SHIELD' && (
+                  <span className="px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9.5px] text-emerald-400 font-mono font-bold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-550"></span>
+                    ✓ OPTIMAL SAFE SHIELD
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Left Column: Parameter controls and Visual progress */}
+              <div className="lg:col-span-5 space-y-4">
+                <div className="p-4 rounded-lg bg-black/40 border border-white/5 space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center text-[10.5px] font-mono mb-1.5 select-none">
+                      <span className="text-white/50 uppercase font-semibold">Max Daily Drawdown Limit:</span>
+                      <span className="text-rose-400 font-black">${maxDailyDrawdownLimit} USD</span>
+                    </div>
+                    {/* Input Slider */}
+                    <input 
+                      type="range" 
+                      min="100" 
+                      max="2000" 
+                      step="50"
+                      value={maxDailyDrawdownLimit} 
+                      onChange={(e) => setMaxDailyDrawdownLimit(parseInt(e.target.value))}
+                      className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-rose-500 lg:accent-rose-500 focus:outline-none"
+                    />
+                    <div className="flex justify-between text-[8px] text-white/30 font-mono mt-1 select-none">
+                      <span>$100 (Tight)</span>
+                      <span>$1,000</span>
+                      <span>$2,000 (Loose)</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-white/5 pt-3 space-y-3.5 font-mono text-[10.5px]">
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/45">Current Peak today:</span>
+                      <span className="font-bold text-white font-mono">${drawdownSentinelMetrics.peakEquityTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/45">Current Session Drawdown:</span>
+                      <span className={`font-bold font-mono ${drawdownSentinelMetrics.actualDrawdown > 0 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`}>
+                        -${drawdownSentinelMetrics.actualDrawdown.toFixed(2)} USD
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/45">Active Safeguard Room:</span>
+                      <span className="font-bold text-emerald-400 font-mono">${drawdownSentinelMetrics.remainingBudget.toFixed(2)} USD</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Drawdown Gauge Arc/Visual */}
+                <div className="relative p-4 rounded-lg bg-black/40 border border-white/5 flex flex-col items-center justify-center">
+                  <div className="w-full text-center mb-1.5 font-mono text-[9px] text-[#888888] uppercase tracking-wider">
+                    Distance to Max Daily Drawdown
+                  </div>
+                  
+                  {/* Linear Bar Distance indicator */}
+                  <div className="w-full select-none mt-2">
+                    <div className="flex justify-between items-baseline text-[11px] font-mono mb-1 font-bold">
+                      <span className="text-white/40">SENTINEL INTEGRITY CAP</span>
+                      <span className={
+                        drawdownSentinelMetrics.clampedDistancePercent <= 25 ? 'text-rose-400 animate-pulse' :
+                        drawdownSentinelMetrics.clampedDistancePercent <= 60 ? 'text-amber-400' :
+                        'text-emerald-400'
+                      }>
+                        {drawdownSentinelMetrics.clampedDistancePercent.toFixed(1)}% Remaining
+                      </span>
+                    </div>
+                    
+                    {/* Visual Segmented Health Bar */}
+                    <div className="h-3.5 bg-zinc-950 rounded border border-white/5 overflow-hidden flex p-0.5 gap-0.5">
+                      {Array.from({ length: 20 }).map((_, i) => {
+                        const threshold = (i / 20) * 100;
+                        const isActive = drawdownSentinelMetrics.clampedDistancePercent > threshold;
+                        
+                        let barBgColor = 'bg-zinc-805';
+                        if (isActive) {
+                          if (drawdownSentinelMetrics.clampedDistancePercent <= 25) {
+                            barBgColor = 'bg-rose-500 shadow shadow-rose-500/20';
+                          } else if (drawdownSentinelMetrics.clampedDistancePercent <= 60) {
+                            barBgColor = 'bg-amber-500 shadow shadow-amber-500/20';
+                          } else {
+                            barBgColor = 'bg-emerald-500 shadow shadow-emerald-500/20';
+                          }
+                        }
+                        
+                        return (
+                          <div 
+                            key={i} 
+                            className={`h-full flex-1 rounded-sm transition-all duration-500 ${barBgColor}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <p className="text-[9px] text-white/35 font-sans mt-3 leading-relaxed text-center">
+                      {drawdownSentinelMetrics.clampedDistancePercent <= 25 ? (
+                        "⚠️ CRITICAL SYSTEM WARN: Severe account erosion. Automatic compliance triggers will lock order entry if remaining budget hits absolute flat zero."
+                      ) : drawdownSentinelMetrics.clampedDistancePercent <= 60 ? (
+                        "Shield level weakened by floating session volatility. Monitor distressed assets or liquidate performers to recover leeway."
+                      ) : (
+                        "Institutional safeguard running. Strategic drawdown buffer satisfies high integrity compliance parameters."
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Outliers and Quick-Action Intercept */}
+              <div className="lg:col-span-7 flex flex-col justify-between">
+                <div className="space-y-3.5 h-full flex flex-col justify-between">
+                  <div className="p-4 rounded-lg bg-black/40 border border-white/5">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2.5 mb-2.5 select-none">
+                      <span className="text-[10px] text-white/50 uppercase font-mono font-bold flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-rose-500" />
+                        Active Downside Volatility Outliers (Floating Losses)
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-black bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        {worstPerformers.length} {worstPerformers.length === 1 ? 'Asset' : 'Assets'}
+                      </span>
+                    </div>
+
+                    {worstPerformers.length > 0 ? (
+                      <div className="space-y-2 max-h-[170px] overflow-y-auto pr-1">
+                        {worstPerformers.map((t) => (
+                          <div 
+                            key={t.id}
+                            className="flex items-center justify-between p-2.5 bg-black/50 hover:bg-zinc-950 border border-white/[0.03] hover:border-white/10 rounded transition-all font-mono"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-[11px] font-extrabold text-white">{t.symbol}</span>
+                              <div className="flex items-center gap-1.5 text-[9.5px] text-white/40">
+                                <span className={`px-1 rounded text-[8px] uppercase ${t.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                  {t.type}
+                                </span>
+                                <span>{t.size.toFixed(2)} lot</span>
+                                <span className="text-[8px] px-1 bg-zinc-900 border border-white/5 rounded">ID: {t.id.slice(-6).toUpperCase()}</span>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-black text-rose-400">
+                                ${t.pnl.toFixed(2)} USD
+                              </span>
+                              <button
+                                onClick={() => handleLiquidateSinglePosition(t.id)}
+                                disabled={isExecutingAutoLock || isLiquidatingWorst}
+                                className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition-all text-[9.5px] font-bold rounded cursor-pointer select-none"
+                                title="Liquidate individual position immediately"
+                              >
+                                Liquidate
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-7 text-center flex flex-col items-center justify-center font-mono">
+                        <ShieldCheck className="w-10 h-10 text-emerald-400 mb-2 opacity-80" />
+                        <h4 className="text-[11px] font-bold text-white uppercase tracking-wider">Vol Zone Compliant</h4>
+                        <p className="text-[9.5px] text-white/35 max-w-xs mt-1 leading-relaxed">
+                          No distressed open positions contributing negatively. All trades aligned and protected by standard mitigators.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Operational Terminal feedback logs */}
+                  {liquidationLog && (
+                    <div className="p-3 bg-zinc-950 border border-zinc-900 font-mono text-[10px] text-rose-400 leading-relaxed rounded-md flex items-start gap-2 animate-fadeIn shadow-inner">
+                      <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping mt-1"></div>
+                      <div>
+                        <strong className="text-white uppercase">[SENTINEL CORE LOG]:</strong>
+                        <span className="ml-1.5 text-zinc-300">{liquidationLog}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Trigger Action block */}
+                  <div className="pt-2">
+                    <button
+                      onClick={handleLiquidateWorstPerformers}
+                      disabled={isLiquidatingWorst || worstPerformers.length === 0}
+                      className={`w-full py-3.5 px-4 rounded-lg font-mono text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 border transition-all select-none cursor-pointer ${
+                        worstPerformers.length > 0 
+                          ? 'bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white border-rose-500 shadow-lg shadow-rose-950/20' 
+                          : 'bg-zinc-900 text-white/20 border-white/5 cursor-not-allowed'
+                      }`}
+                      title={worstPerformers.length > 0 ? "Liquidate positions with worst session loss contributors" : "No active positions with floating loss to liquidate"}
+                    >
+                      {isLiquidatingWorst ? (
+                        <>
+                          <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
+                          <span>Executing Emergency Sentinel Liquidations...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap className={`w-4 h-4 ${worstPerformers.length > 0 ? 'text-white' : 'text-white/10'}`} />
+                          <span>Liquidate Worst Performers</span>
+                        </>
+                      )}
+                    </button>
+                    <span className="text-[8.5px] text-white/30 text-center block mt-2 font-mono uppercase tracking-wide select-none">
+                      Warning: Intercept closes position(s) contributing deepest floating session risks immediately.
+                    </span>
+                  </div>
                 </div>
               </div>
 

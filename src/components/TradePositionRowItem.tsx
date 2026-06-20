@@ -490,21 +490,47 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
             </div>
 
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3.5 justify-between">
-              {/* Quick Action: Set BE */}
-              <div className="space-y-1 shrink-0">
+              {/* Quick Action: Set BE & Lock SL */}
+              <div className="space-y-1.5 shrink-0">
                 <span className="text-[7.5px] text-white/30 block uppercase tracking-wider font-bold">1. Quick Break-Even Protection</span>
-                <button
-                  type="button"
-                  onClick={() => onUpdateParams(trade.id, { stopLoss: trade.entryPrice })}
-                  disabled={trade.stopLoss === trade.entryPrice}
-                  className={`px-3 py-1.5 font-sans font-extrabold uppercase rounded border transition-all text-[9px] cursor-pointer flex items-center justify-center gap-1 w-full md:w-auto ${
-                    trade.stopLoss === trade.entryPrice
-                      ? 'bg-neutral-900 border-white/5 text-white/20 cursor-not-allowed'
-                      : 'bg-[#10b981]/15 hover:bg-[#10b981]/25 text-[#10b981] border-[#10b981]/25 hover:border-[#10b981]/50'
-                  }`}
-                >
-                  🛡️ Set BE (SL → {trade.entryPrice.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : 5)})
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateParams(trade.id, { stopLoss: trade.entryPrice })}
+                    disabled={trade.stopLoss === trade.entryPrice}
+                    className={`px-3 py-1.5 font-sans font-extrabold uppercase rounded border transition-all text-[9.5px] cursor-pointer flex items-center justify-center gap-1 leading-none ${
+                      trade.stopLoss === trade.entryPrice
+                        ? 'bg-neutral-900 border-white/5 text-white/20 cursor-not-allowed'
+                        : 'bg-[#10b981]/15 hover:bg-[#10b981]/25 text-[#10b981] border-[#10b981]/25 hover:border-[#10b981]/50'
+                    }`}
+                  >
+                    🛡️ Set BE ({trade.entryPrice.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : 5)})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Custom dynamic fixed buffer
+                      let buffer = 0.00015; // default forex
+                      if (trade.symbol === 'USD/JPY') buffer = 0.015;
+                      else if (trade.symbol === 'BTC/USDT') buffer = 15.0;
+                      else if (trade.symbol === 'ETH/USDT') buffer = 1.5;
+                      else if (trade.symbol === 'SOL/USDT') buffer = 0.15;
+                      else if (trade.symbol === 'GOLD/USD') buffer = 0.25;
+                      else if (trade.symbol === 'SILVER/USD') buffer = 0.03;
+                      else if (['US30', 'NAS100', 'SPX500', 'GER40'].includes(trade.symbol)) buffer = 1.5;
+
+                      const isBuy = trade.side === 'BUY';
+                      const targetSL = isBuy ? trade.entryPrice + buffer : trade.entryPrice - buffer;
+                      const decimals = trade.symbol === 'USD/JPY' || trade.symbol === 'GOLD/USD' ? 2 : trade.symbol === 'BTC/USDT' ? 1 : 5;
+                      onUpdateParams(trade.id, { stopLoss: parseFloat(targetSL.toFixed(decimals)) });
+                    }}
+                    className="px-3 py-1.5 font-sans font-extrabold uppercase rounded border transition-all text-[9.5px] cursor-pointer flex items-center justify-center gap-1 leading-none bg-indigo-500/15 hover:bg-indigo-600 border-indigo-500/20 hover:border-indigo-500 text-indigo-300 hover:text-white"
+                    title="Pins stop loss to breakeven + a small buffer to guarantee commissions coverage"
+                  >
+                    🔒 Lock SL (+Buffer)
+                  </button>
+                </div>
               </div>
 
               {/* Trailing Stop Loss Toggle */}
