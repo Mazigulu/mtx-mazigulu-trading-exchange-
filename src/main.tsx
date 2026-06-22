@@ -4,6 +4,39 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
+// Gracefully handle web3, MetaMask, or third-party background promise rejections
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    const errorReason = event.reason?.message || String(event.reason || '');
+    const lowerReason = errorReason.toLowerCase();
+    if (
+      lowerReason.includes('metamask') || 
+      lowerReason.includes('ethereum') || 
+      lowerReason.includes('wallet') || 
+      lowerReason.includes('web3') ||
+      lowerReason.includes('provider')
+    ) {
+      console.warn('Intercepted and secured MetaMask/Web3 async connection exception gracefully:', event.reason);
+      event.preventDefault(); // prevent bubble-up crashes
+    }
+  });
+
+  window.addEventListener('error', (event) => {
+    const errorMsg = event.message || '';
+    const lowerMsg = errorMsg.toLowerCase();
+    if (
+      lowerMsg.includes('metamask') || 
+      lowerMsg.includes('ethereum') || 
+      lowerMsg.includes('wallet') || 
+      lowerMsg.includes('web3') ||
+      lowerMsg.includes('provider')
+    ) {
+      console.warn('Intercepted and secured MetaMask/Web3 global error report gracefully:', event.error);
+      event.preventDefault(); // prevent bubble-up crashes
+    }
+  });
+}
+
 interface Props {
   children?: ReactNode;
 }

@@ -630,21 +630,44 @@ export default function AiCopilotWorkspace({ symbol, metrics, onTradeExecuted, t
                   </div>
 
                   {/* Strategic risk & confluences review */}
-                  <div className="mt-4 pt-4 border-t border-white/5 flex flex-col md:flex-row justify-between items-start gap-4 font-mono text-[9.5px] text-white/60">
-                    <div>
-                      <span className="text-white/30 block uppercase font-bold text-[8.5px] tracking-tight">Active Confluences Checked</span>
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {draft.confluences.map((c, i) => (
-                          <span key={i} className="px-1.5 py-0.5 bg-indigo-500/5 text-indigo-350 border border-indigo-500/10 rounded">
-                            ● {c}
-                          </span>
-                        ))}
+                  <div className="mt-5 pt-4 border-t border-white/10 space-y-4 font-mono">
+                    
+                    {/* Header line for the Strategy Confluence Panel */}
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <span className="text-indigo-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 animate-pulse" />
+                        Institutional Confluence Evaluation
+                      </span>
+                      <span className="text-white/40 text-[9px]">MTX Engine v4.8 Alpha</span>
+                    </div>
+
+                    {/* Horizontal grid list for Confluences - Landscape layout */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      {draft.confluences.map((c, i) => (
+                        <div key={i} className="p-3 bg-white/[0.02] border border-white/5 hover:border-indigo-500/15 rounded-lg flex flex-col justify-between transition-colors">
+                          <span className="text-indigo-300 font-bold block mb-1 text-[8px] uppercase tracking-wider">Pillar #{i + 1}</span>
+                          <span className="text-white/80 leading-normal text-[10px]">{c}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Fractional Risk Cap Horizontal Hero Banner */}
+                    <div className="bg-gradient-to-r from-amber-500/5 via-amber-500/[0.02] to-transparent border border-amber-500/15 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                          <span className="text-white font-extrabold uppercase text-[10px] tracking-wider text-amber-300">Fractional Risk Cap Enforced</span>
+                        </div>
+                        <p className="text-[10px] text-white/50 leading-relaxed max-w-xl">
+                          Total risk is capped at <strong className="text-amber-400">{draft.totalRisk || "2.0%"}</strong> of institutional equity, distributed across three laddered buy limits with dynamic ATR-based stop-loss protection.
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-start sm:items-end justify-center shrink-0 bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded">
+                        <span className="text-amber-400/60 uppercase font-bold text-[8px] tracking-tight">Active Ceiling Limit</span>
+                        <span className="text-amber-300 font-black text-xs tabular-nums mt-0.5">{draft.totalRisk ? draft.totalRisk.split(' ')[0] : '2.0%'} Risk Limit</span>
                       </div>
                     </div>
-                    <div className="text-right shrink-0 bg-black/20 p-2.5 border border-white/5 rounded">
-                      <span className="text-white/30 block uppercase font-bold text-[8.5px] tracking-tight">Fractional Risk Cap</span>
-                      <span className="text-amber-400 font-black text-[10px] mt-1 block uppercase">{draft.totalRisk}</span>
-                    </div>
+
                   </div>
 
                   {/* Telemetry pipeline executing panel */}

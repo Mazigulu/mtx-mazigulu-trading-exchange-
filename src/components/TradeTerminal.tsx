@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { MarketSymbol, Trade, MarketMetrics } from '../types';
-import { ShieldCheck, ArrowRightLeft, Landmark, Calculator, AlertTriangle, Play, CheckCircle2, History, XCircle, AlertOctagon, Percent, TrendingUp, Activity, Download, Gauge, CheckSquare, Square, Award, Fingerprint, Lock, Unlock, Cpu, RefreshCw, Sparkles, Eye, Check, X, Key, ShieldAlert, Clock, TrendingDown } from 'lucide-react';
+import { MarketSymbol, Trade, MarketMetrics, LiquiditySweep, OrderBook } from '../types';
+import { ShieldCheck, ArrowRightLeft, Landmark, Calculator, AlertTriangle, Play, CheckCircle2, History, XCircle, AlertOctagon, Percent, TrendingUp, Activity, Download, Gauge, CheckSquare, Square, Award, Fingerprint, Lock, Unlock, Cpu, RefreshCw, Sparkles, Eye, Check, X, Key, ShieldAlert, Clock, TrendingDown, HelpCircle, Layers } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 import { getSignalInsights } from './TradeExplainability';
 
@@ -14,6 +14,8 @@ interface TradeTerminalProps {
   metrics: MarketMetrics;
   onTradeExecuted: () => void;
   trades: Trade[];
+  sweeps?: LiquiditySweep[];
+  orderBook?: OrderBook;
 }
 
 export default function TradeTerminal({
@@ -21,12 +23,9 @@ export default function TradeTerminal({
   metrics,
   onTradeExecuted,
   trades,
-}: {
-  symbol: MarketSymbol;
-  metrics: MarketMetrics;
-  onTradeExecuted: () => void;
-  trades: Trade[];
-}) {
+  sweeps = [],
+  orderBook,
+}: TradeTerminalProps) {
   const [accountBalance, setAccountBalance] = useState(10000);
 
   // AI Institutional Live Execution Layer States
@@ -292,6 +291,7 @@ export default function TradeTerminal({
   }, [performanceStats]);
   const [riskPct, setRiskPct] = useState(1); // 1.0% Fractional Risk Model
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
+  const [selectedDomPrice, setSelectedDomPrice] = useState<number | null>(null);
   
   const [entryPrice, setEntryPrice] = useState(metrics.currentPrice);
   const [stopLoss, setStopLoss] = useState(metrics.currentPrice * 0.99);
@@ -332,6 +332,102 @@ export default function TradeTerminal({
       return parseFloat((entryPrice - tpDistance).toFixed(decimalLimit));
     }
   }, [entryPrice, metrics.atr, atrTpMultiplier, side, symbol]);
+
+  // Find the most recent applicable liquidity sweep for stop-loss suggestion based on MTX Engine
+  const suggestedSweepSl = useMemo(() => {
+    if (!sweeps || sweeps.length === 0) return null;
+    
+    // For a BUY trade: stop loss should be BELOW current entryPrice. Look for SELL_SIDE sweeps (lows swept)
+    // For a SELL trade: stop loss should be ABOVE current entryPrice. Look for BUY_SIDE sweeps (highs swept)
+    const targetType = side === 'BUY' ? 'SELL_SIDE' : 'BUY_SIDE';
+    
+    const applicableSweeps = sweeps.filter(sw => {
+      if (sw.type !== targetType) return false;
+      return side === 'BUY' ? sw.level < entryPrice : sw.level > entryPrice;
+    });
+
+    if (applicableSweeps.length === 0) {
+      // Fallback to any recent sweep of the same type relative to currentPrice
+      const anyApplicable = sweeps.filter(sw => 
+        side === 'BUY' ? sw.level < metrics.currentPrice : sw.level > metrics.currentPrice
+      );
+      if (anyApplicable.length === 0) return null;
+      return anyApplicable[anyApplicable.length - 1];
+    }
+
+    return applicableSweeps[applicableSweeps.length - 1]; // Return the most recent detected sweep
+  }, [sweeps, side, entryPrice, metrics.currentPrice]);
+
+  const suggestedSlPrice = useMemo(() => {
+    if (!suggestedSweepSl) return null;
+    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    const level = suggestedSweepSl.level;
+    
+    // Suggest the sweep level minus a small offset (buffer) of 0.1 * ATR for a safe structural buffer,
+    // ensuring the stop loss lies safely beyond the swept wick.
+    const buffer = (metrics.atr || 0.0001) * 0.1;
+    if (side === 'BUY') {
+      return parseFloat((level - buffer).toFixed(decimalLimit));
+    } else {
+      return parseFloat((level + buffer).toFixed(decimalLimit));
+    }
+  }, [suggestedSweepSl, symbol, side, metrics.atr]);
+
+  const isSlSignificantlyWide = useMemo(() => {
+    if (!stopLoss || !metrics.currentPrice) return false;
+    const atrValue = metrics.atr || 0.0001;
+    const distance = Math.abs(stopLoss - metrics.currentPrice);
+    return distance > 5 * atrValue;
+  }, [stopLoss, metrics.currentPrice, metrics.atr]);
+
+  const domLevels = useMemo(() => {
+    if (!orderBook) return null;
+    const bidMax = orderBook.bids.length > 0 ? Math.max(...orderBook.bids.map((b) => b.amount)) : 1;
+    const askMax = orderBook.asks.length > 0 ? Math.max(...orderBook.asks.map((a) => a.amount)) : 1;
+    const maxAmount = Math.max(bidMax, askMax, 1);
+
+    return {
+      bids: [...orderBook.bids].slice(0, 6).map((b) => ({
+        ...b,
+        densityPct: (b.amount / maxAmount) * 100,
+      })),
+      asks: [...orderBook.asks].slice(0, 6).map((a) => ({
+        ...a,
+        densityPct: (a.amount / maxAmount) * 100,
+      })),
+      maxAmount,
+    };
+  }, [orderBook]);
+
+  const highestDensityLevel = useMemo(() => {
+    if (!domLevels) return null;
+    let maxAmount = 0;
+    let maxPrice = 0;
+    let maxSide: 'BID' | 'ASK' = 'BID';
+    
+    domLevels.bids.forEach((b) => {
+      if (b.amount > maxAmount) {
+        maxAmount = b.amount;
+        maxPrice = b.price;
+        maxSide = 'BID';
+      }
+    });
+    
+    domLevels.asks.forEach((a) => {
+      if (a.amount > maxAmount) {
+        maxAmount = a.amount;
+        maxPrice = a.price;
+        maxSide = 'ASK';
+      }
+    });
+
+    return { price: maxPrice, amount: maxAmount, side: maxSide };
+  }, [domLevels]);
+
+  const formatPrice = (p: number) => {
+    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    return p.toFixed(decimalLimit);
+  };
 
   const calculatedAtrPositionSize = useMemo(() => {
     if (calculatedAtrSlDistance === 0) return 0;
@@ -512,6 +608,19 @@ export default function TradeTerminal({
     
     const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
     setTakeProfit(parseFloat(calculatedTp.toFixed(decimalLimit)));
+  };
+
+  const handleAddStopLossFromSweep = () => {
+    if (!sweeps || sweeps.length === 0) {
+      setErrorMsg('No active sweeps located in engine memory.');
+      return;
+    }
+    const mostRecentSweep = sweeps[sweeps.length - 1];
+    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    setStopLoss(Number(mostRecentSweep.level.toFixed(decimalLimit)));
+    if (errorMsg === 'No active sweeps located in engine memory.') {
+      setErrorMsg(null);
+    }
   };
 
   const formatHoldingDuration = (openedStr: string, closedStr?: string) => {
@@ -888,7 +997,7 @@ export default function TradeTerminal({
       )}
 
       {/* Risk Sizing & Execution Panel */}
-      <div className="lg:col-span-5 bg-[#080808] border border-white/10 rounded p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between">
+      <div className="col-span-12 bg-[#080808] border border-white/10 rounded p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between">
         <div>
           <div className="flex items-center space-x-2.5 pb-4 border-b border-white/10">
             <div className="p-2 bg-indigo-500/10 rounded">
@@ -909,7 +1018,7 @@ export default function TradeTerminal({
                 </div>
                 <div>
                   <h5 className="text-[11.5px] font-mono font-bold uppercase tracking-wider text-white">AI Live Execution</h5>
-                  <span className="text-[9px] font-sans text-white/40 block">Autonomous execution of trades on triggers</span>
+                  <span className="text-[9px] font-sans text-white/45 block">Autonomous execution of trades on triggers</span>
                 </div>
               </div>
               
@@ -921,7 +1030,6 @@ export default function TradeTerminal({
                   if (isLiveExecution) {
                     setIsLiveExecution(false);
                   } else {
-                    // Open secondary password or biometric-protected confirmation interface
                     setIsAuthModalOpen(true);
                     setAuthMode('BIOMETRIC');
                     setEnteredPassword('');
@@ -1002,19 +1110,18 @@ export default function TradeTerminal({
 
           {/* AI Advisor Execution Alert Banner */}
           {aiTradeSuccessAlert && (
-            <div id="ai-trade-success-alert" className="mt-3.5 p-3.5 bg-[#071911] border border-emerald-500/50 rounded text-emerald-300 text-[11px] leading-relaxed flex flex-col space-y-2 relative overflow-hidden">
-              <div className="flex items-start space-x-2">
-                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5 animate-spin" />
-                <div className="flex-1">
-                  <span className="font-mono font-black text-emerald-400 uppercase tracking-wider block text-[10px]">⚡ Institutional Order Executed!</span>
-                  <p className="mt-1 font-sans text-xs">{aiTradeSuccessAlert}</p>
+            <div id="ai-trade-success-alert" className="mt-3.5 p-3.5 bg-emerald-950/20 border border-emerald-500/30 rounded text-emerald-300 text-[11px] leading-relaxed flex flex-col space-y-1">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start space-x-2">
+                  <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <p className="font-sans">{aiTradeSuccessAlert}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setAiTradeSuccessAlert(null)}
-                  className="text-white/30 hover:text-white transition-colors cursor-pointer"
+                  className="text-white/40 hover:text-white transition-colors cursor-pointer select-none"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -1091,37 +1198,278 @@ export default function TradeTerminal({
             </button>
           </div>
 
-          {/* Price limits Inputs */}
-          <div className="space-y-3 mt-4 font-mono text-xs">
+          {/* Institutional DOM Depth Price Ladder Visualizer */}
+          {domLevels && (
+            <div id="execution-dom-ladder" className="mt-4 bg-[#050505] border border-white/10 rounded p-4 space-y-3.5 shadow-md">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <div>
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-white/80">Depth of Market (DOM)</h5>
+                  <span className="text-[10px] text-white/40 block">Click levels to populate limit fields</span>
+                </div>
+                
+                {highestDensityLevel && (
+                  <div className="text-[10px] font-mono text-amber-400 select-none">
+                    Density Pool: {highestDensityLevel.amount} Lots @ {formatPrice(highestDensityLevel.price)}
+                  </div>
+                )}
+              </div>
+
+              {/* Ladder Rows */}
+              <div className="space-y-[3px] font-mono select-none">
+                {/* Column Headers */}
+                <div className="grid grid-cols-12 text-[9px] text-white/30 uppercase font-mono pb-1 border-b border-white/5">
+                  <div className="col-span-4 text-left">Sells Depth</div>
+                  <div className="col-span-4 text-center">Ladder Price</div>
+                  <div className="col-span-4 text-right">Buys Depth</div>
+                </div>
+
+                {/* Asks (Sellers) - Rendered in reversed order (highest first) to flow down to market spread */}
+                {[...domLevels.asks].reverse().map((ask, idx) => {
+                  const isConcentration = highestDensityLevel && highestDensityLevel.price === ask.price;
+                  const isSelected = selectedDomPrice === ask.price;
+                  
+                  // Heatmap colors based on density
+                  const densityColor = ask.densityPct > 75 
+                    ? 'rgba(244, 63, 94, 0.2)' 
+                    : ask.densityPct > 45 
+                      ? 'rgba(244, 63, 94, 0.12)' 
+                      : 'rgba(244, 63, 94, 0.04)';
+
+                  return (
+                    <div key={`dom-ask-${idx}`} className="flex flex-col">
+                      <div
+                        onClick={() => setSelectedDomPrice(selectedDomPrice === ask.price ? null : ask.price)}
+                        className={`grid grid-cols-12 text-xs py-1 px-2 rounded items-center cursor-pointer transition-colors ${
+                          isSelected 
+                            ? 'bg-rose-955/40 border border-rose-500/30' 
+                            : isConcentration 
+                              ? 'border border-amber-500/20 hover:bg-rose-500/5' 
+                              : 'border border-transparent hover:bg-white/5'
+                        }`}
+                        style={{
+                          background: isSelected ? undefined : `linear-gradient(to right, ${densityColor} ${ask.densityPct}%, transparent 0%)`
+                        }}
+                      >
+                        {/* Ask Amount */}
+                        <div className="col-span-4 text-left flex items-center space-x-1.5">
+                          <span className={`font-mono text-xs font-medium ${ask.densityPct > 70 ? 'text-rose-450 font-semibold' : 'text-rose-400/70'}`}>
+                            {ask.amount.toFixed(1)} Lots
+                          </span>
+                        </div>
+
+                        {/* Price */}
+                        <div className="col-span-4 text-center font-semibold text-rose-500 font-mono">
+                          {formatPrice(ask.price)}
+                        </div>
+
+                        {/* Density Bar representation helper */}
+                        <div className="col-span-4 text-right text-[10px] text-white/30 font-mono select-none">
+                          {ask.densityPct.toFixed(0)}%
+                        </div>
+                      </div>
+
+                      {/* Expanded Setters Overlay */}
+                      {isSelected && (
+                        <div className="flex items-center justify-center gap-2 bg-[#050505] border border-t-0 border-rose-500/30 p-1.5 rounded-b select-none">
+                          <button
+                            type="button"
+                            onClick={() => { setEntryPrice(ask.price); setSelectedDomPrice(null); }}
+                            className="px-2 py-1 text-[10px] font-mono uppercase bg-[#111] hover:bg-[#222] text-white/85 rounded border border-white/10 cursor-pointer"
+                          >
+                            Set Entry
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setStopLoss(ask.price); setSelectedDomPrice(null); }}
+                            className="px-2 py-1 text-[10px] font-mono uppercase bg-[#111] hover:bg-[#222] text-white/85 rounded border border-white/10 cursor-pointer"
+                          >
+                            Set SL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setTakeProfit(ask.price); setSelectedDomPrice(null); }}
+                            className="px-2 py-1 text-[10px] font-mono uppercase bg-[#111] hover:bg-[#222] text-white/85 rounded border border-white/10 cursor-pointer"
+                          >
+                            Set TP
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* SPREAD / MID GAP ROW */}
+                <div className="bg-white/5 border border-white/10 rounded py-1 px-3 my-1 flex items-center justify-between text-xs select-none text-white/70">
+                  <div className="flex items-center space-x-1">
+                    <span className="tracking-wider uppercase text-[10px] font-mono text-white/50">Spread Mid</span>
+                  </div>
+                  <span className="font-bold text-white font-mono bg-[#111] px-2 py-0.5 rounded border border-white/5">
+                    {formatPrice(metrics.currentPrice)}
+                  </span>
+                  <div className="text-[10px] font-mono text-white/40">
+                    OFI: <span className={orderBook.imbalance > 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>{orderBook.imbalance > 0 ? `+${orderBook.imbalance}%` : `${orderBook.imbalance}%`}</span>
+                  </div>
+                </div>
+
+                {/* Bids (Buyers) - Rendered matching price flow descending */}
+                {domLevels.bids.map((bid, idx) => {
+                  const isConcentration = highestDensityLevel && highestDensityLevel.price === bid.price;
+                  const isSelected = selectedDomPrice === bid.price;
+                  
+                  // Heatmap colors based on density
+                  const densityColor = bid.densityPct > 75 
+                    ? 'rgba(16, 185, 129, 0.2)' 
+                    : bid.densityPct > 45 
+                      ? 'rgba(16, 185, 129, 0.12)' 
+                      : 'rgba(16, 185, 129, 0.04)';
+
+                  return (
+                    <div key={`dom-bid-${idx}`} className="flex flex-col">
+                      <div
+                        onClick={() => setSelectedDomPrice(selectedDomPrice === bid.price ? null : bid.price)}
+                        className={`grid grid-cols-12 text-xs py-1 px-2 rounded items-center cursor-pointer transition-colors ${
+                          isSelected 
+                            ? 'bg-emerald-955/40 border border-emerald-500/30' 
+                            : isConcentration 
+                              ? 'border border-amber-500/20 hover:bg-emerald-500/5' 
+                              : 'border border-transparent hover:bg-white/5'
+                        }`}
+                        style={{
+                          background: isSelected ? undefined : `linear-gradient(to right, ${densityColor} ${bid.densityPct}%, transparent 0%)`
+                        }}
+                      >
+                        {/* Density Bar representation helper */}
+                        <div className="col-span-4 text-left text-[10px] text-white/30 font-mono select-none">
+                          {bid.densityPct.toFixed(0)}%
+                        </div>
+
+                        {/* Price */}
+                        <div className="col-span-4 text-center font-semibold text-emerald-500 font-mono">
+                          {formatPrice(bid.price)}
+                        </div>
+
+                        {/* Bid Amount */}
+                        <div className="col-span-4 text-right flex items-center justify-end space-x-1.5">
+                          <span className={`font-mono text-xs font-medium ${bid.densityPct > 70 ? 'text-emerald-400 font-bold' : 'text-emerald-400/70'}`}>
+                            {bid.amount.toFixed(1)} Lots
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Expanded Setters Overlay */}
+                      {isSelected && (
+                        <div className="flex items-center justify-center gap-2 bg-[#050505] border border-t-0 border-emerald-500/30 p-1.5 rounded-b select-none">
+                          <button
+                            type="button"
+                            onClick={() => { setEntryPrice(bid.price); setSelectedDomPrice(null); }}
+                            className="px-2 py-1 text-[10px] font-mono uppercase bg-[#111] hover:bg-[#222] text-white/85 rounded border border-white/10 cursor-pointer"
+                          >
+                            Set Entry
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setStopLoss(bid.price); setSelectedDomPrice(null); }}
+                            className="px-2 py-1 text-[10px] font-mono uppercase bg-[#111] hover:bg-[#222] text-white/85 rounded border border-white/10 cursor-pointer"
+                          >
+                            Set SL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setTakeProfit(bid.price); setSelectedDomPrice(null); }}
+                            className="px-2 py-1 text-[10px] font-mono uppercase bg-[#111] hover:bg-[#222] text-white/85 rounded border border-white/10 cursor-pointer"
+                          >
+                            Set TP
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Boundaries Inputs */}
+          <div className="space-y-3.5 mt-4 font-mono text-xs">
+            {/* Entry Price */}
             <div>
-              <label className="text-white/35 block uppercase mb-1 font-sans tracking-tight">Entry Price (4H FVG Touch)</label>
+              <label className="text-white/40 block uppercase mb-1 font-mono tracking-wide text-[10px]">Limit Order Entry Price</label>
               <input
                 id="entry-price-input"
                 type="number"
                 step="0.0001"
                 value={entryPrice}
                 onChange={(e) => setEntryPrice(Number(e.target.value))}
-                className="w-full bg-[#050505] border border-white/10 text-white px-3 py-2 rounded focus:outline-none focus:border-indigo-500"
+                className="w-full bg-[#050505] border border-white/10 text-white px-3 py-2 rounded focus:outline-none focus:border-white/35 font-semibold font-mono text-xs transition-colors"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* SL and TP grid */}
+            <div className="grid grid-cols-2 gap-3.5">
               <div>
-                <label className="text-white/35 block uppercase mb-1 font-sans tracking-tight">
-                  Stop Loss (Structural SL)
-                </label>
+                <div className="flex justify-between items-center mb-1">
+                  <div className="flex items-center space-x-1 select-none">
+                    <label className="text-white/40 block uppercase font-mono tracking-wide text-[10px]">
+                      Stop Loss (SL)
+                    </label>
+                    <div className="group relative flex items-center">
+                      <HelpCircle className="w-3.5 h-3.5 text-white/30 hover:text-white transition-colors cursor-help" />
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-[#050505] border border-white/15 text-white/90 p-3 rounded shadow-lg z-50 w-56 font-mono text-[10px] leading-relaxed pointer-events-none">
+                        <div className="text-white/70 font-bold mb-1 border-b border-white/5 pb-1 uppercase tracking-wider">
+                          Volatility Guidance
+                        </div>
+                        <div className="space-y-1 text-white/70">
+                          <div>ATR Value: <span className="font-mono text-white">{metrics.atr.toFixed(5)}</span></div>
+                          <div>Value: <span className="text-white font-mono">
+                            {symbol === 'USD/JPY' ? (metrics.atr * 100).toFixed(1) : symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? metrics.atr.toFixed(1) : (metrics.atr * 10000).toFixed(1)} {symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? 'USD' : 'pips'}
+                          </span></div>
+                          <div className="pt-1 mt-1 border-t border-white/5">
+                            <span className="text-amber-400 font-bold uppercase block text-[9px] mb-0.5">Safe Exit Range:</span>
+                            <span className="text-white font-bold">
+                              {(side === 'BUY' ? metrics.currentPrice - 2.5 * metrics.atr : metrics.currentPrice + 1.5 * metrics.atr).toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)}
+                              {' - '}
+                              {(side === 'BUY' ? metrics.currentPrice - 1.5 * metrics.atr : metrics.currentPrice + 2.5 * metrics.atr).toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)}
+                            </span>
+                            <span className="text-[8px] text-white/40 block mt-0.5">Ideal {side === 'BUY' ? 'Below' : 'Above'} Price (1.5x - 2.5x ATR Volatility Buffer)</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {suggestedSlPrice && (
+                    <button
+                      id="autosl-suggestion-btn"
+                      type="button"
+                      onClick={() => setStopLoss(suggestedSlPrice)}
+                      className="text-[9px] font-mono text-amber-400 hover:text-amber-300 transition-colors bg-white/5 px-1 px-1.5 py-0.5 rounded border border-white/10 cursor-pointer"
+                      title={`MTX Engine suggests placing Stop Loss at ${suggestedSlPrice} derived from the nearest dynamic Liquidity Sweep at ${suggestedSweepSl?.level}`}
+                    >
+                      Auto-SL: {suggestedSlPrice}
+                    </button>
+                  )}
+                </div>
                 <input
                   id="stoploss-input"
                   type="number"
                   step="0.0001"
                   value={stopLoss}
                   onChange={(e) => setStopLoss(Number(e.target.value))}
-                  className="w-full bg-[#050505] border border-white/10 text-rose-400 px-3 py-2 rounded focus:outline-none focus:border-indigo-500 font-semibold"
+                  className={`w-full bg-[#050505] border ${
+                    isSlSignificantlyWide 
+                      ? 'border-amber-500/50 text-amber-400' 
+                      : 'border-white/10 text-rose-500'
+                  } px-3 py-2 rounded focus:outline-none focus:border-white/35 font-semibold text-xs transition-colors`}
                 />
+                {isSlSignificantlyWide && (
+                  <p className="text-[9px] text-amber-400 font-mono mt-1 leading-tight flex items-start gap-1 select-none animate-pulse">
+                    <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                    <span>Warning: Stop-loss is wide (&gt; 5 ATR difference from market price).</span>
+                  </p>
+                )}
               </div>
               <div>
-                <label className="text-white/35 block uppercase mb-1 font-sans tracking-tight">
-                  Take Profit (Target TP)
+                <label className="text-white/40 block uppercase mb-1 font-mono tracking-wide text-[10px]">
+                  Take Profit (TP)
                 </label>
                 <input
                   id="takeprofit-input"
@@ -1129,21 +1477,43 @@ export default function TradeTerminal({
                   step="0.0001"
                   value={takeProfit}
                   onChange={(e) => setTakeProfit(Number(e.target.value))}
-                  className="w-full bg-[#050505] border border-white/10 text-emerald-400 px-3 py-2 rounded focus:outline-none focus:border-indigo-500 font-semibold"
+                  className="w-full bg-[#050505] border border-white/10 text-emerald-500 px-3 py-2 rounded focus:outline-none focus:border-white/35 font-semibold text-xs transition-colors"
                 />
               </div>
             </div>
 
-            {/* Reward Ratios Shortcut Presets block */}
-            <div className="flex items-center space-x-2 mt-1 select-none">
-              <span className="text-[9px] font-sans text-white/30 uppercase font-bold">SL/TP Sizer Presets:</span>
+            {/* Direct Add Stop-Loss via Liquidity Sweep Button */}
+            <div className="pt-0.5">
+              <button
+                id="btn-add-sl-from-sweep"
+                type="button"
+                onClick={handleAddStopLossFromSweep}
+                className="w-full bg-[#050505] hover:bg-[#111] border border-white/10 hover:border-white/20 text-white/80 font-mono text-[10px] font-bold uppercase py-2 px-3 rounded transition-colors flex items-center justify-between cursor-pointer select-none active:scale-[0.98]"
+              >
+                <div className="flex items-center space-x-2">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="font-extrabold text-white/70">Set SL via Sweep Level memory</span>
+                </div>
+                {sweeps && sweeps.length > 0 ? (
+                  <span className="text-[9px] bg-white/5 text-amber-300 border border-white/10 px-2 py-0.5 rounded font-black">
+                    SWEEP: {sweeps[sweeps.length - 1].level.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)}
+                  </span>
+                ) : (
+                  <span className="text-[8px] text-white/30">NO SWEEP IN MEMORY</span>
+                )}
+              </button>
+            </div>
+
+            {/* Shortcuts (Sizer Presets ratios) */}
+            <div className="flex items-center space-x-2 mt-0.5 select-none text-[10px]">
+              <span className="text-[9.5px] font-mono text-white/40 uppercase">SL/TP Preset Ratios:</span>
               <div className="flex gap-1.5 font-mono text-[9px]">
                 {[1.0, 1.5, 2.0, 3.0, 4.0].map((ratio) => (
                   <button
                     key={`rr-preset-${ratio}`}
                     type="button"
                     onClick={() => applyRewardRatioPreset(ratio)}
-                    className="px-1.5 py-0.5 rounded border border-white/5 bg-[#050505] hover:bg-white/5 text-indigo-300 hover:text-white transition-all cursor-pointer font-extrabold"
+                    className="px-2 py-0.5 rounded border border-white/5 bg-[#0a0b0d] hover:bg-[#151619] text-white/60 hover:text-white transition-colors cursor-pointer font-extrabold"
                     title={`Calculate target Take Profit at exactly 1:${ratio} risk-to-reward ratio based on current entry and Stop Loss levels.`}
                   >
                     1:{ratio === 1 ? '1' : ratio.toFixed(1)}
@@ -1153,40 +1523,40 @@ export default function TradeTerminal({
             </div>
 
             {/* VOLATILITY-BASED POSITION SIZE CALCULATOR */}
-            <div id="atr-position-size-calculator" className="bg-[#08080c] border border-indigo-500/20 hover:border-indigo-500/30 rounded-lg p-4 space-y-3.5 select-none transition-colors">
+            <div id="atr-position-size-calculator" className="bg-[#050505] border border-white/10 rounded p-4 space-y-3.5 select-none shadow-md">
               <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                <div className="flex items-center space-x-1.5">
-                  <Calculator className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-indigo-300">
+                <div className="flex items-center space-x-2">
+                  <Calculator className="w-4 h-4 text-white/60" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/80">
                     ATR Volatility Sizer
                   </span>
                 </div>
-                <div className="flex items-center space-x-1 text-[9px] font-mono text-white/50 bg-indigo-500/10 border border-indigo-500/15 px-2 py-0.5 rounded">
+                <div className="flex items-center space-x-1 py-0.5 px-2 bg-white/5 rounded text-[10px] font-mono text-white/60">
                   <span>ATR:</span>
-                  <span className="font-bold text-white">{metrics.atr.toFixed(5)}</span>
-                  <span className="text-white/30">|</span>
-                  <span className="font-bold text-indigo-300">
+                  <span className="font-mono text-white font-extrabold">{metrics.atr.toFixed(5)}</span>
+                  <span className="text-white/20">|</span>
+                  <span className="font-mono text-amber-400 font-bold">
                     {symbol === 'USD/JPY' ? (metrics.atr * 100).toFixed(1) : symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? metrics.atr.toFixed(1) : (metrics.atr * 10000).toFixed(1)} {symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? 'USD' : 'pips'}
                   </span>
                 </div>
               </div>
 
               {/* SL Multiplier Selectors */}
-              <div className="space-y-1.5 font-sans">
-                <div className="flex justify-between items-center text-[9.5px]">
-                  <span className="text-white/45 uppercase font-semibold">Stop Loss Distance (Multiplier)</span>
-                  <span className="font-mono text-indigo-400 font-bold">{atrMultiplier.toFixed(1)}x ATR</span>
+              <div className="space-y-1 font-mono">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-white/40 uppercase">Stop Loss Distance (Multiplier)</span>
+                  <span className="font-bold text-white/80">{atrMultiplier.toFixed(1)}x ATR</span>
                 </div>
-                <div className="grid grid-cols-4 gap-1 text-[9.5px]">
+                <div className="grid grid-cols-4 gap-1.5 text-[10px]">
                   {[1.5, 2.0, 2.5, 3.0].map((m) => (
                     <button
                       key={`atr-mult-btn-${m}`}
                       type="button"
                       onClick={() => setAtrMultiplier(m)}
-                      className={`py-1 rounded border font-mono font-bold transition-all cursor-pointer ${
+                      className={`py-1 rounded font-mono font-bold transition-all cursor-pointer border ${
                         atrMultiplier === m
-                          ? 'bg-indigo-600 border-indigo-500 text-white font-black shadow-lg shadow-indigo-500/10'
-                          : 'bg-black/35 border-white/5 hover:border-white/10 text-white/40 hover:text-white/70'
+                          ? 'bg-white/10 border-white/30 text-white'
+                          : 'bg-transparent border-white/5 hover:border-white/10 text-white/40 hover:text-white/70'
                       }`}
                     >
                       {m.toFixed(1)}x
@@ -1196,28 +1566,28 @@ export default function TradeTerminal({
               </div>
 
               {/* Risk Percentage Toggle - Recommended 1% Model */}
-              <div className="space-y-1.5 font-sans">
-                <div className="flex justify-between items-center text-[9.5px]">
-                  <span className="text-white/45 uppercase font-semibold">Risk Model (1% Recommended)</span>
-                  <span className="font-mono text-[#888888] font-bold">
-                    <span className="text-indigo-400 font-extrabold">{atrRiskPct.toFixed(1)}%</span> of Balance
+              <div className="space-y-1 font-mono">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-white/40 uppercase">Risk Model (1% Recommended)</span>
+                  <span className="font-bold text-white/80">
+                    <span className="text-amber-400">{atrRiskPct.toFixed(1)}%</span> of Balance
                   </span>
                 </div>
-                <div className="grid grid-cols-4 gap-1 text-[9.5px]">
+                <div className="grid grid-cols-4 gap-1.5 text-[10px]">
                   {[0.5, 1.0, 1.5, 2.0].map((r) => (
                     <button
                       key={`atr-risk-btn-${r}`}
                       type="button"
                       onClick={() => setAtrRiskPct(r)}
-                      className={`py-1 rounded border font-mono font-bold transition-all relative cursor-pointer ${
+                      className={`py-1 rounded font-mono font-bold transition-all relative cursor-pointer border ${
                         atrRiskPct === r
-                          ? 'bg-indigo-600 border-indigo-500 text-white font-black shadow-lg shadow-indigo-500/10'
-                          : 'bg-black/35 border-white/5 hover:border-white/10 text-white/40 hover:text-white/70'
+                          ? 'bg-white/10 border-white/30 text-white'
+                          : 'bg-transparent border-white/5 hover:border-white/10 text-white/40 hover:text-white/70'
                       }`}
                     >
                       {r.toFixed(1)}%
                       {r === 1.0 && (
-                        <span className="absolute -top-1 right-0 bg-emerald-500 text-[6.5px] text-black font-sans font-black px-0.5 rounded leading-none uppercase tracking-tight scale-90">
+                        <span className="absolute -top-1.5 right-0 bg-emerald-500 text-[6px] text-black font-sans font-black px-1 rounded-sm leading-none uppercase tracking-tight shadow-sm">
                           Rec
                         </span>
                       )}
@@ -1227,21 +1597,21 @@ export default function TradeTerminal({
               </div>
 
               {/* TP Reward Ratio Multipliers */}
-              <div className="space-y-1.5 font-sans">
-                <div className="flex justify-between items-center text-[9.5px]">
-                  <span className="text-white/45 uppercase font-semibold">Take Profit Target (TP Multiplier)</span>
-                  <span className="font-mono text-indigo-400 font-bold">{atrTpMultiplier.toFixed(1)}x ATR</span>
+              <div className="space-y-1 font-mono">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-white/40 uppercase">Take Profit Target (TP Multiplier)</span>
+                  <span className="font-bold text-white/80">{atrTpMultiplier.toFixed(1)}x ATR</span>
                 </div>
-                <div className="grid grid-cols-4 gap-1 text-[9.5px]">
+                <div className="grid grid-cols-4 gap-1.5 text-[10px]">
                   {[2.0, 3.0, 4.0, 6.0].map((tp) => (
                     <button
                       key={`atr-tp-btn-${tp}`}
                       type="button"
                       onClick={() => setAtrTpMultiplier(tp)}
-                      className={`py-1 rounded border font-mono font-bold transition-all cursor-pointer ${
+                      className={`py-1 rounded font-mono font-bold transition-all cursor-pointer border ${
                         atrTpMultiplier === tp
-                          ? 'bg-indigo-600 border-indigo-500 text-white font-black shadow-lg shadow-indigo-500/10 relative z-10'
-                          : 'bg-black/35 border-white/5 hover:border-white/10 text-white/40 hover:text-white/70'
+                          ? 'bg-white/10 border-white/30 text-white'
+                          : 'bg-transparent border-white/5 hover:border-white/10 text-white/40 hover:text-white/70'
                       }`}
                     >
                       {tp.toFixed(1)}x
@@ -1251,37 +1621,37 @@ export default function TradeTerminal({
               </div>
 
               {/* live computations display box */}
-              <div className="p-3 bg-black/45 border border-white/[0.04] rounded space-y-2 text-[10px] font-mono leading-relaxed text-left">
-                <div className="flex justify-between items-center text-white/30">
+              <div className="p-3 bg-white/5 border border-white/5 rounded space-y-1.5 text-[10px] font-mono leading-relaxed text-left">
+                <div className="flex justify-between items-center text-white/40">
                   <span>Balance:</span>
-                  <span className="text-white/70">${accountBalance.toLocaleString()}</span>
+                  <span className="text-white/80 font-bold">${accountBalance.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between items-center text-white/30 font-semibold">
-                  <span>Risk Cash Sized:</span>
-                  <span className="text-rose-400 font-bold">${(accountBalance * (atrRiskPct / 100)).toFixed(2)}</span>
+                <div className="flex justify-between items-center text-white/40">
+                  <span>Risk Sized:</span>
+                  <span className="text-rose-450 font-bold">${(accountBalance * (atrRiskPct / 100)).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between items-center text-white/30 border-t border-white/5 pt-1.5">
+                <div className="flex justify-between items-center text-white/40 border-t border-white/5 pt-1.5">
                   <span>SL Point Distance:</span>
                   <span className="text-white/80">
                     {calculatedAtrSlDistance.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)}
-                    <span className="text-white/30 ml-1">
+                    <span className="text-white/40 ml-1">
                       ({symbol === 'USD/JPY' ? (calculatedAtrSlDistance * 100).toFixed(1) : symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? `$${calculatedAtrSlDistance.toFixed(1)}` : (calculatedAtrSlDistance * 10000).toFixed(1)} {symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? 'USD' : 'pips'})
                     </span>
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-white/30">
+                <div className="flex justify-between items-center text-white/40">
                   <span>Proposed Sizing:</span>
-                  <span className="text-indigo-400 font-black text-xs">
+                  <span className="text-amber-400 font-bold text-xs">
                     {calculatedAtrPositionSize} {symbol === 'BTC/USDT' ? 'BTC' : 'LOTS'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-white/30 pt-1 border-t border-white/5">
+                <div className="flex justify-between items-center text-white/40 pt-1.5 border-t border-white/5">
                   <span>Suggested SL Level:</span>
-                  <span className="text-red-400 font-bold">{recommendedAtrStopLoss}</span>
+                  <span className="text-rose-500 font-bold">{recommendedAtrStopLoss}</span>
                 </div>
-                <div className="flex justify-between items-center text-white/30 font-semibold">
+                <div className="flex justify-between items-center text-white/40">
                   <span>Suggested TP Level:</span>
-                  <span className="text-emerald-400 font-bold">{recommendedAtrTakeProfit}</span>
+                  <span className="text-emerald-500 font-bold">{recommendedAtrTakeProfit}</span>
                 </div>
               </div>
 
@@ -1289,7 +1659,7 @@ export default function TradeTerminal({
               <button
                 type="button"
                 onClick={handleApplyAtrParameters}
-                className="w-full py-1.5 md:py-2 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-300 hover:text-white border border-indigo-500/25 hover:border-indigo-500/30 rounded text-xs font-bold font-mono uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center justify-center space-x-1.5 shadow"
+                className="w-full py-2 bg-[#111] hover:bg-[#222] text-white/80 hover:text-white border border-white/10 rounded text-[10px] font-bold font-mono uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shadow"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Apply ATR Sizing & Levels</span>
@@ -1297,32 +1667,32 @@ export default function TradeTerminal({
             </div>
 
             {/* Auto-Break-Even block */}
-            <div className="bg-[#08080a] border border-white/5 rounded p-3.5 space-y-2 select-none">
+            <div className="bg-[#050505] border border-white/10 rounded p-4 space-y-3 select-none text-left shadow-md">
               <div className="flex items-center justify-between">
-                <label className="text-white/80 font-sans font-bold flex items-center gap-2 cursor-pointer text-[10.5px] uppercase tracking-wider">
+                <label className="text-white/80 font-mono font-bold flex items-center gap-2 cursor-pointer text-[10.5px]">
                   <input
                     id="checkbox-auto-break-even"
                     type="checkbox"
                     checked={autoBreakEvenEnabled}
                     onChange={(e) => setAutoBreakEvenEnabled(e.target.checked)}
-                    className="rounded border-white/20 bg-black text-indigo-500 focus:ring-transparent h-4 w-4 cursor-pointer"
+                    className="border-white/20 bg-black text-white focus:ring-transparent h-4 w-4 cursor-pointer rounded"
                   />
                   <span>Auto-Break-Even Strategy</span>
                 </label>
-                <span className={`text-[8.5px] font-mono px-2 py-0.5 rounded font-extrabold uppercase tracking-wide transition-all ${
-                  autoBreakEvenEnabled ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 animate-pulse' : 'bg-white/5 text-white/30 border border-transparent'
+                <span className={`text-[8px] font-mono px-2 py-0.5 rounded font-bold uppercase tracking-wider transition-colors ${
+                  autoBreakEvenEnabled ? 'bg-white/10 text-white border border-white/20' : 'bg-white/5 text-white/30 border border-transparent'
                 }`}>
                   {autoBreakEvenEnabled ? 'ARMED' : 'OFF'}
                 </span>
               </div>
               
               {autoBreakEvenEnabled && (
-                <div className="space-y-2 pt-1 transition-all duration-300">
-                  <p className="text-[10px] font-sans text-white/40 leading-normal">
+                <div className="space-y-2 pt-1 transition-all">
+                  <p className="text-[10px] font-mono text-white/45 leading-normal">
                     Secure capital automatically. Once the active trade reaches this profit target (%), the stop-loss is shifted instantly to its entry price.
                   </p>
-                  <div className="flex items-center gap-2 font-sans">
-                    <span className="text-[10.5px] text-white/50 tracking-tight shrink-0">Trigger Profit Target:</span>
+                  <div className="flex items-center gap-2 font-mono">
+                    <span className="text-[10px] text-white/40 font-semibold shrink-0">Trigger Profit Target:</span>
                     <div className="relative flex-1 max-w-[110px]">
                       <input
                         id="input-auto-be-profit-pct"
@@ -1331,7 +1701,7 @@ export default function TradeTerminal({
                         min="0.1"
                         value={autoBreakEvenProfitPct}
                         onChange={(e) => setAutoBreakEvenProfitPct(e.target.value)}
-                        className="w-full bg-[#030304] border border-white/15 text-indigo-300 font-mono text-xs px-2.5 py-1 rounded outline-none focus:border-indigo-500/40 pr-6"
+                        className="w-full bg-black border border-white/10 text-white font-mono text-xs px-2 py-1 rounded outline-none focus:border-white/30 pr-6"
                         placeholder="1.0"
                       />
                       <span className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-white/30 font-bold">%</span>
@@ -1341,46 +1711,33 @@ export default function TradeTerminal({
               )}
             </div>
 
-            <div>
-              <label className="text-white/35 block uppercase mb-1 font-sans tracking-tight">Sustainment / Logic details</label>
-              <textarea
-                id="reason-textarea"
-                value={reason}
-                rows={2}
-                onChange={(e) => setReason(e.target.value)}
-                className="w-full bg-[#050505] border border-white/10 text-white/60 px-3 py-2 rounded focus:outline-none focus:border-indigo-500 font-sans"
-              />
-            </div>
-
-            <div className="p-3 bg-indigo-500/[0.02] border border-indigo-500/10 rounded-lg space-y-1.5">
+            {/* Market Notes - Unified with styling */}
+            <div className="p-4 bg-[#050505] border border-white/10 rounded space-y-2 text-left">
               <div className="flex items-center justify-between">
-                <label className="text-indigo-300 block text-[10.5px] uppercase font-mono font-bold tracking-tight">
-                  Pre-defined Market Note (Entry Reasoning)
+                <label className="text-white/40 block text-[10px] uppercase font-mono tracking-wide">
+                  Pre-defined Market Note (Entry Reason)
                 </label>
-                <span className="text-[8.5px] text-indigo-400/70 font-mono font-semibold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/10">PERSISTENT</span>
+                <span className="text-[8px] text-white/60 font-mono font-bold bg-white/5 px-1.5 py-0.5 rounded border border-white/10 uppercase tracking-widest">PERSISTENT</span>
               </div>
               <textarea
                 id="market-note-textarea"
                 value={marketNote}
                 rows={2}
                 onChange={(e) => setMarketNote(e.target.value)}
-                placeholder="Pre-define reasoning to automatically stamp it on any trades executed via Terminal, Chart, or Ladder..."
-                className="w-full bg-[#050505] border border-indigo-500/20 hover:border-indigo-500/35 focus:border-indigo-500 text-white/90 px-3 py-2 rounded focus:outline-none placeholder-white/25 text-xs tracking-tight font-sans leading-normal focus:ring-1 focus:ring-indigo-500/10"
+                placeholder="Pre-define strategy reasoning or observations to stamp them on any trades executed..."
+                className="w-full bg-black border border-white/10 focus:border-white/30 hover:border-white/20 text-white px-3 py-2 rounded focus:outline-none placeholder-white/25 text-xs font-mono leading-normal"
               />
-              <span className="text-[8.5px] text-white/30 font-sans leading-normal block">
-                🔒 Stored in local browser safety storage. Stamps automatically onto your live ledger for journal self-auditing.
+              <span className="text-[8.5px] text-white/30 font-mono leading-normal block">
+                🔒 Stored locally in sandbox browser safe vaults. Stamped directly onto live trade ledgers.
               </span>
             </div>
 
             {/* ICT Audit and Confidence Score Block */}
-            <div className="border border-white/5 bg-[#050505]/60 hover:border-white/10 rounded-lg p-3.5 mt-3 space-y-3 font-sans transition-colors">
+            <div className="border border-white/10 bg-[#050505] rounded p-4 space-y-3 text-left shadow-md">
               <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
-                  <Gauge className="w-3.5 h-3.5 text-indigo-400" />
-                  ICT CONFLUENCE AUDIT METHODOLOGY
-                </span>
-                <span className="text-xs font-mono font-black text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/15">
-                  Confidence: {confidence}%
+                <span className="text-xs font-bold uppercase tracking-wider text-white/80 flex items-center gap-1.5">
+                  <Gauge className="w-4 h-4 text-white/60" />
+                  ICT Confluence Audit Methodology
                 </span>
               </div>
 
@@ -1396,13 +1753,13 @@ export default function TradeTerminal({
                     step="1"
                     value={confidence}
                     onChange={(e) => setConfidence(Number(e.target.value))}
-                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer focus:outline-none accent-indigo-500"
+                    className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer focus:outline-none accent-white"
                   />
                 </div>
               </div>
 
               {/* Interactive ICT Checklist mapping */}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-white/40 block text-[9.5px] uppercase font-bold tracking-tight">Executed Confluences Checklist</label>
                 <div className="grid grid-cols-2 gap-2 text-[10px] font-mono leading-tight">
                   {CONFLUENCE_OPTIONS.map((option) => {
@@ -1412,14 +1769,14 @@ export default function TradeTerminal({
                         key={option}
                         type="button"
                         onClick={() => handleToggleConfluence(option)}
-                        className={`flex items-start space-x-1.5 p-1.5 rounded transition-all text-left border ${
+                        className={`flex items-start space-x-1.5 p-2 rounded transition-colors text-left border cursor-pointer ${
                           isChecked 
-                            ? 'bg-indigo-500/10 text-indigo-200 border-indigo-500/15 hover:bg-indigo-500/15' 
-                            : 'bg-transparent text-white/30 border-white/5 hover:text-white/50 hover:bg-white/5'
+                            ? 'bg-white/10 text-white border-white/20' 
+                            : 'bg-transparent text-white/35 border-white/5 hover:text-white/50 hover:bg-white/5'
                         }`}
                       >
                         {isChecked ? (
-                          <CheckSquare className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                          <CheckSquare className="w-3.5 h-3.5 text-white shrink-0 mt-0.5" />
                         ) : (
                           <Square className="w-3.5 h-3.5 text-white/20 shrink-0 mt-0.5" />
                         )}
@@ -1433,53 +1790,53 @@ export default function TradeTerminal({
           </div>
 
           {/* Calculations Summary block */}
-          <div className="mt-4 bg-[#050505] px-4 py-3 border border-white/10 rounded flex items-center justify-between font-mono text-xs">
-            <div className="flex items-center space-x-2">
-              <Calculator className="w-4 h-4 text-indigo-400" />
-              <span className="text-white/55">Calculated Lot Size:</span>
+          <div className="mt-4 bg-[#050505] px-4 py-3 border border-white/10 rounded flex items-center justify-between font-mono text-xs shadow-md">
+            <div className="flex items-center space-x-2 select-none">
+              <Calculator className="w-4 h-4 text-white/50" />
+              <span className="text-white/40 uppercase tracking-wide text-[10px]">Calculated Lot Size:</span>
             </div>
-            <span className="text-[13px] text-indigo-300 font-bold uppercase">
-              {calculatedPositionSize} {symbol === 'BTC/USDT' ? 'BTC' : 'FOREX LOTS'}
+            <span className="text-xs text-white font-bold bg-white/15 border border-white/20 px-2 py-0.5 rounded">
+              {calculatedPositionSize} {symbol === 'BTC/USDT' ? 'BTC' : 'LOTS'}
             </span>
           </div>
 
           {/* Trend alignment alert warning */}
           {!isObserveMode && ((side === 'BUY' && metrics.dailyBias === 'BEARISH') || (side === 'SELL' && metrics.dailyBias === 'BULLISH')) && (
-            <div id="trend-misalignment-alert" className="mt-3.5 p-3.5 bg-yellow-950/20 border border-yellow-500/20 rounded text-yellow-300/80 text-[10.5px] leading-relaxed flex items-start space-x-2">
-              <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+            <div id="trend-misalignment-alert" className="mt-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded text-amber-300 text-xs leading-relaxed flex items-start space-x-2">
+              <AlertTriangle className="w-4 h-4 text-amber-450 shrink-0 mt-0.5" />
               <p>
-                <strong>Trading Code Check Fault</strong>: Trade goes against the 4H/Daily EMA 50 trend bias (currently <span className="font-bold underline">{metrics.dailyBias}</span>). Consider adjusting bias.
+                <strong className="text-amber-400 font-bold uppercase font-mono text-[10px] block mb-0.5">⚠️ Trend alignment Warning:</strong> Go check bias! Trade is against the Daily bias (<span className="font-bold underline text-white">{metrics.dailyBias}</span>).
               </p>
             </div>
           )}
 
           {errorMsg && (
-            <div id="terminal-error" className="mt-3.5 p-3 bg-red-950/20 border border-red-500/30 rounded text-rose-400 text-[11px] flex items-center space-x-2">
-              <AlertOctagon className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
+            <div id="terminal-error" className="mt-4 p-3 bg-red-950/20 border border-red-500/30 rounded text-rose-400 text-xs flex items-center space-x-2">
+              <AlertOctagon className="w-4 h-4 shrink-0 text-rose-500" />
+              <span className="font-semibold">{errorMsg}</span>
             </div>
           )}
 
           {/* REAL-TIME SYSTEM SIGNAL MONITOR & PRIORITIZATION FEED */}
-          <div id="system-signal-monitor-card" className="mt-4 p-4 bg-[#070709] border border-white/5 rounded flex flex-col space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.04]">
-              <div className="flex items-center space-x-1.5 font-sans">
-                <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                <h5 className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/70">
+          <div id="system-signal-monitor-card" className="mt-4 p-4 bg-[#050505] border border-white/10 rounded flex flex-col space-y-3 shadow-md">
+            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+              <div className="flex items-center space-x-2 font-mono select-none">
+                <Activity className="w-4 h-4 text-white/50" />
+                <h5 className="text-xs font-bold uppercase tracking-wider text-white/80">
                   Signal & Watchtower Stream
                 </h5>
               </div>
-              <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                isObserveMode ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse' : 'bg-white/5 text-white/40'
+              <span className={`text-[8px] font-mono font-bold px-2 py-0.5 rounded-md tracking-wider ${
+                isObserveMode ? 'bg-white/15 text-white border border-white/20' : 'bg-white/5 text-white/30'
               }`}>
-                {isObserveMode ? 'OBSERVI-MODE ACTIVE' : 'FULL FEED'}
+                {isObserveMode ? 'SWEEPS FILTER ACTIVE' : 'FULL TRANSMISSION'}
               </span>
             </div>
 
             <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
               {terminalSignals.filter(s => !isObserveMode || s.type === 'SWEEP_BSL' || s.type === 'SWEEP_SSL').length === 0 ? (
-                <div className="text-center py-6 text-white/35 text-[9.5px] italic font-sans">
-                  Waiting for high-dispersion sweeps on {symbol}...
+                <div className="text-center py-6 text-white/30 text-[10px] italic font-mono select-none">
+                  Waiting for sweep signals on {symbol}...
                 </div>
               ) : (
                 terminalSignals
@@ -1489,34 +1846,34 @@ export default function TradeTerminal({
                     return (
                       <div 
                         key={sig.id} 
-                        className={`p-2.5 rounded border transition-all ${
+                        className={`p-3 rounded border transition-colors ${
                           isSweep 
-                            ? 'bg-indigo-950/20 border-indigo-500/20 shadow-[0_0_8px_rgba(99,102,241,0.03)]' 
-                            : 'bg-[#040405] border-white/[0.03]'
+                            ? 'bg-amber-500/5 border-amber-550/20' 
+                            : 'bg-transparent border-white/5'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className={`text-[9.5px] font-mono font-bold flex items-center gap-1 ${
-                            isSweep ? 'text-indigo-300' : 'text-white/60'
+                          <span className={`text-[10px] font-mono font-bold flex items-center gap-1.5 ${
+                            isSweep ? 'text-amber-400' : 'text-white/60'
                           }`}>
                             {isSweep ? (
-                              <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+                              <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
                             ) : (
-                              <Activity className="w-3 h-3 text-white/30" />
+                              <Activity className="w-3.5 h-3.5 text-white/30" />
                             )}
                             {sig.label}
                           </span>
-                          <span className="text-[7.5px] font-mono text-white/30">
+                          <span className="text-[7.5px] font-mono text-white/30 font-semibold select-none">
                             {sig.timestamp}
                           </span>
                         </div>
-                        <p className="text-[8.5px] text-white/50 mt-1 font-sans leading-normal">
+                        <p className="text-[9px] text-white/40 mt-1 font-mono leading-normal text-left">
                           {sig.details}
                         </p>
                         {sig.volume && (
-                          <div className="mt-1.5 flex items-center justify-between text-[8px] font-mono">
+                          <div className="mt-2 flex items-center justify-between text-[8px] font-mono">
                             <span className="text-white/30">DETECTED VOLUME:</span>
-                            <span className="text-indigo-400 font-extrabold bg-indigo-500/10 px-1 py-0.2 rounded">
+                            <span className="text-white/70 font-semibold bg-white/5 px-1.5 py-0.5 rounded leading-none select-none">
                               {sig.volume}
                             </span>
                           </div>
@@ -1533,15 +1890,15 @@ export default function TradeTerminal({
           id="execute-trade-btn"
           disabled={executing}
           onClick={handlePlaceTrade}
-          className="mt-6 w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800/60 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider rounded transition-all shadow-lg flex items-center justify-center space-x-2 cursor-pointer"
+          className="mt-5 w-full py-2.5 bg-white hover:bg-white/90 disabled:bg-white/10 disabled:text-white/30 text-black font-mono font-bold text-xs uppercase tracking-widest rounded transition-colors flex items-center justify-center space-x-2 cursor-pointer"
         >
-          <Play className="w-4 h-4 text-[#e5e5e5]" />
-          <span>{executing ? 'Firing Setup request...' : 'Transmit Trade Confirmation'}</span>
+          <Play className="w-4 h-4 shrink-0 text-black" />
+          <span>{executing ? 'Transmitting limits request...' : 'Transmit Trade Confirmation'}</span>
         </button>
       </div>
 
       {/* Trades Ledger & Positions tracker */}
-      <div className="lg:col-span-7 bg-[#080808] border border-white/10 rounded p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between">
+      <div className="col-span-12 bg-[#080808] border border-white/10 rounded p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between">
         <div>
           <div className="flex items-center space-x-2.5 pb-4 border-b border-white/10">
             <div className="p-2 bg-indigo-500/10 rounded">
@@ -1553,18 +1910,24 @@ export default function TradeTerminal({
             </div>
           </div>
 
-          {/* Performance Summary Statistics */}
-          <div className="mt-4 p-4 bg-[#050505]/60 border border-white/5 rounded">
-            <div className="flex items-center justify-between mb-3">
-              <h5 className="text-[10px] uppercase font-bold text-white/40 font-mono tracking-wider flex items-center">
-                <Activity className="w-3.5 h-3.5 mr-1.5 text-indigo-400" />
-                Performance Analytics
-              </h5>
-              <span className="text-[9px] font-mono text-white/35 bg-white/5 px-1.5 py-0.5 rounded leading-none">
-                {performanceStats.totalTrades} {performanceStats.totalTrades === 1 ? 'Trade' : 'Trades'}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {/* Landscaped Analytics Dashboard layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+            
+            {/* Column 1: Performance Summary Statistics & MT5 Bridge Efficiency */}
+            <div className="flex flex-col space-y-4">
+              
+              {/* Performance Summary Statistics Card */}
+              <div className="p-4 bg-[#050505]/60 border border-white/5 rounded flex-1 flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-3 shrink-0">
+                  <h5 className="text-[10px] uppercase font-bold text-white/40 font-mono tracking-wider flex items-center">
+                    <Activity className="w-3.5 h-3.5 mr-1.5 text-indigo-400" />
+                    Performance Analytics
+                  </h5>
+                  <span className="text-[9px] font-mono text-white/35 bg-white/5 px-1.5 py-0.5 rounded leading-none">
+                    {performanceStats.totalTrades} {performanceStats.totalTrades === 1 ? 'Trade' : 'Trades'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 w-full flex-1">
               {/* Win Rate */}
               <div className="p-2.5 bg-[#080808] border border-white/10 rounded flex flex-col justify-between">
                 <div>
@@ -1660,31 +2023,133 @@ export default function TradeTerminal({
                   From {performanceStats.totalTrades} closed trades
                 </div>
               </div>
+              </div>
             </div>
 
-            {/* Cumulative PnL Growth Curve */}
-            <div className="mt-4 pt-4 border-t border-white/5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[9.5px] text-[#888888] font-mono uppercase tracking-wide">
-                  Cumulative PnL Growth Curve ($)
+            {/* Real-time MT5 Bridge Trade Efficiency Ratio Widget */}
+            <div id="trade-efficiency-ratio-widget" className="p-4 bg-gradient-to-br from-[#0c0c0e] to-[#070709] border border-white/5 rounded-lg flex flex-col justify-between flex-1">
+              <div className="flex items-center justify-between pb-2 border-b border-white/5 mb-2 shrink-0">
+                <h5 className="text-[10px] uppercase font-bold text-white/40 font-mono tracking-wider flex items-center font-sans">
+                  <Cpu className="w-3.5 h-3.5 mr-1.5 text-[#34d399] animate-pulse" />
+                  MT5 Bridge Efficiency
+                </h5>
+                <span className="text-[8px] font-mono text-[#34d399] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-[#10b981]/15 border border-[#10b981]/25">
+                  Live Telemetry
                 </span>
-                {performanceStats.totalTrades > 0 && (
-                  <span className={`text-[10px] font-mono font-bold ${performanceStats.totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {performanceStats.totalPnL >= 0 ? '+' : ''}${performanceStats.totalPnL.toFixed(2)}
-                  </span>
-                )}
               </div>
 
-              {closedTrades.length === 0 ? (
-                <div className="h-[100px] flex items-center justify-center border border-dashed border-white/5 bg-[#030303]/40 rounded">
-                  <span className="text-[9.5px] font-mono text-white/30 italic">
-                    Execute and close trades to populate PnL growth curve
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1 items-center">
+                {/* Score Dial / Ring Meter */}
+                <div className="md:col-span-5 flex flex-col items-center justify-center p-2 text-center bg-black/40 border border-white/5 rounded relative overflow-hidden h-full">
+                  <div className="relative w-12 h-12 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r="20"
+                        className="stroke-white/[0.04]"
+                        strokeWidth="3"
+                        fill="transparent"
+                      />
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r="20"
+                        className="stroke-[#10b981] transition-all duration-1000"
+                        strokeWidth="3"
+                        fill="transparent"
+                        strokeDasharray={`${2 * Math.PI * 20}`}
+                        strokeDashoffset={`${2 * Math.PI * 20 * (1 - tradeEfficiencyMetrics.ratio / 100)}`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span id="efficiency-score-value" className="text-[11px] font-mono font-black text-white leading-none">
+                        {tradeEfficiencyMetrics.ratio.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`text-[7.5px] font-mono font-bold mt-1 leading-none ${
+                    tradeEfficiencyMetrics.ratio >= 85 ? 'text-emerald-400' : tradeEfficiencyMetrics.ratio >= 70 ? 'text-amber-400' : 'text-rose-400'
+                  }`}>
+                    {tradeEfficiencyMetrics.ratio >= 85 ? 'OPTIMAL' : tradeEfficiencyMetrics.ratio >= 70 ? 'JITTER' : 'SLIPPAGE'}
                   </span>
                 </div>
-              ) : (
-                <div className="h-[110px] w-full mt-1">
+
+                {/* Performance stats split */}
+                <div className="md:col-span-7 flex flex-col justify-center space-y-2 h-full">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <div className="p-1 bg-black/20 border border-white/5 rounded text-[8px] text-center">
+                      <span className="text-white/35 uppercase font-mono block text-[6.5px]">Latency</span>
+                      <div id="telemetry-avg-latency" className={`text-[10px] font-mono font-bold mt-0.5 ${
+                        tradeEfficiencyMetrics.avgLatency <= 45 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}>
+                        {tradeEfficiencyMetrics.avgLatency.toFixed(0)}ms
+                      </div>
+                    </div>
+
+                    <div className="p-1 bg-black/20 border border-white/5 rounded text-[8px] text-center">
+                      <span className="text-white/35 uppercase font-mono block text-[6.5px]">Slippage</span>
+                      <div id="telemetry-avg-slippage" className="text-[10px] font-mono font-bold mt-0.5 text-sky-400">
+                        {tradeEfficiencyMetrics.avgSlippage.toFixed(1)}p
+                      </div>
+                    </div>
+
+                    <div className="p-1 bg-black/20 border border-white/5 rounded text-[8px] text-center">
+                      <span className="text-white/35 uppercase font-mono block text-[6.5px]">Health</span>
+                      <div id="telemetry-health-pct" className={`text-[10px] font-mono font-bold mt-0.5 ${
+                        tradeEfficiencyMetrics.healthyPct >= 80 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}>
+                        {tradeEfficiencyMetrics.healthyPct.toFixed(0)}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Latency Breaches Warnings Banner */}
+                  <div className="p-1.5 bg-black/30 border border-white/5 rounded flex items-center justify-between text-[8px] font-mono leading-none">
+                    <div className="flex items-center space-x-1.5">
+                      <span className={`w-1 h-1 rounded-full ${
+                        tradeEfficiencyMetrics.breachedCount > 0 ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+                      }`}></span>
+                      <span className="text-white/40 uppercase text-[7px]">Breaches:</span>
+                      <span id="telemetry-breached-count" className={`font-bold rounded-sm px-1 text-[7.5px] ${
+                        tradeEfficiencyMetrics.breachedCount > 0 ? 'text-amber-300 bg-amber-500/10' : 'text-emerald-300 bg-emerald-500/10'
+                      }`}>
+                        {tradeEfficiencyMetrics.breachedCount}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div> {/* Closes Column 1 wrapper */}
+
+          {/* Column 2: Cumulative PnL Growth Curve */}
+          <div className="p-4 bg-[#050505]/60 border border-white/5 rounded flex flex-col justify-between min-h-[300px]">
+            <div className="flex items-center justify-between mb-3 shrink-0">
+              <span className="text-[10px] uppercase font-bold text-white/40 font-mono tracking-wider flex items-center font-sans">
+                <TrendingUp className="w-3.5 h-3.5 mr-1.5 text-indigo-400" />
+                Cumulative PnL Growth Curve ($)
+              </span>
+              {performanceStats.totalTrades > 0 && (
+                <span className={`text-[10px] font-mono font-bold ${performanceStats.totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {performanceStats.totalPnL >= 0 ? '+' : ''}${performanceStats.totalPnL.toFixed(2)}
+                </span>
+              )}
+            </div>
+
+            {closedTrades.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center border border-dashed border-white/5 bg-[#030303]/40 rounded p-4 min-h-[220px]">
+                <span className="text-[9.5px] font-mono text-white/30 italic text-center">
+                  Execute and close trades to populate PnL growth curve
+                </span>
+              </div>
+            ) : (
+              <div className="flex-1 w-full min-h-[220px] mt-1 relative">
+                <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                    <LineChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
                       <XAxis 
                         dataKey="tradeNum" 
@@ -1738,32 +2203,35 @@ export default function TradeTerminal({
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Column 3: Net PnL by Day of the Week */}
+          <div className="p-4 bg-[#050505]/60 border border-white/5 rounded flex flex-col justify-between min-h-[300px]">
+            <div className="flex items-center justify-between mb-3 shrink-0">
+              <span className="text-[10px] uppercase font-bold text-white/40 font-mono tracking-wider flex items-center font-sans">
+                <Activity className="w-3.5 h-3.5 mr-1.5 text-indigo-400" />
+                Net PnL by Day of the Week ($)
+              </span>
+              {performanceStats.totalTrades > 0 && (
+                <span className="text-[9px] font-mono text-white/35">
+                  Aggregation (Mon–Sun)
+                </span>
               )}
             </div>
 
-            {/* Net PnL by Day of the Week */}
-            <div className="mt-4 pt-4 border-t border-white/5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[9.5px] text-[#888888] font-mono uppercase tracking-wide">
-                  Net PnL by Day of the Week ($)
+            {closedTrades.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center border border-dashed border-white/5 bg-[#030303]/40 rounded p-4 min-h-[220px]">
+                <span className="text-[9.5px] font-mono text-white/30 italic text-center">
+                  Execute and close trades to populate weekly distribution
                 </span>
-                {performanceStats.totalTrades > 0 && (
-                  <span className="text-[10px] font-mono text-white/35">
-                    Aggregation (Mon–Sun)
-                  </span>
-                )}
               </div>
-
-              {closedTrades.length === 0 ? (
-                <div className="h-[100px] flex items-center justify-center border border-dashed border-white/5 bg-[#030303]/40 rounded">
-                  <span className="text-[9.5px] font-mono text-white/30 italic">
-                    Execute and close trades to populate weekly distribution
-                  </span>
-                </div>
-              ) : (
-                <div className="h-[110px] w-full mt-1">
+            ) : (
+              <div className="flex-1 w-full min-h-[220px] mt-1 relative">
+                <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dayOfWeekPnLData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                    <BarChart data={dayOfWeekPnLData} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
                       <XAxis 
                         dataKey="day" 
@@ -1818,117 +2286,12 @@ export default function TradeTerminal({
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Real-time MT5 Bridge Trade Efficiency Ratio Widget */}
-          <div id="trade-efficiency-ratio-widget" className="mt-4 p-4 bg-gradient-to-br from-[#0c0c0e] to-[#070709] border border-white/5 rounded-lg">
-            <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-3">
-              <h5 className="text-[10px] uppercase font-bold text-white/40 font-mono tracking-wider flex items-center">
-                <Cpu className="w-3.5 h-3.5 mr-1.5 text-[#34d399] animate-pulse" />
-                MT5 Bridge Efficiency Recon
-              </h5>
-              <span className="text-[8px] font-mono text-[#34d399] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-[#10b981]/15 border border-[#10b981]/25">
-                Real-Time telemetry
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              {/* Score Dial / Ring Meter */}
-              <div className="md:col-span-4 flex flex-col items-center justify-center p-3 text-center bg-black/40 border border-white/5 rounded-md relative overflow-hidden">
-                <div className="relative w-16 h-16 flex items-center justify-center">
-                  <svg className="w-full h-full transform -rotate-90">
-                    <circle
-                      cx="32"
-                      cy="32"
-                      r="28"
-                      className="stroke-white/[0.04]"
-                      strokeWidth="4"
-                      fill="transparent"
-                    />
-                    <circle
-                      cx="32"
-                      cy="32"
-                      r="28"
-                      className="stroke-[#10b981] transition-all duration-1000"
-                      strokeWidth="4"
-                      fill="transparent"
-                      strokeDasharray={`${2 * Math.PI * 28}`}
-                      strokeDashoffset={`${2 * Math.PI * 28 * (1 - tradeEfficiencyMetrics.ratio / 100)}`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span id="efficiency-score-value" className="text-sm font-mono font-black text-white leading-none">
-                      {tradeEfficiencyMetrics.ratio.toFixed(1)}%
-                    </span>
-                    <span className="text-[6.5px] text-white/35 font-mono uppercase font-black tracking-tighter mt-0.5">
-                      EFFICIENCY
-                    </span>
-                  </div>
-                </div>
-                <span className={`text-[8.5px] font-mono font-bold uppercase mt-2 ${
-                  tradeEfficiencyMetrics.ratio >= 85 ? 'text-emerald-400' : tradeEfficiencyMetrics.ratio >= 70 ? 'text-amber-400' : 'text-rose-400'
-                }`}>
-                  {tradeEfficiencyMetrics.ratio >= 85 ? '■ OPTIMAL ROUTING' : tradeEfficiencyMetrics.ratio >= 70 ? '▲ REGULAR JITTER' : '✕ HIGH SLIPPAGE'}
-                </span>
               </div>
-
-              {/* Performance stats split */}
-              <div className="md:col-span-8 flex flex-col justify-between space-y-2">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-2 bg-black/20 border border-white/5 rounded">
-                    <span className="text-[8px] text-white/30 uppercase font-mono block">Avg Latency</span>
-                    <div id="telemetry-avg-latency" className={`text-xs font-mono font-bold mt-1 ${
-                      tradeEfficiencyMetrics.avgLatency <= 45 ? 'text-emerald-400' : 'text-rose-400'
-                    }`}>
-                      {tradeEfficiencyMetrics.avgLatency.toFixed(1)} ms
-                    </div>
-                    <span className="text-[7px] text-white/20 font-mono">Target: &lt;45ms</span>
-                  </div>
-
-                  <div className="p-2 bg-black/20 border border-white/5 rounded">
-                    <span className="text-[8px] text-white/30 uppercase font-mono block">Avg Slippage</span>
-                    <div id="telemetry-avg-slippage" className="text-xs font-mono font-bold mt-1 text-sky-400">
-                      {tradeEfficiencyMetrics.avgSlippage.toFixed(2)} pips
-                    </div>
-                    <span className="text-[7px] text-white/20 font-mono">Simulated DOM</span>
-                  </div>
-
-                  <div className="p-2 bg-black/20 border border-white/5 rounded">
-                    <span className="text-[8px] text-white/30 uppercase font-mono block">Target Health</span>
-                    <div id="telemetry-health-pct" className={`text-xs font-mono font-bold mt-1 ${
-                      tradeEfficiencyMetrics.healthyPct >= 80 ? 'text-emerald-400' : tradeEfficiencyMetrics.healthyPct >= 65 ? 'text-amber-400' : 'text-rose-400'
-                    }`}>
-                      {tradeEfficiencyMetrics.healthyPct.toFixed(1)}%
-                    </div>
-                    <span className="text-[7px] text-white/20 font-mono">In-target rate</span>
-                  </div>
-                </div>
-
-                {/* Latency Breaches Warnings Banner */}
-                <div className="p-2 bg-black/30 border border-white/5 rounded flex items-center justify-between text-[9px] font-mono leading-none">
-                  <div className="flex items-center space-x-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      tradeEfficiencyMetrics.breachedCount > 0 ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
-                    }`}></span>
-                    <span className="text-white/50 uppercase text-[8px]">Breaches (&gt;45ms):</span>
-                    <span id="telemetry-breached-count" className={`font-black uppercase tracking-wide px-1 rounded ${
-                      tradeEfficiencyMetrics.breachedCount > 0 ? 'text-amber-300 bg-amber-500/10' : 'text-emerald-300 bg-emerald-500/10'
-                    }`}>
-                      {tradeEfficiencyMetrics.breachedCount} {tradeEfficiencyMetrics.breachedCount === 1 ? 'trade' : 'trades'}
-                    </span>
-                  </div>
-                  {tradeEfficiencyMetrics.breachedCount > 0 && (
-                    <span className="text-amber-400/90 font-bold tracking-tighter uppercase animate-pulse text-[8px]">
-                      ⚠️ HIGHLIGHTED BELOW
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+            )}
           </div>
+        </div>
+
+
 
           <div className="mt-4">
             <h5 className="text-[11px] uppercase font-bold text-white/40 font-mono mb-2 tracking-wider flex items-center">

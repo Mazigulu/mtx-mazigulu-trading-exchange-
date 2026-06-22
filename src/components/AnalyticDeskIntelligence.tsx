@@ -37,9 +37,10 @@ interface AnalyticDeskIntelligenceProps {
   metrics: MarketMetrics;
   trades?: Trade[];
   onUpdateTradeParams?: (id: string, params: Partial<Trade>) => Promise<void> | void;
+  mode?: 'ALL' | 'ATR_ONLY' | 'EXCLUDE_ATR';
 }
 
-export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [], onUpdateTradeParams }: AnalyticDeskIntelligenceProps) {
+export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [], onUpdateTradeParams, mode = 'ALL' }: AnalyticDeskIntelligenceProps) {
   const [selectedRegimeRef, setSelectedRegimeRef] = useState<number>(0); // manual shock index nudge
   const [showHeuristicsInfo, setShowHeuristicsInfo] = useState<boolean>(false);
   const [selectedIntegrationWeight, setSelectedIntegrationWeight] = useState<number>(1.0); // 1x ATR multiplier slider
@@ -793,6 +794,225 @@ export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [],
     }
   }, [strategyPreset, metrics, symbol, selectedIntegrationWeight]);
 
+  if (mode === 'ATR_ONLY') {
+    return (
+      <div id="volatility-stop-loss-adviser" className="bg-[#0b0b0d] border border-white/5 rounded-lg p-5 font-mono select-none">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/[0.04] pb-4 mb-4">
+          <div className="flex items-center space-x-2.5">
+            <div className="h-7 w-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+              <Sparkles className="w-4 h-4 animate-pulse" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 block">
+                ATR Volatility-Adjusted Stop Loss Advisor
+              </span>
+              <span className="text-[9px] text-white/35 block font-sans mt-0.5">
+                Calculates dynamic, volatility-appropriate stop-loss levels aligned to live market ATR cushions.
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-[9.5px]">
+            <div className="flex items-center bg-black/40 rounded border border-white/5 p-1">
+              <button 
+                type="button"
+                onClick={() => setSlShowAllSymbols(true)}
+                className={`px-2 py-1 rounded text-[8.5px] transition-all cursor-pointer ${slShowAllSymbols ? 'bg-indigo-600 font-bold text-white' : 'text-white/40 hover:text-white/70'}`}
+              >
+                All Symbols ({trades.filter(t => t.status === 'OPEN').length})
+              </button>
+              <button 
+                type="button"
+                onClick={() => setSlShowAllSymbols(false)}
+                className={`px-2 py-1 rounded text-[8.5px] transition-all cursor-pointer ${!slShowAllSymbols ? 'bg-indigo-600 font-bold text-white' : 'text-white/40 hover:text-white/70'}`}
+              >
+                {symbol} Only ({trades.filter(t => t.status === 'OPEN' && t.symbol === symbol).length})
+              </button>
+            </div>
+
+            <div className="flex items-center bg-black/40 rounded border border-white/5 p-1">
+              <button 
+                type="button"
+                onClick={() => setSlModel('TRAILING')}
+                className={`px-2 py-1 rounded text-[8.5px] transition-all cursor-pointer ${slModel === 'TRAILING' ? 'bg-indigo-600 font-bold text-white' : 'text-white/40 hover:text-white/70'}`}
+                title="Skins ATR cushion below CURRENT PRICE to trail profits up"
+              >
+                Dynamic Trailing
+              </button>
+              <button 
+                type="button"
+                onClick={() => setSlModel('FIXED_ENTRY')}
+                className={`px-2 py-1 rounded text-[8.5px] transition-all cursor-pointer ${slModel === 'FIXED_ENTRY' ? 'bg-indigo-600 font-bold text-white' : 'text-white/40 hover:text-white/70'}`}
+                title="Skins ATR cushion below ENTRY PRICE for locked static risk"
+              >
+                Fixed Strategic
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-1 border border-white/5 bg-black/30 p-1 rounded">
+              <span className="text-white/30 uppercase tracking-wider text-[8px] mr-1">Multiplier:</span>
+              {[1.5, 2.0, 2.5, 3.0].map((m) => (
+                <button
+                  key={`sl-mult-sel-${m}`}
+                  type="button"
+                  onClick={() => setSlMultiplier(m)}
+                  className={`w-8 py-0.5 rounded text-[8.5px] transition-all font-mono font-bold cursor-pointer ${slMultiplier === m ? 'bg-indigo-600 border border-indigo-500/30 text-indigo-300 font-black' : 'text-white/30 hover:text-white/60'}`}
+                >
+                  {m.toFixed(1)}x
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {slSuggestions.length === 0 ? (
+          <div className="bg-[#050506]/55 border border-white/5 rounded-lg p-6 text-center space-y-2 select-none">
+            <ShieldAlert className="w-7 h-7 text-white/20 mx-auto" />
+            <p className="text-[10px] text-white/50 uppercase tracking-wider">No active positions matching current selection criteria</p>
+            <p className="text-[9.5px] text-white/30 font-sans max-w-sm mx-auto">
+              Please initialize open positions in the <strong>Trade Execution Terminal</strong> to activate this real-time risk simulation framework.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="hidden lg:grid grid-cols-12 gap-2 text-[8px] text-white/30 uppercase tracking-wider pb-1.5 border-b border-white/[0.04]">
+              <div className="col-span-3">Position Context</div>
+              <div className="col-span-3">Current Pricing & Limit</div>
+              <div className="col-span-4">ATR Cushion SL Recommendation</div>
+              <div className="col-span-2 text-right">Risk Action Desk</div>
+            </div>
+
+            <div className="space-y-3 font-mono">
+              {slSuggestions.map(({ trade: t, currentPrice, atrValue, proposedSL, currentSLRisk, proposedSLRisk, isSlLockedProfit, lockedProfitAmount, decimals, contractScale }) => {
+                const isBuy = t.side === 'BUY';
+                const hasStopLoss = t.stopLoss > 0;
+                
+                let riskComparisonString = '';
+                let isRiskDecreasing = false;
+                
+                if (!hasStopLoss) {
+                  riskComparisonString = 'Secures unmanaged extreme tail-risk';
+                  isRiskDecreasing = true;
+                } else if (isSlLockedProfit) {
+                  riskComparisonString = `Locks in +$${lockedProfitAmount.toFixed(2)} guaranteed PnL`;
+                  isRiskDecreasing = true;
+                } else {
+                  const slDiff = currentSLRisk ? currentSLRisk - proposedSLRisk : 0;
+                  if (slDiff > 0) {
+                    riskComparisonString = `Reduces loss exposure by $${slDiff.toFixed(2)} (${Math.round((slDiff / currentSLRisk!) * 100)}%)`;
+                    isRiskDecreasing = true;
+                  } else {
+                    riskComparisonString = `Adds $${Math.abs(slDiff).toFixed(2)} volatility cushion spacing`;
+                    isRiskDecreasing = false;
+                  }
+                }
+
+                const displayAtrVal = t.symbol === 'USD/JPY' ? (atrValue * 100).toFixed(1) : t.symbol === 'BTC/USDT' || t.symbol === 'GOLD/USD' ? atrValue.toFixed(1) : (atrValue * 10000).toFixed(1);
+                const displayAtrUnit = t.symbol === 'BTC/USDT' || t.symbol === 'GOLD/USD' ? 'USD' : 'pips';
+
+                const isLoading = actionLoading[t.id];
+                const isSuccess = actionSuccess[t.id];
+
+                return (
+                  <div 
+                    key={`sl-adv-row-${t.id}`} 
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center bg-[#050506]/75 border border-white/5 p-3 rounded-lg hover:border-white/10 transition-colors"
+                  >
+                    <div className="col-span-1 lg:col-span-3 space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border leading-none font-mono ${isBuy ? 'bg-emerald-500/10 text-emerald-450 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'}`}>
+                          {t.side}
+                        </span>
+                        <span className="text-[10.5px] font-bold text-white font-mono">{t.symbol}</span>
+                      </div>
+                      <div className="text-[9.5px] font-sans text-white/40">
+                        Size: <strong className="text-white font-mono">{t.size} Lots</strong>
+                        <span className="text-white/20 mx-1">|</span>
+                        PnL: <span className={`font-bold font-mono ${t.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="col-span-1 lg:col-span-3 space-y-1">
+                      <div className="text-[9.5px] text-white/70">
+                        Entry: <span className="font-mono text-white/50">${t.entryPrice.toLocaleString(undefined, { minimumFractionDigits: decimals })}</span>
+                      </div>
+                      <div className="text-[10px] text-white/40">
+                        Current SL: {hasStopLoss ? (
+                          <span className="font-mono text-emerald-300 font-bold bg-[#14532d]/20 border border-emerald-500/20 px-1 py-0.5 rounded">
+                            ${t.stopLoss.toLocaleString(undefined, { minimumFractionDigits: decimals })}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-red-400 font-extrabold bg-[#7f1d1d]/30 border border-red-500/20 px-1.5 py-0.5 rounded animate-pulse">
+                            ⚠️ UNPROTECTED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="col-span-1 lg:col-span-4 space-y-1 bg-black/35 p-2 rounded border border-white/[0.03]">
+                      <div className="flex justify-between items-center text-[9.5px]">
+                        <span className="text-white/30 text-[8.5px] uppercase">DYNAMIC SL PROPOSAL:</span>
+                        <strong className="text-indigo-300 font-extrabold animate-pulse">
+                          ${proposedSL.toLocaleString(undefined, { minimumFractionDigits: decimals })}
+                        </strong>
+                      </div>
+                      <div className="flex justify-between items-center text-[8.5px] pt-1 border-t border-white/5">
+                        <span className="text-white/30">Cushion ({slMultiplier}x ATR):</span>
+                        <span className="text-white/60 font-mono">
+                          {displayAtrVal} {displayAtrUnit}
+                        </span>
+                      </div>
+                      <div className="text-[8.5px] text-white/40 pt-1 flex items-center gap-1 font-sans">
+                        <span className={`inline-block w-1 h-1 rounded-full ${isRiskDecreasing ? 'bg-emerald-400' : 'bg-indigo-300'}`} />
+                        <span className={isRiskDecreasing ? 'text-emerald-400 font-semibold' : 'text-indigo-350'}>
+                          {riskComparisonString}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="col-span-1 lg:col-span-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateParams(t.id, proposedSL)}
+                        disabled={isLoading || isSuccess}
+                        className={`w-full py-2 px-2.5 rounded border text-[9px] font-bold font-mono uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center justify-center space-x-1 ${
+                          isSuccess
+                            ? 'bg-emerald-600 border-emerald-500 text-white font-extrabold cursor-default'
+                            : isLoading
+                              ? 'bg-neutral-800 border-neutral-700 text-neutral-400 cursor-not-allowed animate-pulse'
+                              : 'bg-indigo-500/10 hover:bg-indigo-600 border-indigo-500/20 hover:border-indigo-500 text-indigo-300 hover:text-white hover:shadow-[0_0_8px_rgba(99,102,241,0.4)]'
+                        }`}
+                      >
+                        {isSuccess ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>SL Applied!</span>
+                          </>
+                        ) : isLoading ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin mr-1" />
+                            <span>Updating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sliders className="w-3 h-3" />
+                            <span>Apply SL</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div id="analytic-desk-intelligence-root" className="bg-[#0a0a0b] border border-white/5 p-5 md:p-6 rounded-lg select-none">
       
@@ -1450,8 +1670,8 @@ export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [],
 
       </div>
 
-      {/* DYNAMIC VOLATILITY-ADJUSTED STOP LOSS ADVISER PANEL (INTEGRATED) */}
-      <div id="volatility-stop-loss-adviser" className="bg-[#0b0b0d] border border-white/5 rounded-lg p-5 mb-6 font-mono select-none">
+      {mode !== 'EXCLUDE_ATR' && (
+        <div id="volatility-stop-loss-adviser" className="bg-[#0b0b0d] border border-white/5 rounded-lg p-5 mb-6 font-mono select-none">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-white/[0.04] pb-4 mb-4">
           <div className="flex items-center space-x-2.5">
             <div className="h-7 w-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -1674,9 +1894,8 @@ export default function AnalyticDeskIntelligence({ symbol, metrics, trades = [],
             </div>
           </div>
         )}
-      </div>
-
-      {/* STRATEGY PRESET INTELLIGENCE LAYER */}
+        </div>
+      )}
       <div id="strategy-preset-intelligence-panel" className="bg-[#0b0b0d] border border-white/5 rounded-lg p-5 mb-6 font-mono select-none relative overflow-hidden">
         {/* Subtle background glow */}
         <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />

@@ -211,6 +211,8 @@ interface ChartContainerProps {
   onSymbolChange?: (sym: MarketSymbol) => void;
   priceAlerts?: PriceAlert[];
   onDeletePriceAlert?: (id: string) => void;
+  timeframe?: 'M15' | 'H1' | 'H4' | 'D1';
+  onTimeframeChange?: (tf: 'M15' | 'H1' | 'H4' | 'D1') => void;
 }
 
 export default function ChartContainer({
@@ -233,6 +235,8 @@ export default function ChartContainer({
   onSymbolChange,
   priceAlerts = [],
   onDeletePriceAlert,
+  timeframe: timeframeProp,
+  onTimeframeChange,
 }: ChartContainerProps) {
   const [hoveredCandle, setHoveredCandle] = useState<Candlestick | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -293,7 +297,14 @@ export default function ChartContainer({
   const d3ContainerRef = useRef<SVGGElement | null>(null);
 
   // Timeframe and Gesture Swipe States
-  const [selectedTimeframe, setSelectedTimeframe] = useState<'M15' | 'H1' | 'H4' | 'D1'>('H4');
+  const [localTimeframe, setLocalTimeframe] = useState<'M15' | 'H1' | 'H4' | 'D1'>('H4');
+  const selectedTimeframe = timeframeProp || localTimeframe;
+  const setSelectedTimeframe = (tf: 'M15' | 'H1' | 'H4' | 'D1') => {
+    setLocalTimeframe(tf);
+    if (onTimeframeChange) {
+      onTimeframeChange(tf);
+    }
+  };
   const [swipeFlash, setSwipeFlash] = useState<{ message: string; type: 'SYMBOL' | 'TIMEFRAME'; value: string } | null>(null);
 
   // Auto-expire the swipe flash feedback notification

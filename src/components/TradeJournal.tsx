@@ -726,15 +726,22 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
                         const isSelected = selectedTrade?.id === t.id;
 
                         return (
-                          <button
+                          <div
                             key={t.id}
                             onClick={() => handleSelectTrade(t)}
-                            type="button"
+                            role="button"
+                            tabIndex={0}
                             className={`w-full text-left ${highDensity ? 'p-1.5 px-2' : 'p-2.5'} rounded border transition-all text-sm cursor-pointer select-none ${
                               isSelected 
                                 ? 'bg-indigo-500/10 border-indigo-500/40 shadow-sm' 
                                 : 'bg-black/20 hover:bg-black/40 border-white/5 hover:border-white/10'
                             }`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleSelectTrade(t);
+                              }
+                            }}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-1.5 font-mono">
@@ -808,7 +815,7 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
                                 </div>
                               </div>
                             )}
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -823,14 +830,22 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
               const isSelected = selectedTrade?.id === t.id;
 
               return (
-                <button
+                <div
                   key={t.id}
                   onClick={() => handleSelectTrade(t)}
+                  role="button"
+                  tabIndex={0}
                   className={`w-full text-left ${highDensity ? 'p-1.5 px-2' : 'p-2.5'} rounded border transition-all text-sm cursor-pointer select-none ${
                     isSelected 
                       ? 'bg-indigo-500/10 border-indigo-500/40 shadow-md' 
                       : 'bg-black/30 hover:bg-black/50 border-white/5 hover:border-white/10'
                   }`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSelectTrade(t);
+                    }
+                  }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2 font-mono">
@@ -851,8 +866,8 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {t.tags.map((tag) => (
                         <span 
-                          key={tag} 
-                          className="text-[7.5px] font-mono px-1 py-0.2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded"
+                           key={tag} 
+                           className="text-[7.5px] font-mono px-1 py-0.2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded"
                         >
                           {tag}
                         </span>
@@ -904,7 +919,7 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
                       </div>
                     </div>
                   )}
-                </button>
+                </div>
               );
             })
           )}

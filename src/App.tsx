@@ -198,13 +198,12 @@ export default function App() {
   };
 
   const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'INTELLIGENCE' | 'EXECUTION' | 'RISK' | 'RESEARCH' | 'SETTINGS' | 'NEWS' | 'COPILOT' | 'ANALYTICS'>('INTELLIGENCE');
-  const [researchSubTab, setResearchSubTab] = useState<'REPLAY' | 'LEDGER' | 'RISK_EXPOSURE'>('REPLAY');
-  const [analyticsSubTab, setAnalyticsSubTab] = useState<'PERFORMANCE' | 'STRATEGIES' | 'CORRELATION_SENTIMENT' | 'INSTITUTIONAL'>('PERFORMANCE');
-  const [analyticsCorrelationTab, setAnalyticsCorrelationTab] = useState<'CROSS_ASSET' | 'PORTFOLIO_CLUSTERS'>('CROSS_ASSET');
+  const [researchSubTab, setResearchSubTab] = useState<'CALENDAR' | 'REPLAY' | 'LEDGER' | 'RISK_EXPOSURE'>('CALENDAR');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isChartExpanded, setIsChartExpanded] = useState(true);
   const [symbol, setSymbol] = useState<MarketSymbol>('EUR/USD');
+  const [timeframe, setTimeframe] = useState<'M15' | 'H1' | 'H4' | 'D1'>('H4');
   const [jumpRange, setJumpRange] = useState<{ start: string; end: string; triggerId: number } | null>(null);
   const [sessionStartDate, setSessionStartDate] = useState('');
   const [sessionEndDate, setSessionEndDate] = useState('');
@@ -1811,20 +1810,18 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
         <div className="flex flex-col h-full justify-between py-5 overflow-y-auto overflow-x-hidden no-scrollbar">
           <div>
             {/* Top section: Brand Identity Logo */}
-            <div className="px-3 mb-8 flex items-center gap-3">
-              <div className="relative shrink-0">
-                <MTXquantLogo size={40} />
-                <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-              </div>
-
-              {isSidebarExpanded && (
+            <div className="px-3 mb-8 flex items-center min-h-[40px]">
+              {!isSidebarExpanded ? (
+                <div className="w-full flex justify-center animate-fadeIn">
+                  <span className="text-sm font-black tracking-tight text-white lowercase">
+                    mtx
+                  </span>
+                </div>
+              ) : (
                 <div className="whitespace-nowrap animate-fadeIn">
                   <div className="flex items-center space-x-1.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-white">
-                      MTXQUANT<span className="text-indigo-500 font-extrabold">.AI</span>
+                    <span className="text-base font-black tracking-tight text-white lowercase">
+                      mtxquant
                     </span>
                     <span className="px-1 py-0.2 rounded bg-white/5 border border-white/10 text-[7px] font-mono uppercase tracking-wide text-[#e5e5e5]/60 font-bold">
                       v2.0
@@ -1841,11 +1838,11 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
             <nav className="space-y-2 px-2.5">
               {[
                 { id: 'INTELLIGENCE', label: 'Intelligence', icon: Bot },
+                { id: 'ANALYTICS', label: 'Analytics Desk', icon: BarChart3 },
                 { id: 'COPILOT', label: 'MTX Engine', icon: Sparkles },
                 { id: 'DASHBOARD', label: 'Dashboard', icon: Layers },
                 { id: 'EXECUTION', label: 'Execution', icon: Activity },
                 { id: 'RISK', label: 'Risk Desk', icon: ShieldAlert },
-                { id: 'ANALYTICS', label: 'Analytics', icon: BarChart3 },
                 { id: 'NEWS', label: 'News Desk', icon: Newspaper },
                 { id: 'RESEARCH', label: 'Research', icon: Award },
                 { id: 'SETTINGS', label: 'Settings', icon: Settings }
@@ -1873,21 +1870,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   </button>
                 );
               })}
-
-              {/* Compliance & Bureaucracy Sidebar item */}
-              <button
-                id="side-nav-tab-compliance-docs"
-                onClick={() => openBureaucracyTab('faq')}
-                className={`w-full py-3 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-150 flex items-center gap-3 cursor-pointer text-[#e5e5e5]/50 hover:text-white hover:bg-white/[0.03] border border-transparent ${isSidebarExpanded ? 'px-4' : 'justify-center px-0'}`}
-                title="Compliance & Documentation"
-              >
-                <HelpCircle className="w-4 h-4 text-white/40 shrink-0 hover:text-indigo-400 transition-colors" />
-                {isSidebarExpanded && (
-                  <span className="whitespace-nowrap animate-fadeIn text-white/70">
-                    Docs & Compliance
-                  </span>
-                )}
-              </button>
             </nav>
           </div>
 
@@ -1930,9 +1912,8 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
               {/* Logo block rendered exclusively on mobile devices */}
               <div id="mobile-brand-logo" className="flex md:hidden items-center gap-1.5 shrink-0 select-none">
-                <MTXquantLogo size={28} />
-                <span className="text-[10px] font-black uppercase tracking-wider text-white">
-                  MTXQUANT<span className="text-indigo-400 font-extrabold">.AI</span>
+                <span className="text-sm font-black tracking-tight text-white lowercase">
+                  mtxquant
                 </span>
               </div>
 
@@ -1947,38 +1928,44 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
             {/* Active status indicator ledger */}
             <div className="flex items-center space-x-2 md:space-x-3">
-              {/* User Profile info and Logout button */}
-              <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/5 rounded h-8">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse"></span>
-                <span className="text-[10px] font-mono text-white/50 font-bold max-w-[130px] truncate" title={traderEmail}>
-                  {traderEmail}
+              {/* Live Ingress Gateway status indicators */}
+              <div className="hidden md:flex items-center space-x-2 text-right shrink-0">
+                <span className="text-[10px] text-white/40 block font-mono uppercase tracking-tighter">Live Ingress Gateway</span>
+                <span className="text-emerald-400 text-xs font-mono flex items-center justify-end font-bold uppercase tracking-wide">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mr-1.5 shadow-[0_0_8px_#10b981]"></span>
+                  ACTIVE FEED ({timeframe})
                 </span>
               </div>
+
+              {/* Alt+X Emergency panic close all button - hidden on mobile since physical keyboard shortcut is absent */}
               <button
-                id="header-logout-btn"
-                onClick={handleLogout}
-                className="p-1.5 hover:bg-rose-500/10 hover:text-rose-300 border border-white/10 hover:border-rose-500/25 rounded text-rose-400 transition-all flex items-center justify-center cursor-pointer h-8 px-2.5 text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 gap-1.5"
-                title={`Log Out from ${traderEmail}`}
+                id="emergency-close-all-btn"
+                onClick={handleEmergencyCloseAll}
+                className="hidden md:flex items-center space-x-1.5 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/40 rounded font-mono text-[11px] h-9 text-rose-400 font-bold transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-500/30 shrink-0"
+                title="Alt+X: Trigger Emergency Close All open positions immediately"
               >
-                <span className="hidden sm:inline">Log Out</span>
-                <LogOut className="w-3.5 h-3.5" />
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse shrink-0" />
+                <div className="flex flex-col text-left leading-none">
+                  <span className="text-[7.5px] text-rose-500/60 uppercase tracking-widest font-extrabold font-mono">Emergency</span>
+                  <span className="text-white font-black tracking-tight mt-0.5 font-mono">Alt + X</span>
+                </div>
               </button>
 
+              {/* Session Time Discipline Indicator - hidden on mobile to avoid row leaks */}
               <button
-                id="global-theme-toggle-btn"
-                onClick={toggleTheme}
-                className="p-1.5 hover:bg-white/5 border border-white/10 rounded text-white/60 hover:text-white transition-colors flex items-center justify-center cursor-pointer h-8 w-8 text-xs shrink-0"
-                title={theme === 'dark' ? 'Switch to High-Contrast Light Mode' : 'Switch to Elegant Dark Mode'}
+                id="session-discipline-tracker"
+                onClick={() => setIsSessionSummaryOpen(true)}
+                className="hidden md:flex items-center space-x-2 px-2.5 py-1.5 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/15 hover:border-indigo-500/35 rounded font-mono text-[11px] h-9 transition-all cursor-pointer text-left focus:outline-none focus:ring-1 focus:ring-indigo-500/30 font-bold shrink-0"
+                title="Time active in current trading session. Click to view Session Summary."
               >
-                {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-400" />}
-              </button>
-              <button
-                id="manual-refresh-btn"
-                onClick={handleManualRefresh}
-                className="p-1.5 hover:bg-white/5 border border-white/10 rounded text-white/60 hover:text-white transition-colors h-8 w-8 flex items-center justify-center shrink-0"
-                title="Manual Sync Feed"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-indigo-400' : ''}`} />
+                <Timer className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
+                <div className="flex flex-col text-left leading-none">
+                  <span className="text-[7.5px] text-white/30 uppercase tracking-widest font-extrabold flex items-center gap-1">
+                    Active Session
+                    <span className="inline-block w-1 h-2 rounded bg-indigo-500/30 animate-pulse" />
+                  </span>
+                  <span className="text-white font-black tabular-nums tracking-tight mt-0.5">{formatSessionTime(sessionSeconds)}</span>
+                </div>
               </button>
 
               {/* Dynamic Auto-Sync Elapsed Time Indicator */}
@@ -1993,44 +1980,37 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 </span>
                 <span>SYNCED: <strong className="font-extrabold text-[#10b981] tabular-nums">{secondsSinceSync || 0}s</strong> ago</span>
               </div>
-              
-              {/* Session Time Discipline Indicator - hidden on mobile to avoid row leaks */}
+
               <button
-                id="session-discipline-tracker"
-                onClick={() => setIsSessionSummaryOpen(true)}
-                className="hidden md:flex items-center space-x-2 px-2.5 py-1.5 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/15 hover:border-indigo-500/35 rounded font-mono text-[11px] h-9 transition-all cursor-pointer text-left focus:outline-none focus:ring-1 focus:ring-indigo-500/30 font-bold"
-                title="Time active in current trading session. Click to view Session Summary."
+                id="manual-refresh-btn"
+                onClick={handleManualRefresh}
+                className="p-1.5 hover:bg-white/5 border border-white/10 rounded text-white/60 hover:text-white transition-colors h-8 w-8 flex items-center justify-center shrink-0 cursor-pointer"
+                title="Manual Sync Feed"
               >
-                <Timer className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
-                <div className="flex flex-col text-left leading-none">
-                  <span className="text-[7.5px] text-white/30 uppercase tracking-widest font-extrabold flex items-center gap-1">
-                    Active Session
-                    <span className="inline-block w-1 h-2 rounded bg-indigo-500/30 animate-pulse" />
-                  </span>
-                  <span className="text-white font-black tabular-nums tracking-tight mt-0.5">{formatSessionTime(sessionSeconds)}</span>
-                </div>
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-indigo-400' : ''}`} />
               </button>
 
-              {/* Alt+X Emergency panic close all button - hidden on mobile since physical keyboard shortcut is absent */}
-              <button
-                id="emergency-close-all-btn"
-                onClick={handleEmergencyCloseAll}
-                className="hidden md:flex items-center space-x-1.5 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/40 rounded font-mono text-[11px] h-9 text-rose-400 font-bold transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-500/30"
-                title="Alt+X: Trigger Emergency Close All open positions immediately"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse shrink-0" />
-                <div className="flex flex-col text-left leading-none">
-                  <span className="text-[7.5px] text-rose-500/60 uppercase tracking-widest font-extrabold font-mono">Emergency</span>
-                  <span className="text-white font-black tracking-tight mt-0.5 font-mono">Alt + X</span>
-                </div>
-              </button>
-              <div className="hidden md:flex items-center space-x-2 text-right">
-                <span className="text-[10px] text-white/40 block font-mono uppercase tracking-tighter">Live Ingress Gateway</span>
-                <span className="text-emerald-400 text-xs font-mono flex items-center justify-end font-bold uppercase tracking-wide">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mr-1.5 shadow-[0_0_8px_#10b981]"></span>
-                  ACTIVE FEED (H4)
+              {/* Professional visual vertical separator to group user info at the absolute right */}
+              <div className="h-6 w-[1px] bg-white/10 hidden sm:block shrink-0" />
+
+              {/* User Profile info box */}
+              <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/5 rounded h-8 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse"></span>
+                <span className="text-[10px] font-mono text-white/50 font-bold max-w-[130px] truncate" title={traderEmail}>
+                  {traderEmail}
                 </span>
               </div>
+
+              {/* Logout button */}
+              <button
+                id="header-logout-btn"
+                onClick={handleLogout}
+                className="p-1.5 hover:bg-rose-500/10 hover:text-rose-300 border border-white/10 hover:border-rose-500/25 rounded text-rose-400 transition-all flex items-center justify-center cursor-pointer h-8 px-2.5 text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 gap-1.5"
+                title={`Log Out from ${traderEmail}`}
+              >
+                <span className="hidden sm:inline">Log Out</span>
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
 
           </div>
@@ -2369,7 +2349,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 </div>
                 
                 {/* Dashboard Multi-grid layout */}
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                <div className="hidden">
                   
                   {/* Economic factory calendar on left (Spans 7 columns) */}
                   <div className="xl:col-span-7 space-y-6">
@@ -3238,6 +3218,8 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                       showTWVP={showTWVP}
                       isExpanded={true}
                       onSymbolChange={setSymbol}
+                      timeframe={timeframe}
+                      onTimeframeChange={setTimeframe}
                       priceAlerts={priceAlerts}
                       onDeletePriceAlert={(id) => {
                         setPriceAlerts(prev => prev.filter(a => a.id !== id));
@@ -3252,45 +3234,72 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 )}
 
                 {/* 2. Main Workspace Layout Grid */}
+                <div className="w-full space-y-6">
+                  
+                  {/* AI Signal Insights and Explainability - Hidden on mobile screens */}
+                  {metrics && (
+                    <div className="hidden md:block">
+                      <TradeExplainability
+                        symbol={symbol}
+                        metrics={metrics}
+                        trades={trades}
+                        highlightOrderBlocks={highlightOrderBlocks}
+                        onToggleHighlightOrderBlocks={() => setHighlightOrderBlocks(prev => !prev)}
+                        showTWVP={showTWVP}
+                        onToggleTWVP={() => setShowTWVP(prev => !prev)}
+                        onResetChartView={() => {
+                          setHighlightOrderBlocks(false);
+                          setShowTWVP(false);
+                          setResetChartKey(prev => prev + 1);
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {metrics && (
+                    <div className="hidden md:block animate-fadeIn">
+                      <AnalyticDeskIntelligence
+                        symbol={symbol}
+                        metrics={metrics}
+                        trades={trades}
+                        onUpdateTradeParams={handleUpdateTradeParams}
+                        mode="ATR_ONLY"
+                      />
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+            ) : activeTab === 'ANALYTICS' ? (
+              <div id="analytics-workspace" className="space-y-6 animate-fadeIn">
+                <div className="flex items-center justify-between gap-4 border-b border-white/5 pb-4 mb-2">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-white font-mono flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-indigo-400" />
+                      MTX ANALYTICS DESK
+                    </h3>
+                    <p className="text-[10px] text-white/35 mt-0.5">Four-tiered institutional analytic engine. Aligned to the MTXQUANT skeleton blueprint.</p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                   
-                  {/* Left-hand layout details (Default width or under expanded chart) */}
-                  <div className="xl:col-span-8 space-y-6">
-
-                    {/* AI Signal Insights and Explainability - Hidden on mobile screens */}
+                  {/* Left hand details: Analytics Desk with EXCLUDE_ATR mode */}
+                  <div className="xl:col-span-8 space-y-6 animate-fadeIn">
                     {metrics && (
-                      <div className="hidden md:block">
-                        <TradeExplainability
-                          symbol={symbol}
-                          metrics={metrics}
-                          trades={trades}
-                          highlightOrderBlocks={highlightOrderBlocks}
-                          onToggleHighlightOrderBlocks={() => setHighlightOrderBlocks(prev => !prev)}
-                          showTWVP={showTWVP}
-                          onToggleTWVP={() => setShowTWVP(prev => !prev)}
-                          onResetChartView={() => {
-                            setHighlightOrderBlocks(false);
-                            setShowTWVP(false);
-                            setResetChartKey(prev => prev + 1);
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {metrics && (
-                      <div className="hidden md:block animate-fadeIn">
-                        <AnalyticDeskIntelligence
-                          symbol={symbol}
-                          metrics={metrics}
-                          trades={trades}
-                          onUpdateTradeParams={handleUpdateTradeParams}
-                        />
-                      </div>
+                      <AnalyticDeskIntelligence
+                        symbol={symbol}
+                        metrics={metrics}
+                        trades={trades}
+                        onUpdateTradeParams={handleUpdateTradeParams}
+                        mode="EXCLUDE_ATR"
+                      />
                     )}
                   </div>
 
-                  {/* Right hand layout pane: Order Book & Correlation Matrix - Hidden on mobile, perfectly proportioned on desktop */}
-                  <div className="hidden md:block xl:col-span-4 space-y-6">
+                  {/* Right hand layout pane: Order Book & Correlation Matrix */}
+                  <div className="hidden md:block xl:col-span-4 space-y-6 animate-fadeIn">
                     {orderBook && (
                       <OrderBookTracker
                         symbol={symbol}
@@ -3308,7 +3317,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   </div>
 
                 </div>
-
               </div>
             ) : activeTab === 'EXECUTION' ? (
               <div id="execution-workspace" className="animate-fadeIn space-y-6">
@@ -3323,6 +3331,8 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                           metrics={metrics}
                           onTradeExecuted={fetchMarketData}
                           trades={trades}
+                          sweeps={sweeps}
+                          orderBook={orderBook || undefined}
                         />
                       </React.Suspense>
                     )}
@@ -3381,11 +3391,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                     </div>
                     <div>
                       <h2 className="text-xs font-black uppercase text-white tracking-widest">RESEARCH DESK</h2>
-                      <p className="text-[9px] text-white/35 font-sans mt-0.5">Modular workspaces for replay simulation and historical review</p>
+                      <p className="text-[9px] text-white/35 font-sans mt-0.5">Modular workspaces for macroeconomic events, replay simulation and historical records</p>
                     </div>
                   </div>
                   <div className="flex items-center bg-[#070709] border border-white/5 rounded-lg p-0.5 gap-1 self-end sm:self-auto overflow-x-auto max-w-full">
                     {[
+                      { id: 'CALENDAR', label: '📅 Economic Calendar' },
                       { id: 'REPLAY', label: '📊 Simulation & Replay' },
                       { id: 'LEDGER', label: '📜 Trade History Ledger' },
                       { id: 'RISK_EXPOSURE', label: '📉 Risk Exposure Journal' }
@@ -3407,6 +3418,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                     })}
                   </div>
                 </div>
+
+                {researchSubTab === 'CALENDAR' && (
+                  <div className="space-y-6 animate-fadeIn">
+                    <EconomicCalendar events={newsEvents} />
+                  </div>
+                )}
 
                 {researchSubTab === 'REPLAY' && (
                   <div className="space-y-6 animate-fadeIn">
@@ -3587,129 +3604,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 )}
 
               </div>
-            ) : activeTab === 'ANALYTICS' ? (
-              <div id="analytics-desk-workspace" className="animate-fadeIn space-y-6">
-                
-                {/* ANALYTICS SUBTAB NAV PANEL */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-[#0a0a0c]/90 border border-white/5 rounded-lg p-4 font-mono">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-500/10 rounded-md border border-indigo-500/20 text-indigo-400">
-                      <BarChart3 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h2 className="text-xs font-black uppercase text-white tracking-widest text-[#eeeeee]">QUANTITATIVE ANALYTICS HUB</h2>
-                      <p className="text-[9.5px] text-white/35 font-sans mt-0.5">Centralized high-performance exposure dashboards, correlation matrix, and tactical models</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center bg-[#070709] border border-white/5 rounded-lg p-0.5 gap-1 self-end sm:self-auto overflow-x-auto max-w-full">
-                    {[
-                      { id: 'PERFORMANCE', label: '📊 Portfolio & Equity' },
-                      { id: 'STRATEGIES', label: '⚙️ Tactical Strategies' },
-                      { id: 'CORRELATION_SENTIMENT', label: '🌐 Correlation & Sentiment' },
-                      { id: 'INSTITUTIONAL', label: '🏛️ Institutional Book' }
-                    ].map((st) => {
-                      const active = analyticsSubTab === st.id;
-                      return (
-                        <button
-                          key={st.id}
-                          onClick={() => setAnalyticsSubTab(st.id as any)}
-                          className={`px-3.5 py-2 text-[9.5px] font-bold uppercase rounded-md tracking-wider transition-all cursor-pointer whitespace-nowrap ${
-                            active
-                              ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30 font-black shadow-[0_0_8px_rgba(99,102,241,0.12)]'
-                              : 'text-white/40 hover:text-white/70 border border-transparent'
-                          }`}
-                        >
-                          {st.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {analyticsSubTab === 'PERFORMANCE' && (
-                  <div className="space-y-6 animate-fadeIn">
-                    <React.Suspense fallback={<TerminalWorkspaceLoader />}>
-                      <PerformanceTracker trades={trades} onTradeUpdated={fetchMarketData} />
-                    </React.Suspense>
-                  </div>
-                )}
-
-                {analyticsSubTab === 'STRATEGIES' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fadeIn">
-                    <div className="lg:col-span-12 space-y-6">
-                      <StrategyPerformanceChart />
-                    </div>
-                    <div className="lg:col-span-12">
-                      <BacktestSimulator selectedSymbol={symbol} onSymbolChange={(sym) => setSymbol(sym)} />
-                    </div>
-                  </div>
-                )}
-
-                {analyticsSubTab === 'CORRELATION_SENTIMENT' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fadeIn">
-                    <div className="lg:col-span-7 space-y-4">
-                      {/* Sub-correlation Mode Selector */}
-                      <div className="flex items-center justify-between bg-[#0e0e11]/80 border border-white/5 rounded-lg p-3 font-mono">
-                        <span className="text-[10px] text-white/40 uppercase font-black tracking-wider">Correlation Engine Model:</span>
-                        <div className="flex items-center bg-black border border-white/10 rounded-md p-0.5 gap-1 select-none">
-                          <button
-                            onClick={() => setAnalyticsCorrelationTab('CROSS_ASSET')}
-                            className={`px-3 py-1 text-[9px] font-bold uppercase rounded transition-all cursor-pointer ${
-                              analyticsCorrelationTab === 'CROSS_ASSET'
-                                ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/20 font-black'
-                                : 'text-white/40 hover:text-white/75 border border-transparent'
-                            }`}
-                          >
-                            📈 Cross-Asset Pearson Matrix
-                          </button>
-                          <button
-                            onClick={() => setAnalyticsCorrelationTab('PORTFOLIO_CLUSTERS')}
-                            className={`px-3 py-1 text-[9px] font-bold uppercase rounded transition-all cursor-pointer ${
-                              analyticsCorrelationTab === 'PORTFOLIO_CLUSTERS'
-                                ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/20 font-black'
-                                : 'text-white/40 hover:text-white/75 border border-transparent'
-                            }`}
-                          >
-                            💼 Portfolio Trade Clusters
-                          </button>
-                        </div>
-                      </div>
-
-                      {analyticsCorrelationTab === 'CROSS_ASSET' ? (
-                        <div className="animate-fadeIn">
-                          <CorrelationMatrix />
-                        </div>
-                      ) : (
-                        <div className="animate-fadeIn">
-                          <CorrelationHeatmap trades={trades} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="lg:col-span-5">
-                      <MarketSentimentHeatmap />
-                    </div>
-                  </div>
-                )}
-
-                {analyticsSubTab === 'INSTITUTIONAL' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fadeIn">
-                    <div className="lg:col-span-5 space-y-6">
-                      <InstitutionalSentimentGauge />
-                      {metrics && (
-                        <InstitutionalFlowWidget
-                          symbol={symbol}
-                          candles={candles}
-                          metrics={metrics}
-                        />
-                      )}
-                    </div>
-                    <div className="lg:col-span-7">
-                      <InstitutionalSweepAlert />
-                    </div>
-                  </div>
-                )}
-
-              </div>
             ) : activeTab === 'NEWS' ? (
               <div id="news-workspace" className="animate-fadeIn space-y-6">
                 {/* Unified News Desk Workspace: Bloomberg Ticker Ribbon & Live Institutional Briefings */}
@@ -3759,9 +3653,8 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
             {/* Column 1: App Branding & Status */}
             <div className="md:col-span-4 space-y-3.5">
               <div className="flex items-center space-x-2.5">
-                <MTXquantLogo size={24} />
-                <span className="text-white text-xs font-black uppercase tracking-[0.15em] select-none">
-                  MTXQUANT<span className="text-indigo-400 font-extrabold">.AI</span>
+                <span className="text-white text-base font-black tracking-tight select-none lowercase">
+                  mtxquant
                 </span>
               </div>
               <p className="text-[10px] text-white/30 leading-relaxed max-w-sm select-none">
@@ -3805,6 +3698,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
                 >
                   &raquo; MT5 Setup
+                </button>
+                <button 
+                  onClick={() => openBureaucracyTab('faq')} 
+                  className="hover:text-indigo-350 text-indigo-400 font-bold text-[10px] text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline col-span-2 mt-1 pt-1.5 border-t border-white/5"
+                >
+                  &raquo; Docs & Compliance
                 </button>
               </div>
             </div>
@@ -3931,11 +3830,11 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       {/* Floating Bottom-Left Advisor Chat */}
       {metrics && (
         <div 
-          className="fixed bottom-18 md:bottom-6 left-3 md:left-[84px] z-50 flex flex-col items-start transition-all duration-300 ease-in-out"
+          className="fixed bottom-18 md:bottom-6 left-3 md:left-[84px] z-[950] flex flex-col items-start transition-all duration-300 ease-in-out"
         >
           {/* Chat Panel Popover */}
           {isChatOpen && (
-            <div className="mb-3 w-[360px] sm:w-[400px] md:w-[420px] max-w-[calc(100vw-3rem)] rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 bg-[#080808] overflow-hidden transition-all duration-300 animate-fadeIn h-[510px]">
+            <div className="mb-3 w-[360px] sm:w-[400px] md:w-[420px] max-w-[calc(100vw-3rem)] rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 bg-[#080808] overflow-hidden transition-all duration-300 animate-fadeIn h-[510px] max-h-[80vh] flex flex-col">
               <AdvisorChat 
                 symbol={symbol} 
                 metrics={metrics} 
@@ -4243,11 +4142,11 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       <nav id="mobile-sticky-bottom-nav" className="fixed bottom-0 left-0 right-0 z-[300] bg-[#080808]/95 backdrop-blur-md border-t border-white/10 flex md:hidden items-center justify-around py-1.5 px-2 safe-bottom">
         {[
           { id: 'INTELLIGENCE', label: 'Intel', icon: Bot },
+          { id: 'ANALYTICS', label: 'Analytic', icon: BarChart3 },
           { id: 'COPILOT', label: 'MTX Eng', icon: Sparkles },
           { id: 'DASHBOARD', label: 'Dash', icon: Layers },
           { id: 'EXECUTION', label: 'Exec', icon: Activity },
           { id: 'RISK', label: 'Risk', icon: ShieldAlert },
-          { id: 'ANALYTICS', label: 'Analyt', icon: BarChart3 },
           { id: 'NEWS', label: 'News', icon: Newspaper },
           { id: 'RESEARCH', label: 'Research', icon: Award },
           { id: 'SETTINGS', label: 'Settings', icon: Settings }
@@ -4296,9 +4195,8 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-white/5 pb-4">
                   <div className="flex items-center gap-2">
-                    <MTXquantLogo size={32} />
-                    <span className="text-xs font-bold uppercase tracking-wider text-white">
-                      MTXQUANT<span className="text-indigo-400 font-extrabold">.AI</span>
+                    <span className="text-sm font-black tracking-tight text-white lowercase">
+                      mtxquant
                     </span>
                   </div>
                   <button
@@ -4313,11 +4211,11 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 <nav className="space-y-1.5">
                   {[
                     { id: 'INTELLIGENCE', label: 'Intelligence Workspace', icon: Bot, desc: 'Trend Bias, Gaps, Order Blocks' },
+                    { id: 'ANALYTICS', label: 'Analytics Desk', icon: BarChart3, desc: 'Heuristics, sentiment, micro order-book depth' },
                     { id: 'COPILOT', label: 'MTX Engine Workspace', icon: Sparkles, desc: 'Cursor Multi-leg Composer & Compiler' },
                     { id: 'DASHBOARD', label: 'General Dashboard', icon: Layers, desc: 'Portfolio PnL & Health' },
                     { id: 'EXECUTION', label: 'Execution Terminal', icon: Activity, desc: 'Manual & EA Order Panel' },
                     { id: 'RISK', label: 'Risk Desk Management', icon: ShieldAlert, desc: 'Leverage, Limits & Heatmap' },
-                    { id: 'ANALYTICS', label: 'Analytics Workspace', icon: BarChart3, desc: 'Multi-indicator correlation, tactical & allocation curves' },
                     { id: 'NEWS', label: 'Dedicated News Desk', icon: Newspaper, desc: 'External feeds & global risk announcements' },
                     { id: 'RESEARCH', label: 'Research & Calendar', icon: Award, desc: 'Economic events & insights' },
                     { id: 'SETTINGS', label: 'System Settings', icon: Settings, desc: 'API, alerts & notification settings' }

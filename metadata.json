@@ -1,5 +1,5 @@
 {
-  "name": "MTXquant Trading Agent",
+  "name": "mtx",
   "description": "Advanced institutional quantitative swing trading agent based on Inner Circle Trader concepts with real-time news filters and order flow indicators.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

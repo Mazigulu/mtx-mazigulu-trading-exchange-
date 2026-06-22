@@ -283,7 +283,7 @@ export default function AdvisorChat({ symbol, metrics, onClose, messages, setMes
   };
 
   return (
-    <div id="advisor-chat-root" className="bg-[#080808] border border-white/10 rounded p-5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between h-[510px]">
+    <div id="advisor-chat-root" className="bg-[#080808] border border-white/10 rounded p-5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between h-full">
       <div>
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center space-x-2.5">

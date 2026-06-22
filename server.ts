@@ -371,9 +371,11 @@ async function generateContentWithRetry(
   }
 
   let attempt = 0;
+  let currentModel = params.model;
   while (true) {
     try {
-      return await client.models.generateContent(params);
+      const executeParams = { ...params, model: currentModel };
+      return await client.models.generateContent(executeParams);
     } catch (err: any) {
       attempt++;
       const errMsg = err.message || '';
@@ -395,6 +397,12 @@ async function generateContentWithRetry(
         errMsg.includes('UNAVAILABLE') || 
         errMsg.includes('demand') ||
         err.status === 503) && !isQuotaLimit;
+
+      if (isTransient && currentModel === 'gemini-3.5-flash') {
+        console.warn(`[Gemini SDK Sentry] Detected transient unavailable error (${errMsg.substring(0, 80)}). Falling back from 'gemini-3.5-flash' to 'gemini-3.1-flash-lite' for resilience.`);
+        currentModel = 'gemini-3.1-flash-lite';
+        continue;
+      }
 
       if (isTransient && attempt < retries) {
         const delay = initialDelay * Math.pow(2, attempt - 1);
@@ -859,7 +867,7 @@ app.get('/api/forex-factory', (req, res) => {
 const defaultInstitutionalNews = [
   {
     id: "term-1",
-    timestamp: new Date(Date.now() - 4 * 60 * 1000).toLocaleTimeString(),
+    timestamp: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
     title: "BREAKING: Federal Reserve Meeting Minutes indicate hawkish consensus on holding rates until Q4 inflation moderation.",
     excerpt: "Federal Open Market Committee members raised concern over robust service-sector wage indices. While some members advocated for structural balance sheet taper adjustments, the consensus remains tilted toward long-term elevation of sovereign cost-of-capital markers.",
     source: "Apex Intelligence Terminal",
@@ -871,7 +879,7 @@ const defaultInstitutionalNews = [
   },
   {
     id: "term-2",
-    timestamp: new Date(Date.now() - 15 * 60 * 1000).toLocaleTimeString(),
+    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     title: "ON-CHAIN ALERT: Institutional Whales move over $340M in BTC into high-security offline vaults.",
     excerpt: "Glassnode metrics indicate the largest single aggregate outflow from public centralized liquid exchange storage pools since early February. Historically, large custody sweeps precede long-term multi-week consolidation expansions.",
     source: "Interbank Liquidity Scan",
@@ -883,7 +891,7 @@ const defaultInstitutionalNews = [
   },
   {
     id: "term-3",
-    timestamp: new Date(Date.now() - 32 * 60 * 1000).toLocaleTimeString(),
+    timestamp: new Date(Date.now() - 32 * 60 * 1000).toISOString(),
     title: "EUROZONE: ECB member Joachim Nagel signals potential pause on upcoming asset purchasing programs.",
     excerpt: "Deutsche Bundesbank President states inflation pressures inside the Union are moderating, but caution over energy supply shocks dictates a conservative quantitative tightening drawdown pace. Euro currency gains minor traction on sovereign bonds spread narrowing.",
     source: "Bloomberg Interbank Feed",
@@ -895,7 +903,7 @@ const defaultInstitutionalNews = [
   },
   {
     id: "term-4",
-    timestamp: new Date(Date.now() - 48 * 60 * 1000).toLocaleTimeString(),
+    timestamp: new Date(Date.now() - 48 * 60 * 1000).toISOString(),
     title: "REGULATORY WATCH: CFTC Chairman requests heightened oversight on digital currency clearing structures.",
     excerpt: "Speaking at the Chicago Derivatives Symposium, the chairman emphasized that current clearing systems lack the localized capital buffers necessary to withstand high-leveraged algorithmic stop runs under stressed liquidity regimes.",
     source: "Federal Clearing Bulletin",
@@ -907,7 +915,7 @@ const defaultInstitutionalNews = [
   },
   {
     id: "term-5",
-    timestamp: new Date(Date.now() - 75 * 60 * 1000).toLocaleTimeString(),
+    timestamp: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
     title: "FOREX DATA: USD/JPY slides below 156.00 following suspicious BoJ currency stabilization liquidity bids.",
     excerpt: "Market makers observed a sudden $4.2B USD block sale of US Treasuries matching Ministry of Finance accounts. Analysts suspect direct market stabilization sweeps are active under official auspices to protect currency floor levels.",
     source: "Reuters FX Feed",
@@ -919,7 +927,7 @@ const defaultInstitutionalNews = [
   },
   {
     id: "term-6",
-    timestamp: new Date(Date.now() - 110 * 60 * 1000).toLocaleTimeString(),
+    timestamp: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
     title: "PRECIOUS METALS: Central gold buying reserves expand by record 42 tonnes in monthly sovereign reporting.",
     excerpt: "Emerging markets sovereign reserves continue aggressive rotation into physical bullion assets. Physical gold premium surges over London paper spot values as physical shipping logistics report congestion bottlenecks.",
     source: "Sovereign Reserves Registry",
@@ -1003,7 +1011,7 @@ async function fetchLiveRSSNews(): Promise<any[]> {
           
           fetchedAlerts.push({
             id,
-            timestamp: pubDate.toLocaleTimeString(),
+            timestamp: pubDate.toISOString(),
             title,
             excerpt,
             source: `${feed.source} News Feed`,
@@ -1071,7 +1079,7 @@ function injectSimulatedHeadline() {
     const id = `sim-${Date.now()}`;
     const newHeadline = {
       id,
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: new Date().toISOString(),
       title: rawBullet.title,
       excerpt: rawBullet.excerpt,
       source: "Apex Terminal Flash Alerts",
@@ -1115,6 +1123,29 @@ app.get('/api/institutional-news', async (req, res) => {
   } catch (e: any) {
     console.error('Error in /api/institutional-news:', e);
     res.status(500).json({ error: 'News server offline.' });
+  }
+});
+
+// Endpoint to prune stale news
+app.post('/api/institutional-news/prune', (req, res) => {
+  try {
+    const maxAgeMinutes = parseInt(req.body.maxAgeMinutes as string || req.query.maxAgeMinutes as string) || 30;
+    const now = Date.now();
+    const cutoff = now - maxAgeMinutes * 60 * 1000;
+
+    const initialCount = cachedInstitutionalNews.length;
+    cachedInstitutionalNews = cachedInstitutionalNews.filter(item => {
+      if (!item.timestamp) return true; // keep if invalid
+      const ts = new Date(item.timestamp).getTime();
+      if (isNaN(ts)) return true;
+      return ts >= cutoff;
+    });
+
+    const prunedCount = initialCount - cachedInstitutionalNews.length;
+    res.json({ success: true, prunedCount, remainingCount: cachedInstitutionalNews.length });
+  } catch (e: any) {
+    console.error('Error in /api/institutional-news/prune:', e);
+    res.status(500).json({ error: 'Pruning failure.' });
   }
 });
 

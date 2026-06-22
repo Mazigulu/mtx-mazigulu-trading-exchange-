@@ -76,6 +76,8 @@ export default function NewsDesk() {
   const [showOnlyRedFolders, setShowOnlyRedFolders] = useState<boolean>(false);
   const [sentimentHighlight, setSentimentHighlight] = useState<boolean>(false);
   const [providerFilter, setProviderFilter] = useState<'ALL' | 'PRIMARY' | 'AGGREGATE' | 'SOCIAL'>('ALL');
+  const [staleFilter, setStaleFilter] = useState<'ALL' | '15M' | '30M' | '1H' | '4H'>('ALL');
+  const [pruneStatus, setPruneStatus] = useState<{ active: boolean; prunedCount?: number; text?: string } | null>(null);
   
   // Interactive Predictive Displacement simulation states
   const [simHeadline, setSimHeadline] = useState<string>("FOMC surprise 50bps rate cut to counter global yield curve inversion");
@@ -104,7 +106,7 @@ export default function NewsDesk() {
       s.includes('ecb') || 
       s.includes('cftc') || 
       s.includes('bloomberg') || 
-      s.includes('apex') || 
+      s.includes('mtx') || 
       s.includes('reuters') ||
       s.includes('board') ||
       s.includes('senate') ||
@@ -212,6 +214,57 @@ export default function NewsDesk() {
     }
   };
 
+  const getArticleAgeMinutes = (timestamp: string): number => {
+    if (!timestamp) return 0;
+    try {
+      let d: Date;
+      if (timestamp.includes(':') && !timestamp.includes('-') && !timestamp.includes('T') && timestamp.length < 12) {
+        // It's local time e.g., "16:31:53"
+        const now = new Date();
+        const parts = timestamp.split(':');
+        const hours = parseInt(parts[0], 10) || 0;
+        const mins = parseInt(parts[1], 10) || 0;
+        const secs = parseInt(parts[2], 10) || 0;
+        d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, mins, secs);
+      } else {
+        d = new Date(timestamp);
+      }
+      if (isNaN(d.getTime())) return 0;
+      return Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000));
+    } catch {
+      return 0;
+    }
+  };
+
+  const pruneStaleNews = async () => {
+    try {
+      setRefreshing(true);
+      // Map staleFilter selection to minutes to send to server, default to 30 mins if ALL is selected
+      const limitMap: Record<string, number> = { '15M': 15, '30M': 30, '1H': 60, '4H': 240, 'ALL': 30 };
+      const maxAgeMinutes = limitMap[staleFilter];
+
+      const res = await fetch(`/api/institutional-news/prune?maxAgeMinutes=${maxAgeMinutes}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Immediately fetch refreshed news list
+        await fetchArticles(true);
+        setPruneStatus({
+          active: true,
+          prunedCount: data.prunedCount,
+          text: `Successfully pruned ${data.prunedCount} stale news item(s) older than ${maxAgeMinutes} minutes from the server and local state.`
+        });
+        setTimeout(() => setPruneStatus(null), 5000);
+      }
+    } catch (err) {
+      console.error('Failed to prune stale news:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     fetchArticles();
   }, []);
@@ -291,6 +344,35 @@ export default function NewsDesk() {
     return keywords.some(word => textToSearch.includes(word));
   };
 
+  const formatNewsTimestamp = (timestamp: string) => {
+    if (!timestamp) return '';
+    try {
+      if (timestamp.includes(':') && !timestamp.includes('-') && !timestamp.includes('T') && timestamp.length < 12) {
+        return `Today ${timestamp}`;
+      }
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) {
+        return timestamp;
+      }
+      const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      
+      const diffMs = Date.now() - d.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+      
+      let relativeStr = '';
+      if (diffMins < 1) relativeStr = 'Just now';
+      else if (diffMins < 60) relativeStr = `${diffMins}m ago`;
+      else if (diffHours < 24) relativeStr = `${diffHours}h ago`;
+      else relativeStr = `${Math.floor(diffHours / 24)}d ago`;
+
+      return `${dateStr}, ${timeStr} (${relativeStr})`;
+    } catch {
+      return timestamp;
+    }
+  };
+
   // Filter and Search logic
   const filteredArticles = useMemo(() => {
     let result = articles.filter(item => {
@@ -302,6 +384,16 @@ export default function NewsDesk() {
       if (providerFilter !== 'ALL') {
         const itemQuality = getProviderType(item.source);
         if (itemQuality !== providerFilter) {
+          return false;
+        }
+      }
+
+      // Stale news filtering based on age in minutes
+      if (staleFilter !== 'ALL') {
+        const ageMins = getArticleAgeMinutes(item.timestamp);
+        const limitMap: Record<string, number> = { '15M': 15, '30M': 30, '1H': 60, '4H': 240 };
+        const maxAge = limitMap[staleFilter];
+        if (maxAge && ageMins > maxAge) {
           return false;
         }
       }
@@ -354,13 +446,13 @@ export default function NewsDesk() {
       // NEWEST by default
       return b.timestamp.localeCompare(a.timestamp);
     });
-  }, [articles, searchQuery, selectedSubTab, bookmarks, sortBy, showOnlyRedFolders, providerFilter]);
+  }, [articles, searchQuery, selectedSubTab, bookmarks, sortBy, showOnlyRedFolders, providerFilter, staleFilter]);
 
   // Reset pagination on sub-page transition or search
   useEffect(() => {
     setCurrentPage(1);
     setAiAnalysis('');
-  }, [selectedSubTab, searchQuery, sortBy, showOnlyRedFolders, providerFilter]);
+  }, [selectedSubTab, searchQuery, sortBy, showOnlyRedFolders, providerFilter, staleFilter]);
 
   // News Volatility Impact Analytics Data Generator for Recharts
   const newsImpactData = useMemo(() => {
@@ -373,7 +465,7 @@ export default function NewsDesk() {
         title: 'US Non-Farm Payrolls (NFP) Shock (+285k vs +152k exp)',
         category: 'MACRO',
         impact: 'CRITICAL',
-        source: 'Apex Terminal Feed'
+        source: 'mtx Terminal Feed'
       },
       {
         id: 'hist-2',
@@ -926,34 +1018,35 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
         </div>
       </div>
 
-      {/* SECTION 2: BENTO CATEGORIZATION CHIPS & SEARCH */}
-      <div className="bg-[#050507] border border-white/5 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        
-        {/* Category triggers */}
-        <div className="flex flex-wrap gap-1.5">
+      {/* SECTION 2: THE SIX FEATURES COMPLETE BOARD TRIGGERS */}
+      <div id="news-desk-board-triggers-section" className="space-y-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full">
           {[
-            { id: 'ALL', label: '📰 COMPLETE BOARD', count: articles.length },
-            { id: 'HIGH_IMPACT', label: '🚨 HIGH IMPACT', count: articles.filter(i => i.impact === 'CRITICAL' || i.impact === 'HIGH').length },
-            { id: 'GEOPOLITICAL', label: '🌍 GEOPOLITICAL', count: articles.filter(isGeopolitical).length },
-            { id: 'CENTRAL_BANK', label: '🏛️ CENTRAL BANK', count: articles.filter(isCentralBank).length },
-            { id: 'BOOKMARKS', label: '⭐️ BOOKMARKS', count: bookmarks.length },
-            { id: 'ANALYTICS', label: '📊 IMPACT ANALYTICS', count: null }
+            { id: 'ALL', label: 'COMPLETE BOARD', icon: '📰', count: articles.length },
+            { id: 'HIGH_IMPACT', label: 'HIGH IMPACT', icon: '🚨', count: articles.filter(i => i.impact === 'CRITICAL' || i.impact === 'HIGH').length },
+            { id: 'GEOPOLITICAL', label: 'GEOPOLITICAL', icon: '🌍', count: articles.filter(isGeopolitical).length },
+            { id: 'CENTRAL_BANK', label: 'CENTRAL BANK', icon: '🏛️', count: articles.filter(isCentralBank).length },
+            { id: 'BOOKMARKS', label: 'BOOKMARKS', icon: '⭐️', count: bookmarks.length },
+            { id: 'ANALYTICS', label: 'IMPACT ANALYTICS', icon: '📊', count: null }
           ].map((sc) => {
             const active = selectedSubTab === sc.id;
             return (
               <button
                 key={sc.id}
                 onClick={() => setSelectedSubTab(sc.id as any)}
-                className={`px-3 py-1.5 text-[9px] font-bold tracking-tight rounded-md border transition-all cursor-pointer flex items-center gap-1.5 relative ${
+                className={`px-3 py-2 text-[10px] font-bold tracking-wider rounded-lg border transition-all cursor-pointer flex items-center justify-between select-none w-full ${
                   active 
-                    ? 'bg-indigo-600/15 border-indigo-500/35 text-indigo-300 font-extrabold shadow-[2px_2px_10px_rgba(99,102,241,0.08)]' 
-                    : 'bg-[#030303]/40 border-white/5 text-white/35 hover:text-white/60 hover:bg-[#08080a]'
+                    ? 'bg-indigo-600/15 border-indigo-500/40 text-indigo-300 font-black shadow-md shadow-indigo-500/5' 
+                    : 'bg-[#050507]/60 border-white/5 text-white/50 hover:text-white/80 hover:border-white/12 hover:bg-[#0c0c0e]'
                 }`}
               >
-                <span>{sc.label}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-xs shrink-0">{sc.icon}</span>
+                  <span className="font-mono uppercase truncate">{sc.label}</span>
+                </div>
                 {sc.count !== null && (
-                  <span className={`text-[7.5px] px-1 py-0.2.5 rounded-full font-sans font-bold ${
-                    active ? 'bg-indigo-500/25 text-white' : 'bg-white/5 text-white/20'
+                  <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ml-1.5 ${
+                    active ? 'bg-indigo-500/25 text-indigo-200 border border-indigo-500/20' : 'bg-white/5 text-white/30 border border-white/5'
                   }`}>
                     {sc.count}
                   </span>
@@ -962,32 +1055,69 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
             );
           })}
         </div>
+      </div>
 
-        {/* Search & layout mode toggles */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          <div className="relative w-full sm:w-56">
-            <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-white/20" />
-            <input
-              type="text"
-              placeholder="Filter by keyword / asset..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-2.5 py-2 text-[10px] bg-black/50 hover:bg-black/80 border border-white/5 hover:border-white/12 rounded-lg outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/10 placeholder-white/20 transition-all font-mono"
-            />
+      {/* SECTION 2B: UTILITY FILTERS, SEARCH & MODE TOGGLES */}
+      <div className="bg-[#050507] border border-white/5 p-4 rounded-xl flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        
+        {/* Search */}
+        <div className="relative w-full xl:w-72">
+          <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-white/20" />
+          <input
+            type="text"
+            placeholder="Filter complete feed by keywords/asset..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-8 pr-2.5 py-2 text-[10px] bg-black/50 hover:bg-black/80 border border-white/5 hover:border-white/12 rounded-lg outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/10 placeholder-white/20 transition-all font-mono"
+          />
+        </div>
+
+        {/* Controls container */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Sort selection dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] text-white/30 tracking-widest uppercase">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-black border border-white/5 hover:border-white/12 text-[9.5px] font-bold text-white/50 hover:text-white px-2.5 py-2 rounded-lg outline-none cursor-pointer font-mono"
+            >
+              <option value="NEWEST">⏳ NEWEST</option>
+              <option value="IMPACT">🚨 HIGHEST IMPACT</option>
+              <option value="SENTIMENT">📈 BULLISH FIRST</option>
+            </select>
           </div>
 
           <div className="h-7 w-[1px] bg-white/5 hidden sm:block" />
 
-          {/* Sort selection dropdown */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="bg-black border border-white/5 hover:border-white/12 text-[9.5px] font-bold text-white/50 hover:text-white px-2.5 py-2 rounded-lg outline-none cursor-pointer font-mono"
+          {/* Stale Filter Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] text-white/30 tracking-widest uppercase">Stale:</span>
+            <select
+              value={staleFilter}
+              onChange={(e) => setStaleFilter(e.target.value as any)}
+              className="bg-black border border-white/5 hover:border-white/12 text-[9.5px] font-bold text-white/50 hover:text-white px-2.5 py-2 rounded-lg outline-none cursor-pointer font-mono"
+            >
+              <option value="ALL">🌐 ALL TIME</option>
+              <option value="15M">⏱️ &lt; 15 MINS</option>
+              <option value="30M">⏱️ &lt; 30 MINS</option>
+              <option value="1H">⏱️ &lt; 1 HOUR</option>
+              <option value="4H">⏱️ &lt; 4 HOURS</option>
+            </select>
+          </div>
+
+          {/* Prune Stale news button */}
+          <button
+            type="button"
+            onClick={pruneStaleNews}
+            className="px-2.5 py-2 rounded-lg text-[9.5px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 shrink-0 bg-orange-500/10 border-orange-500/25 text-orange-400 hover:bg-orange-500/20 hover:border-orange-500/45 font-mono"
+            title="Surgically prune and erase stale news older than the selected threshold from local memory & server cache"
           >
-            <option value="NEWEST">⏳ NEWEST</option>
-            <option value="IMPACT">🚨 HIGHEST IMPACT</option>
-            <option value="SENTIMENT">📈 BULLISH FIRST</option>
-          </select>
+            <Clock className="w-3.5 h-3.5" />
+            <span>PRUNE STALE</span>
+          </button>
+
+          <div className="h-7 w-[1px] bg-white/5 hidden sm:block" />
 
           {/* New Filter Toggle: RED FOLDER ONLY (High-Impact Critical) */}
           <button
@@ -1029,8 +1159,11 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
             <span>SENTIMENT HIGHLIGHTS</span>
           </button>
 
+          <div className="h-7 w-[1px] bg-white/5 hidden sm:block" />
+
           {/* Grid vs Row Toggle */}
           <button
+            type="button"
             onClick={() => setLayoutMode(prev => prev === 'GRID' ? 'COMPACT' : 'GRID')}
             className="p-2 bg-black/40 border border-white/5 hover:border-white/12 hover:text-indigo-400 text-white/30 rounded-lg cursor-pointer transition-all shrink-0"
             title={layoutMode === 'GRID' ? 'Switch to Compact spreadsheet ledger layout' : 'Switch to Bento grid layout'}
@@ -1040,25 +1173,41 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
         </div>
       </div>
 
+      {/* Pruning status toast notification */}
+      {pruneStatus && (
+        <div className="px-4.5 py-3 bg-orange-500/10 border border-orange-500/30 rounded-xl text-[10px] text-orange-300 flex items-center justify-between font-mono animate-fade-in">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-orange-400 shrink-0" />
+            <span>{pruneStatus.text}</span>
+          </div>
+          <button
+            onClick={() => setPruneStatus(null)}
+            className="text-white/40 hover:text-white text-[10px] uppercase font-bold shrink-0 cursor-pointer ml-4"
+          >
+            DISMISS
+          </button>
+        </div>
+      )}
+
       {/* NEWS SOURCE PROVIDER QUALITY FEED TOGGLE */}
-      <div id="news-source-provider-quality-toggle-bar" className="bg-[#050507]/45 border border-white/5 px-4.5 py-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+      <div id="news-source-provider-quality-toggle-bar" className="bg-[#050507]/45 border border-white/5 px-4.5 py-3 rounded-xl flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-indigo-400" />
-          <div>
+          <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+          <div className="min-w-0">
             <span className="text-[9px] font-black uppercase text-white/60 tracking-widest font-mono block">
               News Source Feed Quality
             </span>
-            <span className="text-[8px] text-white/30 font-sans block mt-0.5">
+            <span className="text-[8px] text-white/30 font-sans block mt-0.5 truncate max-w-[280px] sm:max-w-none">
               Refinement filters targeting institutional raw teleprinter bands, standard RSS journals, or social grassroots momentum feeds.
             </span>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto no-scrollbar scrollbar-none py-1 max-w-full">
           {[
             { id: 'ALL', label: '🌐 ALL QUALITY FEEDS', color: 'border-white/10 hover:text-white', activeClass: 'bg-white/10 text-white font-extrabold border-white/20' },
             { id: 'PRIMARY', label: '💎 PRIMARY (INSTITUTIONAL)', color: 'border-amber-500/10 hover:text-amber-400', activeClass: 'bg-amber-500/15 border-amber-500/35 text-amber-400 font-extrabold shadow-[0_0_8px_rgba(245,158,11,0.15)]' },
             { id: 'AGGREGATE', label: '📊 AGGREGATE (STANDARD)', color: 'border-indigo-500/10 hover:text-indigo-400', activeClass: 'bg-indigo-500/15 border-indigo-500/35 text-indigo-400 font-extrabold shadow-[0_0_8px_rgba(99,102,241,0.15)]' },
-            { id: 'SOCIAL', label: '💬 SOCIAL CHATTER (RETAIL)', color: 'border-pink-500/10 hover:text-pink-400', activeClass: 'bg-pink-500/15 border-pink-500/35 text-pink-400 font-extrabold shadow-[0_0_8px_rgba(236,72,153,0.15)]' }
+            { id: 'SOCIAL', label: '💬 SOCIAL CHARTER RETAIL', color: 'border-pink-500/10 hover:text-pink-400', activeClass: 'bg-pink-500/15 border-pink-500/35 text-pink-400 font-extrabold shadow-[0_0_8px_rgba(236,72,153,0.15)]' }
           ].map((prov) => {
             const active = providerFilter === prov.id;
             return (
@@ -1066,7 +1215,7 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
                 key={prov.id}
                 type="button"
                 onClick={() => setProviderFilter(prov.id as any)}
-                className={`px-2.5 py-1.5 rounded-lg border text-[8.5px] font-black tracking-wide transition-all cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-lg border text-[8.5px] font-black tracking-wide transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   active ? prov.activeClass : `bg-black/30 border-white/5 text-white/35 ${prov.color}`
                 }`}
               >
@@ -1838,8 +1987,8 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {getProviderBadge(getProviderType(article.source))}
-                          <span className="text-[8px] font-bold text-white/35 font-mono">
-                            {article.timestamp}
+                          <span className="text-[8px] font-bold text-white/45 font-mono">
+                            {formatNewsTimestamp(article.timestamp)}
                           </span>
                         </div>
                         <span className="text-[8px] font-extrabold text-white/20 uppercase tracking-widest block font-mono">
@@ -1906,9 +2055,9 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
                     className={`p-3 md:p-3.5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-[10px] hover:bg-white/5 transition-colors cursor-pointer ${colors.border}`}
                   >
                     {/* Timestamp & Category */}
-                    <div className="flex items-center space-x-2.5 lg:w-40 shrink-0 text-white/40 text-[9px]">
+                    <div className="flex items-center space-x-2.5 lg:w-56 shrink-0 text-white/50 text-[9px]">
                       <Clock className="w-3.5 h-3.5 text-white/25 shrink-0" />
-                      <span>{article.timestamp}</span>
+                      <span>{formatNewsTimestamp(article.timestamp)}</span>
                       <span className="text-[8px] px-1 py-0.5 bg-white/5 border border-white/5 rounded block lg:hidden font-extrabold text-[#999] tracking-wider uppercase">
                         {article.category}
                       </span>
@@ -2083,9 +2232,9 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
                   <h3 className="text-xs md:text-[13px] font-black text-white uppercase leading-relaxed tracking-tight select-text">
                     {renderHighlightedHeadline(activeArticle.title)}
                   </h3>
-                  <div className="flex items-center text-white/35 text-[8.5px] gap-2">
+                  <div className="flex items-center text-white/45 text-[8.5px] gap-2">
                     <Clock className="w-3.5 h-3.5" />
-                    <span>Scanned at {activeArticle.timestamp}</span>
+                    <span>Scanned at {formatNewsTimestamp(activeArticle.timestamp)}</span>
                     {activeArticle.readTimeMins && (
                       <span>• {activeArticle.readTimeMins} min aggregate read</span>
                     )}

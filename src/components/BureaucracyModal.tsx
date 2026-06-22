@@ -77,9 +77,9 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div id="bureaucracy-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div id="bureaucracy-modal-overlay" className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
           {/* Main Backdrop Closer */}
-          <div className="absolute inset-0" onClick={onClose} />
+          <div className="absolute inset-0 cursor-default" onClick={onClose} />
 
           {/* Modal Container */}
           <motion.div 
@@ -88,7 +88,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-[#0a0a0c] border border-white/10 rounded-xl overflow-hidden shadow-2xl shadow-indigo-500/5 select-none text-left"
+            className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-[#0b0c10] border border-indigo-500/20 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(99,102,241,0.15)] select-none text-left z-10"
           >
             {/* Modal Header */}
             <div className="px-6 py-4 bg-gradient-to-b from-white/[0.04] to-transparent border-b border-white/5 flex items-center justify-between">

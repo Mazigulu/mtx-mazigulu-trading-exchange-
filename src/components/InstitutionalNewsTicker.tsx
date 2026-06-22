@@ -41,6 +41,35 @@ export interface BreakingNewsItem {
   readTimeMins?: number;
 }
 
+const formatNewsTimestamp = (timestamp: string) => {
+  if (!timestamp) return '';
+  try {
+    if (timestamp.includes(':') && !timestamp.includes('-') && !timestamp.includes('T') && timestamp.length < 12) {
+      return `Today ${timestamp}`;
+    }
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) {
+      return timestamp;
+    }
+    const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    
+    const diffMs = Date.now() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    
+    let relativeStr = '';
+    if (diffMins < 1) relativeStr = 'Just now';
+    else if (diffMins < 60) relativeStr = `${diffMins}m ago`;
+    else if (diffHours < 24) relativeStr = `${diffHours}h ago`;
+    else relativeStr = `${Math.floor(diffHours / 24)}d ago`;
+
+    return `${dateStr}, ${timeStr} (${relativeStr})`;
+  } catch {
+    return timestamp;
+  }
+};
+
 export default function InstitutionalNewsTicker() {
   const [news, setNews] = useState<BreakingNewsItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -494,11 +523,11 @@ export default function InstitutionalNewsTicker() {
                   }`}
                 >
                   {/* Left Column: Metadata tag group */}
-                  <div className="flex flex-wrap items-center md:flex-col md:items-start gap-2 shrink-0 md:w-36 text-[9.5px]">
+                  <div className="flex flex-wrap items-center md:flex-col md:items-start gap-2 shrink-0 md:w-52 text-[9.5px]">
                     {/* Timestamp relative clock */}
-                    <div className="flex items-center text-white/30 space-x-1 shrink-0 font-normal">
+                    <div className="flex items-center text-white/35 space-x-1 shrink-0 font-normal">
                       <Clock className="w-3.5 h-3.5 text-white/20" />
-                      <span>{item.timestamp}</span>
+                      <span>{formatNewsTimestamp(item.timestamp)}</span>
                     </div>
 
                     {/* Impact Level Badge */}
@@ -616,9 +645,9 @@ export default function InstitutionalNewsTicker() {
                   {selectedArticle.title}
                 </h3>
                 
-                <div className="flex items-center text-white/30 text-[9px] pt-1">
+                <div className="flex items-center text-white/45 text-[9px] pt-1">
                   <Clock className="w-3.5 h-3.5 text-white/20 mr-1.5 inline" />
-                  <span>Logged at {selectedArticle.timestamp}</span>
+                  <span>Logged at {formatNewsTimestamp(selectedArticle.timestamp)}</span>
                   {selectedArticle.readTimeMins && (
                     <span className="ml-3">• Estimated reading time: {selectedArticle.readTimeMins} mins</span>
                   )}
