@@ -239,7 +239,7 @@ export default function CorrelationMatrix() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         
         {/* Heatmap Area */}
-        <div className="lg:col-span-7 flex flex-col justify-center overflow-x-auto">
+        <div className="lg:col-span-7 w-full overflow-x-auto pb-2 scrollbar-thin">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-2">
               <div className="animate-spin rounded-full h-5 w-5 border-b border-indigo-400"></div>
@@ -247,7 +247,7 @@ export default function CorrelationMatrix() {
             </div>
           ) : error ? (
             <div className="flex items-center justify-center space-x-2 py-12 text-rose-400 font-mono text-[10px] bg-rose-950/10 border border-rose-900/10 rounded">
-              <ShieldAlert className="w-4 h-4 text-rose-500" />
+              <ShieldAlert className="w-4.5 h-4.5 text-rose-500" />
               <span>{error}</span>
             </div>
           ) : (
@@ -256,7 +256,10 @@ export default function CorrelationMatrix() {
               {/* Matrix Element Grid */}
               <div 
                 className="grid gap-1.5 font-mono text-[10px]"
-                style={{ gridTemplateColumns: `repeat(${symbols.length + 1}, minmax(0, 1fr))` }}
+                style={{ 
+                  gridTemplateColumns: `repeat(${symbols.length + 1}, minmax(0, 1fr))`,
+                  minWidth: `${(symbols.length + 1) * 38}px`
+                }}
               >
                 
                 {/* Row 0: Top Header corner (empty) */}

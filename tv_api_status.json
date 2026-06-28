@@ -1,0 +1,14 @@
+{
+  "apiKeyConfigured": true,
+  "apiKeyLength": 50,
+  "apiKeyPlaceholder": false,
+  "lastTvStatus": {
+    "EUR/USD": {
+      "status": "ERROR",
+      "timestamp": "2026-06-28T19:05:00.418Z",
+      "error": "HTTP error 429 (Too Many Requests)",
+      "symbolUsed": "FX:EURUSD",
+      "apiKeyLength": 50
+    }
+  }
+}

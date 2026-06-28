@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { MarketSymbol } from '../types';
+import { motion } from 'motion/react';
 import { 
   Flame, 
   TrendingUp, 
@@ -415,7 +416,15 @@ export default function MarketSentimentHeatmap() {
                         <Newspaper className="w-2.5 h-2.5 text-indigo-400" /> News Feed Force
                       </span>
                       <div className="flex items-baseline gap-1 mt-1.5">
-                        <span className="text-sm font-black text-white">{activeAsset.newsScore}%</span>
+                        <motion.span 
+                          key={activeAsset.newsScore}
+                          initial={{ opacity: 0.5, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.2 }}
+                          className="text-sm font-black text-white"
+                        >
+                          {activeAsset.newsScore}%
+                        </motion.span>
                         <span className="text-[8px] text-white/35 block italic">Score</span>
                       </div>
                       <span className="text-[8px] text-white/30 block mt-1 font-sans">
@@ -428,11 +437,26 @@ export default function MarketSentimentHeatmap() {
                         <Zap className="w-2.5 h-2.5 text-indigo-400" /> Tech Indicator Weight
                       </span>
                       <div className="flex items-baseline gap-1 mt-1.5">
-                        <span className="text-sm font-black text-white">{activeAsset.technicalScore}%</span>
+                        <motion.span 
+                          key={activeAsset.technicalScore}
+                          initial={{ opacity: 0.5, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.2 }}
+                          className="text-sm font-black text-white"
+                        >
+                          {activeAsset.technicalScore}%
+                        </motion.span>
                         <span className="text-[8px] text-white/35 block italic">Score</span>
                       </div>
                       <span className="text-[8px] text-white/30 block mt-1 font-sans">
-                        RSI Momentum: {activeAsset.rsi}
+                        RSI Momentum: <motion.span 
+                          key={activeAsset.rsi}
+                          initial={{ opacity: 0.5 }}
+                          animate={{ opacity: 1 }}
+                          className="font-bold text-indigo-300"
+                        >
+                          {activeAsset.rsi}
+                        </motion.span>
                       </span>
                     </div>
 
@@ -442,9 +466,14 @@ export default function MarketSentimentHeatmap() {
                   <div className="pt-2">
                     <div className="flex justify-between items-center text-[9px] font-mono text-white/30">
                       <span>AVERAGE TRUE RANGE (30 CANDLES):</span>
-                      <span className="font-bold text-white/80">
+                      <motion.span 
+                        key={activeAsset.atr}
+                        initial={{ opacity: 0.5, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="font-bold text-white/80"
+                      >
                         {activeAsset.atr?.toFixed(selectedSymbol === 'USD/JPY' ? 3 : selectedSymbol === 'BTC/USDT' ? 1 : 5)}
-                      </span>
+                      </motion.span>
                     </div>
                   </div>
 

@@ -37,6 +37,9 @@ interface HistoricalCandle {
   isNewsSpike?: boolean;
   newsTitle?: string;
   ema50: number;
+  rsi?: number;
+  atr?: number;
+  sma200?: number;
 }
 
 // Definition of simulated backtest trade
@@ -59,7 +62,7 @@ interface BacktestTrade {
 }
 
 // Configurations for support of all trading pairs in the system
-const SYMBOL_CONFIGS: Record<MarketSymbol, {
+const SYMBOL_CONFIGS: Partial<Record<MarketSymbol, {
   name: string;
   basePrice: number;
   pipSize: number;
@@ -69,7 +72,7 @@ const SYMBOL_CONFIGS: Record<MarketSymbol, {
   flagF1: string;
   flagF2: string;
   newsEvents: { hourIndex: number; title: string; movementInPips: number; impact: string }[];
-}> = {
+}>> = {
   'EUR/USD': {
     name: 'Euro / U.S. Dollar',
     basePrice: 1.1645,
@@ -249,9 +252,105 @@ const SYMBOL_CONFIGS: Record<MarketSymbol, {
 interface BacktestSimulatorProps {
   selectedSymbol?: MarketSymbol;
   onSymbolChange?: (sym: MarketSymbol) => void;
+  onSimulationUpdate?: (data: {
+    candles: HistoricalCandle[];
+    trades: any[];
+    fvgs: any[];
+    obs: any[];
+    sweeps: any[];
+    metrics: any | null;
+  } | null) => void;
+  onSimulationToggle?: (active: boolean) => void;
 }
 
-export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbolChange }: BacktestSimulatorProps) {
+// Analytical helpers for simulated candlesticks
+function calculateSMA(prices: number[], period: number): number[] {
+  const sma: number[] = [];
+  for (let i = 0; i < prices.length; i++) {
+    if (i < period - 1) {
+      sma.push(prices[i]);
+    } else {
+      const sum = prices.slice(i - period + 1, i + 1).reduce((s, p) => s + p, 0);
+      sma.push(sum / period);
+    }
+  }
+  return sma;
+}
+
+function calculateRSI(prices: number[], period = 14): number[] {
+  const rsi: number[] = [];
+  if (prices.length < 2) return Array(prices.length).fill(50);
+
+  let gains = 0;
+  let losses = 0;
+
+  for (let i = 1; i <= period && i < prices.length; i++) {
+    const diff = prices[i] - prices[i - 1];
+    if (diff > 0) gains += diff;
+    else losses -= diff;
+  }
+
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+
+  if (avgLoss === 0) rsi.push(100);
+  else {
+    const rs = avgGain / avgLoss;
+    rsi.push(100 - 100 / (1 + rs));
+  }
+
+  for (let i = 1; i < period; i++) {
+    rsi.unshift(50);
+  }
+
+  for (let i = period; i < prices.length; i++) {
+    const diff = prices[i] - prices[i - 1];
+    let gain = 0;
+    let loss = 0;
+    if (diff > 0) gain = diff;
+    else loss = -diff;
+
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+    if (avgLoss === 0) rsi.push(100);
+    else {
+      const rs = avgGain / avgLoss;
+      rsi.push(100 - 100 / (1 + rs));
+    }
+  }
+
+  return rsi;
+}
+
+function calculateATR(highs: number[], lows: number[], closes: number[], period = 14): number[] {
+  const tr: number[] = [];
+  tr.push(highs[0] - lows[0]);
+
+  for (let i = 1; i < closes.length; i++) {
+    const hl = highs[i] - lows[i];
+    const hc = Math.abs(highs[i] - closes[i - 1]);
+    const lc = Math.abs(lows[i] - closes[i - 1]);
+    tr.push(Math.max(hl, hc, lc));
+  }
+
+  const atr: number[] = [];
+  let sum = tr.slice(0, period).reduce((s, val) => s + val, 0);
+  atr.push(sum / period);
+
+  for (let i = 1; i < period; i++) {
+    atr.unshift(tr[i]);
+  }
+
+  for (let i = period; i < tr.length; i++) {
+    const nextAtr = (atr[atr.length - 1] * (period - 1) + tr[i]) / period;
+    atr.push(nextAtr);
+  }
+
+  return atr;
+}
+
+export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbolChange, onSimulationUpdate, onSimulationToggle }: BacktestSimulatorProps) {
   // Target Trading Pair selected
   const [backtestSymbol, setBacktestSymbol] = useState<MarketSymbol>(selectedSymbol);
 
@@ -357,6 +456,20 @@ export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbol
         newsTitle,
         ema50: parseFloat(ema.toFixed(config.decimals)),
       });
+    }
+
+    const listHighs = list.map(c => c.high);
+    const listLows = list.map(c => c.low);
+    const listCloses = list.map(c => c.close);
+
+    const rsiValues = calculateRSI(listCloses, 14);
+    const atrValues = calculateATR(listHighs, listLows, listCloses, 14);
+    const sma200Values = calculateSMA(listCloses, 50); // Using 50 periods for visual EMA/SMA on simulated chart
+
+    for (let i = 0; i < list.length; i++) {
+      list[i].rsi = parseFloat(rsiValues[i].toFixed(1));
+      list[i].atr = parseFloat(atrValues[i].toFixed(config.decimals));
+      list[i].sma200 = parseFloat(sma200Values[i].toFixed(config.decimals));
     }
 
     return list;
@@ -668,11 +781,165 @@ export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbol
         });
       });
 
+      // 1. Calculate simulated FVGs
+      const simFvgs: any[] = [];
+      for (let i = 1; i < generatedCandles.length - 1; i++) {
+        const prev = generatedCandles[i - 1];
+        const curr = generatedCandles[i];
+        const next = generatedCandles[i + 1];
+
+        if (next.low > prev.high) {
+          simFvgs.push({
+            id: `fvg-up-sim-${i}`,
+            index: i,
+            type: 'BULLISH',
+            gapStart: prev.high,
+            gapEnd: next.low,
+            isMitigated: generatedCandles.slice(i + 2).some(c => c.low <= next.low),
+            timestamp: curr.timestamp
+          });
+        } else if (next.high < prev.low) {
+          simFvgs.push({
+            id: `fvg-down-sim-${i}`,
+            index: i,
+            type: 'BEARISH',
+            gapStart: prev.low,
+            gapEnd: next.high,
+            isMitigated: generatedCandles.slice(i + 2).some(c => c.high >= next.high),
+            timestamp: curr.timestamp
+          });
+        }
+      }
+
+      // 2. Calculate simulated Order Blocks
+      const simObs: any[] = [];
+      const tickSize = config.pipSize || 0.0001;
+      const minDisplacement = tickSize * (
+        backtestSymbol.includes('USDT') ? 35 :
+        backtestSymbol === 'GOLD/USD' ? 15 :
+        backtestSymbol === 'USD/JPY' ? 0.3 :
+        ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(backtestSymbol) ? 5.0 :
+        backtestSymbol === 'BRENT' ? 0.5 :
+        backtestSymbol === 'DXY' ? 0.15 :
+        backtestSymbol === 'US10Y' ? 0.02 :
+        0.0020
+      );
+
+      for (let i = 5; i < generatedCandles.length - 3; i++) {
+        const curr = generatedCandles[i];
+        const next1 = generatedCandles[i + 1];
+        const next2 = generatedCandles[i + 2];
+        const next3 = generatedCandles[i + 3];
+
+        const isRed = curr.close < curr.open;
+        const isNextBullish = next1.close > next1.open && next2.close > next2.open && next3.close > next3.open;
+        const displacement = next3.close - next1.open;
+
+        if (isRed && isNextBullish && displacement > minDisplacement) {
+          simObs.push({
+            id: `ob-bullish-sim-${i}`,
+            index: i,
+            type: 'BULLISH',
+            high: curr.high,
+            low: curr.low,
+            isBroken: generatedCandles.slice(i + 4).some(c => c.close < curr.low),
+            timestamp: curr.timestamp
+          });
+        }
+
+        const isGreen = curr.close > curr.open;
+        const isNextBearish = next1.close < next1.open && next2.close < next2.open && next3.close < next3.open;
+        const downDisplacement = next1.open - next3.close;
+
+        if (isGreen && isNextBearish && downDisplacement > minDisplacement) {
+          simObs.push({
+            id: `ob-bearish-sim-${i}`,
+            index: i,
+            type: 'BEARISH',
+            high: curr.high,
+            low: curr.low,
+            isBroken: generatedCandles.slice(i + 4).some(c => c.close > curr.high),
+            timestamp: curr.timestamp
+          });
+        }
+      }
+
+      // 3. Calculate simulated Sweeps
+      const simSweeps: any[] = [];
+      for (let i = 10; i < generatedCandles.length; i++) {
+        const curr = generatedCandles[i];
+        const neighborhoodHigh = Math.max(...generatedCandles.slice(i - 10, i).map(c => c.high));
+        const neighborhoodLow = Math.min(...generatedCandles.slice(i - 10, i).map(c => c.low));
+
+        if (curr.high > neighborhoodHigh && curr.close < neighborhoodHigh) {
+          simSweeps.push({
+            id: `sweep-buyside-sim-${i}`,
+            index: i,
+            type: 'BUY_SIDE',
+            level: neighborhoodHigh,
+            timestamp: curr.timestamp
+          });
+        }
+
+        if (curr.low < neighborhoodLow && curr.close > neighborhoodLow) {
+          simSweeps.push({
+            id: `sweep-sellside-sim-${i}`,
+            index: i,
+            type: 'SELL_SIDE',
+            level: neighborhoodLow,
+            timestamp: curr.timestamp
+          });
+        }
+      }
+
+      // 4. Map trades Taken
+      const mappedTrades = tradesTaken.map((st) => ({
+        id: st.id,
+        symbol: backtestSymbol,
+        side: st.side,
+        entryPrice: st.entryPrice,
+        stopLoss: st.stopLoss,
+        takeProfit: st.takeProfit,
+        size: st.contractSize,
+        status: 'CLOSED' as const,
+        pnl: st.pnlDollar,
+        exitPrice: st.exitPrice,
+        timestamp: st.time,
+        exitTimestamp: st.exitTime,
+        reason: st.reason,
+        confidence: 85,
+        confluences: [st.strategy],
+      }));
+
+      // 5. Build simulated metrics
+      const lastCandle = generatedCandles[generatedCandles.length - 1];
+      const simulatedMetrics = {
+        atr: lastCandle.atr || (config.averageRange * 1.2),
+        rsi: lastCandle.rsi || 50,
+        trend: lastCandle.close > (lastCandle.ema50 || lastCandle.close) ? 'BULLISH' as const : 'BEARISH' as const,
+        dailyBias: lastCandle.close > (lastCandle.ema50 || lastCandle.close) ? 'BULLISH' as const : 'BEARISH' as const,
+        supportLevels: [lastCandle.low, lastCandle.low * 0.99],
+        resistanceLevels: [lastCandle.high, lastCandle.high * 1.01],
+        currentPrice: lastCandle.close,
+      };
+
       // Save states
       setSimtrades(tradesTaken);
       setEquityCurveData(ecData);
       setIsSimulating(false);
       setSimulationCompleted(true);
+
+      if (onSimulationToggle) onSimulationToggle(true);
+      if (onSimulationUpdate) {
+        onSimulationUpdate({
+          candles: generatedCandles,
+          trades: mappedTrades,
+          fvgs: simFvgs,
+          obs: simObs,
+          sweeps: simSweeps,
+          metrics: simulatedMetrics,
+        });
+      }
     }, 1200);
   };
 
@@ -768,6 +1035,13 @@ export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbol
               <option value="USD/JPY">🇺🇸🇯🇵 USD/JPY (Yen)</option>
               <option value="BTC/USDT">🪙🇺🇸 BTC/USDT (Bitcoin)</option>
               <option value="GOLD/USD">🪙🇺🇸 GOLD/USD (Gold Spot)</option>
+              <option value="DXY">💵🇺🇸 DXY (US Dollar Index)</option>
+              <option value="US10Y">🏦🇺🇸 US10Y (US 10Y Yield)</option>
+              <option value="BRENT">🛢️🌐 BRENT (Brent Crude Oil)</option>
+              <option value="AAPL">🍎🇺🇸 AAPL (Apple)</option>
+              <option value="MSFT">💻🇺🇸 MSFT (Microsoft)</option>
+              <option value="NVDA">🟩🇺🇸 NVDA (NVIDIA)</option>
+              <option value="TSLA">🚗🇺🇸 TSLA (Tesla)</option>
             </select>
           </div>
 

@@ -58,7 +58,14 @@ export type MarketSymbol =
   | 'US30' 
   | 'NAS100' 
   | 'GER40' 
-  | 'SPX500';
+  | 'SPX500'
+  | 'DXY'
+  | 'US10Y'
+  | 'BRENT'
+  | 'AAPL'
+  | 'MSFT'
+  | 'NVDA'
+  | 'TSLA';
 
 export interface Trade {
   id: string;
@@ -92,6 +99,10 @@ export interface Trade {
   trailingTakeProfitDistance?: number;
   maxPriceReached?: number;
   minPriceReached?: number;
+  lavTslActive?: boolean;
+  lavTslAtrMultiplier?: number;
+  lavTslLiquidityActive?: boolean;
+  lavTslTighteningActive?: boolean;
 }
 
 export interface NewsEvent {
@@ -218,6 +229,38 @@ export function getSymbolCorrelations(symbol: MarketSymbol): CorrelationData[] {
     case 'GER40':
       list.push({ sym: 'SPX500', coef: 0.82, desc: 'Coordinate global investment covariance' });
       list.push({ sym: 'US30', coef: 0.78, desc: 'Exporter-driven machinery alignment' });
+      break;
+    case 'DXY':
+      list.push({ sym: 'EUR/USD', coef: -0.95, desc: 'Primary component of dollar index weight' });
+      list.push({ sym: 'USD/JPY', coef: 0.85, desc: 'Highly correlated dollar interest rate tracker' });
+      list.push({ sym: 'GOLD/USD', coef: -0.55, desc: 'Inverse precious metal commodity denominator' });
+      list.push({ sym: 'BTC/USDT', coef: -0.45, desc: 'Inverse speculative risk asset denominator' });
+      break;
+    case 'US10Y':
+      list.push({ sym: 'DXY', coef: 0.60, desc: 'Treasury yields driving strong USD indexing' });
+      list.push({ sym: 'USD/JPY', coef: 0.75, desc: 'Yield-differential carry-trade pairing' });
+      list.push({ sym: 'GOLD/USD', coef: -0.40, desc: 'Yield asset competition with safe-haven metal' });
+      break;
+    case 'BRENT':
+      list.push({ sym: 'GOLD/USD', coef: 0.45, desc: 'Commodity inflation indexing synchronization' });
+      list.push({ sym: 'DXY', coef: -0.30, desc: 'Inverse pricing against American Dollar' });
+      break;
+    case 'AAPL':
+      list.push({ sym: 'NAS100', coef: 0.88, desc: 'Heavy weighting inside tech growth index' });
+      list.push({ sym: 'MSFT', coef: 0.75, desc: 'Big-tech sector capitalization co-exposure' });
+      list.push({ sym: 'SPX500', coef: 0.82, desc: 'Broad-market corporate leader integration' });
+      break;
+    case 'MSFT':
+      list.push({ sym: 'NAS100', coef: 0.89, desc: 'Heavy weighting inside tech growth index' });
+      list.push({ sym: 'AAPL', coef: 0.75, desc: 'Big-tech sector capitalization co-exposure' });
+      list.push({ sym: 'SPX500', coef: 0.84, desc: 'Broad-market corporate leader integration' });
+      break;
+    case 'NVDA':
+      list.push({ sym: 'NAS100', coef: 0.91, desc: 'High-beta growth semiconductor momentum' });
+      list.push({ sym: 'BTC/USDT', coef: 0.48, desc: 'Speculative liquidity cycle synchronization' });
+      break;
+    case 'TSLA':
+      list.push({ sym: 'NAS100', coef: 0.72, desc: 'High-volatility growth vehicle benchmark' });
       break;
     default:
       list.push({ sym: 'EUR/USD', coef: 0.30, desc: 'Market benchmark reference' });

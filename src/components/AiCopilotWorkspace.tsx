@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { MarketSymbol, Trade, MarketMetrics } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
+import MtxExpertArchitect from './MtxExpertArchitect';
 import { 
   Cpu, 
   Terminal, 
@@ -37,6 +38,7 @@ interface AiCopilotWorkspaceProps {
   metrics: MarketMetrics;
   onTradeExecuted: () => void;
   trades?: Trade[];
+  onSelectTab?: (tab: 'DASHBOARD' | 'INTELLIGENCE' | 'RISK' | 'RESEARCH' | 'NEWS' | 'COPILOT' | 'ANALYTICS') => void;
 }
 
 interface DraftOrder {
@@ -63,9 +65,21 @@ interface ScriptCompileResult {
   parameters: { name: string; val: string; desc: string }[];
 }
 
-export default function AiCopilotWorkspace({ symbol, metrics, onTradeExecuted, trades = [] }: AiCopilotWorkspaceProps) {
-  const [activeWorkspace, setActiveWorkspace] = useState<'COMPOSER' | 'COMPILER'>('COMPOSER');
+export default function AiCopilotWorkspace({ symbol, metrics, onTradeExecuted, trades = [], onSelectTab }: AiCopilotWorkspaceProps) {
+  const [activeWorkspace, setActiveWorkspace] = useState<'COMPOSER' | 'COMPILER' | 'ARCHITECT'>('ARCHITECT');
   const [copilotStrategyProfile, setCopilotStrategyProfile] = useState<'SWING' | 'SCALPING'>('SWING');
+
+  const handleSendToExecutionDesk = (order: DraftOrder) => {
+    try {
+      localStorage.setItem('copilot_execution_order_intent', JSON.stringify(order));
+      // Dispatch custom event for immediate same-page subscription trigger
+      window.dispatchEvent(new Event('mtx_copilot_execute'));
+      
+      alert(`Order parameters successfully sent to execution desk!`);
+    } catch (e) {
+      console.error('Error writing copilot intent:', e);
+    }
+  };
 
   useEffect(() => {
     const checkStrategyProfile = () => {
@@ -395,25 +409,38 @@ export default function AiCopilotWorkspace({ symbol, metrics, onTradeExecuted, t
   };
 
   return (
-    <div className="bg-[#060608] border border-white/10 rounded-lg p-6 shadow-2xl space-y-6 flex flex-col justify-between">
+    <div className="bg-[#060608] border border-white/10 p-6 rounded-lg shadow-2xl space-y-6 flex flex-col justify-between">
       
       {/* Header section with high-density styling */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-4.5 gap-4">
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-md">
-            <Cpu className="w-5 h-5 text-indigo-400" />
-          </div>
-          <div>
-            <h3 className="text-sm font-black uppercase text-white tracking-wider flex items-center gap-1.5 font-sans">
-              MTX Engine Workspace
-              <span className="text-[7.5px] bg-indigo-500/25 text-indigo-300 font-mono tracking-widest px-1 rounded animate-pulse">MAGNITUDE V1</span>
-            </h3>
-            <p className="text-[9.5px] text-white/35 font-mono uppercase tracking-tight mt-0.5">The Instant Code-to-Order & pine compiler toolbox for MT5</p>
+        <div className="flex items-center justify-between w-full md:w-auto">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-md">
+              <Cpu className="w-5 h-5 text-indigo-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase text-white tracking-wider flex items-center gap-1.5 font-sans">
+                MTX Engine Workspace
+                <span className="text-[7.5px] bg-indigo-500/25 text-indigo-300 font-mono tracking-widest px-1 rounded animate-pulse">MAGNITUDE V1</span>
+              </h3>
+              <p className="text-[9.5px] text-white/35 font-mono uppercase tracking-tight mt-0.5">The Instant Code-to-Order & pine compiler toolbox for MT5</p>
+            </div>
           </div>
         </div>
 
-        {/* Tab switcher: Composer vs Advisor builder */}
+        {/* Tab switcher: Composer vs Advisor builder vs Architect */}
         <div className="flex space-x-1.5 bg-[#020204] p-1 rounded border border-white/5">
+          <button
+            id="tab-architect"
+            onClick={() => setActiveWorkspace('ARCHITECT')}
+            className={`px-3.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer ${
+              activeWorkspace === 'ARCHITECT' 
+                ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-400/25 font-black' 
+                : 'text-white/40 hover:text-white/90 font-medium'
+            }`}
+          >
+            mTX Expert Architect
+          </button>
           <button
             id="tab-composer"
             onClick={() => setActiveWorkspace('COMPOSER')}
@@ -451,7 +478,9 @@ export default function AiCopilotWorkspace({ symbol, metrics, onTradeExecuted, t
 
       {/* Main Container Deck */}
       <div className="min-h-[500px]">
-        {activeWorkspace === 'COMPOSER' ? (
+        {activeWorkspace === 'ARCHITECT' ? (
+          <MtxExpertArchitect symbol={symbol} metrics={metrics} />
+        ) : activeWorkspace === 'COMPOSER' ? (
           // ==========================================
           // VIEW 1: AI COMMAND BAR & TRADE COMPOSER
           // ==========================================
@@ -559,13 +588,22 @@ export default function AiCopilotWorkspace({ symbol, metrics, onTradeExecuted, t
                               </span>
                               <span className="text-white font-extrabold tracking-wider">{order.symbol}</span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setActiveLegOverride(isOverridden ? null : index)}
-                              className="text-[9px] text-indigo-400 font-bold uppercase transition-all hover:text-white cursor-pointer select-none"
-                            >
-                              {isOverridden ? 'CLOSE ADJUSTMENT' : 'ADJUST PARAMETERS'}
-                            </button>
+                            <div className="flex items-center space-x-3">
+                              <button
+                                type="button"
+                                onClick={() => handleSendToExecutionDesk(order)}
+                                className="text-[9px] bg-indigo-650 hover:bg-indigo-500/80 text-indigo-305 font-bold uppercase transition-all px-2 py-0.5 border border-indigo-500/25 hover:border-indigo-400/50 rounded cursor-pointer select-none"
+                              >
+                                Send to Execution
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setActiveLegOverride(isOverridden ? null : index)}
+                                className="text-[9px] text-[#e5e5e5]/50 hover:text-white font-bold uppercase transition-all cursor-pointer select-none"
+                              >
+                                {isOverridden ? 'CLOSE' : 'ADJUST'}
+                              </button>
+                            </div>
                           </div>
 
                           {/* Order parameters editor line */}

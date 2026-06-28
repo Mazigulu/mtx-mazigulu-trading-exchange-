@@ -10,9 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import ChartContainer from './components/ChartContainer';
 import AdvisorChat, { Message } from './components/AdvisorChat';
 import EconomicCalendar from './components/EconomicCalendar';
-import OrderBookTracker from './components/OrderBookTracker';
-import CumulativeDepthChart from './components/CumulativeDepthChart';
-import Mt5BridgeGuide from './components/Mt5BridgeGuide';
+import SessionConfluenceTracker from './components/SessionConfluenceTracker';
 import BacktestSimulator from './components/BacktestSimulator';
 
 const TradeTerminal = React.lazy(() => import('./components/TradeTerminal'));
@@ -22,14 +20,15 @@ import SystemStatus from './components/SystemStatus';
 import TradeExplainability from './components/TradeExplainability';
 import AnalyticDeskIntelligence from './components/AnalyticDeskIntelligence';
 import CorrelationMatrix from './components/CorrelationMatrix';
+import PositionDependencyView from './components/PositionDependencyView';
 import CorrelationHeatmap from './components/CorrelationHeatmap';
 import InstitutionalSentimentGauge from './components/InstitutionalSentimentGauge';
 import InstitutionalSweepAlert from './components/InstitutionalSweepAlert';
+import InstitutionalSentimentAlertSystem from './components/InstitutionalSentimentAlertSystem';
 import InstitutionalNewsTicker from './components/InstitutionalNewsTicker';
 import MarketSentimentHeatmap from './components/MarketSentimentHeatmap';
 import DailyBriefing from './components/DailyBriefing';
 import MarketMomentumGauge from './components/MarketMomentumGauge';
-import SettingsPanel from './components/SettingsPanel';
 import TickerPrice from './components/TickerPrice';
 import TradeJournal from './components/TradeJournal';
 import StrategyPerformanceChart from './components/StrategyPerformanceChart';
@@ -38,8 +37,12 @@ import { BureaucracyModal } from './components/BureaucracyModal';
 import LoginPage from './components/LoginPage';
 import NewsDesk from './components/NewsDesk';
 import AiCopilotWorkspace from './components/AiCopilotWorkspace';
+import { auth } from './lib/firebase.ts';
+import { onAuthStateChanged } from 'firebase/auth';
 import InstitutionalFlowWidget from './components/InstitutionalFlowWidget';
 import RiskExposureJournal from './components/RiskExposureJournal';
+import MarketsTerminal from './components/MarketsTerminal';
+
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
 import { 
@@ -92,7 +95,13 @@ import {
   Sliders,
   Newspaper,
   Sparkles,
-  BarChart3
+  BarChart3,
+  User,
+  Copy,
+  Volume2,
+  VolumeX,
+  Lock,
+  Shield
 } from 'lucide-react';
 
 const TerminalWorkspaceLoader = () => (
@@ -150,6 +159,117 @@ export default function App() {
     }
   });
 
+  // Install safe global fetch interceptor to dynamically inject standard Firebase Authorization token
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    let interceptorInstalled = false;
+
+    const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      try {
+        const user = auth.currentUser;
+        if (user) {
+          const token = await user.getIdToken();
+          init = init || {};
+          const headers = new Headers(init.headers || {});
+          if (!headers.has('Authorization')) {
+            headers.set('Authorization', `Bearer ${token}`);
+          }
+          init.headers = headers;
+        }
+      } catch (err) {
+        console.error('Error attaching identity token to request:', err);
+      }
+      return originalFetch(input, init);
+    };
+
+    // Attempt 1: Standard direct assignment
+    try {
+      (window as any).fetch = wrappedFetch;
+      interceptorInstalled = true;
+    } catch (err) {
+      console.warn('Standard window.fetch assignment blocked. Trying Object.defineProperty...', err);
+    }
+
+    // Attempt 2: Object.defineProperty on window
+    if (!interceptorInstalled) {
+      try {
+        Object.defineProperty(window, 'fetch', {
+          configurable: true,
+          writable: true,
+          value: wrappedFetch
+        });
+        interceptorInstalled = true;
+      } catch (err) {
+        console.warn('Object.defineProperty on window.fetch blocked. Trying prototype patch...', err);
+      }
+    }
+
+    // Attempt 3: Object.defineProperty on Window.prototype
+    if (!interceptorInstalled) {
+      try {
+        const proto = Object.getPrototypeOf(window);
+        if (proto) {
+          Object.defineProperty(proto, 'fetch', {
+            configurable: true,
+            writable: true,
+            value: wrappedFetch
+          });
+          interceptorInstalled = true;
+        }
+      } catch (err) {
+        console.error('All safe global fetch interceptor installations failed:', err);
+      }
+    }
+
+    return () => {
+      if (interceptorInstalled) {
+        try {
+          (window as any).fetch = originalFetch;
+        } catch (err) {
+          try {
+            Object.defineProperty(window, 'fetch', {
+              configurable: true,
+              writable: true,
+              value: originalFetch
+            });
+          } catch (err2) {
+            try {
+              const proto = Object.getPrototypeOf(window);
+              if (proto) {
+                Object.defineProperty(proto, 'fetch', {
+                  configurable: true,
+                  writable: true,
+                  value: originalFetch
+                });
+              }
+            } catch (err3) {
+              console.warn('Could not restore original fetch:', err3);
+            }
+          }
+        }
+      }
+    };
+  }, []);
+
+  // Monitor centralized auth status changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsLoggedIn(true);
+        setTraderEmail(user.email || 'maziguluj@gmail.com');
+        try {
+          localStorage.setItem('apex_is_logged_in', 'true');
+          if (user.email) {
+            localStorage.setItem('apex_trader_email', user.email);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleLoginSuccess = (email: string) => {
     try {
       localStorage.setItem('apex_is_logged_in', 'true');
@@ -161,9 +281,10 @@ export default function App() {
     setIsLoggedIn(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     try {
       localStorage.removeItem('apex_is_logged_in');
+      await auth.signOut();
     } catch (err) {
       console.error(err);
     }
@@ -197,7 +318,8 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'INTELLIGENCE' | 'EXECUTION' | 'RISK' | 'RESEARCH' | 'SETTINGS' | 'NEWS' | 'COPILOT' | 'ANALYTICS'>('INTELLIGENCE');
+  const [activeTab, setActiveTab] = useState<'RISK' | 'RESEARCH' | 'NEWS' | 'COPILOT' | 'ANALYTICS' | 'MARKETS'>('MARKETS');
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'ORDER_FLOW' | 'CORRELATION' | 'DEPENDENCY'>('ORDER_FLOW');
   const [researchSubTab, setResearchSubTab] = useState<'CALENDAR' | 'REPLAY' | 'LEDGER' | 'RISK_EXPOSURE'>('CALENDAR');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -207,7 +329,102 @@ export default function App() {
   const [jumpRange, setJumpRange] = useState<{ start: string; end: string; triggerId: number } | null>(null);
   const [sessionStartDate, setSessionStartDate] = useState('');
   const [sessionEndDate, setSessionEndDate] = useState('');
+
+  const handleStepReplay = (direction: 'forward' | 'backward') => {
+    if (candles.length === 0) return;
+
+    let startIdx = 0;
+    let endIdx = candles.length - 1;
+
+    if (jumpRange) {
+      const startMs = new Date(jumpRange.start).getTime();
+      const endMs = new Date(jumpRange.end).getTime();
+
+      let minStartDiff = Infinity;
+      let minEndDiff = Infinity;
+
+      for (let i = 0; i < candles.length; i++) {
+        const cTime = new Date(candles[i].timestamp).getTime();
+        
+        const startDiff = Math.abs(cTime - startMs);
+        if (startDiff < minStartDiff) {
+          minStartDiff = startDiff;
+          startIdx = i;
+        }
+
+        const endDiff = Math.abs(cTime - endMs);
+        if (endDiff < minEndDiff) {
+          minEndDiff = endDiff;
+          endIdx = i;
+        }
+      }
+    } else {
+      startIdx = Math.max(0, candles.length - 40);
+      endIdx = candles.length - 1;
+    }
+
+    if (direction === 'backward') {
+      if (startIdx > 0 && endIdx > 0) {
+        startIdx -= 1;
+        endIdx -= 1;
+      } else {
+        return;
+      }
+    } else {
+      if (endIdx < candles.length - 1) {
+        startIdx += 1;
+        endIdx += 1;
+      } else {
+        return;
+      }
+    }
+
+    const startCandle = candles[startIdx];
+    const endCandle = candles[endIdx];
+
+    if (startCandle && endCandle) {
+      setSessionStartDate(startCandle.timestamp.substring(0, 10));
+      setSessionEndDate(endCandle.timestamp.substring(0, 10));
+
+      setJumpRange({
+        start: startCandle.timestamp,
+        end: endCandle.timestamp,
+        triggerId: Date.now()
+      });
+    }
+  };
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isMt5BridgePaused, setIsMt5BridgePaused] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('apex_mt5_bridge_paused') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Keep it synchronized with localStorage
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        setIsMt5BridgePaused(localStorage.getItem('apex_mt5_bridge_paused') === 'true');
+      } catch {}
+    };
+
+    const handleCustomChange = (e: any) => {
+      if (e.detail && typeof e.detail.paused === 'boolean') {
+        setIsMt5BridgePaused(e.detail.paused);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('apex_bridge_status_changed' as any, handleCustomChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('apex_bridge_status_changed' as any, handleCustomChange);
+    };
+  }, []);
+
   const [mt5Ping, setMt5Ping] = useState<number>(12);
   const [isSimulatingSpike, setIsSimulatingSpike] = useState<boolean>(false);
   const [isTestingPing, setIsTestingPing] = useState<boolean>(false);
@@ -228,6 +445,96 @@ export default function App() {
   const openBureaucracyTab = (tab: 'faq' | 'cookies' | 'privacy' | 'terms' | 'risk' | 'docs' | 'compliance') => {
     setBureaucracyActiveTab(tab);
     setIsBureaucracyModalOpen(true);
+  };
+
+  // Institutional Dropdown Menu States
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [soundAlertsEnabled, setSoundAlertsEnabled] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem('apex_institutional_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return parsed.soundAlerts !== false;
+      }
+    } catch {}
+    return true;
+  });
+  const [copiedTokenState, setCopiedTokenState] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Sync soundAlerts local storage state to current layout
+  useEffect(() => {
+    const handleStorageChangeLocal = () => {
+      try {
+        const raw = localStorage.getItem('apex_institutional_settings');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setSoundAlertsEnabled(parsed.soundAlerts !== false);
+        }
+      } catch {}
+    };
+    window.addEventListener('storage', handleStorageChangeLocal);
+    return () => {
+      window.removeEventListener('storage', handleStorageChangeLocal);
+    };
+  }, []);
+
+  // Listen to outer clicks to close the dropdown menu
+  useEffect(() => {
+    const handleOuterClick = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOuterClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOuterClick);
+    };
+  }, []);
+
+  const toggleSoundAlertsInMenu = () => {
+    try {
+      const raw = localStorage.getItem('apex_institutional_settings');
+      let settings = raw ? JSON.parse(raw) : {};
+      const nextVal = !soundAlertsEnabled;
+      settings.soundAlerts = nextVal;
+      localStorage.setItem('apex_institutional_settings', JSON.stringify(settings));
+      setSoundAlertsEnabled(nextVal);
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const copyApiBearerToken = () => {
+    try {
+      const emailHash = traderEmail ? traderEmail.split('@')[0].toUpperCase() : 'QUANT_TRADER';
+      const mockToken = `MTX_LIVE_BEARER_${emailHash}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      navigator.clipboard.writeText(mockToken);
+      setCopiedTokenState(true);
+      setTimeout(() => setCopiedTokenState(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy token:', err);
+    }
+  };
+
+  const wipeTerminalAndReset = () => {
+    if (window.confirm("CRITICAL WARNING: Are you sure you want to purge all local terminal data, cache settings, active user profiles, and backtest history? This will restore everything to initial factory calibration.")) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('apex_') || key.startsWith('mtx_'))) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+        alert("Cache purged successfully. Initializing total terminal recalibration...");
+        window.location.reload();
+      } catch (err) {
+        console.error(err);
+      }
+    }
   };
   const [emergencyCloseStatus, setEmergencyCloseStatus] = useState<{
     show: boolean;
@@ -401,7 +708,19 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
   const [obs, setObs] = useState<OrderBlock[]>([]);
   const [sweeps, setSweeps] = useState<LiquiditySweep[]>([]);
   const [metrics, setMetrics] = useState<MarketMetrics | null>(null);
+  
+  // Backtest Simulation Data State
+  const [backtestData, setBacktestData] = useState<{
+    candles: Candlestick[];
+    trades: Trade[];
+    fvgs: FVG[];
+    obs: OrderBlock[];
+    sweeps: LiquiditySweep[];
+    metrics: MarketMetrics | null;
+  } | null>(null);
+  const [isBacktestActive, setIsBacktestActive] = useState<boolean>(false);
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
+
   const [showTWVP, setShowTWVP] = useState<boolean>(true);
   const [newsEvents, setNewsEvents] = useState<NewsEvent[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -1345,8 +1664,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       let toggleVolatilityBind = 'ALT+V';
       let tabDashboardBind = 'ALT+D';
       let tabResearchBind = 'ALT+R';
-      let tabExecutionBind = 'ALT+E';
-      let tabSettingsBind = 'ALT+S';
 
       try {
         const saved = localStorage.getItem('apex_institutional_settings');
@@ -1356,8 +1673,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
           if (parsed.keybindToggleVolatility) toggleVolatilityBind = parsed.keybindToggleVolatility.toUpperCase();
           if (parsed.keybindTabDashboard) tabDashboardBind = parsed.keybindTabDashboard.toUpperCase();
           if (parsed.keybindTabResearch) tabResearchBind = parsed.keybindTabResearch.toUpperCase();
-          if (parsed.keybindTabExecution) tabExecutionBind = parsed.keybindTabExecution.toUpperCase();
-          if (parsed.keybindTabSettings) tabSettingsBind = parsed.keybindTabSettings.toUpperCase();
         }
       } catch (err) {
         console.warn('Failed to read bindings in hotkey tracker:', err);
@@ -1390,16 +1705,10 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
         setVolatilityAlertEnabled(prev => !prev);
       } else if (pressedShortcut === tabDashboardBind) {
         e.preventDefault();
-        setActiveTab('DASHBOARD');
+        setActiveTab('MARKETS');
       } else if (pressedShortcut === tabResearchBind) {
         e.preventDefault();
         setActiveTab('RESEARCH');
-      } else if (pressedShortcut === tabExecutionBind) {
-        e.preventDefault();
-        setActiveTab('EXECUTION');
-      } else if (pressedShortcut === tabSettingsBind) {
-        e.preventDefault();
-        setActiveTab('SETTINGS');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1784,6 +2093,13 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
     'NAS100': { name: 'NAS100', price: symbol === 'NAS100' ? (candles[candles.length - 1]?.close || 18550.0) : 18550.0, pChange: +0.52 },
     'GER40': { name: 'GER40', price: symbol === 'GER40' ? (candles[candles.length - 1]?.close || 18200.0) : 18200.0, pChange: -0.15 },
     'SPX500': { name: 'SPX500', price: symbol === 'SPX500' ? (candles[candles.length - 1]?.close || 5300.0) : 5300.0, pChange: +0.28 },
+    'DXY': { name: 'DXY', price: symbol === 'DXY' ? (candles[candles.length - 1]?.close || 105.20) : 105.20, pChange: -0.12 },
+    'US10Y': { name: 'US10Y', price: symbol === 'US10Y' ? (candles[candles.length - 1]?.close || 4.250) : 4.250, pChange: +0.08 },
+    'BRENT': { name: 'BRENT', price: symbol === 'BRENT' ? (candles[candles.length - 1]?.close || 82.50) : 82.50, pChange: +0.65 },
+    'AAPL': { name: 'AAPL', price: symbol === 'AAPL' ? (candles[candles.length - 1]?.close || 188.30) : 188.30, pChange: +0.88 },
+    'MSFT': { name: 'MSFT', price: symbol === 'MSFT' ? (candles[candles.length - 1]?.close || 415.50) : 415.50, pChange: +0.55 },
+    'NVDA': { name: 'NVDA', price: symbol === 'NVDA' ? (candles[candles.length - 1]?.close || 945.00) : 945.00, pChange: +3.20 },
+    'TSLA': { name: 'TSLA', price: symbol === 'TSLA' ? (candles[candles.length - 1]?.close || 175.50) : 175.50, pChange: -1.50 },
   };
 
   if (!isLoggedIn) {
@@ -1797,6 +2113,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
   return (
     <div id="mtxquant-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex selection:bg-indigo-500/30 selection:text-indigo-200">
+      <InstitutionalSentimentAlertSystem bannerOnly={true} />
       
       {/* Retractable Left-Hand Side Menu Navigation - Hidden on mobile screens */}
       <aside
@@ -1837,15 +2154,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
             {/* Middle section: Navigation Links */}
             <nav className="space-y-2 px-2.5">
               {[
-                { id: 'INTELLIGENCE', label: 'Intelligence', icon: Bot },
+                { id: 'MARKETS', label: 'Markets Desk', icon: TrendingUp },
                 { id: 'ANALYTICS', label: 'Analytics Desk', icon: BarChart3 },
                 { id: 'COPILOT', label: 'MTX Engine', icon: Sparkles },
-                { id: 'DASHBOARD', label: 'Dashboard', icon: Layers },
-                { id: 'EXECUTION', label: 'Execution', icon: Activity },
                 { id: 'RISK', label: 'Risk Desk', icon: ShieldAlert },
                 { id: 'NEWS', label: 'News Desk', icon: Newspaper },
-                { id: 'RESEARCH', label: 'Research', icon: Award },
-                { id: 'SETTINGS', label: 'Settings', icon: Settings }
+                { id: 'RESEARCH', label: 'Research', icon: Award }
               ].map((item) => {
                 const active = activeTab === item.id;
                 const Icon = item.icon;
@@ -1918,9 +2232,9 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               </div>
 
               {/* Standard workspace indicator for desktop screens only */}
-              <div className="hidden md:flex items-center space-x-2.5">
-                <span className="text-[10px] text-white/30 uppercase font-mono tracking-wider font-bold">Active Workspace:</span>
-                <span className="px-2.5 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] text-indigo-400 font-mono font-bold uppercase tracking-wider">
+              <div className="hidden md:flex items-center space-x-1.5 lg:space-x-2.5 text-[10px] font-mono">
+                <span className="hidden lg:inline text-white/30 uppercase tracking-wider font-bold">Workspace:</span>
+                <span className="px-2 py-0.5 lg:px-2.5 lg:py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold uppercase tracking-wider text-[9px] lg:text-[10px]">
                   {activeTab === 'RISK' ? 'Risk Desk' : activeTab === 'NEWS' ? 'News Desk' : activeTab}
                 </span>
               </div>
@@ -1928,57 +2242,17 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
             {/* Active status indicator ledger */}
             <div className="flex items-center space-x-2 md:space-x-3">
-              {/* Live Ingress Gateway status indicators */}
-              <div className="hidden md:flex items-center space-x-2 text-right shrink-0">
-                <span className="text-[10px] text-white/40 block font-mono uppercase tracking-tighter">Live Ingress Gateway</span>
-                <span className="text-emerald-400 text-xs font-mono flex items-center justify-end font-bold uppercase tracking-wide">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mr-1.5 shadow-[0_0_8px_#10b981]"></span>
-                  ACTIVE FEED ({timeframe})
-                </span>
-              </div>
-
-              {/* Alt+X Emergency panic close all button - hidden on mobile since physical keyboard shortcut is absent */}
-              <button
-                id="emergency-close-all-btn"
-                onClick={handleEmergencyCloseAll}
-                className="hidden md:flex items-center space-x-1.5 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/40 rounded font-mono text-[11px] h-9 text-rose-400 font-bold transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-500/30 shrink-0"
-                title="Alt+X: Trigger Emergency Close All open positions immediately"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse shrink-0" />
-                <div className="flex flex-col text-left leading-none">
-                  <span className="text-[7.5px] text-rose-500/60 uppercase tracking-widest font-extrabold font-mono">Emergency</span>
-                  <span className="text-white font-black tracking-tight mt-0.5 font-mono">Alt + X</span>
-                </div>
-              </button>
-
-              {/* Session Time Discipline Indicator - hidden on mobile to avoid row leaks */}
-              <button
-                id="session-discipline-tracker"
-                onClick={() => setIsSessionSummaryOpen(true)}
-                className="hidden md:flex items-center space-x-2 px-2.5 py-1.5 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/15 hover:border-indigo-500/35 rounded font-mono text-[11px] h-9 transition-all cursor-pointer text-left focus:outline-none focus:ring-1 focus:ring-indigo-500/30 font-bold shrink-0"
-                title="Time active in current trading session. Click to view Session Summary."
-              >
-                <Timer className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
-                <div className="flex flex-col text-left leading-none">
-                  <span className="text-[7.5px] text-white/30 uppercase tracking-widest font-extrabold flex items-center gap-1">
-                    Active Session
-                    <span className="inline-block w-1 h-2 rounded bg-indigo-500/30 animate-pulse" />
-                  </span>
-                  <span className="text-white font-black tabular-nums tracking-tight mt-0.5">{formatSessionTime(sessionSeconds)}</span>
-                </div>
-              </button>
-
               {/* Dynamic Auto-Sync Elapsed Time Indicator */}
               <div 
                 id="header-auto-sync-indicator"
-                className="hidden sm:flex items-center space-x-1.5 px-2 bg-white/5 border border-white/10 hover:border-indigo-500/20 rounded h-8 font-mono text-[9px] text-white/55 select-none shrink-0 transition-colors uppercase tracking-tight"
+                className="hidden md:flex items-center space-x-1 px-1.5 lg:px-2 bg-white/5 border border-white/10 hover:border-indigo-500/20 rounded h-8 font-mono text-[9px] text-white/55 select-none shrink-0 transition-colors uppercase tracking-tight"
                 title="Auto-Sync: Seconds elapsed since last successful financial market data fetch"
               >
-                <span className="relative flex h-1.5 w-1.5">
+                <span className="relative flex h-1 w-1 lg:h-1.5 lg:w-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                  <span className="relative inline-flex rounded-full h-1 w-1 lg:h-1.5 lg:w-1.5 bg-emerald-500"></span>
                 </span>
-                <span>SYNCED: <strong className="font-extrabold text-[#10b981] tabular-nums">{secondsSinceSync || 0}s</strong> ago</span>
+                <span className="text-[8px] lg:text-[9px]"><span className="hidden xl:inline">SYNCED: </span><strong className="font-extrabold text-[#10b981] tabular-nums">{secondsSinceSync || 0}s</strong><span className="hidden lg:inline"> ago</span></span>
               </div>
 
               <button
@@ -1991,26 +2265,167 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               </button>
 
               {/* Professional visual vertical separator to group user info at the absolute right */}
-              <div className="h-6 w-[1px] bg-white/10 hidden sm:block shrink-0" />
+              <div className="h-6 w-[1px] bg-white/10 hidden md:block shrink-0" />
 
-              {/* User Profile info box */}
-              <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/5 rounded h-8 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse"></span>
-                <span className="text-[10px] font-mono text-white/50 font-bold max-w-[130px] truncate" title={traderEmail}>
-                  {traderEmail}
-                </span>
+              {/* Institutional Profile & Terminal Control Center Dropdown */}
+              <div className="relative shrink-0" ref={profileMenuRef}>
+                <button
+                  id="institutional-profile-dropdown-trigger"
+                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                  className="flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/10 hover:border-indigo-500/30 hover:bg-white/10 rounded h-8 transition-all duration-150 cursor-pointer select-none"
+                  title="Institutional Profile & Terminal Diagnostics"
+                >
+                  <div className="relative flex items-center justify-center">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse"></span>
+                  </div>
+                  <span className="text-[9px] lg:text-[10px] font-mono text-white/80 font-bold max-w-[70px] md:max-w-[100px] lg:max-w-[140px] truncate" title={traderEmail}>
+                    {traderEmail}
+                  </span>
+                  <ChevronDown className={`w-3 h-3 text-white/50 transition-transform duration-200 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {isProfileMenuOpen && (
+                    <motion.div
+                      id="institutional-dropdown-menu"
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
+                      className="absolute right-0 mt-2 w-72 bg-[#08080c] border border-white/10 rounded-lg shadow-[0_15px_40px_rgba(0,0,0,0.85)] z-[999] overflow-hidden divide-y divide-white/5 font-mono text-[10px]"
+                    >
+                      {/* Section 1: Trader Identity Profile & Status */}
+                      <div className="p-3 bg-gradient-to-b from-white/[0.03] to-transparent">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-white/40 block font-bold uppercase tracking-wider text-[8px]">Trader Profile</span>
+                          <span className="px-1.5 py-0.2 rounded bg-indigo-500/10 border border-indigo-500/25 text-[7px] text-indigo-400 font-bold tracking-widest uppercase">
+                            TIER-1 CORE
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-bold text-white max-w-full truncate font-mono" title={traderEmail}>
+                          {traderEmail}
+                        </div>
+                        <div className="mt-2 space-y-1 text-white/50 leading-relaxed bg-black/40 border border-white/5 p-2 rounded">
+                          <div className="flex justify-between items-center">
+                            <span>CLEARANCE:</span>
+                            <span className="text-[#e2e8f0] font-bold flex items-center gap-1">
+                              <Shield className="w-2.5 h-2.5 text-indigo-400 inline" /> LEVEL-2 DESK
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>MQL STREAM:</span>
+                            <span className="text-[#10b981] font-bold flex items-center gap-1">
+                              <Wifi className="w-2.5 h-2.5 text-[#10b981] inline" /> {mt5Ping}ms (LIVE)
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>SESSION:</span>
+                            <span className="text-white/70 font-bold">
+                              {Math.floor(sessionSeconds / 60)}m {sessionSeconds % 60}s
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 2: Quick Navigation & Desks */}
+                      <div className="p-2 space-y-0.5">
+                        <span className="text-white/40 px-2 py-1 block uppercase tracking-wider text-[7px] font-bold">Terminal Desks Shortcuts</span>
+                        <button
+                          onClick={() => { setActiveTab('ANALYTICS'); setIsProfileMenuOpen(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
+                        >
+                          <span className="flex items-center gap-2"><BarChart3 className="w-3.5 h-3.5 text-indigo-400" /> ANALYTICS DESK</span>
+                          <span className="text-[8px] text-white/30 tracking-tight uppercase font-mono">Desk</span>
+                        </button>
+                        <button
+                          onClick={() => { setActiveTab('RISK'); setIsProfileMenuOpen(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
+                        >
+                          <span className="flex items-center gap-2"><ShieldAlert className="w-3.5 h-3.5 text-[#ef4444]" /> RISK MANAGEMENT</span>
+                          <span className="text-[8px] text-white/30 tracking-tight uppercase font-mono">Control</span>
+                        </button>
+                        <button
+                          onClick={() => { setActiveTab('COPILOT'); setIsProfileMenuOpen(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
+                        >
+                          <span className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-amber-400" /> MTX INTELLIGENT CO-OP</span>
+                          <span className="text-[8px] text-white/30 tracking-tight uppercase font-mono">Agentic</span>
+                        </button>
+                      </div>
+
+                      {/* Section 3: Calibre Utilities & Configurations */}
+                      <div className="p-2 space-y-0.5">
+                        <span className="text-white/40 px-2 py-1 block uppercase tracking-wider text-[7px] font-bold">Core Controls & Utilities</span>
+                        
+                        {/* Sound Alert Toggle */}
+                        <button
+                          onClick={toggleSoundAlertsInMenu}
+                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
+                        >
+                          <span className="flex items-center gap-2">
+                            {soundAlertsEnabled ? (
+                              <>
+                                <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                                <span>SYSTEM AUDIO ALERTS</span>
+                              </>
+                            ) : (
+                              <>
+                                <VolumeX className="w-3.5 h-3.5 text-white/30" />
+                                <span className="text-white/50">SYSTEM AUDIO ALERTS</span>
+                              </>
+                            )}
+                          </span>
+                          <span className={`text-[8px] font-bold px-1 rounded uppercase ${soundAlertsEnabled ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-white/30 bg-white/5 border border-white/5'}`}>
+                            {soundAlertsEnabled ? 'ON' : 'MUTED'}
+                          </span>
+                        </button>
+
+                        {/* Copy API token */}
+                        <button
+                          onClick={copyApiBearerToken}
+                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
+                        >
+                          <span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5 text-sky-400" /> ACCESS BEARER TOKEN</span>
+                          <span className={`text-[8px] px-1 rounded transition-all duration-150 font-bold uppercase ${copiedTokenState ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20' : 'text-white/30 border border-transparent'}`}>
+                            {copiedTokenState ? 'COPIED' : 'COPY'}
+                          </span>
+                        </button>
+
+                        {/* Regulation Policy and Compliance audit */}
+                        <button
+                          onClick={() => { openBureaucracyTab('compliance'); setIsProfileMenuOpen(false); }}
+                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
+                        >
+                          <span className="flex items-center gap-2"><FileCode className="w-3.5 h-3.5 text-emerald-400" /> AUDIT & COMPLIANCE</span>
+                          <span className="text-[8px] text-white/30 tracking-tight uppercase">SEC</span>
+                        </button>
+
+                        {/* Cache purger */}
+                        <button
+                          onClick={wipeTerminalAndReset}
+                          className="w-full text-left px-2 py-1.5 rounded hover:bg-yellow-500/10 text-white/70 hover:text-yellow-400 flex items-center justify-between cursor-pointer transition-all"
+                          title="Flush all terminal local storage cache properties"
+                        >
+                          <span className="flex items-center gap-2"><Trash2 className="w-3.5 h-3.5 text-yellow-500" /> FACTORY CALIBRATION</span>
+                          <span className="text-[8px] text-yellow-500/40 tracking-tight uppercase font-mono font-bold">Wipe</span>
+                        </button>
+                      </div>
+
+                      {/* Section 4: Secure Terminate Session */}
+                      <div className="p-2">
+                        <button
+                          id="header-logout-btn"
+                          onClick={() => { setIsProfileMenuOpen(false); handleLogout(); }}
+                          className="w-full text-left px-2.5 py-2.5 rounded bg-rose-500/5 hover:bg-rose-500/15 text-rose-400 hover:text-rose-300 border border-rose-500/10 hover:border-rose-500/25 transition-all flex items-center justify-between cursor-pointer text-[10px] font-mono font-bold uppercase tracking-wider leading-none"
+                        >
+                          <span className="flex items-center gap-2"><LogOut className="w-3.5 h-3.5" /> SECURE TERMINATE SESSION</span>
+                          <span className="text-[8.5px] px-1 bg-rose-500/10 rounded uppercase tracking-tighter">Exit</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-
-              {/* Logout button */}
-              <button
-                id="header-logout-btn"
-                onClick={handleLogout}
-                className="p-1.5 hover:bg-rose-500/10 hover:text-rose-300 border border-white/10 hover:border-rose-500/25 rounded text-rose-400 transition-all flex items-center justify-center cursor-pointer h-8 px-2.5 text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 gap-1.5"
-                title={`Log Out from ${traderEmail}`}
-              >
-                <span className="hidden sm:inline">Log Out</span>
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
             </div>
 
           </div>
@@ -2020,6 +2435,44 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
       {/* Core Dynamic Workplace Area */}
       <main className="max-w-[1400px] mx-auto w-full px-3 md:px-6 py-2 md:py-6 flex-1">
+        
+        {/* Persistent Backtest Replay Notification Banner */}
+        {isBacktestActive && backtestData && (
+          <div 
+            id="persistent-backtest-mode-notification"
+            className="mb-6 bg-gradient-to-r from-[#1b1509] via-[#0c0c0e] to-[#0a0a0c] border border-amber-500/40 rounded-lg p-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xl animate-fadeIn relative overflow-hidden"
+          >
+            <div className="absolute right-0 top-0 bottom-0 w-24 bg-amber-500/5 blur-2xl pointer-events-none" />
+            
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-500 shrink-0 mt-0.5 animate-pulse">
+                <History className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/40 rounded text-[9px] font-mono font-black text-amber-400 uppercase tracking-widest leading-none">
+                    BACKTEST ACTIVE
+                  </span>
+                  <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                    Viewing Simulated Backtest Session for {symbol}
+                  </h4>
+                </div>
+                <p className="text-[11px] text-white/60 font-sans mt-1 leading-relaxed">
+                  You are in Backtest/Replay mode. The main chart, Fair Value Gaps, Order Blocks, Liquidity Sweeps, and trade signals are currently wired directly to the past-week backtest simulator results. Timeframe selectors (M15, H1, H4, D1) will align perfectly with your simulation.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full md:w-auto justify-end shrink-0 border-t border-white/5 md:border-0 pt-2 md:pt-0">
+              <button
+                onClick={() => setIsBacktestActive(false)}
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 border border-transparent rounded font-mono text-[10px] text-black font-extrabold transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.25)] flex items-center gap-1 shrink-0"
+              >
+                <span>RETURN TO LIVE TICKER</span>
+              </button>
+            </div>
+          </div>
+        )}
         
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -2068,13 +2521,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   
                   <div className="flex items-center gap-1.5">
                     <button
-                      id="btn-volatility-alert-go-settings"
-                      onClick={() => setActiveTab('SETTINGS')}
-                      className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded font-mono text-[9px] font-bold uppercase text-white tracking-wider transition-all cursor-pointer"
-                    >
-                      Configure Toggles
-                    </button>
-                    <button
                       id="btn-volatility-alert-dismiss"
                       onClick={() => setDismissedVolatilityAlertSymbol(symbol)}
                       className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 rounded transition-all cursor-pointer"
@@ -2094,1186 +2540,14 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   metrics={metrics}
                   onTradeExecuted={fetchMarketData}
                   trades={trades}
+                  onSelectTab={(tab) => setActiveTab(tab)}
                 />
               </div>
-            ) : activeTab === 'DASHBOARD' ? (
-              <div id="desk-grid-grid" className="space-y-6">
-                
-                {/* 1. Dynamic Overview Telemetry Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  {/* Card 1: Account Equity */}
-                  <div className="bg-[#0a0a0b] border border-white/5 rounded-lg p-4 flex flex-col justify-between space-y-3 shadow-sm select-none">
-                    <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-indigo-550 animate-pulse"></span>
-                      Account Equity
-                    </span>
-                    <div>
-                      <div className="text-xl font-mono font-bold text-white">
-                        ${systemDashboardSummary.accountEquity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <span className="text-[9px] font-mono text-indigo-400 font-bold">+138.4% Cumulative Net Increase</span>
-                    </div>
-                  </div>
-
-                  {/* Card 2: Daily PnL */}
-                  <div className="bg-[#0a0a0b] border border-white/5 rounded-lg p-4 flex flex-col justify-between space-y-3 shadow-sm select-none">
-                    <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider">Daily PnL</span>
-                    <div>
-                      <div className={`text-xl font-mono font-bold ${systemDashboardSummary.dailyPnL >= 0 ? 'text-emerald-400' : 'text-rose-455'}`}>
-                        {systemDashboardSummary.dailyPnL >= 0 ? '+' : ''}${systemDashboardSummary.dailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <span className="text-[9px] font-mono text-emerald-500/80 font-semibold font-mono">Intraday Target: 1.0%</span>
-                    </div>
-                  </div>
-
-                  {/* Card 3: Projection vs Actual Area Chart */}
-                  <div id="projection-vs-actual-card" className="col-span-2 md:col-span-2 lg:col-span-2 bg-[#0a0a0b] border border-white/5 rounded-lg p-3.5 flex flex-col justify-between shadow-sm select-none h-full">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-white/[0.03]">
-                      <div className="flex items-center justify-between sm:justify-start gap-2.5">
-                        <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider flex items-center gap-1.5">
-                          <TrendingUp className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-                          Goals vs Performance
-                        </span>
-                        {/* Interactive Trend Projection Toggle */}
-                        <button
-                          id="btn-toggle-trend-projection"
-                          onClick={() => setTrendProjectionEnabled(!trendProjectionEnabled)}
-                          className={`px-1.5 py-0.5 rounded border text-[8px] font-mono font-bold tracking-wider uppercase transition-all flex items-center gap-1 cursor-pointer select-none h-4.5 ${
-                            trendProjectionEnabled
-                              ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
-                              : 'bg-white/[0.02] border-white/5 text-white/40 hover:text-white/70 hover:bg-white/[0.05]'
-                          }`}
-                          title={`Toggle Trend Projection Line (extending current ${currentPivotHourText} slope to close)`}
-                        >
-                          <TrendingUp className="w-2 text-white" />
-                          <span>Proj Trend</span>
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between sm:justify-end gap-2 font-mono text-[9px] bg-white/[0.01] px-2 py-0.5 rounded border border-white/5">
-                        <div className="flex items-center gap-1">
-                          <span className="text-white/30">Goal:</span>
-                          <span className="text-indigo-400 font-bold">${dailyPnLGoal.toLocaleString()}</span>
-                        </div>
-                        <span className="text-white/10 hidden sm:inline">|</span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-white/30">Actual:</span>
-                          <span className={`${systemDashboardSummary.dailyPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-bold`}>
-                            ${systemDashboardSummary.dailyPnL.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="h-[75px] md:h-[80px] w-full mt-2.5">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={projectionVsActualData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
-                          <defs>
-                            <linearGradient id="goalGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.12}/>
-                              <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.01}/>
-                            </linearGradient>
-                            <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor={systemDashboardSummary.dailyPnL >= 0 ? '#10b981' : '#f43f5e'} stopOpacity={0.16}/>
-                              <stop offset="95%" stopColor={systemDashboardSummary.dailyPnL >= 0 ? '#10b981' : '#f43f5e'} stopOpacity={0.01}/>
-                            </linearGradient>
-                          </defs>
-                          <XAxis dataKey="hour" hide />
-                          <YAxis hide domain={['auto', 'auto']} />
-                          <Tooltip
-                            content={({ active, payload }) => {
-                              if (active && payload && payload.length) {
-                                const dataPoint = payload[0].payload;
-                                const activeHourIdx = projectionVsActualData.findIndex(item => item.hour === dataPoint.hour);
-                                const historicalHours = projectionVsActualData.slice(0, activeHourIdx + 1);
-                                const isAhead = dataPoint['Actual PnL'] >= dataPoint['Daily Goal'];
-                                const diff = dataPoint['Actual PnL'] - dataPoint['Daily Goal'];
-                                const accentBorder = isAhead 
-                                  ? 'border-emerald-500/50 border-l-3 border-l-emerald-500' 
-                                  : 'border-rose-500/50 border-l-3 border-l-rose-500';
-
-                                return (
-                                  <div className={`bg-[#0c0c0e]/95 border ${accentBorder} px-3 py-2.5 text-[9px] font-mono rounded-lg shadow-[0_16px_36px_rgba(0,0,0,0.95)] text-left leading-tight z-50 w-[240px] pointer-events-none backdrop-blur-md`}>
-                                    {/* Snapshot Header */}
-                                    <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
-                                      <span className="text-white font-bold text-[10px] flex items-center gap-1.5">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
-                                        {dataPoint.hour} Update
-                                      </span>
-                                      <span className="text-white/40 text-[8px] uppercase tracking-wider">Trading Progress</span>
-                                    </div>
-
-                                    {/* Core Stats Grid (Adapts to 3 columns if Trend is toggled) */}
-                                    <div className={`grid ${trendProjectionEnabled ? 'grid-cols-3' : 'grid-cols-2'} gap-x-2 gap-y-1 mb-2`}>
-                                      <div>
-                                        <div className="text-white/30 text-[7.5px] uppercase tracking-wider">Goal Target</div>
-                                        <div className="text-indigo-300 font-bold mt-0.5">${dataPoint['Daily Goal'].toLocaleString()}</div>
-                                      </div>
-                                      <div>
-                                        <div className="text-white/30 text-[7.5px] uppercase tracking-wider">Actual PnL</div>
-                                        <div className={`font-bold mt-0.5 ${dataPoint['Actual PnL'] >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                          ${dataPoint['Actual PnL'] >= 0 ? '+' : ''}{dataPoint['Actual PnL'].toLocaleString()}
-                                        </div>
-                                      </div>
-                                      {trendProjectionEnabled && (
-                                        <div>
-                                          <div className="text-amber-400/70 text-[7.5px] uppercase tracking-wider">Trend Proj</div>
-                                          <div className={`font-bold mt-0.5 ${dataPoint['Trend Projection'] >= 0 ? 'text-amber-400' : 'text-rose-300'}`}>
-                                            ${dataPoint['Trend Projection'] >= 0 ? '+' : ''}{dataPoint['Trend Projection'].toLocaleString()}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Divergence warning or accolade */}
-                                    <div className={`p-1 rounded text-[8px] font-bold text-center border mb-2 flex items-center justify-center gap-1 leading-none ${
-                                      isAhead 
-                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                                        : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                                    }`}>
-                                      {isAhead ? (
-                                        <>+ Ahead of Goal by ${diff.toLocaleString()}</>
-                                      ) : (
-                                        <>- Behind Goal by ${Math.abs(diff).toLocaleString()}</>
-                                      )}
-                                    </div>
-
-                                    {/* Trend Projection divergence highlight bar */}
-                                    {trendProjectionEnabled && (
-                                      <div className={`p-1 rounded text-[8px] font-bold text-center border mb-2 flex items-center justify-center gap-1 leading-none ${
-                                        dataPoint['Trend Projection'] >= dataPoint['Daily Goal']
-                                          ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                          : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                                      }`}>
-                                        {dataPoint['Trend Projection'] >= dataPoint['Daily Goal'] ? (
-                                          <>Trend: Ahead of Goal by ${(dataPoint['Trend Projection'] - dataPoint['Daily Goal']).toLocaleString()}</>
-                                        ) : (
-                                          <>Trend: Behind Goal by ${(dataPoint['Daily Goal'] - dataPoint['Trend Projection']).toLocaleString()}</>
-                                        )}
-                                      </div>
-                                    )}
-
-                                    {/* Hourly Breakdown Subsection */}
-                                    <div className="border-t border-white/5 pt-1.5">
-                                      <div className="text-[7.5px] text-white/30 uppercase font-black tracking-wider mb-1 flex items-center justify-between">
-                                        <span>Historical Timeline</span>
-                                        <span>Hourly Delta</span>
-                                      </div>
-                                      <div className="space-y-1 max-h-[140px] overflow-y-auto no-scrollbar">
-                                        {historicalHours.map((hist, hIdx) => {
-                                          const isPositive = hist.hourlyChange >= 0;
-                                          return (
-                                            <div key={hist.hour} className="flex justify-between items-center text-[8.5px] py-0.5 border-b border-white/[0.02]">
-                                              <span className="text-white/50">
-                                                {hist.hour} &middot; <span className="font-semibold text-white/80">${hist['Actual PnL']}</span>
-                                              </span>
-                                              <span className={`font-mono text-[8.5px] flex items-center gap-0.5 ${isPositive ? 'text-emerald-500' : 'text-rose-400'}`}>
-                                                {hIdx === 0 ? '' : (isPositive ? '▲' : '▼')}
-                                                {hIdx === 0 ? `$${hist.hourlyChange}` : `$${Math.abs(hist.hourlyChange)}`}
-                                              </span>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            }}
-                          />
-                          <Area
-                            type="monotone"
-                            dataKey="Daily Goal"
-                            stroke="#6366f1"
-                            strokeWidth={1}
-                            strokeDasharray="2 2"
-                            fillOpacity={1}
-                            fill="url(#goalGrad)"
-                          />
-                          <Area
-                            type="monotone"
-                            dataKey="Actual PnL"
-                            stroke={systemDashboardSummary.dailyPnL >= 0 ? '#10b981' : '#f43f5e'}
-                            strokeWidth={1.5}
-                            fillOpacity={1}
-                            fill="url(#actualGrad)"
-                          />
-                          {trendProjectionEnabled && (
-                            <Line
-                              type="monotone"
-                              dataKey="Trend Projection"
-                              stroke="#f59e0b"
-                              strokeWidth={1.5}
-                              strokeDasharray="3 3"
-                              dot={false}
-                              activeDot={{ r: 4 }}
-                            />
-                          )}
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  {/* Card 4: Monthly PnL */}
-                  <div className="bg-[#0a0a0b] border border-white/5 rounded-lg p-4 flex flex-col justify-between space-y-3 shadow-sm select-none font-sans">
-                    <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider">Monthly PnL</span>
-                    <div>
-                      <div className="text-xl font-mono font-bold text-emerald-500">
-                        +${systemDashboardSummary.monthlyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <span className="text-[9px] font-mono text-emerald-400/80 font-bold">Premium Yield Target</span>
-                    </div>
-                  </div>
-
-                  {/* Card 5: Active Risk Exposure */}
-                  <div className="bg-[#0a0a0b] border border-white/5 rounded-lg p-4 flex flex-col justify-between space-y-3 shadow-sm select-none">
-                    <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider text-white/35">Risk Active</span>
-                    <div>
-                      <div className={`text-xl font-mono font-bold ${systemDashboardSummary.riskRatio > 0 ? 'text-amber-400 animate-pulse' : 'text-white/60'}`}>
-                        {systemDashboardSummary.riskRatio.toFixed(1)}% Active
-                      </div>
-                      <span className="text-[9px] font-mono text-white/30">Leverage Cap: 2.0% Max</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Daily Morning Market Narrative Briefing & Market Momentum Gauge Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-                  <div className="lg:col-span-8 xl:col-span-9">
-                    <DailyBriefing />
-                  </div>
-                  <div className="lg:col-span-4 xl:col-span-3">
-                    <MarketMomentumGauge symbol={symbol} candles={candles} metrics={metrics} />
-                  </div>
-                </div>
-                
-                {/* Dashboard Multi-grid layout */}
-                <div className="hidden">
-                  
-                  {/* Economic factory calendar on left (Spans 7 columns) */}
-                  <div className="xl:col-span-7 space-y-6">
-                    <EconomicCalendar events={newsEvents} />
-                  </div>
-
-                  {/* Right side active positions overview & system logs (Spans 5 columns) */}
-                  <div className="xl:col-span-5 space-y-6">
-                    <div id="positions-overview-card" className="bg-[#0a0a0b] border border-white/5 rounded-lg p-5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-3.5 mb-4 gap-2">
-                        <div className="flex flex-wrap items-center gap-2.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-xs font-bold font-mono tracking-wider uppercase text-white flex items-center gap-2">
-                              <Activity className="w-4 h-4 text-indigo-400" />
-                              Positions Overview
-                            </h3>
-                            <span className="px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[9.5px] font-mono text-indigo-400 font-bold">
-                              {systemDashboardSummary.activeTradesCount} EXPOSURES ACTIVE
-                            </span>
-
-                            {/* Denser Dynamic Trend Strength & ICT Displacement Meter */}
-                            <div className={`flex items-center gap-2 px-2.5 py-1 rounded border bg-gradient-to-r text-[9px] font-mono leading-none ${dynamicTrendMeter.strengthBg} ${dynamicTrendMeter.strengthRingColor}`} title={`Comprehensive real-time calculation: Trend Score: ${dynamicTrendMeter.trendScore}% | ICT Displacement: ${dynamicTrendMeter.displacementIntensity}%`}>
-                              <span className="text-[7.5px] text-white/40 uppercase tracking-widest">Trend Index</span>
-                              <span className={`font-black uppercase tracking-tight ${dynamicTrendMeter.strengthColor}`}>
-                                {dynamicTrendMeter.strengthLabel} ({dynamicTrendMeter.aggregateStrength}%)
-                              </span>
-                              <span className="text-white/20">|</span>
-                              <span className="text-[7.5px] text-white/40 uppercase tracking-widest">ICT</span>
-                              <span className={`${dynamicTrendMeter.displacementColorClass} font-extrabold uppercase`}>
-                                {dynamicTrendMeter.displacementLabel}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Export UI Snapshot Action */}
-                          <button
-                            id="btn-take-positions-snapshot"
-                            onClick={handleTakePositionsSnapshot}
-                            disabled={isSnapshotting}
-                            className="px-2 py-0.5 bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40 rounded transition-all text-[9px] flex items-center space-x-1.5 font-mono cursor-pointer disabled:opacity-50 font-bold uppercase tracking-tight select-none"
-                            title="Export Current Positions View as High-Definition Image"
-                          >
-                            <Camera className={`w-3 h-3 ${isSnapshotting ? 'animate-pulse text-indigo-300' : ''}`} />
-                            <span>{isSnapshotting ? 'Capture...' : 'Snapshot'}</span>
-                          </button>
-
-                          {/* Pre-formatted Text Share Action */}
-                          <button
-                            id="btn-share-active-positions"
-                            onClick={handleSharePositions}
-                            className={`px-2 py-0.5 border rounded transition-all text-[9px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
-                              shareSuccess 
-                                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' 
-                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
-                            }`}
-                            title="Copy Live Active Position Exposures Summary to Clipboard"
-                          >
-                            {shareSuccess ? (
-                              <Check className="w-3 h-3 text-emerald-400 font-bold" />
-                            ) : (
-                              <Share2 className="w-3 h-3 text-indigo-400" />
-                            )}
-                            <span>{shareSuccess ? 'Copied!' : 'Share'}</span>
-                          </button>
-
-                          {/* Session Performance Toggle Action */}
-                          <button
-                            id="btn-toggle-session-performance"
-                            onClick={() => setShowSessionPerformance(!showSessionPerformance)}
-                            className={`px-2 py-0.5 border rounded transition-all text-[9.5px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
-                              showSessionPerformance
-                                ? 'bg-amber-500/10 border-amber-500/35 text-amber-300 font-extrabold shadow-[0_0_8px_rgba(245,158,11,0.1)]'
-                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
-                            }`}
-                            title="Toggle Session Performance PnL Goal Tracker"
-                          >
-                            <TrendingUp className={`w-3 h-3 ${showSessionPerformance ? 'text-amber-400 animate-pulse' : 'text-indigo-400'}`} />
-                            <span>{showSessionPerformance ? 'Performance On' : 'Performance'}</span>
-                          </button>
-
-                          {/* Price Alerts Configuration Toggle */}
-                          <button
-                            id="btn-toggle-price-alerts"
-                            onClick={() => {
-                              setShowPriceAlertsPanel(!showPriceAlertsPanel);
-                              const currentSymbolPrice = candles[candles.length - 1]?.close;
-                              if (currentSymbolPrice) {
-                                setNewAlertPrice(currentSymbolPrice.toString());
-                              }
-                            }}
-                            className={`px-2 py-0.5 border rounded transition-all text-[9.5px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
-                              showPriceAlertsPanel
-                                ? 'bg-indigo-500/10 border-indigo-500/35 text-indigo-300 font-extrabold shadow-[0_0_8px_rgba(99,102,241,0.2)]'
-                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
-                            }`}
-                            title="Configure price-based browser alerts for Forex / Crypto assets"
-                          >
-                            <Bell className={`w-3 h-3 ${showPriceAlertsPanel ? 'text-indigo-300 animate-bounce' : 'text-indigo-400'}`} />
-                            <span>{showPriceAlertsPanel ? 'Alerts On' : 'Alerts'}</span>
-                          </button>
-
-                          {/* Denser Compact View Toggle Action */}
-                          <button
-                            id="btn-toggle-compact-view"
-                            onClick={() => setIsCompactPositions(!isCompactPositions)}
-                            className={`px-2 py-0.5 border rounded transition-all text-[9.5px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
-                              isCompactPositions
-                                ? 'bg-indigo-555/25 border-indigo-500/50 text-indigo-300 shadow-[0_0_8px_rgba(99,102,241,0.2)]'
-                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
-                            }`}
-                            title="Toggle High Density Compact Row Rendering"
-                          >
-                            {isCompactPositions ? (
-                              <Maximize2 className="w-3 h-3 text-indigo-300" />
-                            ) : (
-                              <Minimize2 className="w-3 h-3 text-indigo-400" />
-                            )}
-                            <span>{isCompactPositions ? 'Compact On' : 'Compact'}</span>
-                          </button>
-
-                          {/* Bulk Adjust SL/TP Action */}
-                          <button
-                            id="btn-toggle-bulk-adjust-sltp"
-                            onClick={() => setShowBulkAdjustPanel(!showBulkAdjustPanel)}
-                            className={`px-2 py-0.5 border rounded transition-all text-[9.5px] flex items-center space-x-1.5 font-mono cursor-pointer font-bold uppercase tracking-tight select-none ${
-                              showBulkAdjustPanel
-                                ? 'bg-indigo-500/10 border-indigo-500/35 text-indigo-300 font-extrabold shadow-[0_0_8px_rgba(99,102,241,0.2)]'
-                                : 'bg-indigo-500/11 hover:bg-indigo-500/30 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-500/40'
-                            }`}
-                            title="Bulk Adjust Stop Loss & Take Profit across visible positions"
-                          >
-                            <Sliders className={`w-3 h-3 ${showBulkAdjustPanel ? 'text-indigo-300 animate-pulse' : 'text-indigo-400'}`} />
-                            <span>{showBulkAdjustPanel ? 'Bulk Adjust On' : 'Bulk Adjust SL/TP'}</span>
-                          </button>
-                        </div>
-
-                                         {/* Highly tactual Sort & Dropdown Filter Selection */}
-                        {systemDashboardSummary.activeTradesCount > 0 && (
-                          <div className="flex flex-wrap items-center gap-3 font-mono text-[9.5px]">
-                            {/* Dropdown for Filter */}
-                            <div className="flex items-center space-x-1">
-                              <span className="text-white/35 mr-1 text-[8.5px] uppercase tracking-wider flex items-center gap-1">
-                                <Filter className="w-2.5 h-2.5 text-white/40" /> Filter:
-                              </span>
-                              <div className="relative">
-                                <select
-                                  id="select-position-filter"
-                                  value={positionFilter}
-                                  onChange={(e) => setPositionFilter(e.target.value as 'ALL' | 'WINNING' | 'LOSING')}
-                                  className="appearance-none bg-[#0a0a0b] text-white/80 border border-white/10 rounded pl-2 pr-6 py-0.5 text-[9px] font-mono outline-none focus:border-indigo-500 hover:border-white/20 transition-colors cursor-pointer font-semibold uppercase tracking-wider"
-                                >
-                                  <option value="ALL">ALL DECK</option>
-                                  <option value="WINNING" className="text-emerald-400">WINNINGS</option>
-                                  <option value="LOSING" className="text-rose-455">LOSSES</option>
-                                </select>
-                                <ChevronDown className="w-3 h-3 text-white/40 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                              </div>
-                            </div>
-
-                            {/* Decorative Separator */}
-                            <span className="hidden sm:inline text-white/10 select-none">|</span>
-
-                            <div className="flex items-center space-x-1">
-                              <span className="text-white/35 mr-1 text-[8.5px] uppercase tracking-wider">Sort:</span>
-                              <div className="flex bg-black/40 p-0.5 rounded border border-white/5 space-x-0.5">
-                                <button
-                                  onClick={() => setPositionSort('PROFITABLE')}
-                                  className={`px-2 py-0.5 rounded text-[9px] transition-all font-semibold uppercase tracking-wider cursor-pointer ${
-                                    positionSort === 'PROFITABLE'
-                                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                                      : 'text-white/45 hover:text-white/85 border border-transparent'
-                                  }`}
-                                  title="Sort by Most Profitable"
-                                >
-                                  PnL
-                                </button>
-                                <button
-                                  onClick={() => setPositionSort('MARGIN')}
-                                  className={`px-2 py-0.5 rounded text-[9px] transition-all font-semibold uppercase tracking-wider cursor-pointer ${
-                                    positionSort === 'MARGIN'
-                                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                                      : 'text-white/45 hover:text-white/85 border border-transparent'
-                                  }`}
-                                  title="Sort by Highest Margin Used"
-                                >
-                                  Margin
-                                </button>
-                                <button
-                                  onClick={() => setPositionSort('DURATION')}
-                                  className={`px-2 py-0.5 rounded text-[9px] transition-all font-semibold uppercase tracking-wider cursor-pointer ${
-                                    positionSort === 'DURATION'
-                                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                                      : 'text-white/45 hover:text-white/85 border border-transparent'
-                                  }`}
-                                  title="Sort by Longest Duration"
-                                >
-                                  Duration
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Session Performance PnL Goal Tracker sub-panel */}
-                      {showSessionPerformance && (
-                        <div id="session-performance-subpanel" className="mb-4 p-3.5 bg-black/40 border border-white/5 rounded-md text-xs font-mono animate-fade-in-shorter shadow-inner">
-                          <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-2.5">
-                            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                              <span className="relative flex h-1.5 w-1.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
-                              </span>
-                              Live Session Performance
-                            </span>
-                            <span className="text-[8.5px] text-white/40 uppercase font-medium">Daily Goal: <span className="text-white/80 font-bold">${dailyPnLGoal.toLocaleString()}</span></span>
-                          </div>
-
-                          {/* Realized, Floating, Total Metrics block */}
-                          <div className="grid grid-cols-3 gap-3 text-center mb-3">
-                            <div className="bg-[#0e0e11] p-2 rounded border border-white/5 flex flex-col justify-between">
-                              <span className="text-[8px] text-white/40 uppercase tracking-wider block">Realized Daily PnL</span>
-                              <span className={`text-[12px] font-bold ${systemDashboardSummary.realizedDailyPnL >= 0 ? 'text-emerald-400' : 'text-rose-455'} mt-1`}>
-                                {systemDashboardSummary.realizedDailyPnL >= 0 ? '+' : ''}${systemDashboardSummary.realizedDailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                            <div className="bg-[#0e0e11] p-2 rounded border border-white/5 flex flex-col justify-between">
-                              <span className="text-[8px] text-white/40 uppercase tracking-wider block">Floating PnL</span>
-                              <span className={`text-[12px] font-bold ${systemDashboardSummary.floatingPnL >= 0 ? 'text-emerald-400' : 'text-rose-455'} mt-1`}>
-                                {systemDashboardSummary.floatingPnL >= 0 ? '+' : ''}${systemDashboardSummary.floatingPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                            <div className="bg-[#0e0e11] p-2 rounded border border-white/5 flex flex-col justify-between">
-                              <span className="text-[8px] text-white/40 uppercase tracking-wider block">Total Session PnL</span>
-                              <span className={`text-[12px] font-extrabold ${systemDashboardSummary.dailyPnL >= 0 ? 'text-emerald-400' : 'text-rose-455'} mt-1`}>
-                                {systemDashboardSummary.dailyPnL >= 0 ? '+' : ''}${systemDashboardSummary.dailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Visual Progress Bar compared to Daily Goal */}
-                          <div>
-                            <div className="flex items-center justify-between text-[9px] text-white/40 mb-1">
-                              <span>DAILY GOAL PROGRESS</span>
-                              <span className={`font-bold font-mono ${systemDashboardSummary.dailyPnL >= dailyPnLGoal ? 'text-indigo-400 animate-pulse' : systemDashboardSummary.dailyPnL > 0 ? 'text-emerald-400' : 'text-rose-455'}`}>
-                                {systemDashboardSummary.dailyPnL <= 0 
-                                  ? '0.0%' 
-                                  : `${Math.min(100, (systemDashboardSummary.dailyPnL / dailyPnLGoal) * 100).toFixed(1)}%`}
-                              </span>
-                            </div>
-                            <div className="h-2 w-full bg-white/5 rounded-full relative overflow-hidden border border-white/[0.03]">
-                              {/* Background scale markings */}
-                              <div className="absolute inset-y-0 left-1/4 border-r border-white/10 pointer-events-none" />
-                              <div className="absolute inset-y-0 left-2/4 border-r border-white/10 pointer-events-none" />
-                              <div className="absolute inset-y-0 left-3/4 border-r border-white/10 pointer-events-none" />
-                              
-                              {/* Actual progress bar handle */}
-                              <div 
-                                className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                                  systemDashboardSummary.dailyPnL >= dailyPnLGoal 
-                                    ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 animate-pulse' 
-                                    : systemDashboardSummary.dailyPnL > 0 
-                                      ? 'bg-emerald-500' 
-                                      : 'bg-rose-500/40 w-0'
-                                }`}
-                                style={{ 
-                                  width: `${Math.max(0, Math.min(100, (systemDashboardSummary.dailyPnL / dailyPnLGoal) * 100))}%` 
-                                }}
-                              />
-                            </div>
-                            <div className="flex justify-between items-center text-[7.5px] text-white/25 mt-1 font-mono uppercase tracking-wider">
-                              <span>0%</span>
-                              <span>25%</span>
-                              <span>50%</span>
-                              <span>75%</span>
-                              <span className="text-white/50 font-bold">100% GOAL</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Price Alerts subpanel */}
-                      {showPriceAlertsPanel && (
-                        <div id="price-alerts-subpanel" className="mb-4 p-4 bg-[#0d0d11]/90 border border-indigo-500/15 rounded-lg text-xs font-mono animate-fade-in shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-                          
-                          {/* Banner & Title */}
-                          <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-3">
-                            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5 text-ellipsis overflow-hidden whitespace-nowrap">
-                              <Bell className="w-3.5 h-3.5 animate-pulse text-indigo-400 shrink-0" />
-                              Institution Price alerts
-                            </span>
-                            
-                            {/* Browser Notification Switcher Status */}
-                            {typeof Notification !== 'undefined' ? (
-                              <button
-                                onClick={requestNotificationAuth}
-                                className={`text-[8px] uppercase tracking-wide px-2 py-0.5 rounded border font-bold transition-all shrink-0 ${
-                                  notificationPermissionGranted
-                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                    : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
-                                }`}
-                                title={notificationPermissionGranted ? "Browser Notifications active" : "Enable native browser notification prompts"}
-                              >
-                                {notificationPermissionGranted ? '● Notifications On' : '⚡ Enable Notifications'}
-                              </button>
-                            ) : null}
-                          </div>
-
-                          {/* Quick Alert Creator Form */}
-                          <div className="bg-black/35 p-3 rounded-md border border-white/5 mb-3.5">
-                            <h4 className="text-[9px] font-bold text-white/50 uppercase tracking-widest mb-2">Create New Price alert</h4>
-                            
-                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                              {/* Symbol Selection */}
-                              <div className="sm:col-span-4">
-                                <label className="block text-[8px] text-white/35 uppercase mb-1">Asset/Symbol</label>
-                                <select
-                                  value={newAlertSymbol}
-                                  onChange={(e) => {
-                                    const sym = e.target.value as MarketSymbol;
-                                    setNewAlertSymbol(sym);
-                                    // Prepopulate with latest mock/stats price
-                                    const currentPrice = tickerStats[sym]?.price || 0;
-                                    setNewAlertPrice(currentPrice > 0 ? currentPrice.toString() : '');
-                                  }}
-                                  className="w-full bg-[#121217] border border-white/10 rounded px-2 py-1.5 text-[10.5px] font-bold text-white outline-none focus:border-indigo-500/50"
-                                >
-                                  {Object.keys(tickerStats).map((sym) => (
-                                    <option key={sym} value={sym}>
-                                      {sym}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              {/* Alert Condition Selector */}
-                              <div className="sm:col-span-3">
-                                <label className="block text-[8px] text-white/35 uppercase mb-1">Condition</label>
-                                <select
-                                  value={newAlertCondition}
-                                  onChange={(e) => setNewAlertCondition(e.target.value as 'ABOVE' | 'BELOW')}
-                                  className="w-full bg-[#121217] border border-white/10 rounded px-2 py-1.5 text-[10.5px] text-white font-bold outline-none focus:border-indigo-500/50"
-                                >
-                                  <option value="ABOVE">≥ Crossing Up</option>
-                                  <option value="BELOW">≤ Crossing Down</option>
-                                </select>
-                              </div>
-
-                              {/* Target Price Value Input */}
-                              <div className="sm:col-span-3">
-                                <label className="block text-[8px] text-white/35 uppercase mb-1">
-                                  Target Price
-                                </label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. 1.08500"
-                                  value={newAlertPrice}
-                                  onChange={(e) => setNewAlertPrice(e.target.value)}
-                                  className="w-full bg-[#121217] border border-white/10 rounded px-2 py-1.5 text-[10.5px] text-white font-bold outline-none focus:border-indigo-500/50"
-                                />
-                              </div>
-
-                              {/* Trigger Add Action Button */}
-                              <div className="sm:col-span-2 flex items-end">
-                                <button
-                                  onClick={() => {
-                                    const parsedPrice = parseFloat(newAlertPrice);
-                                    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-                                      // Log alert format error
-                                      const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
-                                      setMqlConsoleLogs(prev => [...prev, `${timeStr}.883 [ALERT ERROR] Invalid price format specified.`].slice(-150));
-                                      return;
-                                    }
-
-                                    // Add alert
-                                    const newAlert: PriceAlert = {
-                                      id: 'alert_' + Math.random().toString(36).substring(2, 9),
-                                      symbol: newAlertSymbol,
-                                      targetPrice: parsedPrice,
-                                      condition: newAlertCondition,
-                                      isTriggered: false,
-                                      createdAt: new Date().toLocaleTimeString()
-                                    };
-
-                                    setPriceAlerts(prev => [newAlert, ...prev]);
-                                    
-                                    // Log to terminal console
-                                    const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
-                                    setMqlConsoleLogs(prev => [
-                                      ...prev,
-                                      `${timeStr}.115 [ALERT REGISTERED] Created target level alert for ${newAlertSymbol} at price ${parsedPrice.toLocaleString()} when crossing ${newAlertCondition}`
-                                    ].slice(-150));
-
-                                    // Clean up price state
-                                    setNewAlertPrice('');
-                                  }}
-                                  className="w-full bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 font-extrabold py-1.5 rounded border border-indigo-500/35 transition-all text-[11px] flex items-center justify-center gap-1 cursor-pointer select-none"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                  <span>ADD</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* List of active alerts */}
-                          <div>
-                            <div className="flex items-center justify-between text-[8px] text-white/35 uppercase tracking-wider mb-2 font-bold select-none">
-                              <span>Configured Price Targets ({priceAlerts.length})</span>
-                              {priceAlerts.length > 0 && (
-                                <button
-                                  onClick={() => {
-                                    setPriceAlerts([]);
-                                    const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
-                                    setMqlConsoleLogs(prev => [...prev, `${timeStr}.050 [ALERTS PURGED] All active price monitors cleared.`].slice(-150));
-                                  }}
-                                  className="hover:text-rose-455 transition-colors uppercase cursor-pointer"
-                                >
-                                  Purge Alerts
-                                </button>
-                              )}
-                            </div>
-
-                            {priceAlerts.length === 0 ? (
-                              <div className="text-center py-4 bg-white/[0.02] border border-dashed border-white/5 rounded text-white/30 text-[10px]">
-                                No active alerts configured. Use the creator above to track targets.
-                              </div>
-                            ) : (
-                              <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1 select-none scrollbar-thin">
-                                {priceAlerts.map((alert) => (
-                                  <div
-                                    key={alert.id}
-                                    className={`p-2.5 rounded border flex items-center justify-between transition-all ${
-                                      alert.isTriggered
-                                        ? 'bg-emerald-500/5 border-emerald-500/25 opacity-75'
-                                        : 'bg-[#101014] border-white/5 hover:border-white/10'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      {/* Blink Indicator Status icon */}
-                                      <span className="relative flex h-2 w-2">
-                                        {alert.isTriggered ? (
-                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                                        ) : (
-                                          <>
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
-                                          </>
-                                        )}
-                                      </span>
-
-                                      <div className="flex flex-col">
-                                        <div className="flex items-center gap-1.5 font-bold text-white text-[10.5px]">
-                                          <span>{alert.symbol}</span>
-                                          <span className="text-[8.5px] font-medium text-white/45 uppercase">
-                                            {alert.condition === 'ABOVE' ? '≥ Crossing Up' : '≤ Crossing Down'}
-                                          </span>
-                                        </div>
-                                        <div className="text-[8px] text-white/35 mt-0.5">
-                                          Target: <strong className="text-indigo-400 font-bold">{alert.targetPrice}</strong>
-                                          {alert.isTriggered && alert.triggeredAt && (
-                                            <span className="text-emerald-400 font-bold ml-1.5">
-                                              Triggered at {alert.triggeredAt}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Action items deletion */}
-                                    <button
-                                      onClick={() => {
-                                        setPriceAlerts(prev => prev.filter(a => a.id !== alert.id));
-                                        const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
-                                        setMqlConsoleLogs(prev => [...prev, `${timeStr}.444 [ALERT DELETED] Cleared monitor ID ${alert.id}.`].slice(-150));
-                                      }}
-                                      className="p-1 hover:bg-rose-500/10 text-white/20 hover:text-rose-455 rounded transition-colors cursor-pointer shrink-0"
-                                      title="Delete Price Alert"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          
-                        </div>
-                      )}
-
-                      {/* Bulk Adjust SL/TP Sub-panel */}
-                      {showBulkAdjustPanel && (
-                        <div id="bulk-adjust-sltp-subpanel" className="mb-4 p-4 bg-[#0d0d11] border border-indigo-500/15 rounded-lg text-xs font-mono animate-fade-in shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-                          <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-3">
-                            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap">
-                              <Sliders className="w-3.5 h-3.5 text-indigo-450 shrink-0" />
-                              Bulk Adjust SL/TP Action Desk
-                            </span>
-                            <span className="text-[8px] text-white/30 uppercase">
-                              Applies to {sortedActivePositions.length} currently visible positions
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-black/35 p-3 rounded-md border border-white/5 mb-3">
-                            {/* Action Target Selector */}
-                            <div className="sm:col-span-4">
-                              <label className="block text-[8px] text-white/35 uppercase mb-1">Target parameter</label>
-                              <div className="flex bg-[#121217] p-0.5 rounded border border-white/10">
-                                <button
-                                  type="button"
-                                  onClick={() => setBulkAdjustTarget('SL')}
-                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
-                                    bulkAdjustTarget === 'SL' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
-                                  }`}
-                                >
-                                  SL Only
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setBulkAdjustTarget('TP')}
-                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
-                                    bulkAdjustTarget === 'TP' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
-                                  }`}
-                                >
-                                  TP Only
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setBulkAdjustTarget('BOTH')}
-                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
-                                    bulkAdjustTarget === 'BOTH' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
-                                  }`}
-                                >
-                                  Both
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Offset Type: Percentage or Points */}
-                            <div className="sm:col-span-4">
-                              <label className="block text-[8px] text-white/35 uppercase mb-1">Distance type</label>
-                              <div className="flex bg-[#121217] p-0.5 rounded border border-white/10">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setBulkAdjustType('PERCENT');
-                                    setBulkAdjustValue('1.5');
-                                  }}
-                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
-                                    bulkAdjustType === 'PERCENT' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
-                                  }`}
-                                >
-                                  Percentage (%)
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setBulkAdjustType('POINTS');
-                                    setBulkAdjustValue('50');
-                                  }}
-                                  className={`flex-1 py-1 rounded text-[9px] transition-all font-bold uppercase ${
-                                    bulkAdjustType === 'POINTS' ? 'bg-indigo-600 text-white font-extrabold' : 'text-white/40 hover:text-white/75'
-                                  }`}
-                                >
-                                  Pips / Points
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Distance value input field */}
-                            <div className="sm:col-span-4">
-                              <label className="block text-[8px] text-white/35 uppercase mb-1">
-                                {bulkAdjustType === 'PERCENT' ? 'Percentage Distance (%)' : 'Offset Pips/USD Points'}
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  placeholder={bulkAdjustType === 'PERCENT' ? 'e.g. 1.5' : 'e.g. 50'}
-                                  value={bulkAdjustValue}
-                                  onChange={(e) => {
-                                    setBulkAdjustValue(e.target.value);
-                                    setBulkErrorMessage('');
-                                  }}
-                                  className="w-full bg-[#121217] border border-white/10 rounded px-2.5 py-1 text-[11px] font-bold text-white outline-none focus:border-indigo-500"
-                                />
-                                {bulkAdjustType === 'PERCENT' && (
-                                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-white/30 font-bold">%</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Preview Section - Shows a breakdown of how the values will change */}
-                          {sortedActivePositions.length > 0 && (
-                            <div className="mb-3.5 bg-black/20 rounded p-2.5 border border-white/[0.04]">
-                              <span className="block text-[8.5px] font-extrabold uppercase text-white/40 mb-2">Simulation of proposed limits:</span>
-                              <div className="space-y-1 max-h-32 overflow-y-auto pr-1 select-none scrollbar-thin">
-                                {sortedActivePositions.map(t => {
-                                  const valNum = parseFloat(bulkAdjustValue) || 0;
-                                  const decimals = t.symbol === 'USD/JPY' || t.symbol === 'GOLD/USD' ? 2 : t.symbol === 'BTC/USDT' ? 1 : 5;
-                                  let dist = 0;
-                                  if (bulkAdjustType === 'PERCENT') {
-                                    dist = t.entryPrice * (valNum / 100);
-                                  } else {
-                                    let mult = 0.0001;
-                                    if (t.symbol === 'USD/JPY') mult = 0.01;
-                                    else if (['BTC/USDT', 'GOLD/USD', 'SILVER/USD', 'ETH/USDT', 'SOL/USDT', 'US30', 'NAS100', 'SPX500', 'GER40'].includes(t.symbol)) {
-                                      mult = 1.0;
-                                    }
-                                    dist = valNum * mult;
-                                  }
-
-                                  const isBuy = t.side === 'BUY';
-                                  const slStr = (bulkAdjustTarget === 'SL' || bulkAdjustTarget === 'BOTH') 
-                                    ? (isBuy ? t.entryPrice - dist : t.entryPrice + dist).toFixed(decimals)
-                                    : t.stopLoss > 0 ? t.stopLoss.toFixed(decimals) : 'None';
-                                  const tpStr = (bulkAdjustTarget === 'TP' || bulkAdjustTarget === 'BOTH')
-                                    ? (isBuy ? t.entryPrice + dist : t.entryPrice - dist).toFixed(decimals)
-                                    : t.takeProfit > 0 ? t.takeProfit.toFixed(decimals) : 'None';
-
-                                  return (
-                                    <div key={`bulk-sim-${t.id}`} className="flex items-center justify-between text-[8.5px] border-b border-white/[0.02] pb-1">
-                                      <div className="flex items-center gap-1.5 font-bold">
-                                        <span className={isBuy ? 'text-emerald-450' : 'text-rose-450'}>{t.side}</span>
-                                        <span className="text-white/80">{t.symbol}</span>
-                                      </div>
-                                      <div className="text-white/40 font-mono">
-                                        Entry: <span className="text-white/60">${t.entryPrice.toFixed(decimals)}</span>
-                                        <span className="mx-1">|</span>
-                                        {bulkAdjustTarget !== 'TP' && (
-                                          <>
-                                            Proposed SL: <strong className="text-rose-450 font-bold">${slStr}</strong>
-                                            {bulkAdjustTarget === 'BOTH' && <span className="mx-1">|</span>}
-                                          </>
-                                        )}
-                                        {bulkAdjustTarget !== 'SL' && (
-                                          <>
-                                            Proposed TP: <strong className="text-emerald-400 font-bold">${tpStr}</strong>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Status and Error Messages */}
-                          {bulkErrorMessage && (
-                            <div className="text-[9px] text-rose-400 font-bold mb-2 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                              {bulkErrorMessage}
-                            </div>
-                          )}
-
-                          {bulkSuccessMessage && (
-                            <div className="text-[9px] text-emerald-400 font-bold mb-2 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                              {bulkSuccessMessage}
-                            </div>
-                          )}
-
-                          {/* Submit controls */}
-                          <div className="flex items-center justify-end gap-2 text-[10px] pt-1 border-t border-white/5">
-                            <button
-                              type="button"
-                              onClick={() => setShowBulkAdjustPanel(false)}
-                              className="px-2.5 py-1 text-white/40 hover:text-white/80 transition-colors uppercase cursor-pointer"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              disabled={bulkIsSubmitting}
-                              onClick={handleApplyBulkAdjust}
-                              className="px-3.5 py-1 bg-indigo-650 hover:bg-indigo-500 text-white font-black border border-indigo-500/20 hover:border-indigo-400 rounded transition-all text-[9.5px] uppercase cursor-pointer disabled:opacity-50 flex items-center gap-1 animate-pulse"
-                            >
-                              {bulkIsSubmitting ? (
-                                <>
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                  <span>Adjusting...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Apply Unified Limits</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Health Status Summary Metrics Banner Line */}
-                      {systemDashboardSummary.activeTradesCount > 0 && (
-                        <div className="mb-4 py-2 px-3 bg-[#0a0a0c] border border-white/10 rounded flex items-center justify-between text-[10px] font-mono select-none animate-fadeIn">
-                          <span className="text-white/35 uppercase tracking-wider font-bold">Health Status Summary:</span>
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5" title="Active standard exposure without immediate safety/target breaches">
-                              <span className="w-2 h-2 rounded-full bg-indigo-400/80" />
-                              <span className="text-white/40">Active:</span>
-                              <span className="font-bold text-indigo-400">{healthStats.active}</span>
-                            </div>
-                            <span className="text-white/10">|</span>
-                            <div className="flex items-center gap-1.5" title="Critical Drawdown: close to stop-loss threshold (SL Proximity >= 70%)">
-                              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                              <span className="text-white/40">At Risk:</span>
-                              <span className="font-bold text-rose-400">{healthStats.atRisk}</span>
-                            </div>
-                            <span className="text-white/10">|</span>
-                            <div className="flex items-center gap-1.5" title="Healthy positive profit margin (> 0 PnL)">
-                              <span className="w-2 h-2 rounded-full bg-teal-400" />
-                              <span className="text-white/40">Profitable:</span>
-                              <span className="font-bold text-teal-400">{healthStats.profitable}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {sortedActivePositions.length === 0 ? (
-                        <div className="py-6 flex flex-col items-center justify-center text-center space-y-4">
-                          <div className="relative w-48 h-48 sm:w-52 sm:h-52 rounded-xl overflow-hidden border border-white/10 bg-black/60 shadow-lg shadow-indigo-500/5 group">
-                            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:16px_16px] z-10 pointer-events-none" />
-                            
-                            <img 
-                              src={emptyPositionsImg} 
-                              alt="Institutional Trading System Inactive Matrix" 
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover opacity-50 mix-blend-lighten transition-transform duration-700 group-hover:scale-105"
-                            />
-                            
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0b] via-transparent to-[#0a0a0b]/80 pointer-events-none" />
-                            <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0b] via-transparent to-[#0a0a0b] pointer-events-none" />
-                            
-                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 bg-black/80 border border-white/10 px-2.5 py-1 rounded font-mono text-[8px] uppercase tracking-wider text-white/70 flex items-center gap-1.5 backdrop-blur-md whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-550 animate-pulse" />
-                              MATRIX STATE: SYNCED
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5 max-w-[280px]">
-                            <p className="text-xs font-mono font-bold tracking-tight text-white/50">
-                              {systemDashboardSummary.activeTradesCount > 0 
-                                ? "NO MATCHING EXPOSURES"
-                                : "ZERO ACTIVE DECK"}
-                            </p>
-                            <p className="text-[10.5px] font-sans text-white/35 leading-normal">
-                              {systemDashboardSummary.activeTradesCount > 0 
-                                ? `No active ${positionFilter === 'WINNING' ? 'winning' : 'losing'} positions found matching your filter overlay.`
-                                : "The institutional portfolio database is currently clear. No micro-leveraged exposure or delta-hedged risk vectors detected."}
-                            </p>
-                          </div>
-
-                          {systemDashboardSummary.activeTradesCount === 0 && (
-                            <button 
-                              onClick={() => {
-                                console.log('[NAVIGATION] Opening Execution Terminal...');
-                                setActiveTab('EXECUTION');
-                              }}
-                              className="px-3.5 py-1.5 text-[9px] uppercase font-mono font-extrabold text-indigo-400 hover:text-white bg-indigo-500/10 hover:bg-indigo-600/30 border border-indigo-500/20 hover:border-indigo-500/40 rounded transition-all tracking-wider cursor-pointer"
-                            >
-                              Open trading interface &rarr;
-                            </button>
-                          )}
-                        </div>
-                      ) : (() => {
-                        const totalActivePos = sortedActivePositions.length;
-                        const safePageIndex = Math.max(0, Math.min(activeTradePageIndex, totalActivePos - 1));
-                        const displayedTrade = sortedActivePositions[safePageIndex];
-
-                        return (
-                          <div className="space-y-4">
-                            {/* Pagination Controls Row */}
-                            <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 px-3 py-2 rounded-lg font-mono text-[10.5px]">
-                              <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-                                <span className="text-white/40 uppercase font-black">Coexposures Decoded:</span>
-                                <span className="text-white font-extrabold text-[11px]">
-                                  Position {safePageIndex + 1} of {totalActivePos}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center gap-1.5 select-none">
-                                <button
-                                  onClick={() => setActiveTradePageIndex(prev => Math.max(0, prev - 1))}
-                                  disabled={safePageIndex === 0}
-                                  className={`p-1.5 rounded border transition-colors flex items-center justify-center ${
-                                    safePageIndex === 0 
-                                      ? 'bg-transparent border-white/5 text-white/15 cursor-not-allowed' 
-                                      : 'bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-white/20 cursor-pointer'
-                                  }`}
-                                  title="Previous Active Position"
-                                >
-                                  <ChevronLeft className="w-3.5 h-3.5" />
-                                </button>
-                                
-                                <button
-                                  onClick={() => setActiveTradePageIndex(prev => Math.min(totalActivePos - 1, prev + 1))}
-                                  disabled={safePageIndex >= totalActivePos - 1}
-                                  className={`p-1.5 rounded border transition-colors flex items-center justify-center ${
-                                    safePageIndex >= totalActivePos - 1 
-                                      ? 'bg-transparent border-white/5 text-white/15 cursor-not-allowed' 
-                                      : 'bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10 hover:border-white/20 cursor-pointer'
-                                  }`}
-                                  title="Next Active Position"
-                                >
-                                  <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Self-contained Active Card Area, fully stretched */}
-                            <div className="relative min-h-[140px] flex flex-col justify-stretch">
-                              <AnimatePresence mode="wait">
-                                {displayedTrade && (
-                                  <motion.div
-                                    key={displayedTrade.id}
-                                    initial={{ opacity: 0, x: 15 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -15 }}
-                                    className="w-full h-full flex-1"
-                                  >
-                                    <TradePositionRowItem
-                                      trade={displayedTrade}
-                                      isExpanded={true}
-                                      onToggleExpand={() => {}}
-                                      onQuickClose={handleQuickCloseTrade}
-                                      formatOpenDuration={formatOpenDuration}
-                                      isCompact={false}
-                                      onUpdateParams={handleUpdateTradeParams}
-                                    />
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <SystemStatus />
-                  </div>
-                </div>
-              </div>
-            ) : activeTab === 'INTELLIGENCE' ? (
-              <div id="intelligence-workspace-deck" className="space-y-3 md:space-y-6 animate-fadeIn">
-                
-                {/* 1. Full-Width Panoramic Chart row (rendered permanently as final panoramic mode) */}
-                {metrics && (
-                  <div className="w-full transition-all duration-300">
-                    <ChartContainer
-                      symbol={symbol}
-                      candles={candles}
-                      fvgs={fvgs}
-                      obs={obs}
-                      sweeps={sweeps}
-                      metrics={metrics}
-                      onLogEventToAdvisor={handleLogEventToAdvisor}
-                      trades={trades}
-                      onTradeExecuted={fetchMarketData}
-                      newsEvents={newsEvents}
-                      highlightOrderBlocks={highlightOrderBlocks}
-                      resetKey={resetChartKey}
-                      jumpRange={jumpRange}
-                      showTWVP={showTWVP}
-                      isExpanded={true}
-                      onSymbolChange={setSymbol}
-                      timeframe={timeframe}
-                      onTimeframeChange={setTimeframe}
-                      priceAlerts={priceAlerts}
-                      onDeletePriceAlert={(id) => {
-                        setPriceAlerts(prev => prev.filter(a => a.id !== id));
-                        const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
-                        setMqlConsoleLogs(prev => [
-                          ...prev,
-                          `${timeStr}.444 [ALERT DELETED] Cleared monitor ID ${id}.`
-                        ].slice(-150));
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* 2. Main Workspace Layout Grid */}
-                <div className="w-full space-y-6">
-                  
-                  {/* AI Signal Insights and Explainability - Hidden on mobile screens */}
-                  {metrics && (
-                    <div className="hidden md:block">
-                      <TradeExplainability
-                        symbol={symbol}
-                        metrics={metrics}
-                        trades={trades}
-                        highlightOrderBlocks={highlightOrderBlocks}
-                        onToggleHighlightOrderBlocks={() => setHighlightOrderBlocks(prev => !prev)}
-                        showTWVP={showTWVP}
-                        onToggleTWVP={() => setShowTWVP(prev => !prev)}
-                        onResetChartView={() => {
-                          setHighlightOrderBlocks(false);
-                          setShowTWVP(false);
-                          setResetChartKey(prev => prev + 1);
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {metrics && (
-                    <div className="hidden md:block animate-fadeIn">
-                      <AnalyticDeskIntelligence
-                        symbol={symbol}
-                        metrics={metrics}
-                        trades={trades}
-                        onUpdateTradeParams={handleUpdateTradeParams}
-                        mode="ATR_ONLY"
-                      />
-                    </div>
-                  )}
-
-                </div>
-
-              </div>
+            ) : false ? (
+              null
             ) : activeTab === 'ANALYTICS' ? (
               <div id="analytics-workspace" className="space-y-6 animate-fadeIn">
-                <div className="flex items-center justify-between gap-4 border-b border-white/5 pb-4 mb-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-2">
                   <div>
                     <h3 className="text-sm font-black uppercase tracking-wider text-white font-mono flex items-center gap-2">
                       <BarChart3 className="w-4 h-4 text-indigo-400" />
@@ -3281,90 +2555,71 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                     </h3>
                     <p className="text-[10px] text-white/35 mt-0.5">Four-tiered institutional analytic engine. Aligned to the MTXQUANT skeleton blueprint.</p>
                   </div>
+
+                  {/* High fidelity horizontal page tabs */}
+                  <div className="flex bg-[#050507] p-1 rounded border border-white/5 space-x-1 font-mono text-[9px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setAnalyticsSubTab('ORDER_FLOW')}
+                      className={`px-3.5 py-1.5 uppercase tracking-wide rounded transition-all cursor-pointer ${
+                        analyticsSubTab === 'ORDER_FLOW'
+                          ? 'bg-indigo-650 text-indigo-200 border border-indigo-500/20 font-black shadow-sm'
+                          : 'text-white/40 hover:text-white/80'
+                      }`}
+                    >
+                      Session Confluence & Velocity
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAnalyticsSubTab('CORRELATION')}
+                      className={`px-3.5 py-1.5 uppercase tracking-wide rounded transition-all cursor-pointer ${
+                        analyticsSubTab === 'CORRELATION'
+                          ? 'bg-indigo-650 text-indigo-200 border border-indigo-500/20 font-black shadow-sm'
+                          : 'text-white/40 hover:text-white/80'
+                      }`}
+                    >
+                      Correlations & Sentiment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAnalyticsSubTab('DEPENDENCY')}
+                      className={`px-3.5 py-1.5 uppercase tracking-wide rounded transition-all cursor-pointer ${
+                        analyticsSubTab === 'DEPENDENCY'
+                          ? 'bg-indigo-650 text-indigo-200 border border-indigo-500/20 font-black shadow-sm'
+                          : 'text-white/40 hover:text-white/80'
+                      }`}
+                    >
+                      Position Dependency
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                  
-                  {/* Left hand details: Analytics Desk with EXCLUDE_ATR mode */}
-                  <div className="xl:col-span-8 space-y-6 animate-fadeIn">
-                    {metrics && (
-                      <AnalyticDeskIntelligence
-                        symbol={symbol}
-                        metrics={metrics}
-                        trades={trades}
-                        onUpdateTradeParams={handleUpdateTradeParams}
-                        mode="EXCLUDE_ATR"
-                      />
-                    )}
-                  </div>
-
-                  {/* Right hand layout pane: Order Book & Correlation Matrix */}
-                  <div className="hidden md:block xl:col-span-4 space-y-6 animate-fadeIn">
-                    {orderBook && (
-                      <OrderBookTracker
-                        symbol={symbol}
-                        orderBook={orderBook}
-                      />
-                    )}
-                    {orderBook && (
-                      <CumulativeDepthChart
-                        symbol={symbol}
-                        orderBook={orderBook}
-                      />
-                    )}
-                    <CorrelationMatrix />
-                    <MarketSentimentHeatmap />
-                  </div>
-
-                </div>
-              </div>
-            ) : activeTab === 'EXECUTION' ? (
-              <div id="execution-workspace" className="animate-fadeIn space-y-6">
-                
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                  <div className="xl:col-span-9 space-y-6">
-                    {/* Positions manager */}
-                    {metrics && (
-                      <React.Suspense fallback={<TerminalWorkspaceLoader />}>
-                        <TradeTerminal
-                          symbol={symbol}
-                          metrics={metrics}
-                          onTradeExecuted={fetchMarketData}
-                          trades={trades}
-                          sweeps={sweeps}
-                          orderBook={orderBook || undefined}
-                        />
-                      </React.Suspense>
-                    )}
-                  </div>
-
-                  <div className="xl:col-span-3 space-y-6">
-                    {/* System bridge latency information panel */}
-                    <div className="bg-[#0a0a0b] border border-white/5 rounded-lg p-5 space-y-4">
-                      <div className="border-b border-white/5 pb-2.5">
-                        <h4 className="text-xs font-bold uppercase font-mono text-white tracking-wider">
-                          Bridge Health
-                        </h4>
-                        <p className="text-[9.5px] text-white/30 font-mono mt-0.5">Automated safety parameters</p>
+                <div className="animate-fadeIn">
+                  {analyticsSubTab === 'ORDER_FLOW' ? (
+                    <SessionConfluenceTracker
+                      symbol={symbol}
+                      metrics={metrics}
+                    />
+                  ) : analyticsSubTab === 'CORRELATION' ? (
+                    <div className="space-y-6 animate-fadeIn font-mono">
+                      <div className="bg-[#0a0a0c] border border-white/5 p-4 rounded-lg">
+                        <h4 className="text-xs font-bold text-white mb-1 uppercase tracking-wide">Dynamic Cross-Asset Alignment</h4>
+                        <p className="text-[10px] text-white/40 leading-relaxed mb-4">Tracking alignment matrices across primary financial baskets in real-time.</p>
+                        <CorrelationMatrix />
                       </div>
-
-                      <div className="space-y-3 text-[10px] font-mono leading-relaxed text-slate-350 space-y-3">
-                        <p>
-                          Your placement requests are serialized directly into standard <span className="text-[#a16207] font-semibold">1% fixed fractional models</span>.
-                        </p>
-                        <p>
-                          Active latency warnings evaluate round-trip packet speeds dynamically to avoid trade slippages during market announcements.
-                        </p>
-                      </div>
-
-                      <div className="p-3 bg-[#050505] rounded border border-white/5 font-mono text-[9px]">
-                        <span className="text-white/30 block uppercase font-bold">PASSIVE LATENCY BOUNDS</span>
-                        <span className="text-emerald-400 font-bold block mt-1">SECURED BY LOCK (45ms)</span>
+                      <div className="bg-[#0a0a0c] border border-white/5 p-4 rounded-lg">
+                        <h4 className="text-xs font-bold text-white mb-1 uppercase tracking-wide">News Stream Sentiment Radar</h4>
+                        <p className="text-[10px] text-white/40 leading-relaxed mb-4">Aggregating natural language bias scores across standard news wires.</p>
+                        <MarketSentimentHeatmap />
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <PositionDependencyView
+                      currentSymbol={symbol}
+                      trades={trades}
+                    />
+                  )}
                 </div>
-
               </div>
             ) : activeTab === 'RISK' ? (
               <div id="risk-workspace" className="animate-fadeIn space-y-6">
@@ -3379,6 +2634,10 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                     />
                   </React.Suspense>
                 )}
+              </div>
+            ) : activeTab === 'MARKETS' ? (
+              <div id="markets-workspace" className="animate-fadeIn">
+                <MarketsTerminal />
               </div>
             ) : activeTab === 'RESEARCH' ? (
               <div id="backtest-workspace" className="animate-fadeIn space-y-6">
@@ -3554,6 +2813,29 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                               APPLY
                             </button>
 
+                            {/* Candle-by-candle Step Controls */}
+                            <div className="flex items-center bg-[#050505] border border-white/5 rounded h-[34px] p-0.5">
+                              <button
+                                id="btn-replay-step-backward"
+                                onClick={() => handleStepReplay('backward')}
+                                title="Step Backward (one candle)"
+                                className="h-full px-2 rounded hover:bg-white/5 text-white/50 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-1 group"
+                              >
+                                <ChevronLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                                <span className="text-[9px] font-extrabold uppercase tracking-wider hidden sm:inline">Back</span>
+                              </button>
+                              <div className="h-4 w-[1px] bg-white/10" />
+                              <button
+                                id="btn-replay-step-forward"
+                                onClick={() => handleStepReplay('forward')}
+                                title="Step Forward (one candle)"
+                                className="h-full px-2 rounded hover:bg-white/5 text-white/50 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-1 group"
+                              >
+                                <span className="text-[9px] font-extrabold uppercase tracking-wider hidden sm:inline">Forward</span>
+                                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                              </button>
+                            </div>
+
                             <button
                               id="btn-reset-replay-view"
                               onClick={() => {
@@ -3584,7 +2866,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                       metrics={metrics}
                     />
                     <StrategyPerformanceChart />
-                    <BacktestSimulator selectedSymbol={symbol} onSymbolChange={(sym) => setSymbol(sym)} />
+                    <BacktestSimulator 
+                      selectedSymbol={symbol} 
+                      onSymbolChange={(sym) => setSymbol(sym)} 
+                      onSimulationUpdate={(data) => setBacktestData(data as any)}
+                      onSimulationToggle={setIsBacktestActive}
+                    />
                   </div>
                 )}
 
@@ -3614,30 +2901,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 {/* Full Dedicated News board & Impact predictive scanner */}
                 <NewsDesk />
               </div>
-            ) : (
-              <div id="settings-direct-control-workspace" className="animate-fadeIn">
-                <SettingsPanel 
-                  layoutState={{
-                    showSentimentGauge,
-                    showMarketSentimentHeatmap,
-                    showSweepAlert,
-                    showHeatmap,
-                    showTWVP,
-                    showSessionPerformance,
-                    showPriceAlertsPanel,
-                  }}
-                  setLayoutState={{
-                    setShowSentimentGauge,
-                    setShowMarketSentimentHeatmap,
-                    setShowSweepAlert,
-                    setShowHeatmap,
-                    setShowTWVP,
-                    setShowSessionPerformance,
-                    setShowPriceAlertsPanel,
-                  }}
-                />
-              </div>
-            )}
+            ) : null}
           </>
         )}
 
@@ -3788,7 +3052,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   )}
                 </div>
 
-                {mt5Ping > 45 && (
+                {isMt5BridgePaused ? (
+                  <div className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-rose-500/15 border border-rose-500/30 text-[9px] text-rose-400 font-bold tracking-tight animate-pulse uppercase">
+                    <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0 animate-ping" />
+                    <span>MT5 Bridge Paused (Threshold Exceeded)</span>
+                  </div>
+                ) : mt5Ping > 45 && (
                   <div className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 text-[9px] text-rose-300 font-bold tracking-tight animate-pulse uppercase">
                     <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
                     <span>Latency warning threshold exceeded (Limit: 45ms)</span>
@@ -4141,15 +3410,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       {/* Mobile Sticky Bottom Navigation Dock */}
       <nav id="mobile-sticky-bottom-nav" className="fixed bottom-0 left-0 right-0 z-[300] bg-[#080808]/95 backdrop-blur-md border-t border-white/10 flex md:hidden items-center justify-around py-1.5 px-2 safe-bottom">
         {[
-          { id: 'INTELLIGENCE', label: 'Intel', icon: Bot },
+          { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
           { id: 'ANALYTICS', label: 'Analytic', icon: BarChart3 },
           { id: 'COPILOT', label: 'MTX Eng', icon: Sparkles },
-          { id: 'DASHBOARD', label: 'Dash', icon: Layers },
-          { id: 'EXECUTION', label: 'Exec', icon: Activity },
           { id: 'RISK', label: 'Risk', icon: ShieldAlert },
           { id: 'NEWS', label: 'News', icon: Newspaper },
-          { id: 'RESEARCH', label: 'Research', icon: Award },
-          { id: 'SETTINGS', label: 'Settings', icon: Settings }
+          { id: 'RESEARCH', label: 'Research', icon: Award }
         ].map((item) => {
           const active = activeTab === item.id;
           const Icon = item.icon;
@@ -4210,15 +3476,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 {/* Navigation Items */}
                 <nav className="space-y-1.5">
                   {[
-                    { id: 'INTELLIGENCE', label: 'Intelligence Workspace', icon: Bot, desc: 'Trend Bias, Gaps, Order Blocks' },
+                    { id: 'MARKETS', label: 'Markets Terminal Desk', icon: TrendingUp, desc: 'yfinance, Pandas screens, backtesting, portfolio opt' },
                     { id: 'ANALYTICS', label: 'Analytics Desk', icon: BarChart3, desc: 'Heuristics, sentiment, micro order-book depth' },
                     { id: 'COPILOT', label: 'MTX Engine Workspace', icon: Sparkles, desc: 'Cursor Multi-leg Composer & Compiler' },
-                    { id: 'DASHBOARD', label: 'General Dashboard', icon: Layers, desc: 'Portfolio PnL & Health' },
-                    { id: 'EXECUTION', label: 'Execution Terminal', icon: Activity, desc: 'Manual & EA Order Panel' },
                     { id: 'RISK', label: 'Risk Desk Management', icon: ShieldAlert, desc: 'Leverage, Limits & Heatmap' },
                     { id: 'NEWS', label: 'Dedicated News Desk', icon: Newspaper, desc: 'External feeds & global risk announcements' },
-                    { id: 'RESEARCH', label: 'Research & Calendar', icon: Award, desc: 'Economic events & insights' },
-                    { id: 'SETTINGS', label: 'System Settings', icon: Settings, desc: 'API, alerts & notification settings' }
+                    { id: 'RESEARCH', label: 'Research & Calendar', icon: Award, desc: 'Economic events & insights' }
                   ].map((item) => {
                     const active = activeTab === item.id;
                     const Icon = item.icon;

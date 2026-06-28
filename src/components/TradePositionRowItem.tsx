@@ -609,6 +609,125 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                 </span>
               </div>
             </div>
+
+            {/* LAV-TSL: Liquidity-Adjusted Volatility Trailing Stop Loss */}
+            <div className="bg-indigo-950/10 border border-indigo-500/15 p-3 rounded-lg space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${trade.lavTslActive ? 'animate-ping bg-indigo-400' : 'bg-white/10'}`}></span>
+                    <span className={`relative inline-flex rounded-full h-2 w-2 ${trade.lavTslActive ? 'bg-indigo-400' : 'bg-white/20'}`}></span>
+                  </span>
+                  <span className="text-[9px] font-black text-white uppercase tracking-wider">
+                    MTX LAV-TSL: Volatility & Liquidity-Adjusted Trailing Stop
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    id={`lav-tsl-toggle-${trade.id}`}
+                    checked={!!trade.lavTslActive}
+                    onChange={(e) => {
+                      const active = e.target.checked;
+                      onUpdateParams(trade.id, { 
+                        lavTslActive: active,
+                        lavTslAtrMultiplier: trade.lavTslAtrMultiplier || 2.0,
+                        lavTslLiquidityActive: trade.lavTslLiquidityActive !== undefined ? trade.lavTslLiquidityActive : true,
+                        lavTslTighteningActive: trade.lavTslTighteningActive !== undefined ? trade.lavTslTighteningActive : true,
+                      });
+                    }}
+                    className="rounded border-indigo-500/30 bg-black text-indigo-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <label htmlFor={`lav-tsl-toggle-${trade.id}`} className="text-[9px] text-indigo-300 font-extrabold uppercase cursor-pointer">
+                    {trade.lavTslActive ? 'ACTIVE' : 'OFF'}
+                  </label>
+                </div>
+              </div>
+
+              {trade.lavTslActive ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[10px] animate-fadeIn">
+                  {/* Parameter 1: ATR Multiplier */}
+                  <div className="bg-black/30 p-2 rounded border border-white/5 space-y-1">
+                    <div className="flex justify-between items-center text-[8.5px] text-white/40 font-bold uppercase">
+                      <span>ATR Multiplier Buffer</span>
+                      <span className="text-indigo-300 font-extrabold">{trade.lavTslAtrMultiplier?.toFixed(2) || '2.00'}x ATR</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1.0"
+                      max="3.5"
+                      step="0.25"
+                      value={trade.lavTslAtrMultiplier || 2.0}
+                      onChange={(e) => {
+                        onUpdateParams(trade.id, { lavTslAtrMultiplier: parseFloat(e.target.value) });
+                      }}
+                      className="w-full accent-indigo-500 cursor-pointer h-1 rounded-lg bg-white/5"
+                    />
+                    <span className="text-[7.5px] text-white/35 leading-tight block">
+                      Cushion distance based on True Range volatility.
+                    </span>
+                  </div>
+
+                  {/* Parameter 2: Liquidity Zone Alignment */}
+                  <div className="bg-black/30 p-2 rounded border border-white/5 space-y-1.5">
+                    <div className="flex justify-between items-center text-[8.5px] text-white/40 font-bold uppercase">
+                      <span>Liquidity Zone Pad</span>
+                      <span className={`text-[7px] px-1 rounded font-black ${trade.lavTslLiquidityActive ? 'bg-indigo-500/15 text-indigo-300' : 'bg-white/5 text-white/30'}`}>
+                        {trade.lavTslLiquidityActive ? 'PADDED' : 'BYPASSED'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <input
+                        type="checkbox"
+                        id={`lav-tsl-liquidity-${trade.id}`}
+                        checked={!!trade.lavTslLiquidityActive}
+                        onChange={(e) => {
+                          onUpdateParams(trade.id, { lavTslLiquidityActive: e.target.checked });
+                        }}
+                        className="rounded border-white/10 bg-black text-indigo-500 focus:ring-0 focus:ring-offset-0 w-3 h-3 cursor-pointer"
+                      />
+                      <label htmlFor={`lav-tsl-liquidity-${trade.id}`} className="text-[8px] text-white/70 font-semibold uppercase cursor-pointer">
+                        Align behind Order Blocks
+                      </label>
+                    </div>
+                    <span className="text-[7.5px] text-white/35 leading-tight block">
+                      Pins trailing bounds behind unmitigated level-2 liquidity keys.
+                    </span>
+                  </div>
+
+                  {/* Parameter 3: Profit Tightening Scale */}
+                  <div className="bg-black/30 p-2 rounded border border-white/5 space-y-1.5">
+                    <div className="flex justify-between items-center text-[8.5px] text-white/40 font-bold uppercase">
+                      <span>Profit Tightening</span>
+                      <span className={`text-[7px] px-1 rounded font-black ${trade.lavTslTighteningActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-white/30'}`}>
+                        {trade.lavTslTighteningActive ? 'DYNAMIC' : 'STATIC'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <input
+                        type="checkbox"
+                        id={`lav-tsl-tightening-${trade.id}`}
+                        checked={!!trade.lavTslTighteningActive}
+                        onChange={(e) => {
+                          onUpdateParams(trade.id, { lavTslTighteningActive: e.target.checked });
+                        }}
+                        className="rounded border-white/10 bg-black text-indigo-500 focus:ring-0 focus:ring-offset-0 w-3 h-3 cursor-pointer"
+                      />
+                      <label htmlFor={`lav-tsl-tightening-${trade.id}`} className="text-[8px] text-white/70 font-semibold uppercase cursor-pointer">
+                        Scale down as profit accrues
+                      </label>
+                    </div>
+                    <span className="text-[7.5px] text-white/35 leading-tight block">
+                      Tighter risk exposure dynamically to protect paper gains.
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[8.5px] text-indigo-300/60 leading-relaxed font-mono">
+                  ⚡️ The MTX institutional-grade stop mechanism. Merges 14-period Average True Range volatility with level-2 order book depth profiles, placing trailing stop barriers behind high-volume liquidity pools and compressing risk as the market advances in your favor.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Premium ICT Liquidity Hunt Sub-section details */}

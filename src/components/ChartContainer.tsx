@@ -3,14 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'motion/react';
 import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent, MarketSymbol, CorrelationData, getSymbolCorrelations, PriceAlert } from '../types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders, Zap, Server, Magnet, Crosshair, Maximize2, Minimize2, ArrowRightLeft, ArrowRight, ChevronDown, Clock, Type, Newspaper } from 'lucide-react';
-import DOMPriceLadder from './DOMPriceLadder';
 
 const FRIENDLY_NAMES: Record<string, string> = {
   'EUR/USD': 'Euro / U.S. Dollar',
@@ -27,6 +26,13 @@ const FRIENDLY_NAMES: Record<string, string> = {
   'NAS100': 'Nasdaq 100 Index',
   'GER40': 'DAX 40 Index',
   'SPX500': 'S&P 500 Index',
+  'DXY': 'US Dollar Index',
+  'US10Y': 'US 10-Year Treasury Yield',
+  'BRENT': 'Brent Crude Oil Spot',
+  'AAPL': 'Apple Inc.',
+  'MSFT': 'Microsoft Corporation',
+  'NVDA': 'NVIDIA Corporation',
+  'TSLA': 'Tesla, Inc.',
 };
 
 const FEED_SOURCES: Record<string, string> = {
@@ -44,6 +50,13 @@ const FEED_SOURCES: Record<string, string> = {
   'NAS100': 'MT5_FEED',
   'GER40': 'MT5_FEED',
   'SPX500': 'MT5_FEED',
+  'DXY': 'ICE',
+  'US10Y': 'FRED_CBOE',
+  'BRENT': 'ICE_SPOT',
+  'AAPL': 'NASDAQ',
+  'MSFT': 'NASDAQ',
+  'NVDA': 'NASDAQ',
+  'TSLA': 'NASDAQ',
 };
 
 const FLAG_EMOJIS: Record<string, { f1: string; f2: string }> = {
@@ -61,6 +74,13 @@ const FLAG_EMOJIS: Record<string, { f1: string; f2: string }> = {
   'NAS100': { f1: '🇺🇸', f2: '📊' },
   'GER40': { f1: '🇩🇪', f2: '📈' },
   'SPX500': { f1: '🇺🇸', f2: '📊' },
+  'DXY': { f1: '🇺🇸', f2: '💵' },
+  'US10Y': { f1: '🇺🇸', f2: '🏦' },
+  'BRENT': { f1: '🛢️', f2: '🌐' },
+  'AAPL': { f1: '🍎', f2: '🇺🇸' },
+  'MSFT': { f1: '💻', f2: '🇺🇸' },
+  'NVDA': { f1: '🟩', f2: '🇺🇸' },
+  'TSLA': { f1: '🚗', f2: '🇺🇸' },
 };
 
 const playAlertSound = () => {
@@ -213,6 +233,8 @@ interface ChartContainerProps {
   onDeletePriceAlert?: (id: string) => void;
   timeframe?: 'M15' | 'H1' | 'H4' | 'D1';
   onTimeframeChange?: (tf: 'M15' | 'H1' | 'H4' | 'D1') => void;
+  isBacktestActive?: boolean;
+  onGoLive?: () => void;
 }
 
 export default function ChartContainer({
@@ -237,6 +259,8 @@ export default function ChartContainer({
   onDeletePriceAlert,
   timeframe: timeframeProp,
   onTimeframeChange,
+  isBacktestActive = false,
+  onGoLive,
 }: ChartContainerProps) {
   const [hoveredCandle, setHoveredCandle] = useState<Candlestick | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -360,7 +384,8 @@ export default function ChartContainer({
       'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
       'GOLD/USD', 'SILVER/USD',
       'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-      'US30', 'NAS100', 'GER40', 'SPX500'
+      'US30', 'NAS100', 'GER40', 'SPX500',
+      'DXY', 'US10Y', 'BRENT', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
     ];
     const currentIndex = allSymbols.indexOf(symbol);
     if (currentIndex !== -1) {
@@ -387,7 +412,7 @@ export default function ChartContainer({
 
     // H4
     if (selectedTimeframe === 'H4') {
-      result = candlesInput.map(c => ({ ...c }));
+      result = candlesInput.map((c, idx) => ({ ...c, originalIndex: idx } as any));
     }
     
     // D1: Aggregate every 4 candles into 1 candle to make it feel dense and daily-like
@@ -410,7 +435,8 @@ export default function ChartContainer({
           volume,
           ema50: chunk[chunk.length - 1].ema50,
           sma200: chunk[chunk.length - 1].sma200,
-        });
+          originalIndex: i,
+        } as any);
       }
       result = aggregated;
     }
@@ -418,20 +444,22 @@ export default function ChartContainer({
     // H1: Subdivide candles visually so they display more ticks/periods (simulated)
     else if (selectedTimeframe === 'H1') {
       const subdivided: Candlestick[] = [];
-      candlesInput.forEach((c) => {
+      candlesInput.forEach((c, idx) => {
         subdivided.push({
           ...c,
           timestamp: c.timestamp,
           close: (c.open + c.close) / 2,
           high: Math.max(c.open, c.close, (c.open + c.close) / 2),
-        });
+          originalIndex: idx,
+        } as any);
 
         subdivided.push({
           ...c,
           timestamp: c.timestamp,
           open: (c.open + c.close) / 2,
           low: Math.min(c.open, c.close, (c.open + c.close) / 2),
-        });
+          originalIndex: idx,
+        } as any);
       });
       result = subdivided.slice(-candlesInput.length);
     }
@@ -446,10 +474,11 @@ export default function ChartContainer({
           close: c.close * (1 - noise),
           high: Math.max(c.open, c.close) * (1 + Math.abs(noise)),
           low: Math.min(c.open, c.close) * (1 - Math.abs(noise)),
+          originalIndex: i,
         };
       });
     } else {
-      result = candlesInput.map(c => ({ ...c }));
+      result = candlesInput.map((c, idx) => ({ ...c, originalIndex: idx } as any));
     }
 
     if (result.length === 0) return [];
@@ -470,13 +499,31 @@ export default function ChartContainer({
       const computedDate = new Date(lastTime - timeOffset);
       return {
         ...c,
-        timestamp: computedDate.toISOString()
+        timestamp: computedDate.toISOString(),
+        originalIndex: (c as any).originalIndex
       };
     });
   }, [candlesInput, selectedTimeframe]);
 
   // All downstream logic relies on candles
   const candles = processedCandles;
+
+  // Map original candle index to processed timeframe index
+  const getProcessedIndexFromOriginal = useCallback((targetOriginalIndex: number) => {
+    if (!candles || candles.length === 0) return -1;
+    let bestIdx = -1;
+    let minDiff = Infinity;
+    for (let i = 0; i < candles.length; i++) {
+      const origIdx = (candles[i] as any).originalIndex;
+      if (origIdx === undefined) continue;
+      const diff = Math.abs(origIdx - targetOriginalIndex);
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestIdx = i;
+      }
+    }
+    return bestIdx !== -1 ? bestIdx : targetOriginalIndex;
+  }, [candles]);
 
   // One-Click Quick Entry States
   const [isOneClickActive, setIsOneClickActive] = useState(false);
@@ -1833,8 +1880,10 @@ export default function ChartContainer({
     const fvgGroup = container.append('g').attr('class', 'd3-fvg-overlays');
     
     fvgs.forEach((fvg) => {
-      const startX = getX(fvg.index - 1);
-      const endX = getX(fvg.index + 1);
+      const pIdx = getProcessedIndexFromOriginal(fvg.index);
+      if (pIdx === -1) return;
+      const startX = getX(pIdx - 1);
+      const endX = getX(pIdx + 1);
       const blockWidth = endX - startX;
       
       const topY = getY(Math.max(fvg.gapStart, fvg.gapEnd));
@@ -1911,7 +1960,9 @@ export default function ChartContainer({
     const obGroup = container.append('g').attr('class', 'd3-ob-overlays');
 
     obs.forEach((ob) => {
-      const obX = getX(ob.index);
+      const pIdx = getProcessedIndexFromOriginal(ob.index);
+      if (pIdx === -1) return;
+      const obX = getX(pIdx);
       const blockWidth = xStep * 4; // draw forward block representing validity
       const topY = getY(ob.high);
       const bottomY = getY(ob.low);
@@ -2879,101 +2930,70 @@ export default function ChartContainer({
                   id="tv-pair-heading-trigger"
                   type="button"
                   onClick={() => setIsAssetSelectorOpen(!isAssetSelectorOpen)}
-                  className={`group font-mono font-black text-[13px] md:text-[14px] text-white tracking-tight flex items-center gap-2.5 bg-neutral-900/90 border border-white/10 hover:border-indigo-500/40 hover:bg-neutral-850 transition-all px-3 py-2 rounded-lg select-none cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.5)] ${isAssetSelectorOpen ? 'ring-1 ring-indigo-500/30 border-indigo-500/30' : ''}`}
+                  className={`group flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 hover:border-indigo-500/30 hover:bg-white/10 rounded h-8 transition-all duration-150 cursor-pointer select-none font-mono text-[10px] font-bold ${isAssetSelectorOpen ? 'ring-1 ring-indigo-500/30 border-indigo-500/30' : ''}`}
                 >
-                  <span className="flex items-center gap-1.5 shrink-0">
-                    {(symbolEmoji.f1 || symbolEmoji.f2) && (
-                      <span className="text-xs filter saturate-110 drop-shadow-sm select-none">{symbolEmoji.f1} {symbolEmoji.f2}</span>
-                    )}
-                    <span className="text-white hover:text-indigo-300 font-bold tracking-wider">{symbol}</span>
-                  </span>
-                  <ChevronDown className={`w-3.5 h-3.5 text-white/40 group-hover:text-indigo-400 transition-transform duration-300 ${isAssetSelectorOpen ? 'rotate-180 text-indigo-400' : ''}`} />
+                  <span className="text-white hover:text-indigo-300 font-bold tracking-wider">{symbol}</span>
+                  <ChevronDown className={`w-3 h-3 text-white/40 group-hover:text-indigo-400 transition-transform duration-300 ${isAssetSelectorOpen ? 'rotate-180 text-indigo-400' : ''}`} />
                 </button>
 
                 <AnimatePresence>
                   {isAssetSelectorOpen && (
                     <>
-                      {/* Transparent global click-away backdrop */}
+                      {/* Dimmed static backdrop on mobile, transparent click-away on desktop */}
                       <div 
-                        className="fixed inset-0 z-[490] bg-transparent"
+                        className="fixed inset-0 z-[490] bg-black/60 md:bg-transparent backdrop-blur-[1px] md:backdrop-blur-none"
                         onClick={() => setIsAssetSelectorOpen(false)}
                       />
                       
-                      {/* Cascading Menu */}
+                      {/* Cascading Minimalist Assets Dropdown Menu (Fixed modal position on mobile) */}
                       <motion.div
-                        initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 12, scale: 0.97 }}
-                        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                        className="absolute left-0 mt-3 w-[34rem] max-w-[calc(100vw-24px)] z-[500] bg-[#0c0c0c] border border-white/15 rounded-xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.95)] flex min-h-[250px] overflow-hidden"
+                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="fixed md:absolute top-1/2 left-1/2 md:top-auto md:left-0 transform -translate-x-1/2 -translate-y-1/2 md:translate-x-0 md:translate-y-0 mt-0 md:mt-2 w-[300px] xs:w-[320px] sm:w-[340px] h-[260px] md:h-[230px] z-[500] bg-[#08080c] border border-white/10 rounded-lg shadow-[0_15px_40px_rgba(0,0,0,0.85)] flex overflow-hidden divide-x divide-white/5 font-mono text-[10px]"
                       >
-                        {/* Categories panel (Left Column) */}
-                        <div className="w-[165px] border-r border-white/10 bg-[#050505] p-2.5 shrink-0 flex flex-col space-y-1 select-none">
-                          <div className="text-[8px] font-mono font-bold tracking-widest text-white/20 uppercase px-2.5 py-2 border-b border-white/5 mb-1.5 flex items-center gap-1.5">
-                            <Server className="w-3 h-3 text-indigo-400/80" />
-                            <span>Broker Groups</span>
+                        {/* Column 1: Desk Categories / Offerings */}
+                        <div className="w-[110px] sm:w-[135px] flex flex-col overflow-y-auto custom-scrollbar p-1.5 space-y-0.5 select-none shrink-0 bg-black/25">
+                          <div className="px-2 py-1 mb-1 border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent text-[7.5px] font-bold text-white/40 uppercase tracking-widest leading-none">
+                            OFFERINGS
                           </div>
-                          
                           {ASSET_CLASSES.map((category) => {
-                            const active = hoveredCategory === category.id;
+                            const isCategoryHovered = hoveredCategory === category.id;
                             return (
                               <button
                                 key={category.id}
                                 type="button"
                                 onMouseEnter={() => setHoveredCategory(category.id)}
                                 onClick={() => setHoveredCategory(category.id)}
-                                className={`w-full text-left px-3 py-2.5 rounded-lg font-mono text-[9.5px] font-bold uppercase transition-all duration-200 flex items-center justify-between group cursor-pointer ${
-                                  active
-                                    ? 'bg-indigo-600/10 text-indigo-300 border-l-2 border-indigo-500 pl-2'
-                                    : 'text-white/40 hover:text-white/80 hover:bg-white/[0.02]'
+                                className={`w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/55 hover:text-white flex items-center justify-between cursor-pointer transition-all ${
+                                  isCategoryHovered ? 'bg-[#12121e] text-indigo-300 font-bold border border-white/5 shadow-[0_1px_5px_rgba(99,102,241,0.1)]' : 'border border-transparent'
                                 }`}
                               >
-                                <span className="flex items-center gap-2">
-                                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${
-                                    category.id === 'CURRENCIES' ? 'bg-sky-400' :
-                                    category.id === 'INDICES' ? 'bg-purple-400' :
-                                    category.id === 'METALS' ? 'bg-amber-400' : 'bg-emerald-400'
-                                  }`} />
-                                  {category.id}
-                                </span>
-                                <ArrowRight className={`w-3 h-3 text-white/20 transition-transform duration-200 group-hover:translate-x-0.5 ${active ? 'opacity-100 text-indigo-400 scale-105' : 'opacity-40'}`} />
+                                <span>{category.id}</span>
+                                {isCategoryHovered && (
+                                  <span className="w-1 h-1 rounded-full bg-indigo-400 shadow-[0_0_4px_#818cf8]" />
+                                )}
                               </button>
                             );
                           })}
                         </div>
 
-                        {/* Sub-assets dynamic panel (Right Column) */}
-                        <div className="flex-1 p-3.5 bg-[#090909] flex flex-col min-h-0 select-none">
+                        {/* Column 2: Specific Instruments / Pairs */}
+                        <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar p-1.5 space-y-0.5 select-none">
                           {(() => {
-                            const activeCat = ASSET_CLASSES.find(c => c.id === hoveredCategory) || ASSET_CLASSES[0];
+                            const activeCat = ASSET_CLASSES.find(c => c.id === (hoveredCategory || 'CURRENCIES')) || ASSET_CLASSES[0];
                             return (
                               <>
-                                {/* Header */}
-                                <div className="border-b border-white/5 pb-2 mb-2 flex items-center justify-between shrink-0">
-                                  <span className="text-[9.5px] uppercase font-mono font-extrabold tracking-wider text-indigo-300 flex items-center gap-1.5">
-                                    <span>{activeCat.label}</span>
-                                  </span>
-                                  <span className="text-[8px] font-mono text-white/30 lowercase font-bold bg-white/[0.03] border border-white/5 py-0.5 px-1.5 rounded-full">
-                                    {activeCat.assets.length} active assets
+                                <div className="px-2.5 py-1 mb-1 border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent text-[7.5px] font-bold text-indigo-400 uppercase tracking-widest leading-none flex justify-between items-center">
+                                  <span>{activeCat.label}</span>
+                                  <span className="text-[7px] text-white/30 font-normal">
+                                    {activeCat.assets.length} DESK
                                   </span>
                                 </div>
-
-                                {/* List Grid */}
-                                <div className="grid grid-cols-2 gap-2 overflow-y-auto custom-scrollbar flex-1 pr-0.5 animate-fade-in-shorter">
+                                <div className="space-y-0.5">
                                   {activeCat.assets.map((sym) => {
                                     const selected = symbol === sym;
-                                    const flags = FLAG_EMOJIS[sym] || { f1: '🌎', f2: '💵' };
-                                    const friendly = FRIENDLY_NAMES[sym] || sym;
-                                    
-                                    // Mock dynamic institutional information
-                                    const mockSpreads: Record<string, string> = {
-                                      'EUR/USD': '0.1 pips', 'GBP/USD': '0.3 pips', 'USD/JPY': '0.2 pips', 'AUD/USD': '0.4 pips', 'EUR/GBP': '0.3 pips',
-                                      'US30': '1.2 pts', 'NAS100': '0.8 pts', 'GER40': '1.0 pts', 'SPX500': '0.3 pts',
-                                      'GOLD/USD': '12¢ spread', 'SILVER/USD': '0.8¢ spread',
-                                      'BTC/USDT': '0.01% fee', 'ETH/USDT': '0.01% fee', 'SOL/USDT': '0.02% fee'
-                                    };
-                                    const mockSpread = mockSpreads[sym] || '0.1 pips';
-
                                     return (
                                       <button
                                         key={sym}
@@ -2984,29 +3004,16 @@ export default function ChartContainer({
                                           }
                                           setIsAssetSelectorOpen(false);
                                         }}
-                                        className={`p-2 border rounded-xl text-left transition-all hover:bg-neutral-800/40 hover:border-white/10 flex flex-col justify-between h-[58px] cursor-pointer relative ${
-                                          selected
-                                            ? 'bg-indigo-600/10 border-indigo-500/40 text-white shadow-[0_4px_16px_rgba(99,102,241,0.08)]'
-                                            : 'bg-white/[0.015] border-white/5 text-white/70 hover:text-white'
+                                        className={`w-full text-left px-2.5 py-1.5 rounded transition-all text-[10px] font-mono font-bold uppercase tracking-wider leading-none flex items-center justify-between cursor-pointer ${
+                                          selected 
+                                            ? 'bg-indigo-500/10 text-indigo-300 font-extrabold border border-indigo-500/25 shadow-[0_0_8px_rgba(99,102,241,0.15)]' 
+                                            : 'text-white/70 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/5'
                                         }`}
                                       >
-                                        <div className="flex items-center justify-between w-full">
-                                          <span className="text-[11px] font-mono font-bold tracking-tight uppercase flex items-center gap-1.5">
-                                            {(flags.f1 || flags.f2) && (
-                                              <span className="text-[13px] filter saturate-110 drop-shadow-sm select-none">{flags.f1} {flags.f2}</span>
-                                            )}
-                                            {sym}
-                                          </span>
-                                          {selected ? (
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
-                                          ) : (
-                                            <span className="text-[7px] font-mono text-white/20 group-hover:text-white/40">{mockSpread}</span>
-                                          )}
-                                        </div>
-                                        
-                                        <div className="text-[7.5px] font-sans text-white/30 truncate uppercase mt-1 leading-none font-medium">
-                                          {friendly}
-                                        </div>
+                                        <span className="flex items-center gap-1.5">
+                                          <span className={`w-1 h-1 rounded-full ${selected ? 'bg-indigo-400 shadow-[0_0_4px_#818cf8]' : 'bg-white/10'}`} />
+                                          <span>{sym}</span>
+                                        </span>
                                       </button>
                                     );
                                   })}
@@ -3027,7 +3034,7 @@ export default function ChartContainer({
                   id="tv-timeframe-selector-trigger"
                   type="button"
                   onClick={() => setIsTimeframeSelectorOpen(!isTimeframeSelectorOpen)}
-                  className={`group font-mono font-black text-[11px] md:text-[12px] text-white tracking-tight flex items-center gap-2 bg-neutral-900/90 border border-white/10 hover:border-indigo-500/40 hover:bg-neutral-850 transition-all px-2.5 py-1.5 rounded-lg select-none cursor-pointer h-7 md:h-8 shadow-[0_4px_12px_rgba(0,0,0,0.5)] ${isTimeframeSelectorOpen ? 'ring-1 ring-indigo-500/30 border-indigo-500/30' : ''}`}
+                  className={`group flex items-center gap-2 px-2.5 py-1.5 bg-white/5 border border-white/10 hover:border-indigo-500/30 hover:bg-white/10 rounded h-8 transition-all duration-150 cursor-pointer select-none font-mono text-[10px] font-bold ${isTimeframeSelectorOpen ? 'ring-1 ring-indigo-500/30 border-indigo-500/30' : ''}`}
                   title="Select Chart Analysis Timeframe"
                 >
                   <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -3038,29 +3045,25 @@ export default function ChartContainer({
                 <AnimatePresence>
                   {isTimeframeSelectorOpen && (
                     <>
-                      {/* Transparent click-away backdrop */}
+                      {/* Dimmed backdrop on mobile, transparent click-away on desktop */}
                       <div 
-                        className="fixed inset-0 z-[490] bg-transparent"
+                        className="fixed inset-0 z-[490] bg-black/60 md:bg-transparent backdrop-blur-[1px] md:backdrop-blur-none"
                         onClick={() => setIsTimeframeSelectorOpen(false)}
                       />
                       
-                      {/* Dropdown Menu */}
+                      {/* Minimalist Dropdown Menu (Fixed modal position on mobile) */}
                       <motion.div
-                        initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 8, scale: 0.97 }}
-                        transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                        className="absolute left-0 mt-2 w-44 z-[500] bg-[#0c0c0c] border border-white/15 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.95)] p-1.5 space-y-0.5 text-left"
+                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="fixed md:absolute top-1/2 left-1/2 md:top-auto md:left-0 transform -translate-x-1/2 -translate-y-1/2 md:translate-x-0 md:translate-y-0 mt-0 md:mt-2 w-48 md:w-40 z-[500] bg-[#08080c] border border-white/10 rounded-lg shadow-[0_15px_40px_rgba(0,0,0,0.85)] p-2 md:p-1 space-y-1 md:space-y-0.5 text-left font-mono"
                       >
-                        <div className="text-[8px] font-mono font-bold tracking-widest text-white/20 uppercase px-2 py-1 select-none border-b border-white/5 mb-1 flex items-center gap-1.5">
-                          <Clock className="w-2.5 h-2.5 text-indigo-400/80" />
-                          <span>Resolutions</span>
-                        </div>
                         {[
-                          { id: 'M15', label: '15 Minutes', dicon: '15m' },
-                          { id: 'H1', label: '1 Hour', dicon: '1h' },
-                          { id: 'H4', label: '4 Hours', dicon: '4h' },
-                          { id: 'D1', label: 'Daily (1D)', dicon: '1d' }
+                          { id: 'M15', label: 'M15 - 15M' },
+                          { id: 'H1', label: 'H1 - 1H' },
+                          { id: 'H4', label: 'H4 - 4H' },
+                          { id: 'D1', label: 'D1 - 1D' }
                         ].map((tf) => {
                           const selected = selectedTimeframe === tf.id;
                           return (
@@ -3074,17 +3077,16 @@ export default function ChartContainer({
                                   navigator.vibrate(8);
                                 }
                               }}
-                              className={`w-full text-left px-2.5 py-1.5 rounded-lg font-mono text-[9.5px] font-bold uppercase transition-all duration-150 flex items-center justify-between cursor-pointer ${
-                                selected
-                                  ? 'bg-indigo-600/10 text-indigo-300 border-l-2 border-indigo-500 pl-2'
-                                  : 'text-white/40 hover:text-white/80 hover:bg-white/[0.02]'
+                              className={`w-full text-left px-2.5 py-1.5 rounded transition-all text-[10px] font-mono font-bold uppercase tracking-wider leading-none flex items-center justify-between cursor-pointer ${
+                                selected 
+                                  ? 'bg-indigo-500/10 text-indigo-300 font-extrabold border border-indigo-500/25 shadow-[0_0_8px_rgba(99,102,241,0.15)]' 
+                                  : 'text-white/70 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/5'
                               }`}
                             >
-                              <span className="flex items-center gap-2">
-                                <span className={`inline-block w-1.5 h-1.5 rounded-full ${selected ? 'bg-indigo-400 shadow-[0_0_6px_#818cf8]' : 'bg-transparent border border-white/25'}`} />
-                                {tf.label}
+                              <span className="flex items-center gap-1.5">
+                                <span className={`w-1.5 h-1.5 rounded-full ${selected ? 'bg-indigo-400 shadow-[0_0_6px_#818cf8]' : 'bg-white/10'}`} />
+                                <span>{tf.label}</span>
                               </span>
-                              <span className="text-[7.5px] text-white/35 font-semibold bg-white/[0.03] border border-white/5 px-1 rounded">{tf.dicon}</span>
                             </button>
                           );
                         })}
@@ -3148,6 +3150,26 @@ export default function ChartContainer({
               <span className="text-[9.5px] text-white/50 font-mono tracking-tight font-semibold items-center bg-white/[0.02] border border-white/5 px-2 py-0.5 rounded-md hidden sm:inline-flex">
                 {pairName}
               </span>
+
+              {isBacktestActive && (
+                <>
+                  <span className="text-white/20 select-none hidden sm:inline-flex">•</span>
+                  <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/35 text-amber-400 rounded-md px-2 py-0.5 text-[8.5px] font-mono font-bold uppercase animate-pulse select-none h-5">
+                    <span>● BACKTEST SIM FEED</span>
+                    {onGoLive && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onGoLive();
+                        }}
+                        className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-sans font-bold px-1.5 py-0.5 rounded transition-colors text-[8px] cursor-pointer"
+                      >
+                        GO LIVE
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -3219,11 +3241,17 @@ export default function ChartContainer({
                     </span>
                     <span className="uppercase font-bold text-[8.5px] tracking-wider text-white/95">Live Price Action</span>
                     <span className="text-white/30 text-[8px] font-sans">|</span>
-                    <span className={`text-[8.5px] font-extrabold flex items-center ${
-                      (metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'text-emerald-400' : (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'text-[#ff5555]' : 'text-amber-400'
-                    }`}>
+                    <motion.span 
+                      key={metrics?.trend || 'NEUTRAL'}
+                      initial={{ opacity: 0, scale: 0.9, y: -2 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      className={`text-[8.5px] font-extrabold flex items-center ${
+                        (metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'text-emerald-400' : (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'text-[#ff5555]' : 'text-amber-400'
+                      }`}
+                    >
                       {(metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'BULLISH ↗' : (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'BEARISH ↘' : 'RANGE ⇌'}
-                    </span>
+                    </motion.span>
                   </span>
                   
                   {/* Hover Tooltip Details for Price Action */}
@@ -3245,7 +3273,14 @@ export default function ChartContainer({
                       </div>
                       <div className="flex justify-between">
                         <span className="text-white/40">ATR Volatility:</span>
-                        <span className="font-bold text-white font-mono">{(metrics?.atr || 0).toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5)}</span>
+                        <motion.span 
+                          key={metrics?.atr}
+                          initial={{ opacity: 0.5, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="font-bold text-white font-mono"
+                        >
+                          {(metrics?.atr || 0).toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5)}
+                        </motion.span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-white/40">Heartbeat State:</span>
@@ -3276,11 +3311,17 @@ export default function ChartContainer({
                     <Zap className="w-3 h-3 text-indigo-400 shrink-0" />
                     <span className="uppercase font-bold text-[8.5px] tracking-wider text-white/95">Confluence</span>
                     <span className="text-white/30 text-[8px] font-sans">|</span>
-                    <span className="text-[8.5px] font-extrabold flex items-center">
+                    <motion.span 
+                      key={`${metrics?.dailyBias}-${metrics?.trend}`}
+                      initial={{ opacity: 0, scale: 0.9, y: -2 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      className="text-[8.5px] font-extrabold flex items-center"
+                    >
                       {(metrics?.dailyBias || 'BULLISH') === 'BULLISH' && (metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'STRONG BUY ⚡' :
                        (metrics?.dailyBias || 'BULLISH') === 'BEARISH' && (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'STRONG SELL ⚡' :
                        (metrics?.dailyBias || 'BULLISH') === 'BULLISH' ? 'BUY BIAS ↗' : 'SELL BIAS ↘'}
-                    </span>
+                    </motion.span>
                   </span>
                   
                   {/* Hover Tooltip Details for HTF Confluence */}
@@ -3296,27 +3337,42 @@ export default function ChartContainer({
                     <div className="space-y-1.5 text-white/75 uppercase text-[8.5px]">
                       <div className="flex items-center justify-between pb-1 border-b border-white/[0.03]">
                         <span className="text-white/40">Dual H4 Bias:</span>
-                        <span className={`font-bold px-1 rounded text-[8px] ${
-                          (metrics?.dailyBias || 'BULLISH') === 'BULLISH' ? 'text-emerald-400 bg-emerald-500/10' : 'text-[#ff5555] bg-[#ff5555]/10'
-                        }`}>
+                        <motion.span 
+                          key={metrics?.dailyBias}
+                          initial={{ opacity: 0.5, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className={`font-bold px-1 rounded text-[8px] ${
+                            (metrics?.dailyBias || 'BULLISH') === 'BULLISH' ? 'text-emerald-400 bg-emerald-500/10' : 'text-[#ff5555] bg-[#ff5555]/10'
+                          }`}
+                        >
                           {metrics?.dailyBias || 'BULLISH'}
-                        </span>
+                        </motion.span>
                       </div>
                       <div className="flex items-center justify-between pb-1 border-b border-white/[0.03]">
                         <span className="text-white/40">Current 4H Trend:</span>
-                        <span className={`font-bold px-1 rounded text-[8px] ${
-                          (metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'text-emerald-400 bg-emerald-500/10' : (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'text-[#ff5555] bg-[#ff5555]/10' : 'text-amber-400 bg-amber-500/10'
-                        }`}>
+                        <motion.span 
+                          key={metrics?.trend}
+                          initial={{ opacity: 0.5, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className={`font-bold px-1 rounded text-[8px] ${
+                            (metrics?.trend || 'NEUTRAL') === 'BULLISH' ? 'text-emerald-400 bg-emerald-500/10' : (metrics?.trend || 'NEUTRAL') === 'BEARISH' ? 'text-[#ff5555] bg-[#ff5555]/10' : 'text-amber-400 bg-amber-500/10'
+                          }`}
+                        >
                           {metrics?.trend || 'NEUTRAL'}
-                        </span>
+                        </motion.span>
                       </div>
                       <div className="flex items-center justify-between pb-1 border-b border-white/[0.03]">
                         <span className="text-white/40">Momentum RSI:</span>
-                        <span className={`font-bold ${
-                          (metrics?.rsi || 50) > 70 ? 'text-[#ff5555]' : (metrics?.rsi || 50) < 30 ? 'text-emerald-400' : 'text-white'
-                        }`}>
+                        <motion.span 
+                          key={metrics?.rsi}
+                          initial={{ opacity: 0.5, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className={`font-bold ${
+                            (metrics?.rsi || 50) > 70 ? 'text-[#ff5555]' : (metrics?.rsi || 50) < 30 ? 'text-emerald-400' : 'text-white'
+                          }`}
+                        >
                           {(metrics?.rsi || 50).toFixed(1)} &middot; {(metrics?.rsi || 50) > 70 ? 'Overbought' : (metrics?.rsi || 50) < 30 ? 'Oversold' : 'Balanced'}
-                        </span>
+                        </motion.span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-white/40">Active Order Blocks:</span>
@@ -3350,9 +3406,15 @@ export default function ChartContainer({
                     <TrendingUp className={`w-3 h-3 shrink-0 ${metrics?.dailyBias === 'BULLISH' ? 'text-emerald-400' : 'text-rose-400'}`} />
                     <span className="uppercase font-bold text-[8.5px] tracking-wider text-white/95">Bias</span>
                     <span className="text-white/30 text-[8px] font-sans">|</span>
-                    <span className="text-[8.5px] font-extrabold flex items-center">
+                    <motion.span 
+                      key={metrics?.dailyBias || 'BULLISH'}
+                      initial={{ opacity: 0, scale: 0.9, y: -2 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      className="text-[8.5px] font-extrabold flex items-center"
+                    >
                       {metrics?.dailyBias} (50 EMA)
-                    </span>
+                    </motion.span>
                   </span>
                   
                   {/* Hover Tooltip Details for Trend Bias & Gauge & Alarm */}
@@ -3367,11 +3429,16 @@ export default function ChartContainer({
                     <div className="space-y-2 text-white/75">
                       <div className="flex justify-between">
                         <span className="text-white/40 font-semibold uppercase text-[8px]">Direction:</span>
-                        <span className={`font-black uppercase tracking-wider ${
-                          metrics?.dailyBias === 'BULLISH' ? 'text-emerald-400' : 'text-rose-400'
-                        }`}>
+                        <motion.span 
+                          key={metrics?.dailyBias}
+                          initial={{ opacity: 0.5, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className={`font-black uppercase tracking-wider ${
+                            metrics?.dailyBias === 'BULLISH' ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
                           {metrics?.dailyBias} (50 EMA)
-                        </span>
+                        </motion.span>
                       </div>
 
                       <div className="flex justify-between items-center">
@@ -3386,11 +3453,13 @@ export default function ChartContainer({
                           <span className="font-bold text-white">{trendIntensity.percent}% ({trendIntensity.label})</span>
                         </div>
                         <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden relative">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-300 ${
+                          <motion.div 
+                            className={`h-full rounded-full ${
                               metrics?.dailyBias === 'BULLISH' ? 'bg-emerald-500' : 'bg-rose-500'
                             }`}
-                            style={{ width: `${trendIntensity.percent}%` }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${trendIntensity.percent}%` }}
+                            transition={{ type: "spring", stiffness: 80, damping: 15 }}
                           />
                         </div>
                       </div>
@@ -3466,11 +3535,18 @@ export default function ChartContainer({
             </button>
 
             {isLayersDropdownOpen && (
-              <div 
-                id="dropdown-layers-menu"
-                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d] border border-white/20 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.95)] z-[500] p-1.5 space-y-0.5"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <>
+                {/* Dimmed static backdrop on mobile, transparent click-away on desktop */}
+                <div 
+                  className="fixed inset-0 z-[490] bg-black/60 md:bg-transparent backdrop-blur-[1px] md:backdrop-blur-none"
+                  onClick={() => setIsLayersDropdownOpen(false)}
+                />
+                
+                <div 
+                  id="dropdown-layers-menu"
+                  className="fixed md:absolute top-1/2 left-1/2 md:top-auto md:left-auto md:right-0 transform -translate-x-1/2 -translate-y-1/2 md:translate-x-0 md:translate-y-0 mt-0 md:mt-2 w-[280px] md:w-56 bg-[#0a0a0d] border border-white/20 rounded-lg shadow-[0_15px_40px_rgba(0,0,0,0.85)] z-[500] p-2 md:p-1.5 space-y-1 md:space-y-0.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
                 <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-b border-white/5 mb-1.5">
                   Visibility Layers
                 </div>
@@ -3708,7 +3784,7 @@ export default function ChartContainer({
                   </span>
                 </button>
               </div>
-            )}
+            </>)}
           </div>
 
           {/* Consolidated DRAWING AND UTILITIES Dropdown */}
@@ -3743,11 +3819,18 @@ export default function ChartContainer({
             </button>
 
             {isDrawDropdownOpen && (
-              <div 
-                id="dropdown-draw-menu"
-                className="absolute right-0 mt-2 w-56 bg-[#0a0a0d] border border-white/20 rounded-md shadow-[0_12px_32px_rgba(0,0,0,0.95)] z-[500] p-1.5 space-y-0.5"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <>
+                {/* Dimmed static backdrop on mobile, transparent click-away on desktop */}
+                <div 
+                  className="fixed inset-0 z-[490] bg-black/60 md:bg-transparent backdrop-blur-[1px] md:backdrop-blur-none"
+                  onClick={() => setIsDrawDropdownOpen(false)}
+                />
+                
+                <div 
+                  id="dropdown-draw-menu"
+                  className="fixed md:absolute top-1/2 left-1/2 md:top-auto md:left-auto md:right-0 transform -translate-x-1/2 -translate-y-1/2 md:translate-x-0 md:translate-y-0 mt-0 md:mt-2 w-[280px] md:w-56 bg-[#0a0a0d] border border-white/20 rounded-lg shadow-[0_15px_40px_rgba(0,0,0,0.85)] z-[500] p-2 md:p-1.5 space-y-1 md:space-y-0.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
                 <div className="text-[8.5px] font-bold text-white/35 uppercase tracking-wider px-2 py-1 select-none border-b border-white/5 mb-1.5">
                   Analysis Drawings
                 </div>
@@ -3846,7 +3929,7 @@ export default function ChartContainer({
                   </span>
                 </button>
               </div>
-            )}
+            </>)}
           </div>
 
           {/* Smart Alerts Trigger Drawer Toggle Button */}
@@ -3894,7 +3977,7 @@ export default function ChartContainer({
           <div className={`relative flex flex-col ${
             isFullscreen 
               ? 'flex-1 min-h-0 w-full' 
-              : 'col-span-12 lg:col-span-9 min-h-[380px]'
+              : 'col-span-12 min-h-[380px] w-full'
           }`}>
             <div 
               ref={containerRef}
@@ -4952,8 +5035,10 @@ export default function ChartContainer({
               {/* FVG Highlight Areas (As overlays behind wicks) */}
               {showFVG && !highlightOrderBlocks &&
                 fvgs.map((fvg, fIdx) => {
-                  const startX = getX(fvg.index - 1);
-                  const endX = getX(fvg.index + 1);
+                  const pIdx = getProcessedIndexFromOriginal(fvg.index);
+                  if (pIdx === -1) return null;
+                  const startX = getX(pIdx - 1);
+                  const endX = getX(pIdx + 1);
                   const blockWidth = endX - startX;
                   
                   const topY = getY(Math.max(fvg.gapStart, fvg.gapEnd));
@@ -5025,7 +5110,9 @@ export default function ChartContainer({
               {/* Order Blocks Highlights */}
               {showOB && !highlightOrderBlocks &&
                 obs.map((ob, oIdx) => {
-                  const obX = getX(ob.index);
+                  const pIdx = getProcessedIndexFromOriginal(ob.index);
+                  if (pIdx === -1) return null;
+                  const obX = getX(pIdx);
                   const blockWidth = xStep * 4; // draw forward block representing validity
                   const topY = getY(ob.high);
                   const bottomY = getY(ob.low);
@@ -5095,7 +5182,9 @@ export default function ChartContainer({
 
               {/* Liquidity Sweep Indicators */}
               {sweeps.slice(-3).map((sw, sIdx) => {
-                const xValue = getX(sw.index);
+                const pIdx = getProcessedIndexFromOriginal(sw.index);
+                if (pIdx === -1) return null;
+                const xValue = getX(pIdx);
                 const yValue = getY(sw.level);
                 return (
                   <g key={`sweep-${sIdx}`} className="stroke-none">
@@ -6776,26 +6865,6 @@ export default function ChartContainer({
           )}
             </div>
           </div>
-
-          {/* DOM Price Ladder Column */}
-          {!isFullscreen && (
-            <div className={`col-span-12 lg:col-span-3 transition-all duration-300 ${
-              isExpanded ? 'lg:h-[550px]' : 'lg:h-[360px]'
-            }`}>
-              <DOMPriceLadder
-                symbol={symbol as any}
-                livePrice={hoveredCandle ? hoveredCandle.close : (typeof livePrice !== 'undefined' ? livePrice : basePrice)}
-                trades={trades}
-                oneClickLots={oneClickLots}
-                onTradeExecuted={onTradeExecuted}
-                basePrice={basePrice}
-                sweeps={sweeps}
-                candles={candles}
-                showTWVP={showTWVP}
-                metrics={metrics}
-              />
-            </div>
-          )}
         </div>
 
         {/* Smart Alerts Sidebar Drawer */}
@@ -7561,8 +7630,16 @@ export default function ChartContainer({
             <Activity className="w-3.5 h-3.5 text-indigo-400" />
             <span>Relative Strength Index (RSI 14)</span>
           </div>
-          <span className="font-bold text-white/60">
-            Current: {metrics.rsi} (Limit thresholds: Overbought 70% | Oversold 30%)
+          <span className="font-bold text-white/60 flex items-center gap-1">
+            Current: <motion.span
+              key={metrics.rsi}
+              initial={{ opacity: 0.3, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.2 }}
+              className="text-indigo-400 font-extrabold"
+            >
+              {metrics.rsi}
+            </motion.span> (Limit thresholds: Overbought 70% | Oversold 30%)
           </span>
         </div>
 

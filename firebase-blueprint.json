@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "chat": {
+      "title": "Chat",
+      "description": "A persistent conversation session containing messages and analysis history.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique ID of the chat conversation."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user who owns this chat."
+        },
+        "title": {
+          "type": "string",
+          "description": "The custom title or symbol analyzed in this chat session."
+        },
+        "symbol": {
+          "type": "string",
+          "description": "The market symbol related to the chat."
+        },
+        "messages": {
+          "type": "array",
+          "description": "The sequence of messages between the user and assistant."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last update."
+        }
+      },
+      "required": ["id", "userId", "title", "symbol", "messages", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/chats/{chatId}": {
+      "schema": "chat",
+      "description": "Collection of user chat histories."
+    }
+  }
+}

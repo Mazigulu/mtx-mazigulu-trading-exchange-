@@ -67,7 +67,7 @@ export default function NewsDesk() {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSubTab, setSelectedSubTab] = useState<'ALL' | 'HIGH_IMPACT' | 'GEOPOLITICAL' | 'CENTRAL_BANK' | 'BOOKMARKS' | 'ANALYTICS'>('ALL');
-  const [analyticsSymbol, setAnalyticsSymbol] = useState<'EUR/USD' | 'GBP/USD' | 'USD/JPY' | 'BTC/USDT'>('EUR/USD');
+  const [analyticsSymbol, setAnalyticsSymbol] = useState<'EUR/USD' | 'GBP/USD' | 'USD/JPY' | 'BTC/USDT' | 'AAPL' | 'NVDA' | 'MSFT' | 'TSLA' | 'SPX500'>('AAPL');
   const [layoutMode, setLayoutMode] = useState<'GRID' | 'COMPACT'>('GRID');
   const [sortBy, setSortBy] = useState<'NEWEST' | 'IMPACT' | 'SENTIMENT'>('NEWEST');
   const [weeklyScope, setWeeklyScope] = useState<'WEEK' | 'ALL'>('WEEK');
@@ -547,6 +547,19 @@ export default function NewsDesk() {
           baseNoise = 45;
           symbolLabel = 'USDT';
           break;
+        case 'AAPL':
+        case 'NVDA':
+        case 'MSFT':
+        case 'TSLA':
+          volatilityMultiplier = 2.4;
+          baseNoise = 8;
+          symbolLabel = 'USD';
+          break;
+        case 'SPX500':
+          volatilityMultiplier = 1.6;
+          baseNoise = 25;
+          symbolLabel = 'Points';
+          break;
         case 'EUR/USD':
         default:
           volatilityMultiplier = 1.0;
@@ -825,7 +838,12 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
       'EUR/USD': { 'MACRO': 0.89, 'MONETARY': 0.87, 'CENTRAL_BANK': 0.84, 'FOREX': 0.91, 'REGULATORY': 0.38, 'LIQUIDITY': 0.65 },
       'GBP/USD': { 'MACRO': 0.83, 'MONETARY': 0.80, 'CENTRAL_BANK': 0.78, 'FOREX': 0.86, 'REGULATORY': 0.32, 'LIQUIDITY': 0.58 },
       'USD/JPY': { 'MACRO': 0.78, 'MONETARY': 0.96, 'CENTRAL_BANK': 0.93, 'FOREX': 0.82, 'REGULATORY': 0.28, 'LIQUIDITY': 0.75 },
-      'BTC/USDT': { 'MACRO': 0.72, 'MONETARY': 0.84, 'CENTRAL_BANK': 0.68, 'FOREX': 0.44, 'REGULATORY': 0.95, 'LIQUIDITY': 0.90 }
+      'BTC/USDT': { 'MACRO': 0.72, 'MONETARY': 0.84, 'CENTRAL_BANK': 0.68, 'FOREX': 0.44, 'REGULATORY': 0.95, 'LIQUIDITY': 0.90 },
+      'AAPL': { 'MACRO': 0.65, 'MONETARY': 0.72, 'CENTRAL_BANK': 0.68, 'FOREX': 0.25, 'REGULATORY': 0.85, 'LIQUIDITY': 0.82 },
+      'NVDA': { 'MACRO': 0.70, 'MONETARY': 0.75, 'CENTRAL_BANK': 0.70, 'FOREX': 0.20, 'REGULATORY': 0.90, 'LIQUIDITY': 0.95 },
+      'MSFT': { 'MACRO': 0.68, 'MONETARY': 0.74, 'CENTRAL_BANK': 0.69, 'FOREX': 0.22, 'REGULATORY': 0.80, 'LIQUIDITY': 0.85 },
+      'TSLA': { 'MACRO': 0.60, 'MONETARY': 0.70, 'CENTRAL_BANK': 0.62, 'FOREX': 0.18, 'REGULATORY': 0.88, 'LIQUIDITY': 0.89 },
+      'SPX500': { 'MACRO': 0.88, 'MONETARY': 0.92, 'CENTRAL_BANK': 0.90, 'FOREX': 0.40, 'REGULATORY': 0.60, 'LIQUIDITY': 0.88 }
     };
     
     const activeTable = instrumentCorrs[activeSym] || corrTable;
@@ -851,6 +869,8 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
     let assetBaseModifier = 0;
     if (activeSym === 'BTC/USDT') assetBaseModifier = 10;
     else if (activeSym === 'USD/JPY') assetBaseModifier = 4;
+    else if (['AAPL', 'NVDA', 'MSFT', 'TSLA'].includes(activeSym)) assetBaseModifier = 6;
+    else if (activeSym === 'SPX500') assetBaseModifier = 8;
     else if (activeSym === 'EUR/USD') assetBaseModifier = -2;
     
     const rawScore = (couplingCoeff * 55) + (impactWeight * 30) + (sentimentWeight * 15) + (hashVal % 12) + assetBaseModifier;
@@ -1419,8 +1439,8 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
             {/* Currency Symbol selection for customized calculations */}
             <div className="flex items-center space-x-2 shrink-0">
               <span className="text-[9px] uppercase text-white/30 font-bold font-mono">CALIBRATE ASSET BIAS:</span>
-              <div className="flex bg-black p-0.5 rounded border border-white/5">
-                {(['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT'] as const).map(sym => (
+              <div className="flex bg-black p-0.5 rounded border border-white/5 flex-wrap gap-1">
+                {(['AAPL', 'NVDA', 'MSFT', 'TSLA', 'SPX500', 'BTC/USDT', 'EUR/USD', 'GBP/USD', 'USD/JPY'] as const).map(sym => (
                   <button
                     key={sym}
                     onClick={() => setAnalyticsSymbol(sym)}

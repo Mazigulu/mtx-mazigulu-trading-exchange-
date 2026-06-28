@@ -160,6 +160,34 @@ export default function RiskDashboard({
   const [isExecutingAutoLock, setIsExecutingAutoLock] = useState<boolean>(false);
   const [showAutoLockHistory, setShowAutoLockHistory] = useState<boolean>(false);
 
+  // Safety Guard states
+  const [isSafetyGuardEnabled, setIsSafetyGuardEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('apex_safety_guard_enabled');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [safetyGuardThreshold, setSafetyGuardThreshold] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('apex_safety_guard_threshold');
+      return saved ? parseFloat(saved) : 300;
+    } catch {
+      return 300;
+    }
+  });
+
+  const [isMt5BridgePaused, setIsMt5BridgePaused] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('apex_mt5_bridge_paused');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   const getTradeRiskUSD = (t: Trade) => {
     const slDistance = Math.abs(t.entryPrice - t.stopLoss);
     if (slDistance === 0) return 50;
@@ -449,6 +477,38 @@ export default function RiskDashboard({
       currentEquity
     };
   }, [trades, openTrades, dailyProfitToday, maxDailyDrawdownLimit]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_safety_guard_enabled', String(isSafetyGuardEnabled));
+    } catch {}
+  }, [isSafetyGuardEnabled]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_safety_guard_threshold', String(safetyGuardThreshold));
+    } catch {}
+  }, [safetyGuardThreshold]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_mt5_bridge_paused', String(isMt5BridgePaused));
+      
+      // Dispatch a storage event or standard custom event to sync across components immediately
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('apex_bridge_status_changed', { detail: { paused: isMt5BridgePaused } }));
+    } catch {}
+  }, [isMt5BridgePaused]);
+
+  // Automatic Safety Guard calculation and state trigger
+  useEffect(() => {
+    if (isSafetyGuardEnabled && !isMt5BridgePaused) {
+      const dailyLoss = dailyProfitToday < 0 ? Math.abs(dailyProfitToday) : 0;
+      if (dailyLoss >= safetyGuardThreshold) {
+        setIsMt5BridgePaused(true);
+      }
+    }
+  }, [isSafetyGuardEnabled, isMt5BridgePaused, dailyProfitToday, safetyGuardThreshold]);
 
   useEffect(() => {
     if (dailyProfitToday >= dailyProfitTarget && dailyProfitTarget > 0) {
@@ -2581,6 +2641,89 @@ export default function RiskDashboard({
                     </p>
                   </div>
                 </div>
+
+                {/* MT5 Bridge Safety Guard Circuit Breaker */}
+                <div className="relative p-4 rounded-lg bg-black/40 border border-indigo-500/10 space-y-3.5" id="mt5-safety-guard-card">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <div className="flex items-center space-x-1.5">
+                      <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                      <h4 className="text-[11px] font-mono font-bold text-white uppercase tracking-wider">
+                        MT5 Bridge Safety Guard
+                      </h4>
+                    </div>
+                    {/* Toggle Switch */}
+                    <label className="relative inline-flex items-center cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={isSafetyGuardEnabled}
+                        onChange={(e) => setIsSafetyGuardEnabled(e.target.checked)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-8 h-4 bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-white"></div>
+                    </label>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-[10.5px] font-mono">
+                      <span className="text-white/50 uppercase font-semibold">Drawdown Threshold (USD):</span>
+                      <span className="text-indigo-400 font-black">${safetyGuardThreshold} USD</span>
+                    </div>
+
+                    {/* Threshold Input Slider */}
+                    <input 
+                      type="range" 
+                      min="50" 
+                      max="1500" 
+                      step="25"
+                      value={safetyGuardThreshold} 
+                      onChange={(e) => setSafetyGuardThreshold(parseInt(e.target.value))}
+                      disabled={!isSafetyGuardEnabled}
+                      className={`w-full h-1 rounded-lg appearance-none cursor-pointer focus:outline-none accent-indigo-500 ${!isSafetyGuardEnabled ? 'bg-zinc-800 opacity-40 cursor-not-allowed' : 'bg-zinc-850'}`}
+                    />
+                    <div className="flex justify-between text-[8px] text-white/30 font-mono select-none">
+                      <span>$50</span>
+                      <span>$750</span>
+                      <span>$1,500</span>
+                    </div>
+                  </div>
+
+                  {/* Operational Status Display */}
+                  <div className="pt-1.5 font-mono text-[10px]">
+                    {isMt5BridgePaused ? (
+                      <div className="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 flex flex-col gap-2 animate-fadeIn">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                            ⚠️ MT5 BRIDGE PAUSED
+                          </span>
+                          <span className="text-[8.5px] text-rose-400/80">CIRCUIT BREAKER TRIGGERED</span>
+                        </div>
+                        <p className="text-[9px] text-rose-300/80 leading-relaxed">
+                          Intraday loss exceeded your user-defined drawdown threshold of ${safetyGuardThreshold} USD. Automated execution pipelines have been strictly decoupled.
+                        </p>
+                        <button
+                          onClick={() => {
+                            setIsMt5BridgePaused(false);
+                          }}
+                          className="w-full py-1.5 px-2 bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/30 text-rose-300 rounded font-bold text-[9.5px] uppercase transition-all select-none cursor-pointer text-center"
+                        >
+                          Manual Resume Bridge Link
+                        </button>
+                      </div>
+                    ) : (
+                      <div className={`p-2.5 rounded border text-[9.5px] flex items-center justify-between transition-colors ${isSafetyGuardEnabled ? 'bg-indigo-500/5 border-indigo-500/10 text-indigo-300' : 'bg-zinc-950 border-white/5 text-white/40'}`}>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${isSafetyGuardEnabled ? 'bg-indigo-400 animate-pulse' : 'bg-zinc-500'}`}></span>
+                          <span>MT5 Bridge Guard: {isSafetyGuardEnabled ? 'MONITORING LOSSES' : 'INACTIVE'}</span>
+                        </div>
+                        <span className="text-[8px] opacity-60 uppercase font-bold tracking-wider">
+                          {isSafetyGuardEnabled ? 'STANDBY' : 'BYPASS'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
 
               {/* Right Column: Outliers and Quick-Action Intercept */}

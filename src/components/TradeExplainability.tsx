@@ -34,7 +34,7 @@ interface TradeExplainabilityProps {
 
 export function getSignalInsights(symbol: MarketSymbol, dailyBias: 'BULLISH' | 'BEARISH') {
   const isBullish = dailyBias === 'BULLISH';
-  const stats: Record<MarketSymbol, {
+  const stats: Partial<Record<MarketSymbol, {
     confidence: number;
     action: 'BUY' | 'SELL' | 'NEUTRAL';
     expectedRR: number;
@@ -44,7 +44,7 @@ export function getSignalInsights(symbol: MarketSymbol, dailyBias: 'BULLISH' | '
     volatility: boolean;
     risk: boolean;
     rationale: string;
-  }> = {
+  }>> = {
     'EUR/USD': {
       confidence: isBullish ? 78 : 64,
       action: isBullish ? 'BUY' : 'SELL',

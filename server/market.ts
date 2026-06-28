@@ -101,13 +101,95 @@ function calculateATR(highs: number[], lows: number[], closes: number[], period 
 }
 
 function getDecimals(symbol: string): number {
-  if (symbol.includes('JPY') || symbol.includes('GOLD') || symbol.includes('SILVER') || symbol === 'SOL/USDT' || symbol === 'US30' || symbol === 'NAS100' || symbol === 'GER40' || symbol === 'SPX500') {
+  if (symbol.includes('JPY') || symbol.includes('GOLD') || symbol.includes('SILVER') || symbol === 'SOL/USDT' || symbol === 'US30' || symbol === 'NAS100' || symbol === 'GER40' || symbol === 'SPX500' || symbol === 'DXY' || symbol === 'BRENT' || ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(symbol)) {
     return 2;
+  }
+  if (symbol === 'US10Y') {
+    return 3;
   }
   if (symbol === 'BTC/USDT' || symbol === 'ETH/USDT') {
     return 1;
   }
   return 5;
+}
+
+const tradingViewSymbols: Record<MarketSymbol, string> = {
+  'EUR/USD': 'FX:EURUSD',
+  'GBP/USD': 'FX:GBPUSD',
+  'USD/JPY': 'FX:USDJPY',
+  'AUD/USD': 'FX:AUDUSD',
+  'EUR/GBP': 'FX:EURGBP',
+  'GOLD/USD': 'FX:XAUUSD',
+  'SILVER/USD': 'FX:XAGUSD',
+  'BTC/USDT': 'BINANCE:BTCUSDT',
+  'ETH/USDT': 'BINANCE:ETHUSDT',
+  'SOL/USDT': 'BINANCE:SOLUSDT',
+  'US30': 'FOREXCOM:DJI',
+  'NAS100': 'NASDAQ:NDX',
+  'GER40': 'INDEX:DEU40',
+  'SPX500': 'FOREXCOM:SPX500',
+  'DXY': 'CAPITALCOM:DXY',
+  'US10Y': 'TVC:US10Y',
+  'BRENT': 'TVC:UKOIL',
+  'AAPL': 'NASDAQ:AAPL',
+  'MSFT': 'NASDAQ:MSFT',
+  'NVDA': 'NASDAQ:NVDA',
+  'TSLA': 'NASDAQ:TSLA'
+};
+
+function parseTradingViewCandles(data: any): Candlestick[] {
+  if (!data) return [];
+
+  // 1. If it is standard TV UDF format (object containing arrays: t, o, h, l, c, v)
+  if (data && Array.isArray(data.t) && Array.isArray(data.o)) {
+    const candles: Candlestick[] = [];
+    for (let i = 0; i < data.t.length; i++) {
+      const timeVal = data.t[i];
+      const date = new Date(timeVal * (timeVal > 10000000000 ? 1 : 1000));
+      candles.push({
+        timestamp: date.toISOString(),
+        open: parseFloat(data.o[i]),
+        high: parseFloat(data.h[i]),
+        low: parseFloat(data.l[i]),
+        close: parseFloat(data.c[i]),
+        volume: parseInt(data.v ? data.v[i] : 0) || 0
+      });
+    }
+    return candles;
+  }
+
+  // 2. If it is an array of candles
+  if (Array.isArray(data)) {
+    return data.map(item => {
+      const rawTime = item.time || item.timestamp || item.t;
+      let date = new Date();
+      if (rawTime) {
+        if (typeof rawTime === 'number') {
+          date = new Date(rawTime * (rawTime > 10000000000 ? 1 : 1000));
+        } else {
+          date = new Date(rawTime);
+        }
+      }
+      return {
+        timestamp: date.toISOString(),
+        open: parseFloat(item.open ?? item.o ?? 0),
+        high: parseFloat(item.high ?? item.max ?? item.h ?? 0),
+        low: parseFloat(item.low ?? item.min ?? item.l ?? 0),
+        close: parseFloat(item.close ?? item.c ?? 0),
+        volume: parseInt(item.volume ?? item.v ?? 0) || 0
+      };
+    });
+  }
+
+  // 3. Nested variants
+  if (data.candles && Array.isArray(data.candles)) return parseTradingViewCandles(data.candles);
+  if (data.data && data.data.history && Array.isArray(data.data.history)) return parseTradingViewCandles(data.data.history);
+  if (data.data && Array.isArray(data.data)) return parseTradingViewCandles(data.data);
+  if (data.history && Array.isArray(data.history)) return parseTradingViewCandles(data.history);
+  if (data.result && Array.isArray(data.result)) return parseTradingViewCandles(data.result);
+  if (data.result && data.result.t) return parseTradingViewCandles(data.result);
+
+  return [];
 }
 
 export class MarketSimulator {
@@ -125,7 +207,14 @@ export class MarketSimulator {
     'US30': [],
     'NAS100': [],
     'GER40': [],
-    'SPX500': []
+    'SPX500': [],
+    'DXY': [],
+    'US10Y': [],
+    'BRENT': [],
+    'AAPL': [],
+    'MSFT': [],
+    'NVDA': [],
+    'TSLA': []
   };
 
   private mt5Active: Record<MarketSymbol, boolean> = {
@@ -142,8 +231,17 @@ export class MarketSimulator {
     'US30': false,
     'NAS100': false,
     'GER40': false,
-    'SPX500': false
+    'SPX500': false,
+    'DXY': false,
+    'US10Y': false,
+    'BRENT': false,
+    'AAPL': false,
+    'MSFT': false,
+    'NVDA': false,
+    'TSLA': false
   };
+
+  public lastTvStatus: Record<string, any> = {};
 
   private basePrices: Record<MarketSymbol, number> = {
     'EUR/USD': 1.1645,
@@ -159,7 +257,14 @@ export class MarketSimulator {
     'US30': 38850.0,
     'NAS100': 18550.0,
     'GER40': 18200.0,
-    'SPX500': 5300.0
+    'SPX500': 5300.0,
+    'DXY': 105.20,
+    'US10Y': 4.250,
+    'BRENT': 82.50,
+    'AAPL': 188.30,
+    'MSFT': 415.50,
+    'NVDA': 945.00,
+    'TSLA': 175.50
   };
 
   private tickSizes: Record<MarketSymbol, number> = {
@@ -176,13 +281,169 @@ export class MarketSimulator {
     'US30': 1.0,
     'NAS100': 1.0,
     'GER40': 1.0,
-    'SPX500': 0.10
+    'SPX500': 0.10,
+    'DXY': 0.01,
+    'US10Y': 0.001,
+    'BRENT': 0.01,
+    'AAPL': 0.05,
+    'MSFT': 0.05,
+    'NVDA': 0.10,
+    'TSLA': 0.05
   };
+
+  private lastTvFetch: Record<MarketSymbol, number> = {} as any;
 
   constructor() {
     this.initializeAll();
     // Start live updates
     setInterval(() => this.tickAll(), 5000);
+  }
+
+  public async fetchTradingViewData(symbol: MarketSymbol): Promise<boolean> {
+    const apiKey = process.env.RAPIDAPI_KEY;
+    const tvSymbol = tradingViewSymbols[symbol];
+
+    if (!apiKey || apiKey === 'MY_RAPIDAPI_KEY' || apiKey.trim() === '') {
+      this.lastTvStatus[symbol] = {
+        status: 'DISABLED',
+        timestamp: new Date().toISOString(),
+        error: 'RAPIDAPI_KEY environment variable is missing, empty, or set to placeholder. Configure RAPIDAPI_KEY in the Secrets / Settings panel.',
+        symbolUsed: tvSymbol,
+        apiKeyLength: apiKey ? apiKey.length : 0
+      };
+      return false;
+    }
+
+    const now = Date.now();
+    // Throttle fetches to at most once per 60 seconds per symbol
+    if (this.lastTvFetch[symbol] && now - this.lastTvFetch[symbol] < 60000) {
+      return true;
+    }
+
+    if (!tvSymbol) {
+      this.lastTvStatus[symbol] = {
+        status: 'ERROR',
+        timestamp: new Date().toISOString(),
+        error: `No mapped TradingView symbol found for ${symbol}`,
+        apiKeyLength: apiKey.length
+      };
+      return false;
+    }
+
+    try {
+      this.lastTvFetch[symbol] = now;
+      console.log(`[TradingView API] Fetching live data for ${symbol} using mapped symbol ${tvSymbol}...`);
+
+      const url = `https://tradingview-data1.p.rapidapi.com/api/price/${encodeURIComponent(tvSymbol)}`;
+      const response = await fetch(url, {
+        headers: {
+          'x-rapidapi-key': apiKey,
+          'x-rapidapi-host': 'tradingview-data1.p.rapidapi.com'
+        },
+        signal: AbortSignal.timeout(5000)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status} (${response.statusText || 'Unknown'})`);
+      }
+
+      const data = await response.json();
+      
+      // Save debug snapshot to help diagnose exact shape returned by the third-party API
+      const responseKeys = data ? Object.keys(data) : [];
+      
+      const rawCandles = parseTradingViewCandles(data);
+
+      if (rawCandles && rawCandles.length > 0) {
+        console.log(`[TradingView API] Successfully fetched ${rawCandles.length} candles for ${symbol}`);
+        
+        const mergedList: Candlestick[] = [];
+        const dec = getDecimals(symbol);
+
+        if (rawCandles.length < 240) {
+          const firstTvTime = new Date(rawCandles[0].timestamp);
+          const gap = 240 - rawCandles.length;
+          let currentPrice = rawCandles[0].open;
+          const tick = this.tickSizes[symbol];
+
+          for (let i = gap; i >= 1; i--) {
+            const time = new Date(firstTvTime.getTime() - i * 4 * 60 * 60 * 1000);
+            const isUp = Math.random() > 0.45;
+            const isHighVol = symbol.startsWith('BTC') || symbol.startsWith('ETH') || symbol === 'SOL/USDT' || ['AAPL', 'TSLA', 'NVDA', 'US10Y'].includes(symbol);
+            const bodySize = (Math.random() * 5 + 1) * tick * (isHighVol ? 15 : 5);
+            const wickHigh = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
+            const wickLow = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
+
+            const open = currentPrice - (isUp ? bodySize : -bodySize);
+            const close = currentPrice;
+            const high = Math.max(open, close) + wickHigh;
+            const low = Math.min(open, close) - wickLow;
+            const volume = Math.floor(Math.random() * 10000) + 5000;
+
+            mergedList.push({
+              timestamp: time.toISOString(),
+              open: parseFloat(open.toFixed(dec)),
+              high: parseFloat(high.toFixed(dec)),
+              low: parseFloat(low.toFixed(dec)),
+              close: parseFloat(close.toFixed(dec)),
+              volume
+            });
+
+            currentPrice = open;
+          }
+        }
+
+        for (const c of rawCandles) {
+          mergedList.push({
+            timestamp: c.timestamp,
+            open: parseFloat(c.open.toFixed(dec)),
+            high: parseFloat(c.high.toFixed(dec)),
+            low: parseFloat(c.low.toFixed(dec)),
+            close: parseFloat(c.close.toFixed(dec)),
+            volume: c.volume
+          });
+        }
+
+        this.candles[symbol] = mergedList.slice(-240);
+        this.recalculateIndicators(this.candles[symbol]);
+        this.mt5Active[symbol] = true;
+
+        this.lastTvStatus[symbol] = {
+          status: 'SUCCESS',
+          timestamp: new Date().toISOString(),
+          candlesCount: rawCandles.length,
+          symbolUsed: tvSymbol,
+          apiKeyLength: apiKey.length,
+          responseStatus: response.status,
+          responseKeys
+        };
+
+        return true;
+      } else {
+        const errStr = `Parsed zero candles. API response keys: [${responseKeys.join(', ')}]. Double-check API response shape or symbol access plan.`;
+        console.log(`[TradingView API] Notice: ${errStr}`);
+        this.lastTvStatus[symbol] = {
+          status: 'ERROR',
+          timestamp: new Date().toISOString(),
+          error: errStr,
+          symbolUsed: tvSymbol,
+          apiKeyLength: apiKey.length,
+          responseStatus: response.status,
+          responseKeys
+        };
+      }
+    } catch (err: any) {
+      const errMsg = err.message || String(err);
+      console.log(`[TradingView API] Notice fetching for ${symbol}:`, errMsg);
+      this.lastTvStatus[symbol] = {
+        status: 'ERROR',
+        timestamp: new Date().toISOString(),
+        error: errMsg,
+        symbolUsed: tvSymbol,
+        apiKeyLength: apiKey.length
+      };
+    }
+    return false;
   }
 
   private initializeAll() {
@@ -203,9 +464,10 @@ export class MarketSimulator {
     for (let i = 240; i >= 1; i--) {
       const time = new Date(now.getTime() - i * 4 * 60 * 60 * 1000);
       const isUp = Math.random() > 0.45; // slight bullish tint
-      const bodySize = (Math.random() * 5 + 1) * tick * (symbol.startsWith('BTC') ? 20 : 5);
-      const wickHigh = Math.random() * 3 * tick * (symbol.startsWith('BTC') ? 10 : 3);
-      const wickLow = Math.random() * 3 * tick * (symbol.startsWith('BTC') ? 10 : 3);
+      const isHighVol = symbol.startsWith('BTC') || symbol.startsWith('ETH') || symbol === 'SOL/USDT' || ['AAPL', 'TSLA', 'NVDA', 'US10Y'].includes(symbol);
+      const bodySize = (Math.random() * 5 + 1) * tick * (isHighVol ? 15 : 5);
+      const wickHigh = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
+      const wickLow = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
 
       const open = currentPrice;
       const close = isUp ? open + bodySize : open - bodySize;
@@ -374,7 +636,16 @@ export class MarketSimulator {
       const isNextBullish = next1.close > next1.open && next2.close > next2.open && next3.close > next3.open;
       // Net change calculation to measure institutional displacement
       const displacement = next3.close - next1.open;
-      const minDisplacement = this.tickSizes[symbol] * (symbol === 'BTC/USDT' ? 50 : symbol === 'GOLD/USD' ? 15 : symbol === 'USD/JPY' ? 0.3 : 0.0020);
+      const minDisplacement = this.tickSizes[symbol] * (
+        symbol.includes('USDT') ? 35 :
+        symbol === 'GOLD/USD' ? 15 :
+        symbol === 'USD/JPY' ? 0.3 :
+        ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(symbol) ? 5.0 :
+        symbol === 'BRENT' ? 0.5 :
+        symbol === 'DXY' ? 0.15 :
+        symbol === 'US10Y' ? 0.02 :
+        0.0020
+      );
 
       if (isRed && isNextBullish && displacement > minDisplacement) {
         obs.push({

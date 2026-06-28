@@ -15,6 +15,13 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { MarketSimulator } from './server/market';
 import { MarketSymbol, Trade, NewsEvent, BreachEvent } from './src/types';
+import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { db } from './src/db/index.ts';
+import { trades as tradesTable, users as usersTable } from './src/db/schema.ts';
+import { getOrCreateUser } from './src/db/users.ts';
+import { eq, and, desc } from 'drizzle-orm';
+import { adminDb } from './src/lib/firebase-admin.ts';
+
 
 const app = express();
 const PORT = 3000;
@@ -165,23 +172,32 @@ function writeBreaches(breaches: BreachEvent[]): boolean {
   }
 }
 
-function checkForNewBreaches(): void {
+async function checkForNewBreaches(): Promise<void> {
   try {
-    const trades = readTrades();
-    const openTrades = trades.filter(t => t.status === 'OPEN');
+    const openTrades = await db.select()
+      .from(tradesTable)
+      .where(eq(tradesTable.status, 'OPEN'));
     if (openTrades.length === 0) return;
 
     let totalRiskAtStake = 0;
     openTrades.forEach((t) => {
-      const metrics = simulator.getMarketMetrics(t.symbol);
+      const metrics = simulator.getMarketMetrics(t.symbol as MarketSymbol);
       const curPrice = metrics ? metrics.currentPrice : t.entryPrice;
       const slDistance = Math.abs(t.entryPrice - t.stopLoss);
       
       let tradeRiskDollar = 0;
-      if (t.symbol === 'BTC/USDT') {
+      if (t.symbol === 'BTC/USDT' || t.symbol === 'ETH/USDT' || t.symbol === 'SOL/USDT') {
         tradeRiskDollar = slDistance * t.size;
       } else if (t.symbol === 'USD/JPY') {
         tradeRiskDollar = (slDistance / 0.01) * t.size * 0.1;
+      } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(t.symbol)) {
+        tradeRiskDollar = slDistance * t.size * 100;
+      } else if (t.symbol === 'US10Y') {
+        tradeRiskDollar = slDistance * t.size * 10000;
+      } else if (t.symbol === 'DXY' || t.symbol === 'BRENT') {
+        tradeRiskDollar = slDistance * t.size * 1000;
+      } else if (['US30', 'NAS100', 'SPX500', 'GER40'].includes(t.symbol)) {
+        tradeRiskDollar = slDistance * t.size * 10;
       } else {
         const contractLots = t.size * 100000;
         tradeRiskDollar = slDistance * contractLots;
@@ -217,7 +233,7 @@ function checkForNewBreaches(): void {
         const newBreach: BreachEvent = {
           id: `breach-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           timestamp: now.toISOString(),
-          symbol: maxRiskSymbol,
+          symbol: maxRiskSymbol as MarketSymbol,
           exposure: portfolioRiskPercent,
           pnlAtBreach: -totalRiskAtStake,
           reason: `Automated compliance engine recorded an active exposure of ${portfolioRiskPercent}% (Threshold: 1.50%).`
@@ -415,183 +431,261 @@ async function generateContentWithRetry(
   }
 }
 
-// Auto close trades check
-function checkAndAutoCloseTrades(): void {
-  const trades = readTrades();
-  let changed = false;
+function getSymbolPrecision(sym: string): number {
+  if (sym === 'US10Y') return 3;
+  if (sym.includes('JPY') || sym.includes('GOLD') || sym.includes('SILVER') || sym === 'SOL/USDT' || sym === 'US30' || sym === 'NAS100' || sym === 'GER40' || sym === 'SPX500' || sym === 'DXY' || sym === 'BRENT' || ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(sym)) {
+    return 2;
+  }
+  if (sym === 'BTC/USDT' || sym === 'ETH/USDT') {
+    return 1;
+  }
+  return 5;
+}
 
-  const updatedTrades = trades.map((t) => {
-    if (t.status === 'CLOSED') return t;
-    
-    const metrics = simulator.getMarketMetrics(t.symbol);
-    const curPrice = metrics ? metrics.currentPrice : t.entryPrice;
-    
-    // Auto-Break-Even Check
-    let currentStopLoss = t.stopLoss;
-    let currentTakeProfit = t.takeProfit;
-    let autoBeTriggered = t.autoBreakEvenTriggered;
-    let currentReason = t.reason || '';
+function calculateTradePnL(sym: string, entryPrice: number, currentPrice: number, size: number, side: string): number {
+  const pnlMultiplier = side === 'BUY' ? 1 : -1;
+  const priceDiff = currentPrice - entryPrice;
+  
+  if (sym === 'BTC/USDT' || sym === 'ETH/USDT' || sym === 'SOL/USDT') {
+    return priceDiff * size * pnlMultiplier;
+  } else if (sym === 'USD/JPY') {
+    return (priceDiff / 0.01) * size * 0.1 * pnlMultiplier;
+  } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(sym)) {
+    return priceDiff * size * 100 * pnlMultiplier;
+  } else if (sym === 'US10Y') {
+    return priceDiff * size * 10000 * pnlMultiplier;
+  } else if (sym === 'DXY' || sym === 'BRENT') {
+    return priceDiff * size * 1000 * pnlMultiplier;
+  } else if (['US30', 'NAS100', 'SPX500', 'GER40'].includes(sym)) {
+    return priceDiff * size * 10 * pnlMultiplier;
+  } else {
+    return (priceDiff / 0.0001) * size * 1.0 * pnlMultiplier;
+  }
+}
 
-    // Initialize or update trailing peaks and troughs
-    let maxPrice = t.maxPriceReached ?? curPrice;
-    let minPrice = t.minPriceReached ?? curPrice;
+// Auto close trades check in PostgreSQL
+async function checkAndAutoCloseTrades(): Promise<void> {
+  try {
+    const openTrades = await db.select()
+      .from(tradesTable)
+      .where(eq(tradesTable.status, 'OPEN'));
 
-    if (curPrice > maxPrice) {
-      maxPrice = curPrice;
-      changed = true;
-    }
-    if (curPrice < minPrice) {
-      minPrice = curPrice;
-      changed = true;
-    }
-
-    // Trailing Stop Loss (TSL) Logic
-    if (t.trailingStopActive && t.trailingStopDistance) {
-      const dist = t.trailingStopDistance;
-      if (t.side === 'BUY') {
-        const potentialSL = maxPrice - dist;
-        if (potentialSL > currentStopLoss) {
-          const precision = t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5;
-          currentStopLoss = parseFloat(potentialSL.toFixed(precision));
-          changed = true;
-          currentReason = `${currentReason} [Trailing SL raised to ${currentStopLoss} tracking peak ${maxPrice.toFixed(precision)}]`.trim();
-        }
-      } else { // SELL
-        const potentialSL = minPrice + dist;
-        if (potentialSL < currentStopLoss) {
-          const precision = t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5;
-          currentStopLoss = parseFloat(potentialSL.toFixed(precision));
-          changed = true;
-          currentReason = `${currentReason} [Trailing SL lowered to ${currentStopLoss} tracking trough ${minPrice.toFixed(precision)}]`.trim();
-        }
-      }
-    }
-
-    // Self-Adjusting Take Profit (TTP) Logic
-    if (t.trailingTakeProfitActive) {
-      if (t.side === 'BUY') {
-        const targetDistance = t.takeProfit - t.entryPrice;
-        // Trigger if price is within 15% of the take-profit target
-        const triggerThreshold = t.takeProfit - (targetDistance * 0.15);
-        if (curPrice >= triggerThreshold && currentTakeProfit === t.takeProfit) {
-          const extension = targetDistance * 0.5;
-          const precision = t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5;
-          const newTP = parseFloat((t.takeProfit + extension).toFixed(precision));
-          const newSL = parseFloat((t.takeProfit - (targetDistance * 0.05)).toFixed(precision)); // locks index at 95% of original TP target
-          
-          currentTakeProfit = newTP;
-          currentStopLoss = newSL;
-          changed = true;
-          currentReason = `${currentReason} [Self-Adjusting TP: Extended target to ${newTP} and locked trade profit SL at ${newSL}]`.trim();
-        }
-      } else { // SELL
-        const targetDistance = t.entryPrice - t.takeProfit;
-        const triggerThreshold = t.takeProfit + (targetDistance * 0.15);
-        if (curPrice <= triggerThreshold && currentTakeProfit === t.takeProfit) {
-          const extension = targetDistance * 0.5;
-          const precision = t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5;
-          const newTP = parseFloat((t.takeProfit - extension).toFixed(precision));
-          const newSL = parseFloat((t.takeProfit + (targetDistance * 0.05)).toFixed(precision));
-          
-          currentTakeProfit = newTP;
-          currentStopLoss = newSL;
-          changed = true;
-          currentReason = `${currentReason} [Self-Adjusting TP: Extended target to ${newTP} and locked trade profit SL at ${newSL}]`.trim();
-        }
-      }
-    }
-
-    if (t.autoBreakEvenProfitPct && !autoBeTriggered) {
-      const pnlMultiplier = t.side === 'BUY' ? 1 : -1;
-      const priceDiff = curPrice - t.entryPrice;
-      const profitPct = (priceDiff / t.entryPrice) * 100 * pnlMultiplier;
-
-      if (profitPct >= t.autoBreakEvenProfitPct) {
-        currentStopLoss = t.entryPrice;
-        autoBeTriggered = true;
-        changed = true;
-        currentReason = `${currentReason} [Auto-Break-Even: SL moved to entry price ${t.entryPrice} because trade hit target profit of ${t.autoBreakEvenProfitPct}%]`.trim();
-      }
-    }
-
-    let shouldClose = false;
-    let triggerPrice = curPrice;
-    let closingReason = '';
-
-    if (t.side === 'BUY') {
-      if (curPrice <= currentStopLoss) {
-        shouldClose = true;
-        triggerPrice = currentStopLoss;
-        closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
-      } else if (curPrice >= currentTakeProfit) {
-        shouldClose = true;
-        triggerPrice = currentTakeProfit;
-        closingReason = `Auto Closed: TP hit at ${currentTakeProfit}`;
-      }
-    } else { // SELL
-      if (curPrice >= currentStopLoss) {
-        shouldClose = true;
-        triggerPrice = currentStopLoss;
-        closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
-      } else if (curPrice <= currentTakeProfit) {
-        shouldClose = true;
-        triggerPrice = currentTakeProfit;
-        closingReason = `Auto Closed: TP hit at ${currentTakeProfit}`;
-      }
-    }
-
-    if (shouldClose) {
-      changed = true;
-      const pnlMultiplier = t.side === 'BUY' ? 1 : -1;
-      const priceDiff = triggerPrice - t.entryPrice;
+    for (const t of openTrades) {
+      const metrics = simulator.getMarketMetrics(t.symbol as MarketSymbol);
+      const curPrice = metrics ? metrics.currentPrice : t.entryPrice;
       
-      let rawPnl = 0;
-      if (t.symbol === 'BTC/USDT') {
-        rawPnl = priceDiff * t.size * pnlMultiplier;
-      } else if (t.symbol === 'USD/JPY') {
-        rawPnl = (priceDiff / 0.01) * t.size * 0.1 * pnlMultiplier;
-      } else {
-        rawPnl = (priceDiff / 0.0001) * t.size * 1.0 * pnlMultiplier;
+      let currentStopLoss = t.stopLoss;
+      let currentTakeProfit = t.takeProfit;
+      let autoBeTriggered = t.autoBreakEvenTriggered;
+      let currentReason = t.reason || '';
+
+      let maxPrice = t.maxPriceReached ?? curPrice;
+      let minPrice = t.minPriceReached ?? curPrice;
+
+      let changed = false;
+
+      if (curPrice > maxPrice) {
+        maxPrice = curPrice;
+        changed = true;
+      }
+      if (curPrice < minPrice) {
+        minPrice = curPrice;
+        changed = true;
       }
 
-      return {
-        ...t,
-        status: 'CLOSED' as const,
-        exitPrice: parseFloat(triggerPrice.toFixed(t.symbol === 'USD/JPY' ? 3 : t.symbol === 'BTC/USDT' ? 1 : 5)),
-        pnl: parseFloat(rawPnl.toFixed(2)),
-        exitTimestamp: new Date().toISOString(),
-        reason: closingReason,
-        stopLoss: currentStopLoss,
-        takeProfit: currentTakeProfit,
-        maxPriceReached: maxPrice,
-        minPriceReached: minPrice,
-        autoBreakEvenTriggered: autoBeTriggered
-      };
+      // Trailing Stop Loss (TSL) and Liquidity-Adjusted Volatility Trailing Stop (LAV-TSL) Logic
+      if (t.lavTslActive) {
+        const liveAtr = metrics ? metrics.atr : (t.symbol.includes('USDT') ? 450 : t.symbol.includes('JPY') ? 0.35 : 0.0035);
+        let multiplier = t.lavTslAtrMultiplier || 2.0;
+
+        // Tighter risk management as profit accrues (profit tightening active)
+        if (t.lavTslTighteningActive) {
+          const profitPct = Math.max(0, t.side === 'BUY' 
+            ? (curPrice - t.entryPrice) / t.entryPrice 
+            : (t.entryPrice - curPrice) / t.entryPrice
+          );
+          // Scale multiplier down by up to 45% based on trade expansion
+          const scale = Math.min(0.45, profitPct * 25.0);
+          multiplier = multiplier * (1 - scale);
+        }
+
+        let dist = liveAtr * multiplier;
+        const precision = getSymbolPrecision(t.symbol);
+
+        if (t.side === 'BUY') {
+          let potentialSL = maxPrice - dist;
+
+          // Align stop-loss behind market liquidity zones (order block support levels)
+          if (t.lavTslLiquidityActive && metrics && metrics.supportLevels && metrics.supportLevels.length > 0) {
+            const validSupports = metrics.supportLevels.filter(s => s < curPrice && s > potentialSL);
+            if (validSupports.length > 0) {
+              const highestSupport = Math.max(...validSupports);
+              // Safe cushion below the support level
+              const adjustedSL = highestSupport - (0.2 * liveAtr);
+              if (adjustedSL > potentialSL && adjustedSL < curPrice - (0.4 * liveAtr)) {
+                potentialSL = adjustedSL;
+              }
+            }
+          }
+
+          if (potentialSL > currentStopLoss) {
+            currentStopLoss = parseFloat(potentialSL.toFixed(precision));
+            changed = true;
+            currentReason = `${currentReason} [LAV-TSL trailing SL raised to ${currentStopLoss} behind liquidity/volatility peak ${maxPrice.toFixed(precision)}]`.trim();
+          }
+        } else { // SELL
+          let potentialSL = minPrice + dist;
+
+          // Align stop-loss behind market liquidity zones (order block resistance levels)
+          if (t.lavTslLiquidityActive && metrics && metrics.resistanceLevels && metrics.resistanceLevels.length > 0) {
+            const validResistances = metrics.resistanceLevels.filter(r => r > curPrice && r < potentialSL);
+            if (validResistances.length > 0) {
+              const lowestResistance = Math.min(...validResistances);
+              // Safe cushion above the resistance level
+              const adjustedSL = lowestResistance + (0.2 * liveAtr);
+              if (adjustedSL < potentialSL && adjustedSL > curPrice + (0.4 * liveAtr)) {
+                potentialSL = adjustedSL;
+              }
+            }
+          }
+
+          if (potentialSL < currentStopLoss) {
+            currentStopLoss = parseFloat(potentialSL.toFixed(precision));
+            changed = true;
+            currentReason = `${currentReason} [LAV-TSL trailing SL lowered to ${currentStopLoss} behind liquidity/volatility trough ${minPrice.toFixed(precision)}]`.trim();
+          }
+        }
+      } else if (t.trailingStopActive && t.trailingStopDistance) {
+        const dist = t.trailingStopDistance;
+        if (t.side === 'BUY') {
+          const potentialSL = maxPrice - dist;
+          if (potentialSL > currentStopLoss) {
+            const precision = getSymbolPrecision(t.symbol);
+            currentStopLoss = parseFloat(potentialSL.toFixed(precision));
+            changed = true;
+            currentReason = `${currentReason} [Trailing SL raised to ${currentStopLoss} tracking peak ${maxPrice.toFixed(precision)}]`.trim();
+          }
+        } else { // SELL
+          const potentialSL = minPrice + dist;
+          if (potentialSL < currentStopLoss) {
+            const precision = getSymbolPrecision(t.symbol);
+            currentStopLoss = parseFloat(potentialSL.toFixed(precision));
+            changed = true;
+            currentReason = `${currentReason} [Trailing SL lowered to ${currentStopLoss} tracking trough ${minPrice.toFixed(precision)}]`.trim();
+          }
+        }
+      }
+
+      // Self-Adjusting Take Profit (TTP) Logic
+      if (t.trailingTakeProfitActive) {
+        if (t.side === 'BUY') {
+          const targetDistance = t.takeProfit - t.entryPrice;
+          const triggerThreshold = t.takeProfit - (targetDistance * 0.15);
+          if (curPrice >= triggerThreshold && currentTakeProfit === t.takeProfit) {
+            const extension = targetDistance * 0.5;
+            const precision = getSymbolPrecision(t.symbol);
+            const newTP = parseFloat((t.takeProfit + extension).toFixed(precision));
+            const newSL = parseFloat((t.takeProfit - (targetDistance * 0.05)).toFixed(precision));
+            
+            currentTakeProfit = newTP;
+            currentStopLoss = newSL;
+            changed = true;
+            currentReason = `${currentReason} [Self-Adjusting TP: Extended target to ${newTP} and locked trade profit SL at ${newSL}]`.trim();
+          }
+        } else { // SELL
+          const targetDistance = t.entryPrice - t.takeProfit;
+          const triggerThreshold = t.takeProfit + (targetDistance * 0.15);
+          if (curPrice <= triggerThreshold && currentTakeProfit === t.takeProfit) {
+            const extension = targetDistance * 0.5;
+            const precision = getSymbolPrecision(t.symbol);
+            const newTP = parseFloat((t.takeProfit - extension).toFixed(precision));
+            const newSL = parseFloat((t.takeProfit + (targetDistance * 0.05)).toFixed(precision));
+            
+            currentTakeProfit = newTP;
+            currentStopLoss = newSL;
+            changed = true;
+            currentReason = `${currentReason} [Self-Adjusting TP: Extended target to ${newTP} and locked trade profit SL at ${newSL}]`.trim();
+          }
+        }
+      }
+
+      if (t.autoBreakEvenProfitPct && !autoBeTriggered) {
+        const pnlMultiplier = t.side === 'BUY' ? 1 : -1;
+        const priceDiff = curPrice - t.entryPrice;
+        const profitPct = (priceDiff / t.entryPrice) * 100 * pnlMultiplier;
+
+        if (profitPct >= t.autoBreakEvenProfitPct) {
+          currentStopLoss = t.entryPrice;
+          autoBeTriggered = true;
+          changed = true;
+          currentReason = `${currentReason} [Auto-Break-Even: SL moved to entry price ${t.entryPrice} because trade hit target profit of ${t.autoBreakEvenProfitPct}%]`.trim();
+        }
+      }
+
+      let shouldClose = false;
+      let triggerPrice = curPrice;
+      let closingReason = '';
+
+      if (t.side === 'BUY') {
+        if (curPrice <= currentStopLoss) {
+          shouldClose = true;
+          triggerPrice = currentStopLoss;
+          closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
+        } else if (curPrice >= currentTakeProfit) {
+          shouldClose = true;
+          triggerPrice = currentTakeProfit;
+          closingReason = `Auto Closed: TP hit at ${currentTakeProfit}`;
+        }
+      } else { // SELL
+        if (curPrice >= currentStopLoss) {
+          shouldClose = true;
+          triggerPrice = currentStopLoss;
+          closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
+        } else if (curPrice <= currentTakeProfit) {
+          shouldClose = true;
+          triggerPrice = currentTakeProfit;
+          closingReason = `Auto Closed: TP hit at ${currentTakeProfit}`;
+        }
+      }
+
+      if (shouldClose) {
+        const rawPnl = calculateTradePnL(t.symbol, t.entryPrice, triggerPrice, t.size, t.side);
+
+        await db.update(tradesTable)
+          .set({
+            status: 'CLOSED',
+            exitPrice: parseFloat(triggerPrice.toFixed(getSymbolPrecision(t.symbol))),
+            pnl: parseFloat(rawPnl.toFixed(2)),
+            exitTimestamp: new Date().toISOString(),
+            reason: closingReason,
+            stopLoss: currentStopLoss,
+            takeProfit: currentTakeProfit,
+            maxPriceReached: maxPrice,
+            minPriceReached: minPrice,
+            autoBreakEvenTriggered: autoBeTriggered
+          })
+          .where(eq(tradesTable.id, t.id));
+      } else if (changed ||
+        currentStopLoss !== t.stopLoss || 
+        currentTakeProfit !== t.takeProfit || 
+        autoBeTriggered !== t.autoBreakEvenTriggered ||
+        maxPrice !== t.maxPriceReached ||
+        minPrice !== t.minPriceReached
+      ) {
+        await db.update(tradesTable)
+          .set({
+            stopLoss: currentStopLoss,
+            takeProfit: currentTakeProfit,
+            autoBreakEvenTriggered: autoBeTriggered,
+            maxPriceReached: maxPrice,
+            minPriceReached: minPrice,
+            reason: currentReason
+          })
+          .where(eq(tradesTable.id, t.id));
+      }
     }
-
-    if (
-      currentStopLoss !== t.stopLoss || 
-      currentTakeProfit !== t.takeProfit || 
-      autoBeTriggered !== t.autoBreakEvenTriggered ||
-      maxPrice !== t.maxPriceReached ||
-      minPrice !== t.minPriceReached
-    ) {
-      return {
-        ...t,
-        stopLoss: currentStopLoss,
-        takeProfit: currentTakeProfit,
-        autoBreakEvenTriggered: autoBeTriggered,
-        maxPriceReached: maxPrice,
-        minPriceReached: minPrice,
-        reason: currentReason
-      };
-    }
-
-    return t;
-  });
-
-  if (changed) {
-    writeTrades(updatedTrades);
+  } catch (err) {
+    console.error('Error in checkAndAutoCloseTrades background loop:', err);
   }
 }
 
@@ -632,12 +726,47 @@ app.get('/api/mt5/status', (req, res) => {
   res.json(simulator.getMT5Status());
 });
 
+// Endpoint to retrieve diagnostics for the TradingView RapidAPI connection
+app.get('/api/tradingview/status', (req, res) => {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  const statusObj = {
+    apiKeyConfigured: !!apiKey && apiKey !== 'MY_RAPIDAPI_KEY' && apiKey.trim() !== '',
+    apiKeyLength: apiKey ? apiKey.length : 0,
+    apiKeyPlaceholder: apiKey === 'MY_RAPIDAPI_KEY',
+    lastTvStatus: simulator.lastTvStatus
+  };
+  try {
+    fs.writeFileSync(path.join(process.cwd(), 'tv_api_status.json'), JSON.stringify(statusObj, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('Failed to write tv_api_status.json:', err);
+  }
+  res.json(statusObj);
+});
+
 // get market statistics and candles
-app.get('/api/market-data', (req, res) => {
+app.get('/api/market-data', async (req, res) => {
   // Always verify open positions prior to returning data to guarantee fresh real-time financial accuracy
   checkAndAutoCloseTrades();
 
   const symbol = (req.query.symbol as MarketSymbol) || 'EUR/USD';
+  
+  // Dynamically load real-time data from TradingView if RAPIDAPI_KEY is available
+  await simulator.fetchTradingViewData(symbol);
+
+  // Write status to file for diagnostics
+  const apiKey = process.env.RAPIDAPI_KEY;
+  const statusObj = {
+    apiKeyConfigured: !!apiKey && apiKey !== 'MY_RAPIDAPI_KEY' && apiKey.trim() !== '',
+    apiKeyLength: apiKey ? apiKey.length : 0,
+    apiKeyPlaceholder: apiKey === 'MY_RAPIDAPI_KEY',
+    lastTvStatus: simulator.lastTvStatus
+  };
+  try {
+    fs.writeFileSync(path.join(process.cwd(), 'tv_api_status.json'), JSON.stringify(statusObj, null, 2), 'utf8');
+  } catch (err) {
+    // silent fallback
+  }
+
   const candles = simulator.getCandles(symbol);
   const fvgs = simulator.getFVGs(symbol);
   const obs = simulator.getOrderBlocks(symbol);
@@ -659,7 +788,8 @@ app.get('/api/market-prices', (req, res) => {
   const symbols = [
     'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
     'GOLD/USD', 'SILVER/USD', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500'
+    'US30', 'NAS100', 'GER40', 'SPX500',
+    'DXY', 'US10Y', 'BRENT', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
   for (const sym of symbols) {
     const candles = simulator.getCandles(sym as MarketSymbol) || [];
@@ -678,7 +808,8 @@ app.get('/api/market-correlation', (req, res) => {
     'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
     'GOLD/USD', 'SILVER/USD',
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500'
+    'US30', 'NAS100', 'GER40', 'SPX500',
+    'DXY', 'US10Y', 'BRENT', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
   const matrix: Record<string, Record<string, number>> = {};
   const candleSeries: Record<string, number[]> = {};
@@ -727,128 +858,137 @@ app.get('/api/market-correlation', (req, res) => {
 
 // get real-time market sentiment and state analysis
 app.get('/api/market-sentiment', (req, res) => {
-  const symbols: MarketSymbol[] = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD',
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500'
-  ];
-  const sentimentMap: Record<string, any> = {};
+  try {
+    const symbols: MarketSymbol[] = [
+      'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
+      'GOLD/USD', 'SILVER/USD',
+      'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+      'US30', 'NAS100', 'GER40', 'SPX500',
+      'DXY', 'US10Y', 'BRENT', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
+    ];
+    const sentimentMap: Record<string, any> = {};
 
-  const now = new Date();
+    const now = new Date();
 
-  for (const sym of symbols) {
-    const metrics = simulator.getMarketMetrics(sym);
-    const orderBook = simulator.getOrderBook(sym);
-    
-    // Split symbol into currencies, e.g. EUR, USD
-    const parts = sym.split('/');
-    const baseCur = parts[0];
-    const quoteCur = parts[1] || 'USD'; // default to USD
-    
-    // Match events related to these currencies
-    const relatedEvents = economicEvents.filter(ev => 
-      ev.currency === baseCur || 
-      ev.currency === quoteCur ||
-      (sym === 'BTC/USDT' && ev.currency === 'USD') ||
-      (sym === 'GOLD/USD' && ev.currency === 'USD')
-    );
-
-    // Calculate News Impact score and bias
-    let newsScoreCumulative = 50;
-    let highImpactSoon = false;
-    let netImpactStrength = 0;
-
-    relatedEvents.forEach(ev => {
-      const evTime = new Date(ev.time);
-      const diffMs = Math.abs(evTime.getTime() - now.getTime());
-      const diffHours = diffMs / (1000 * 60 * 60);
-
-      // We consider events within 36 hours of current time to catch relevant macro news
-      if (diffHours <= 36) {
-        let weight = 5;
-        if (ev.impact === 'HIGH') {
-          weight = 40;
-          if (diffHours <= 6) {
-            highImpactSoon = true;
-          }
-        } else if (ev.impact === 'MEDIUM') {
-          weight = 20;
-        }
-
-        netImpactStrength += weight;
-        
-        // Deterministic directional bias of news:
-        // Even length titles bias positive, odd length bias negative
-        const biasDirection = ev.title.length % 2 === 0 ? 1 : -1;
-        newsScoreCumulative += biasDirection * (weight * 0.4);
+    for (const sym of symbols) {
+      const metrics = simulator.getMarketMetrics(sym);
+      if (!metrics) {
+        continue;
       }
+      const orderBook = simulator.getOrderBook(sym);
+      
+      // Split symbol into currencies, e.g. EUR, USD
+      const parts = sym.split('/');
+      const baseCur = parts[0];
+      const quoteCur = parts[1] || 'USD'; // default to USD
+      
+      // Match events related to these currencies
+      const relatedEvents = economicEvents.filter(ev => 
+        ev.currency === baseCur || 
+        ev.currency === quoteCur ||
+        (sym === 'BTC/USDT' && ev.currency === 'USD') ||
+        (sym === 'GOLD/USD' && ev.currency === 'USD')
+      );
+
+      // Calculate News Impact score and bias
+      let newsScoreCumulative = 50;
+      let highImpactSoon = false;
+      let netImpactStrength = 0;
+
+      relatedEvents.forEach(ev => {
+        const evTime = new Date(ev.time);
+        const diffMs = Math.abs(evTime.getTime() - now.getTime());
+        const diffHours = diffMs / (1000 * 60 * 60);
+
+        // We consider events within 36 hours of current time to catch relevant macro news
+        if (diffHours <= 36) {
+          let weight = 5;
+          if (ev.impact === 'HIGH') {
+            weight = 40;
+            if (diffHours <= 6) {
+              highImpactSoon = true;
+            }
+          } else if (ev.impact === 'MEDIUM') {
+            weight = 20;
+          }
+
+          netImpactStrength += weight;
+          
+          // Deterministic directional bias of news:
+          // Even length titles bias positive, odd length bias negative
+          const biasDirection = ev.title.length % 2 === 0 ? 1 : -1;
+          newsScoreCumulative += biasDirection * (weight * 0.4);
+        }
+      });
+
+      // Clamp news score between 15 and 85
+      const newsScore = Math.min(85, Math.max(15, newsScoreCumulative));
+
+      // Technical score derived from rsi, daily bias, trend, orderbook imbalance
+      let technicalScore = 50;
+      if (metrics.rsi) {
+        // RSI divergence from midpoint 50
+        technicalScore += (metrics.rsi - 50) * 0.5;
+      }
+      if (metrics.dailyBias === 'BULLISH') technicalScore += 10;
+      else if (metrics.dailyBias === 'BEARISH') technicalScore -= 10;
+
+      if (metrics.trend === 'BULLISH') technicalScore += 8;
+      else if (metrics.trend === 'BEARISH') technicalScore -= 8;
+
+      // Orderbook imbalance factor (-100 to +100)
+      if (orderBook && typeof orderBook.imbalance === 'number') {
+        technicalScore += orderBook.imbalance * 0.12;
+      }
+
+      // Clamp technical score between 10 and 90
+      const techClamped = Math.min(90, Math.max(10, technicalScore));
+
+      // Weighted Overall Sentiment Index (0 to 100)
+      const overallScore = Math.round(techClamped * 0.6 + newsScore * 0.4);
+
+      // Identify Market State: 'Volatile' | 'Trending' | 'Mean Reverting'
+      let state: 'Volatile' | 'Trending' | 'Mean Reverting' = 'Mean Reverting';
+      
+      const atrRatio = metrics.atr / metrics.currentPrice;
+      
+      // Thresholds: Volatility trigger
+      // Crypto/Gold typically have higher volatility ratio, Forex is lower
+      const isCryptoOrGold = sym === 'BTC/USDT' || sym === 'GOLD/USD';
+      const volatilityThreshold = isCryptoOrGold ? 0.007 : 0.0016;
+
+      if (atrRatio > volatilityThreshold || highImpactSoon || netImpactStrength > 50) {
+        state = 'Volatile';
+      } else if (metrics.trend !== 'NEUTRAL' || (metrics.rsi > 58 || metrics.rsi < 42)) {
+        state = 'Trending';
+      } else {
+        state = 'Mean Reverting';
+      }
+
+      sentimentMap[sym] = {
+        symbol: sym,
+        overallScore, // 0 - 100
+        technicalScore: Math.round(techClamped),
+        newsScore: Math.round(newsScore),
+        state,
+        impactFactor: Math.min(100, Math.round(netImpactStrength)),
+        currentPrice: metrics.currentPrice,
+        rsi: Math.round(metrics.rsi),
+        atr: metrics.atr,
+        trend: metrics.trend,
+        imbalance: Math.round(orderBook?.imbalance || 0),
+        eventsCount: relatedEvents.length
+      };
+    }
+
+    res.json({
+      sentiment: sentimentMap,
+      timestamp: new Date().toISOString()
     });
-
-    // Clamp news score between 15 and 85
-    const newsScore = Math.min(85, Math.max(15, newsScoreCumulative));
-
-    // Technical score derived from rsi, daily bias, trend, orderbook imbalance
-    let technicalScore = 50;
-    if (metrics.rsi) {
-      // RSI divergence from midpoint 50
-      technicalScore += (metrics.rsi - 50) * 0.5;
-    }
-    if (metrics.dailyBias === 'BULLISH') technicalScore += 10;
-    else if (metrics.dailyBias === 'BEARISH') technicalScore -= 10;
-
-    if (metrics.trend === 'BULLISH') technicalScore += 8;
-    else if (metrics.trend === 'BEARISH') technicalScore -= 8;
-
-    // Orderbook imbalance factor (-100 to +100)
-    if (orderBook && typeof orderBook.imbalance === 'number') {
-      technicalScore += orderBook.imbalance * 0.12;
-    }
-
-    // Clamp technical score between 10 and 90
-    const techClamped = Math.min(90, Math.max(10, technicalScore));
-
-    // Weighted Overall Sentiment Index (0 to 100)
-    const overallScore = Math.round(techClamped * 0.6 + newsScore * 0.4);
-
-    // Identify Market State: 'Volatile' | 'Trending' | 'Mean Reverting'
-    let state: 'Volatile' | 'Trending' | 'Mean Reverting' = 'Mean Reverting';
-    
-    const atrRatio = metrics.atr / metrics.currentPrice;
-    
-    // Thresholds: Volatility trigger
-    // Crypto/Gold typically have higher volatility ratio, Forex is lower
-    const isCryptoOrGold = sym === 'BTC/USDT' || sym === 'GOLD/USD';
-    const volatilityThreshold = isCryptoOrGold ? 0.007 : 0.0016;
-
-    if (atrRatio > volatilityThreshold || highImpactSoon || netImpactStrength > 50) {
-      state = 'Volatile';
-    } else if (metrics.trend !== 'NEUTRAL' || (metrics.rsi > 58 || metrics.rsi < 42)) {
-      state = 'Trending';
-    } else {
-      state = 'Mean Reverting';
-    }
-
-    sentimentMap[sym] = {
-      symbol: sym,
-      overallScore, // 0 - 100
-      technicalScore: Math.round(techClamped),
-      newsScore: Math.round(newsScore),
-      state,
-      impactFactor: Math.min(100, Math.round(netImpactStrength)),
-      currentPrice: metrics.currentPrice,
-      rsi: Math.round(metrics.rsi),
-      atr: metrics.atr,
-      trend: metrics.trend,
-      imbalance: Math.round(orderBook?.imbalance || 0),
-      eventsCount: relatedEvents.length
-    };
+  } catch (error: any) {
+    console.warn('[Sentiment API Error]:', error.message || error);
+    res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
-
-  res.json({
-    sentiment: sentimentMap,
-    timestamp: new Date().toISOString()
-  });
 });
 
 // get orderbook depth
@@ -1069,6 +1209,42 @@ const simulatorMacroBullets = [
     category: "REGULATORY",
     symbol: "GLOBAL",
     sentiment: "BEARISH"
+  },
+  {
+    title: "QUANT EARNINGS BREAKOUT: NVIDIA (NVDA) reports blowout results with Blackwell supply visibility expanding 45%.",
+    excerpt: "NVIDIA reports net net institutional demand exceeding production capabilities by twice the order capacity. Cloud giants Microsoft and Amazon project increased high-intensity capital expenditures, driving tech risk-premia upward.",
+    source: "Apex Sovereign Agency Room",
+    impact: "CRITICAL",
+    category: "LIQUIDITY",
+    symbol: "NVDA",
+    sentiment: "BULLISH"
+  },
+  {
+    title: "CORPORATE FILINGS DEEP DIVE: Apple Inc. (AAPL) locks custom on-device AI LLM contracts, initiating high hardware upgrade cycle.",
+    excerpt: "Apple SEC 10-Q filing exposes custom licensing structures with core sovereign data providers. Institutional investors scale positioning models as projected premium subscription margins lift valuation bounds.",
+    source: "Apex Sovereign Agency Room",
+    impact: "HIGH",
+    category: "MACRO",
+    symbol: "AAPL",
+    sentiment: "BULLISH"
+  },
+  {
+    title: "MACRO OUTLOOK BRIEF: S&P 500 (SPX500) breaks all-time high as capital allocations shift toward premium risk duration.",
+    excerpt: "Quantitative risk funds record largest monthly rotation out of long bonds and into broad S&P 500 equity pools. Analysts cite corporate yield resilience in high-rate environments as the prime catalyst.",
+    source: "Apex Terminal Flash Alerts",
+    impact: "HIGH",
+    category: "MACRO",
+    symbol: "SPX500",
+    sentiment: "BULLISH"
+  },
+  {
+    title: "AUTOMATED ADVISORY BULLETIN: Tesla (TSLA) secures regulatory FSD testing approvals, driving high sentiment recovery.",
+    excerpt: "Tesla secures trial clearances in dense sovereign metropolitan hubs. Analysts indicate a potential turning point for high-margin service fee licensing scaling, sparking short covers in institutional pools.",
+    source: "Apex Terminal Flash Alerts",
+    impact: "HIGH",
+    category: "REGULATORY",
+    symbol: "TSLA",
+    sentiment: "BULLISH"
   }
 ];
 
@@ -1150,23 +1326,47 @@ app.post('/api/institutional-news/prune', (req, res) => {
 });
 
 // Get historical risk breaches
-app.get('/api/risk/breaches', (req, res) => {
-  checkForNewBreaches();
+app.get('/api/risk/breaches', async (req, res) => {
+  await checkForNewBreaches();
   res.json(readBreaches());
 });
 
+// Register user context when logged in on frontend
+app.post('/api/auth/register', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const fireUser = req.user;
+    if (!fireUser || !fireUser.uid || !fireUser.email) {
+      res.status(400).json({ error: 'Missing token content' });
+      return;
+    }
+    const dbUser = await getOrCreateUser(fireUser.uid, fireUser.email);
+    res.json(dbUser);
+  } catch (err: any) {
+    console.error('Registration API Error:', err);
+    res.status(500).json({ error: 'Internal Server Error registering user.' });
+  }
+});
+
 // Get paginated CLOSED trades history
-app.get('/api/trades/history', (req, res) => {
+app.get('/api/trades/history', requireAuth, async (req: AuthRequest, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 5;
     const tag = (req.query.tag as string) || 'ALL';
+    const userId = req.dbUser.id;
 
-    const rawTrades = readTrades();
-    let closed = rawTrades.filter(t => t.status === 'CLOSED');
+    // Fetch trades from SQL belonging to this user
+    let userTrades = await db.select()
+      .from(tradesTable)
+      .where(
+        and(
+          eq(tradesTable.userId, userId),
+          eq(tradesTable.status, 'CLOSED')
+        )
+      );
 
     // Sort: most recent exit first
-    closed.sort((a, b) => {
+    userTrades.sort((a, b) => {
       const timeA = a.exitTimestamp ? new Date(a.exitTimestamp).getTime() : new Date(a.timestamp).getTime();
       const timeB = b.exitTimestamp ? new Date(b.exitTimestamp).getTime() : new Date(b.timestamp).getTime();
       return timeB - timeA;
@@ -1174,9 +1374,11 @@ app.get('/api/trades/history', (req, res) => {
 
     // Tag filtration
     if (tag !== 'ALL') {
-      closed = closed.filter(t => {
+      userTrades = userTrades.filter(t => {
         if (!t.tags) return false;
-        return t.tags.some(tg => {
+        // Since tags are stored as jsonb in DB (jsonb value is parsed automatically by pg/drizzle)
+        const tagsArr = t.tags as string[];
+        return tagsArr.some(tg => {
           let cleaned = tg.trim();
           if (!cleaned.startsWith('#')) {
             cleaned = '#' + cleaned;
@@ -1186,10 +1388,10 @@ app.get('/api/trades/history', (req, res) => {
       });
     }
 
-    const total = closed.length;
+    const total = userTrades.length;
     const totalPages = Math.ceil(total / limit);
     const startIndex = (page - 1) * limit;
-    const paginated = closed.slice(startIndex, startIndex + limit);
+    const paginated = userTrades.slice(startIndex, startIndex + limit);
 
     // Collect available tags across all closed trades
     const tagSet = new Set<string>();
@@ -1199,9 +1401,20 @@ app.get('/api/trades/history', (req, res) => {
     tagSet.add('#TrendFollowing');
     tagSet.add('#Breakout');
 
-    rawTrades.forEach(t => {
-      if (t.status === 'CLOSED' && t.tags) {
-        t.tags.forEach(tg => {
+    // Query all closed trades for tag aggregation (Drizzle)
+    const allClosedTrades = await db.select({ tags: tradesTable.tags })
+      .from(tradesTable)
+      .where(
+        and(
+          eq(tradesTable.userId, userId),
+          eq(tradesTable.status, 'CLOSED')
+        )
+      );
+
+    allClosedTrades.forEach(t => {
+      if (t.tags) {
+        const tagsArr = t.tags as string[];
+        tagsArr.forEach(tg => {
           let cleaned = tg.trim();
           if (cleaned) {
             if (!cleaned.startsWith('#')) {
@@ -1228,19 +1441,134 @@ app.get('/api/trades/history', (req, res) => {
 });
 
 // Get Trades list
-app.get('/api/trades', (req, res) => {
-  checkAndAutoCloseTrades();
-  const rawTrades = readTrades();
-  const enrichedTrades = rawTrades.map(trade => {
-    if (trade.status !== 'OPEN') {
-      return trade;
+app.get('/api/trades', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    await checkAndAutoCloseTrades();
+    const userId = req.dbUser.id;
+
+    const userTrades = await db.select()
+      .from(tradesTable)
+      .where(eq(tradesTable.userId, userId));
+
+    const enrichedTrades = userTrades.map(trade => {
+      if (trade.status !== 'OPEN') {
+        return trade as any;
+      }
+
+      const metrics = simulator.getMarketMetrics(trade.symbol as MarketSymbol);
+      const curPrice = metrics ? metrics.currentPrice : trade.entryPrice;
+
+      const rawPnl = calculateTradePnL(trade.symbol, trade.entryPrice, curPrice, trade.size, trade.side);
+      const currentPnl = parseFloat(rawPnl.toFixed(2));
+
+      const candlesList = simulator.getCandles(trade.symbol as MarketSymbol) || [];
+      const historicCandles = candlesList.slice(-60);
+
+      const trajectory = historicCandles.map((c, index) => {
+        const cPnl = calculateTradePnL(trade.symbol, trade.entryPrice, c.close, trade.size, trade.side);
+        return {
+          minute: index,
+          pnl: parseFloat(cPnl.toFixed(2))
+        };
+      });
+
+      return {
+        ...trade,
+        pnl: currentPnl,
+        pnlTrajectory: trajectory
+      } as any;
+    });
+
+    res.json(enrichedTrades);
+  } catch (err) {
+    console.error('Error fetching trades:', err);
+    res.status(500).json({ error: 'Server error retrieving trades.' });
+  }
+});
+
+// Enter a trade
+app.post('/api/trades', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { symbol, side, entryPrice, stopLoss, takeProfit, size, reason, confidence, confluences, marketNote, autoBreakEvenProfitPct } = req.body;
+    if (!symbol || !side || !entryPrice || !stopLoss || !takeProfit || !size) {
+      res.status(400).json({ error: 'Missing trade parameters.' });
+      return;
     }
 
-    const metrics = simulator.getMarketMetrics(trade.symbol);
-    const curPrice = metrics ? metrics.currentPrice : trade.entryPrice;
+    const userId = req.dbUser.id;
 
+    // Generate simulated execution efficiency metrics for the MT5 bridge
+    // ~17% rate of latency spikes above the 45ms bridge health threshold
+    const isSpike = Math.random() < 0.17;
+    const simulatedLatency = isSpike 
+      ? Math.floor(46 + Math.random() * 95) // 46ms to 140ms
+      : Math.floor(18 + Math.random() * 26); // 18ms to 44ms (healthy)
+    
+    // Slippage is correlated with latency. Higher latency = more slippage
+    const baseSlippage = isSpike 
+      ? 0.7 + Math.random() * 1.6 // 0.7 to 2.3 pips/points
+      : Math.random() * 0.45; // 0.0 to 0.45 pips/points (excellent)
+    const simulatedSlippage = parseFloat(baseSlippage.toFixed(2));
+
+    const newTradeId = `trade-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    const [inserted] = await db.insert(tradesTable)
+      .values({
+        id: newTradeId,
+        userId: userId,
+        symbol,
+        side,
+        entryPrice: parseFloat(entryPrice),
+        stopLoss: parseFloat(stopLoss),
+        takeProfit: parseFloat(takeProfit),
+        size: parseFloat(size),
+        status: 'OPEN',
+        pnl: 0,
+        timestamp: new Date().toISOString(),
+        reason: reason || 'Entered via strategy trigger',
+        confidence: confidence !== undefined ? parseFloat(confidence) : undefined,
+        confluences: Array.isArray(confluences) ? confluences : undefined,
+        marketNote: marketNote || '',
+        autoBreakEvenProfitPct: autoBreakEvenProfitPct !== undefined ? parseFloat(autoBreakEvenProfitPct) : undefined,
+        autoBreakEvenTriggered: autoBreakEvenProfitPct !== undefined ? false : undefined,
+        latency: req.body.latency !== undefined ? parseFloat(req.body.latency) : simulatedLatency,
+        slippage: req.body.slippage !== undefined ? parseFloat(req.body.slippage) : simulatedSlippage
+      })
+      .returning();
+
+    res.status(201).json(inserted);
+  } catch (err) {
+    console.error('Error inserting trade:', err);
+    res.status(500).json({ error: 'Server error entering trade.' });
+  }
+});
+
+// Close a trade manually or due to trigger
+app.post('/api/trades/:id/close', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { exitPrice } = req.body;
+    const userId = req.dbUser.id;
+
+    const [trade] = await db.select()
+      .from(tradesTable)
+      .where(and(eq(tradesTable.id, id), eq(tradesTable.userId, userId)));
+
+    if (!trade) {
+      res.status(404).json({ error: 'Trade not found.' });
+      return;
+    }
+
+    if (trade.status === 'CLOSED') {
+      res.status(400).json({ error: 'Trade already closed.' });
+      return;
+    }
+
+    const price = exitPrice ? parseFloat(exitPrice) : simulator.getMarketMetrics(trade.symbol as MarketSymbol).currentPrice;
     const pnlMultiplier = trade.side === 'BUY' ? 1 : -1;
-    const priceDiff = curPrice - trade.entryPrice;
+    const priceDiff = price - trade.entryPrice;
+    
+    // simple pip value conversion
     let rawPnl = 0;
     if (trade.symbol === 'BTC/USDT') {
       rawPnl = priceDiff * trade.size * pnlMultiplier;
@@ -1249,284 +1577,234 @@ app.get('/api/trades', (req, res) => {
     } else {
       rawPnl = (priceDiff / 0.0001) * trade.size * 1.0 * pnlMultiplier;
     }
-    const currentPnl = parseFloat(rawPnl.toFixed(2));
 
-    const candlesList = simulator.getCandles(trade.symbol) || [];
-    const historicCandles = candlesList.slice(-60);
+    const [updated] = await db.update(tradesTable)
+      .set({
+        status: 'CLOSED',
+        exitPrice: price,
+        pnl: parseFloat(rawPnl.toFixed(2)),
+        exitTimestamp: new Date().toISOString()
+      })
+      .where(eq(tradesTable.id, id))
+      .returning();
 
-    const trajectory = historicCandles.map((c, index) => {
-      const cDiff = c.close - trade.entryPrice;
-      let cPnl = 0;
-      if (trade.symbol === 'BTC/USDT') {
-        cPnl = cDiff * trade.size * pnlMultiplier;
-      } else if (trade.symbol === 'USD/JPY') {
-        cPnl = (cDiff / 0.01) * trade.size * 0.1 * pnlMultiplier;
-      } else {
-        cPnl = (cDiff / 0.0001) * trade.size * 1.0 * pnlMultiplier;
-      }
-      return {
-        minute: index,
-        pnl: parseFloat(cPnl.toFixed(2))
-      };
-    });
-
-    return {
-      ...trade,
-      pnl: currentPnl,
-      pnlTrajectory: trajectory
-    };
-  });
-  res.json(enrichedTrades);
-});
-
-// Enter a trade
-app.post('/api/trades', (req, res) => {
-  const { symbol, side, entryPrice, stopLoss, takeProfit, size, reason, confidence, confluences, marketNote, autoBreakEvenProfitPct } = req.body;
-  if (!symbol || !side || !entryPrice || !stopLoss || !takeProfit || !size) {
-    res.status(400).json({ error: 'Missing trade parameters.' });
-    return;
+    res.json(updated);
+  } catch (err) {
+    console.error('Error closing trade:', err);
+    res.status(500).json({ error: 'Server error closing trade.' });
   }
-
-  // Generate simulated execution efficiency metrics for the MT5 bridge
-  // ~17% rate of latency spikes above the 45ms bridge health threshold
-  const isSpike = Math.random() < 0.17;
-  const simulatedLatency = isSpike 
-    ? Math.floor(46 + Math.random() * 95) // 46ms to 140ms
-    : Math.floor(18 + Math.random() * 26); // 18ms to 44ms (healthy)
-  
-  // Slippage is correlated with latency. Higher latency = more slippage
-  const baseSlippage = isSpike 
-    ? 0.7 + Math.random() * 1.6 // 0.7 to 2.3 pips/points
-    : Math.random() * 0.45; // 0.0 to 0.45 pips/points (excellent)
-  const simulatedSlippage = parseFloat(baseSlippage.toFixed(2));
-
-  const trades = readTrades();
-  const newTrade: Trade = {
-    id: `trade-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    symbol,
-    side,
-    entryPrice: parseFloat(entryPrice),
-    stopLoss: parseFloat(stopLoss),
-    takeProfit: parseFloat(takeProfit),
-    size: parseFloat(size),
-    status: 'OPEN',
-    pnl: 0,
-    timestamp: new Date().toISOString(),
-    reason: reason || 'Entered via strategy trigger',
-    confidence: confidence !== undefined ? parseFloat(confidence) : undefined,
-    confluences: Array.isArray(confluences) ? confluences : undefined,
-    marketNote: marketNote || '',
-    autoBreakEvenProfitPct: autoBreakEvenProfitPct !== undefined ? parseFloat(autoBreakEvenProfitPct) : undefined,
-    autoBreakEvenTriggered: autoBreakEvenProfitPct !== undefined ? false : undefined,
-    latency: req.body.latency !== undefined ? parseFloat(req.body.latency) : simulatedLatency,
-    slippage: req.body.slippage !== undefined ? parseFloat(req.body.slippage) : simulatedSlippage
-  };
-
-  trades.push(newTrade);
-  writeTrades(trades);
-  res.status(201).json(newTrade);
-});
-
-// Close a trade manually or due to trigger
-app.post('/api/trades/:id/close', (req, res) => {
-  const { id } = req.params;
-  const { exitPrice } = req.body;
-
-  const trades = readTrades();
-  const tradeIndex = trades.findIndex(t => t.id === id);
-
-  if (tradeIndex === -1) {
-    res.status(404).json({ error: 'Trade not found.' });
-    return;
-  }
-
-  const trade = trades[tradeIndex];
-  if (trade.status === 'CLOSED') {
-    res.status(400).json({ error: 'Trade already closed.' });
-    return;
-  }
-
-  const price = exitPrice ? parseFloat(exitPrice) : simulator.getMarketMetrics(trade.symbol).currentPrice;
-  const pnlMultiplier = trade.side === 'BUY' ? 1 : -1;
-  const priceDiff = price - trade.entryPrice;
-  
-  // simple pip value conversion
-  let rawPnl = 0;
-  if (trade.symbol === 'BTC/USDT') {
-    rawPnl = priceDiff * trade.size * pnlMultiplier;
-  } else if (trade.symbol === 'USD/JPY') {
-    rawPnl = (priceDiff / 0.01) * trade.size * 0.1 * pnlMultiplier;
-  } else {
-    rawPnl = (priceDiff / 0.0001) * trade.size * 1.0 * pnlMultiplier;
-  }
-
-  trade.status = 'CLOSED';
-  trade.exitPrice = price;
-  trade.pnl = parseFloat(rawPnl.toFixed(2));
-  trade.exitTimestamp = new Date().toISOString();
-
-  trades[tradeIndex] = trade;
-  writeTrades(trades);
-  res.json(trade);
 });
 
 // Partial profit taking on a trade (e.g. close percentage of position size at current price)
-app.post('/api/trades/:id/partial-close', (req, res) => {
-  const { id } = req.params;
-  const ratio = req.body.ratio !== undefined ? parseFloat(req.body.ratio) : 0.5; // default to 50% partial close
+app.post('/api/trades/:id/partial-close', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const ratio = req.body.ratio !== undefined ? parseFloat(req.body.ratio) : 0.5; // default to 50% partial close
+    const userId = req.dbUser.id;
 
-  const trades = readTrades();
-  const tradeIndex = trades.findIndex(t => t.id === id);
+    const [trade] = await db.select()
+      .from(tradesTable)
+      .where(and(eq(tradesTable.id, id), eq(tradesTable.userId, userId)));
 
-  if (tradeIndex === -1) {
-    res.status(404).json({ error: 'Trade not found.' });
-    return;
-  }
+    if (!trade) {
+      res.status(404).json({ error: 'Trade not found.' });
+      return;
+    }
 
-  const trade = trades[tradeIndex];
-  if (trade.status === 'CLOSED') {
-    res.status(400).json({ error: 'Trade already closed.' });
-    return;
-  }
+    if (trade.status === 'CLOSED') {
+      res.status(400).json({ error: 'Trade already closed.' });
+      return;
+    }
 
-  const price = simulator.getMarketMetrics(trade.symbol).currentPrice;
-  const pnlMultiplier = trade.side === 'BUY' ? 1 : -1;
-  const priceDiff = price - trade.entryPrice;
+    const price = simulator.getMarketMetrics(trade.symbol as MarketSymbol).currentPrice;
+    const pnlMultiplier = trade.side === 'BUY' ? 1 : -1;
+    const priceDiff = price - trade.entryPrice;
 
-  // Calculate sizes
-  const closedSize = Math.max(0.01, parseFloat((trade.size * ratio).toFixed(2)));
-  const remainingSize = Math.max(0, parseFloat((trade.size - closedSize).toFixed(2)));
+    // Calculate sizes
+    const closedSize = Math.max(0.01, parseFloat((trade.size * ratio).toFixed(2)));
+    const remainingSize = Math.max(0, parseFloat((trade.size - closedSize).toFixed(2)));
 
-  // simple pip value conversion for closed portion
-  let rawPnl = 0;
-  if (trade.symbol === 'BTC/USDT') {
-    rawPnl = priceDiff * closedSize * pnlMultiplier;
-  } else if (trade.symbol === 'USD/JPY') {
-    rawPnl = (priceDiff / 0.01) * closedSize * 0.1 * pnlMultiplier;
-  } else {
-    rawPnl = (priceDiff / 0.0001) * closedSize * 1.0 * pnlMultiplier;
-  }
-  const closedPnl = parseFloat(rawPnl.toFixed(2));
-
-  // If remaining size is close to zero, close the entire trade instead
-  if (remainingSize <= 0.01) {
-    trade.status = 'CLOSED' as 'CLOSED';
-    trade.exitPrice = price;
-    trade.exitTimestamp = new Date().toISOString();
-    
-    // Total PnL gets calculated on the original size
-    let fullRawPnl = 0;
+    // simple pip value conversion for closed portion
+    let rawPnl = 0;
     if (trade.symbol === 'BTC/USDT') {
-      fullRawPnl = priceDiff * trade.size * pnlMultiplier;
+      rawPnl = priceDiff * closedSize * pnlMultiplier;
     } else if (trade.symbol === 'USD/JPY') {
-      fullRawPnl = (priceDiff / 0.01) * trade.size * 0.1 * pnlMultiplier;
+      rawPnl = (priceDiff / 0.01) * closedSize * 0.1 * pnlMultiplier;
     } else {
-      fullRawPnl = (priceDiff / 0.0001) * trade.size * 1.0 * pnlMultiplier;
+      rawPnl = (priceDiff / 0.0001) * closedSize * 1.0 * pnlMultiplier;
     }
-    trade.pnl = parseFloat(fullRawPnl.toFixed(2));
-    if (trade.annotation) {
-      trade.annotation = `${trade.annotation} | Full Close via target liquidation.`;
-    } else {
-      trade.annotation = 'Locked via target liquidation.';
-    }
-    trades[tradeIndex] = trade;
-  } else {
-    // Reduce open position's size
-    trade.size = remainingSize;
-    if (!trade.annotation) {
-      trade.annotation = `Reduced size from ${(remainingSize + closedSize).toFixed(2)} to ${remainingSize.toFixed(2)} (${(ratio * 100).toFixed(0)}% partial close).`;
-    } else {
-      trade.annotation += ` | Part-closed ${(ratio * 100).toFixed(0)}%.`;
-    }
-    trades[tradeIndex] = trade;
+    const closedPnl = parseFloat(rawPnl.toFixed(2));
 
-    // Create a new CLOSED transaction representing the closed portion
-    const partialId = `${trade.id}-p-${Date.now()}`;
-    const closedTrade: Trade = {
-      ...trade,
-      id: partialId,
-      status: 'CLOSED' as 'CLOSED',
-      size: closedSize,
-      exitPrice: price,
-      pnl: closedPnl,
-      exitTimestamp: new Date().toISOString(),
-      annotation: `Partial Profit Taking (${(ratio * 100).toFixed(0)}% of exposure closed, Parent: ${trade.id})`
-    };
-    trades.push(closedTrade);
+    // If remaining size is close to zero, close the entire trade instead
+    if (remainingSize <= 0.01) {
+      // Total PnL gets calculated on the original size
+      let fullRawPnl = 0;
+      if (trade.symbol === 'BTC/USDT') {
+        fullRawPnl = priceDiff * trade.size * pnlMultiplier;
+      } else if (trade.symbol === 'USD/JPY') {
+        fullRawPnl = (priceDiff / 0.01) * trade.size * 0.1 * pnlMultiplier;
+      } else {
+        fullRawPnl = (priceDiff / 0.0001) * trade.size * 1.0 * pnlMultiplier;
+      }
+
+      await db.update(tradesTable)
+        .set({
+          status: 'CLOSED',
+          exitPrice: price,
+          pnl: parseFloat(fullRawPnl.toFixed(2)),
+          exitTimestamp: new Date().toISOString(),
+          annotation: trade.annotation 
+            ? `${trade.annotation} | Full Close via target liquidation.`
+            : 'Locked via target liquidation.'
+        })
+        .where(eq(tradesTable.id, id));
+
+      const [finalTrade] = await db.select()
+        .from(tradesTable)
+        .where(eq(tradesTable.id, id));
+      res.json(finalTrade);
+    } else {
+      // Reduce open position's size
+      const newAnnotation = trade.annotation
+        ? `${trade.annotation} | Part-closed ${(ratio * 100).toFixed(0)}%.`
+        : `Reduced size from ${(remainingSize + closedSize).toFixed(2)} to ${remainingSize.toFixed(2)} (${(ratio * 100).toFixed(0)}% partial close).`;
+
+      const [updatedTrade] = await db.update(tradesTable)
+        .set({
+          size: remainingSize,
+          annotation: newAnnotation
+        })
+        .where(eq(tradesTable.id, id))
+        .returning();
+
+      // Create a new CLOSED transaction representing the closed portion
+      const partialId = `${trade.id}-p-${Date.now()}`;
+      await db.insert(tradesTable)
+        .values({
+          id: partialId,
+          userId: userId,
+          symbol: trade.symbol,
+          side: trade.side,
+          entryPrice: trade.entryPrice,
+          stopLoss: trade.stopLoss,
+          takeProfit: trade.takeProfit,
+          status: 'CLOSED',
+          size: closedSize,
+          exitPrice: price,
+          pnl: closedPnl,
+          timestamp: trade.timestamp,
+          exitTimestamp: new Date().toISOString(),
+          reason: trade.reason,
+          confidence: trade.confidence,
+          confluences: trade.confluences,
+          tags: trade.tags,
+          sentimentRating: trade.sentimentRating,
+          screenshot: trade.screenshot,
+          annotation: `Partial Profit Taking (${(ratio * 100).toFixed(0)}% of exposure closed, Parent: ${trade.id})`
+        });
+
+      res.json(updatedTrade);
+    }
+  } catch (err) {
+    console.error('Error during partial close:', err);
+    res.status(500).json({ error: 'Server error handling partial close.' });
   }
-
-  writeTrades(trades);
-  res.json(trade);
 });
 
 // Update trade parameters dynamically (Stop-Loss, Take-Profit, Trailing Stops/Take-Profit)
-app.post('/api/trades/:id/update-params', (req, res) => {
-  const { id } = req.params;
-  const { 
-    stopLoss, 
-    takeProfit, 
-    trailingStopActive, 
-    trailingStopDistance, 
-    trailingTakeProfitActive,
-    trailingTakeProfitDistance
-  } = req.body;
+app.post('/api/trades/:id/update-params', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      stopLoss, 
+      takeProfit, 
+      trailingStopActive, 
+      trailingStopDistance, 
+      trailingTakeProfitActive,
+      trailingTakeProfitDistance,
+      lavTslActive,
+      lavTslAtrMultiplier,
+      lavTslLiquidityActive,
+      lavTslTighteningActive
+    } = req.body;
+    const userId = req.dbUser.id;
 
-  const trades = readTrades();
-  const tradeIndex = trades.findIndex(t => t.id === id);
+    const [trade] = await db.select()
+      .from(tradesTable)
+      .where(and(eq(tradesTable.id, id), eq(tradesTable.userId, userId)));
 
-  if (tradeIndex === -1) {
-    res.status(404).json({ error: 'Trade not found.' });
-    return;
+    if (!trade) {
+      res.status(404).json({ error: 'Trade not found.' });
+      return;
+    }
+
+    if (trade.status === 'CLOSED') {
+      res.status(400).json({ error: 'Cannot update parameters on completed trades.' });
+      return;
+    }
+
+    const updates: Partial<typeof tradesTable.$inferInsert> = {};
+    if (stopLoss !== undefined) updates.stopLoss = parseFloat(stopLoss);
+    if (takeProfit !== undefined) updates.takeProfit = parseFloat(takeProfit);
+    if (trailingStopActive !== undefined) updates.trailingStopActive = !!trailingStopActive;
+    if (trailingStopDistance !== undefined) updates.trailingStopDistance = parseFloat(trailingStopDistance);
+    if (trailingTakeProfitActive !== undefined) updates.trailingTakeProfitActive = !!trailingTakeProfitActive;
+    if (trailingTakeProfitDistance !== undefined) updates.trailingTakeProfitDistance = parseFloat(trailingTakeProfitDistance);
+    if (lavTslActive !== undefined) updates.lavTslActive = !!lavTslActive;
+    if (lavTslAtrMultiplier !== undefined) updates.lavTslAtrMultiplier = parseFloat(lavTslAtrMultiplier);
+    if (lavTslLiquidityActive !== undefined) updates.lavTslLiquidityActive = !!lavTslLiquidityActive;
+    if (lavTslTighteningActive !== undefined) updates.lavTslTighteningActive = !!lavTslTighteningActive;
+
+    const metrics = simulator.getMarketMetrics(trade.symbol as MarketSymbol);
+    const curPrice = metrics ? metrics.currentPrice : trade.entryPrice;
+
+    if (trade.maxPriceReached === undefined || trade.maxPriceReached === null) updates.maxPriceReached = curPrice;
+    if (trade.minPriceReached === undefined || trade.minPriceReached === null) updates.minPriceReached = curPrice;
+
+    const [updated] = await db.update(tradesTable)
+      .set(updates)
+      .where(eq(tradesTable.id, id))
+      .returning();
+
+    res.json(updated);
+  } catch (err) {
+    console.error('Error updating trade params:', err);
+    res.status(500).json({ error: 'Server error updating parameters.' });
   }
-
-  const trade = trades[tradeIndex];
-  if (trade.status === 'CLOSED') {
-    res.status(400).json({ error: 'Cannot update parameters on completed trades.' });
-    return;
-  }
-
-  if (stopLoss !== undefined) trade.stopLoss = parseFloat(stopLoss);
-  if (takeProfit !== undefined) trade.takeProfit = parseFloat(takeProfit);
-  if (trailingStopActive !== undefined) trade.trailingStopActive = !!trailingStopActive;
-  if (trailingStopDistance !== undefined) trade.trailingStopDistance = parseFloat(trailingStopDistance);
-  if (trailingTakeProfitActive !== undefined) trade.trailingTakeProfitActive = !!trailingTakeProfitActive;
-  if (trailingTakeProfitDistance !== undefined) trade.trailingTakeProfitDistance = parseFloat(trailingTakeProfitDistance);
-
-  // When trailing parameters are updated or toggled, initialize maxPrice/minPrice to actual currency metrics if undefined
-  const metrics = simulator.getMarketMetrics(trade.symbol);
-  const curPrice = metrics ? metrics.currentPrice : trade.entryPrice;
-  
-  if (trade.maxPriceReached === undefined) trade.maxPriceReached = curPrice;
-  if (trade.minPriceReached === undefined) trade.minPriceReached = curPrice;
-
-  trades[tradeIndex] = trade;
-  writeTrades(trades);
-  res.json(trade);
 });
 
 // Update trade journal details (annotations, tags, sentiment ratings, screenshots)
-app.post('/api/trades/:id/journal', (req, res) => {
-  const { id } = req.params;
-  const { annotation, tags, sentimentRating, screenshot } = req.body;
+app.post('/api/trades/:id/journal', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { annotation, tags, sentimentRating, screenshot } = req.body;
+    const userId = req.dbUser.id;
 
-  const trades = readTrades();
-  const tradeIndex = trades.findIndex(t => t.id === id);
+    const [trade] = await db.select()
+      .from(tradesTable)
+      .where(and(eq(tradesTable.id, id), eq(tradesTable.userId, userId)));
 
-  if (tradeIndex === -1) {
-    res.status(404).json({ error: 'Trade not found.' });
-    return;
+    if (!trade) {
+      res.status(404).json({ error: 'Trade not found.' });
+      return;
+    }
+
+    const updates: Partial<typeof tradesTable.$inferInsert> = {};
+    if (typeof annotation === 'string') updates.annotation = annotation;
+    if (Array.isArray(tags)) updates.tags = tags;
+    if (typeof sentimentRating === 'string') updates.sentimentRating = sentimentRating;
+    if (typeof screenshot === 'string') updates.screenshot = screenshot;
+
+    const [updated] = await db.update(tradesTable)
+      .set(updates)
+      .where(eq(tradesTable.id, id))
+      .returning();
+
+    res.json(updated);
+  } catch (err) {
+    console.error('Error journaling trade:', err);
+    res.status(500).json({ error: 'Server error journaling trade details.' });
   }
-
-  const trade = trades[tradeIndex];
-  
-  trade.annotation = typeof annotation === 'string' ? annotation : trade.annotation;
-  trade.tags = Array.isArray(tags) ? tags : trade.tags;
-  trade.sentimentRating = typeof sentimentRating === 'string' ? sentimentRating : trade.sentimentRating;
-  trade.screenshot = typeof screenshot === 'string' ? screenshot : trade.screenshot;
-
-  trades[tradeIndex] = trade;
-  writeTrades(trades);
-  res.json(trade);
 });
 
 // Gemini RAG advisory chatbot model endpoint (Strictly Server-Side)
@@ -1647,6 +1925,365 @@ User Query: ${prompt}
     res.json({ text: getSimulatedResponse(notice) });
   }
 });
+
+// ==================== PERSISTENT CHAT HISTORY (FIRESTORE) ====================
+
+// 1. GET /api/chat/history (List user's chats)
+app.get('/api/chat/history', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user.uid;
+    const snapshot = await adminDb.collection('chats')
+      .where('userId', '==', userId)
+      .orderBy('updatedAt', 'desc')
+      .get();
+
+    const chats: any[] = [];
+    snapshot.forEach(doc => {
+      chats.push({ id: doc.id, ...doc.data() });
+    });
+    res.json(chats);
+  } catch (err: any) {
+    console.error('Error fetching chat history from Firestore:', err);
+    res.status(500).json({ error: 'Server error retrieving chat history.', details: err.message });
+  }
+});
+
+// 2. GET /api/chat/history/:id (Retrieve a single chat)
+app.get('/api/chat/history/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.uid;
+
+    const doc = await adminDb.collection('chats').doc(id).get();
+    if (!doc.exists) {
+      res.status(404).json({ error: 'Chat session not found.' });
+      return;
+    }
+
+    const data = doc.data();
+    if (data?.userId !== userId) {
+      res.status(403).json({ error: 'Access denied.' });
+      return;
+    }
+
+    res.json({ id: doc.id, ...data });
+  } catch (err: any) {
+    console.error('Error fetching chat session:', err);
+    res.status(500).json({ error: 'Server error retrieving chat session.' });
+  }
+});
+
+// 3. POST /api/chat/history (Create or update chat)
+app.post('/api/chat/history', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user.uid;
+    const { id, title, symbol, messages } = req.body;
+
+    if (!id || !title || !symbol || !Array.isArray(messages)) {
+      res.status(400).json({ error: 'Missing required parameters: id, title, symbol, or messages.' });
+      return;
+    }
+
+    const docRef = adminDb.collection('chats').doc(id);
+    const docSnapshot = await docRef.get();
+
+    const now = new Date().toISOString();
+
+    if (docSnapshot.exists) {
+      const existingData = docSnapshot.data();
+      if (existingData?.userId !== userId) {
+        res.status(403).json({ error: 'Access denied.' });
+        return;
+      }
+
+      await docRef.update({
+        title,
+        symbol,
+        messages,
+        updatedAt: now
+      });
+    } else {
+      await docRef.set({
+        id,
+        userId,
+        title,
+        symbol,
+        messages,
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+
+    res.json({ success: true, id, updatedAt: now });
+  } catch (err: any) {
+    console.error('Error saving chat session:', err);
+    res.status(500).json({ error: 'Server error saving chat session.' });
+  }
+});
+
+// 4. DELETE /api/chat/history/:id (Delete a chat session)
+app.delete('/api/chat/history/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.uid;
+
+    const docRef = adminDb.collection('chats').doc(id);
+    const docSnapshot = await docRef.get();
+
+    if (!docSnapshot.exists) {
+      res.status(404).json({ error: 'Chat session not found.' });
+      return;
+    }
+
+    const data = docSnapshot.data();
+    if (data?.userId !== userId) {
+      res.status(403).json({ error: 'Access denied.' });
+      return;
+    }
+
+    await docRef.delete();
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error deleting chat session:', err);
+    res.status(500).json({ error: 'Server error deleting chat session.' });
+  }
+});
+
+// ==================== MARKETS PAGE (YAHOO FINANCE & FUNDAMENTALS) ====================
+
+// Helper for simulated historical price data (failsafe fallback)
+function getSimulatedHistoricalData(ticker: string, range: string) {
+  const bars: any[] = [];
+  const days = range === '1d' ? 24 : range === '5d' ? 5 : range === '1mo' ? 30 : range === '3mo' ? 90 : range === '1y' ? 250 : 30;
+  let currentPrice = ticker === 'BTC-USD' ? 64000 : ticker === 'ETH-USD' ? 3200 : ticker === 'AAPL' ? 180 : ticker === 'MSFT' ? 420 : ticker === 'NVDA' ? 120 : ticker === 'TSLA' ? 175 : 100;
+  
+  const now = Date.now();
+  const step = range === '1d' ? 3600 * 1000 : 24 * 3600 * 1000;
+
+  for (let i = days; i >= 0; i--) {
+    const time = now - i * step;
+    const change = (Math.random() - 0.49) * (currentPrice * 0.03);
+    const open = currentPrice;
+    const close = currentPrice + change;
+    const high = Math.max(open, close) + Math.random() * (currentPrice * 0.015);
+    const low = Math.min(open, close) - Math.random() * (currentPrice * 0.015);
+    const volume = Math.round(1000000 + Math.random() * 5000000);
+
+    bars.push({
+      timestamp: new Date(time).toISOString(),
+      open: parseFloat(open.toFixed(2)),
+      high: parseFloat(high.toFixed(2)),
+      low: parseFloat(low.toFixed(2)),
+      close: parseFloat(close.toFixed(2)),
+      volume
+    });
+
+    currentPrice = close;
+  }
+
+  return {
+    ticker,
+    currency: 'USD',
+    symbol: ticker,
+    regularMarketPrice: parseFloat(currentPrice.toFixed(2)),
+    bars
+  };
+}
+
+// Helper for simulated fundamentals data (failsafe fallback)
+function getSimulatedFundamentals(ticker: string) {
+  const isTech = ['AAPL', 'MSFT', 'NVDA', 'GOOG', 'AMZN', 'META'].includes(ticker);
+  const pe = isTech ? 25 + Math.random() * 15 : 12 + Math.random() * 10;
+  const roe = isTech ? 0.25 + Math.random() * 0.2 : 0.1 + Math.random() * 0.1;
+  const debtToEquity = isTech ? 40 + Math.random() * 80 : 80 + Math.random() * 100;
+  const profitMargin = isTech ? 0.2 + Math.random() * 0.15 : 0.05 + Math.random() * 0.1;
+
+  return {
+    ticker,
+    incomeStatement: [
+      { endDate: '2025-12-31', totalRevenue: 385000000000, costOfRevenue: 220000000000, grossProfit: 165000000000, operatingIncome: 115000000000, netIncome: 95000000000 },
+      { endDate: '2024-12-31', totalRevenue: 365000000000, costOfRevenue: 210000000000, grossProfit: 155000000000, operatingIncome: 105000000000, netIncome: 85000000000 },
+      { endDate: '2023-12-31', totalRevenue: 345000000000, costOfRevenue: 200000000000, grossProfit: 145000000000, operatingIncome: 95000000000, netIncome: 75000000000 }
+    ],
+    balanceSheet: [
+      { endDate: '2025-12-31', totalAssets: 420000000000, totalLiab: 280000000000, totalStockholderEquity: 140000000000, cash: 65000000000, shortTermInvestments: 55000000000 },
+      { endDate: '2024-12-31', totalAssets: 380000000000, totalLiab: 260000000000, totalStockholderEquity: 120000000000, cash: 55000000000, shortTermInvestments: 45000000000 }
+    ],
+    cashFlow: [
+      { endDate: '2025-12-31', operatingCashflow: 110000000000, capitalExpenditure: -12000000000, investingCashflow: -30000000000, financingCashflow: -70000000000, freeCashflow: 98000000000 },
+      { endDate: '2024-12-31', operatingCashflow: 95000000000, capitalExpenditure: -10000000000, investingCashflow: -25000000000, financingCashflow: -65000000000, freeCashflow: 85000000000 }
+    ],
+    ratios: {
+      peRatio: pe,
+      forwardPE: pe * 0.9,
+      priceToBook: 4.5 + Math.random() * 8,
+      roe: roe,
+      roa: roe * 0.6,
+      marketCap: ticker === 'AAPL' ? 3000000000000 : ticker === 'MSFT' ? 3200000000000 : ticker === 'NVDA' ? 2800000000000 : 500000000000,
+      operatingMargin: profitMargin * 1.3,
+      profitMargin: profitMargin,
+      beta: 1.0 + (Math.random() - 0.5) * 0.4,
+      dividendYield: 0.005 + Math.random() * 0.015,
+      debtToEquity: debtToEquity,
+      revenueGrowth: 0.05 + Math.random() * 0.15,
+      earningsGrowth: 0.08 + Math.random() * 0.2,
+      fiftyTwoWeekChange: 0.15 + Math.random() * 0.3
+    }
+  };
+}
+
+// 5. GET /api/markets/historical (Fetch historical data from Yahoo Finance)
+app.get('/api/markets/historical', async (req, res) => {
+  try {
+    const ticker = (req.query.ticker as string || 'AAPL').toUpperCase();
+    const range = req.query.range as string || '1mo'; // 1d, 5d, 1mo, 3mo, 6mo, 1y, 5y
+    let interval = req.query.interval as string || '1d';
+    
+    if (range === '1d') interval = '5m';
+    else if (range === '5d') interval = '15m';
+
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${interval}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Yahoo Finance API returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const result = data?.chart?.result?.[0];
+    if (!result) {
+      throw new Error(`No historical data found for ticker ${ticker}`);
+    }
+
+    const timestamps = result.timestamp || [];
+    const quote = result.indicators?.quote?.[0] || {};
+    const opens = quote.open || [];
+    const highs = quote.high || [];
+    const lows = quote.low || [];
+    const closes = quote.close || [];
+    const volumes = quote.volume || [];
+
+    const bars: any[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      if (opens[i] != null && highs[i] != null && lows[i] != null && closes[i] != null) {
+        bars.push({
+          timestamp: new Date(timestamps[i] * 1000).toISOString(),
+          open: parseFloat(opens[i].toFixed(2)),
+          high: parseFloat(highs[i].toFixed(2)),
+          low: parseFloat(lows[i].toFixed(2)),
+          close: parseFloat(closes[i].toFixed(2)),
+          volume: volumes[i] ? Math.round(volumes[i]) : 0
+        });
+      }
+    }
+
+    res.json({
+      ticker,
+      currency: result.meta?.currency || 'USD',
+      symbol: result.meta?.symbol || ticker,
+      regularMarketPrice: result.meta?.regularMarketPrice || (bars.length > 0 ? bars[bars.length - 1].close : 0),
+      bars
+    });
+  } catch (err: any) {
+    console.log(`[Yahoo Finance Proxy] Notice: Fetching historical data for ticker ${req.query.ticker} fallback to simulation:`, err.message || err);
+    res.json(getSimulatedHistoricalData(req.query.ticker as string || 'AAPL', req.query.range as string || '1mo'));
+  }
+});
+
+// 6. GET /api/markets/fundamentals (Fetch fundamentals from Yahoo Finance)
+app.get('/api/markets/fundamentals', async (req, res) => {
+  try {
+    const ticker = (req.query.ticker as string || 'AAPL').toUpperCase();
+    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=incomeStatementHistory,balanceSheetHistory,cashflowStatementHistory,defaultKeyStatistics,financialData,summaryDetail`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Yahoo Finance API returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const quoteSummary = data?.quoteSummary?.result?.[0];
+    if (!quoteSummary) {
+      throw new Error(`No fundamental data found for ticker ${ticker}`);
+    }
+
+    // Format income statement history
+    const rawIncome = quoteSummary.incomeStatementHistory?.incomeStatementHistory || [];
+    const incomeStatement = rawIncome.map((item: any) => ({
+      endDate: item.endDate?.fmt || 'N/A',
+      totalRevenue: item.totalRevenue?.raw || 0,
+      costOfRevenue: item.costOfRevenue?.raw || 0,
+      grossProfit: item.grossProfit?.raw || 0,
+      operatingIncome: item.operatingIncome?.raw || 0,
+      netIncome: item.netIncome?.raw || 0
+    }));
+
+    // Format balance sheet history
+    const rawBalance = quoteSummary.balanceSheetHistory?.balanceSheetHistory || [];
+    const balanceSheet = rawBalance.map((item: any) => ({
+      endDate: item.endDate?.fmt || 'N/A',
+      totalAssets: item.totalAssets?.raw || 0,
+      totalLiab: item.totalLiab?.raw || 0,
+      totalStockholderEquity: item.totalStockholderEquity?.raw || 0,
+      cash: item.cash?.raw || 0,
+      shortTermInvestments: item.shortTermInvestments?.raw || 0
+    }));
+
+    // Format cash flow history
+    const rawCash = quoteSummary.cashflowStatementHistory?.cashflowStatementHistory || [];
+    const cashFlow = rawCash.map((item: any) => ({
+      endDate: item.endDate?.fmt || 'N/A',
+      operatingCashflow: item.totalCashFromOperatingActivities?.raw || 0,
+      capitalExpenditure: item.capitalExpenditures?.raw || 0,
+      investingCashflow: item.totalCashflowsFromInvestingActivities?.raw || 0,
+      financingCashflow: item.totalCashFromFinancingActivities?.raw || 0,
+      freeCashflow: (item.totalCashFromOperatingActivities?.raw || 0) + (item.capitalExpenditures?.raw || 0)
+    }));
+
+    // Extract key ratios
+    const keyStats = quoteSummary.defaultKeyStatistics || {};
+    const finData = quoteSummary.financialData || {};
+    const sumDetail = quoteSummary.summaryDetail || {};
+
+    const ratios = {
+      peRatio: sumDetail.trailingPE?.raw || sumDetail.forwardPE?.raw || null,
+      forwardPE: sumDetail.forwardPE?.raw || null,
+      priceToBook: keyStats.priceToBook?.raw || null,
+      roe: finData.returnOnEquity?.raw || null,
+      roa: finData.returnOnAssets?.raw || null,
+      marketCap: sumDetail.marketCap?.raw || null,
+      operatingMargin: finData.operatingMargins?.raw || null,
+      profitMargin: finData.profitMargins?.raw || null,
+      beta: keyStats.beta?.raw || null,
+      dividendYield: sumDetail.dividendYield?.raw || null,
+      debtToEquity: finData.debtToEquity?.raw || null,
+      revenueGrowth: finData.revenueGrowth?.raw || null,
+      earningsGrowth: finData.earningsGrowth?.raw || null,
+      fiftyTwoWeekChange: keyStats["52WeekChange"]?.raw || null
+    };
+
+    res.json({
+      ticker,
+      incomeStatement,
+      balanceSheet,
+      cashFlow,
+      ratios
+    });
+  } catch (err: any) {
+    console.log(`[Yahoo Finance Proxy] Notice: Fetching fundamentals for ticker ${req.query.ticker} fallback to simulation:`, err.message || err);
+    res.json(getSimulatedFundamentals(req.query.ticker as string || 'AAPL'));
+  }
+});
+
 
 interface CachedBriefing {
   narrative: string;

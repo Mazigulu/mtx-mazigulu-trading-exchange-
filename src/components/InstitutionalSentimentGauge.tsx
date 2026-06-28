@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { MarketSymbol, NewsEvent } from '../types';
+import { motion } from 'motion/react';
 import { 
   Gauge, 
   HelpCircle, 
@@ -414,15 +415,39 @@ export default function InstitutionalSentimentGauge() {
             <div className="w-full grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-[9px] font-mono text-white/40">
               <div className="text-center bg-[#09090b] p-1.5 border border-white/5 rounded">
                 <span className="block text-[8px] text-white/30 uppercase font-semibold">Macro Score</span>
-                <span className="text-indigo-300 font-bold text-[10.5px] block mt-0.5">{synthesisResult.newsScore}%</span>
+                <motion.span 
+                  key={synthesisResult.newsScore}
+                  initial={{ opacity: 0.5, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="text-indigo-300 font-bold text-[10.5px] block mt-0.5"
+                >
+                  {synthesisResult.newsScore}%
+                </motion.span>
               </div>
               <div className="text-center bg-[#09090b] p-1.5 border border-white/5 rounded">
                 <span className="block text-[8px] text-white/30 uppercase font-semibold">Flow Score</span>
-                <span className="text-emerald-400 font-bold text-[10.5px] block mt-0.5">{synthesisResult.flowScore}%</span>
+                <motion.span 
+                  key={synthesisResult.flowScore}
+                  initial={{ opacity: 0.5, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="text-emerald-400 font-bold text-[10.5px] block mt-0.5"
+                >
+                  {synthesisResult.flowScore}%
+                </motion.span>
               </div>
               <div className="text-center bg-[#09090b] p-1.5 border border-white/5 rounded">
                 <span className="block text-[8px] text-white/30 uppercase font-semibold">RSI Parameter</span>
-                <span className="text-amber-400 font-bold text-[10.5px] block mt-0.5">{activeAsset?.rsi || '50'}</span>
+                <motion.span 
+                  key={activeAsset?.rsi || '50'}
+                  initial={{ opacity: 0.5, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="text-amber-400 font-bold text-[10.5px] block mt-0.5"
+                >
+                  {activeAsset?.rsi || '50'}
+                </motion.span>
               </div>
             </div>
 
@@ -450,24 +475,44 @@ export default function InstitutionalSentimentGauge() {
                 <div className="flex items-center justify-between bg-[#0b0b0e] hover:bg-[#101015] border border-indigo-500/10 p-2 rounded-lg gap-3">
                   <div className="w-1/2 flex flex-col">
                     <span className="text-[8px] text-white/35">BID DENSITY (BUYERS)</span>
-                    <span className="text-xs font-black text-emerald-400 mt-1">{50 + (activeAsset?.imbalance || 0) / 2}%</span>
+                    <motion.span 
+                      key={activeAsset?.imbalance}
+                      initial={{ opacity: 0.6, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.25 }}
+                      className="text-xs font-black text-emerald-400 mt-1"
+                    >
+                      {50 + (activeAsset?.imbalance || 0) / 2}%
+                    </motion.span>
                   </div>
                   <div className="flex-1 bg-[#050505] h-3.5 border border-white/5 rounded relative overflow-hidden flex items-center">
                     {/* Visual split fill bar */}
-                    <div 
-                      className="absolute left-0 top-0 bottom-0 bg-emerald-500/20 border-r border-emerald-500/40 transition-all duration-500"
-                      style={{ width: `${50 + (activeAsset?.imbalance || 0) / 2}%` }}
+                    <motion.div 
+                      className="absolute left-0 top-0 bottom-0 bg-emerald-500/20 border-r border-emerald-500/40"
+                      initial={false}
+                      animate={{ width: `${50 + (activeAsset?.imbalance || 0) / 2}%` }}
+                      transition={{ type: "spring", stiffness: 100, damping: 15 }}
                     />
-                    <div 
-                      className="absolute right-0 top-0 bottom-0 bg-rose-500/10 transition-all duration-500"
-                      style={{ width: `${50 - (activeAsset?.imbalance || 0) / 2}%` }}
+                    <motion.div 
+                      className="absolute right-0 top-0 bottom-0 bg-rose-500/10"
+                      initial={false}
+                      animate={{ width: `${50 - (activeAsset?.imbalance || 0) / 2}%` }}
+                      transition={{ type: "spring", stiffness: 100, damping: 15 }}
                     />
                     <span className="absolute left-2 text-[8px] font-black text-white/40 z-10">BIDS</span>
                     <span className="absolute right-2 text-[8px] font-black text-white/40 z-10">ASKS</span>
                   </div>
                   <div className="w-1/2 text-right flex flex-col">
                     <span className="text-[8px] text-white/35">ASK DENSITY (SELLERS)</span>
-                    <span className="text-xs font-black text-rose-400 mt-1">{50 - (activeAsset?.imbalance || 0) / 2}%</span>
+                    <motion.span 
+                      key={activeAsset?.imbalance}
+                      initial={{ opacity: 0.6, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.25 }}
+                      className="text-xs font-black text-rose-400 mt-1"
+                    >
+                      {50 - (activeAsset?.imbalance || 0) / 2}%
+                    </motion.span>
                   </div>
                 </div>
 
