@@ -75,12 +75,6 @@ export default function SystemStatus() {
       message: 'Evaluating structural liquidity sweeps on EUR/USD... Spread 0.8 pips acceptable.'
     },
     {
-      time: '07:03:02',
-      source: 'AI_ADVISOR',
-      level: 'INFO',
-      message: 'Gemini RAG loaded successful template models referencing The Trading Bible.'
-    },
-    {
       time: '07:03:45',
       source: 'TELEGRAM',
       level: 'SUCCESS',
@@ -107,23 +101,13 @@ export default function SystemStatus() {
       icon: Wifi
     },
     {
-      id: 'sys-mt5',
-      name: 'MT5 Bridge Gateway',
-      desc: 'MetaTrader 5 Python connector (IPC)',
+      id: 'sys-gateway',
+      name: 'Execution Gateway',
+      desc: 'High-speed broker order execution gateway (FIX)',
       status: 'OPERATIONAL',
       latency: 12,
       packetLoss: 0,
       heartbeats: 1042,
-      icon: Cpu
-    },
-    {
-      id: 'sys-ai',
-      name: 'AI Advisory Engine',
-      desc: 'Gemini RAG context-aware strategy layer',
-      status: 'OPERATIONAL',
-      latency: 1540,
-      packetLoss: 0,
-      heartbeats: 382,
       icon: Cpu
     },
     {
@@ -175,7 +159,7 @@ export default function SystemStatus() {
           }
 
           // Compute basic fluctuated latency
-          const baseLatency = srv.id === 'sys-ai' ? 1480 : srv.id === 'sys-feed' ? 14 : srv.id === 'sys-mt5' ? 12 : srv.id === 'sys-broker' ? 28 : srv.id === 'sys-engine' ? 3 : 1;
+          const baseLatency = srv.id === 'sys-ai' ? 1480 : srv.id === 'sys-feed' ? 14 : srv.id === 'sys-gateway' ? 12 : srv.id === 'sys-broker' ? 28 : srv.id === 'sys-engine' ? 3 : 1;
           const jitterCap = srv.id === 'sys-ai' ? 120 : 4;
           const jitter = Math.round((Math.random() * jitterCap) - (jitterCap / 2));
           

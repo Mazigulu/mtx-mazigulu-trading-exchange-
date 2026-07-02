@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { MarketSymbol, Candlestick, MarketMetrics } from '../types';
 import { Gauge, Zap, TrendingUp, HelpCircle, Activity, Compass, AlertTriangle } from 'lucide-react';
+import { motion } from 'motion/react';
 
 interface MarketMomentumGaugeProps {
   symbol: MarketSymbol;
@@ -301,10 +302,16 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
           {/* Vol Ratio stat block */}
           <div className="bg-black/40 p-2.5 rounded border border-white/5 text-center">
             <span className="text-[8px] text-white/30 uppercase tracking-tight block">Vol Ratio (3/15)</span>
-            <div className="text-[10px] font-mono font-bold mt-1 text-white flex items-center justify-center space-x-1">
-              <span className={volRatio >= 1.2 ? 'text-amber-400' : 'text-emerald-400'}>
+            <div className="text-[10px] font-mono font-bold mt-1 text-white flex items-center justify-center space-x-1 h-4">
+              <motion.span 
+                key={volRatio}
+                initial={{ opacity: 0.3, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 12 }}
+                className={volRatio >= 1.2 ? 'text-amber-400 font-extrabold' : 'text-emerald-400 font-semibold'}
+              >
                 {volRatio.toFixed(2)}x
-              </span>
+              </motion.span>
             </div>
             <span className="text-[7.5px] text-white/20 block font-sans mt-0.5">
               {volRatio >= 1.2 ? 'Expansion' : 'Compression'}
@@ -314,10 +321,16 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
           {/* RSI Deviation block */}
           <div className="bg-black/40 p-2.5 rounded border border-white/5 text-center">
             <span className="text-[8px] text-white/30 uppercase tracking-tight block">RSI Deviation</span>
-            <div className="text-[10px] font-mono font-bold mt-1 text-white flex items-center justify-center space-x-1 animate-pulse">
-              <span className={Math.abs(rsiVal - 50) >= 15 ? 'text-amber-400 font-black' : 'text-emerald-400'}>
+            <div className="text-[10px] font-mono font-bold mt-1 text-white flex items-center justify-center space-x-1 h-4">
+              <motion.span 
+                key={rsiVal}
+                initial={{ opacity: 0.3, scale: 0.85, y: -2 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 12 }}
+                className={Math.abs(rsiVal - 50) >= 15 ? 'text-amber-400 font-black' : 'text-emerald-400 font-semibold'}
+              >
                 {Math.abs(Math.round(rsiVal - 50))}
-              </span>
+              </motion.span>
             </div>
             <span className="text-[7.5px] text-white/20 block font-sans mt-0.5">
               Ref: {Math.round(rsiVal)}
@@ -327,10 +340,16 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
           {/* Trend strength stat block */}
           <div className="bg-black/40 p-2.5 rounded border border-white/5 text-center">
             <span className="text-[8px] text-white/30 uppercase tracking-tight block">Trend Persist</span>
-            <div className="text-[10px] font-mono font-bold mt-1 text-white flex items-center justify-center space-x-1">
-              <span className={trendStrength >= 60 ? 'text-indigo-400 font-extrabold' : 'text-neutral-400'}>
+            <div className="text-[10px] font-mono font-bold mt-1 text-white flex items-center justify-center space-x-1 h-4">
+              <motion.span 
+                key={trendStrength}
+                initial={{ opacity: 0.3, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 12 }}
+                className={trendStrength >= 60 ? 'text-indigo-400 font-extrabold' : 'text-neutral-400 font-semibold'}
+              >
                 {Math.round(trendStrength)}%
-              </span>
+              </motion.span>
             </div>
             <span className="text-[7.5px] text-white/20 block font-sans mt-0.5">
               {trendStrength >= 65 ? 'Impaired' : 'Balanced'}

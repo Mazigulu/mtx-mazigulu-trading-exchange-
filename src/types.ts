@@ -45,23 +45,10 @@ export interface LiquiditySweep {
 }
 
 export type MarketSymbol = 
-  | 'EUR/USD' 
-  | 'GBP/USD' 
-  | 'USD/JPY' 
-  | 'AUD/USD' 
-  | 'EUR/GBP' 
-  | 'GOLD/USD' 
-  | 'SILVER/USD' 
-  | 'BTC/USDT' 
-  | 'ETH/USDT' 
-  | 'SOL/USDT' 
   | 'US30' 
   | 'NAS100' 
   | 'GER40' 
   | 'SPX500'
-  | 'DXY'
-  | 'US10Y'
-  | 'BRENT'
   | 'AAPL'
   | 'MSFT'
   | 'NVDA'
@@ -91,8 +78,8 @@ export interface Trade {
   marketNote?: string;
   autoBreakEvenProfitPct?: number;
   autoBreakEvenTriggered?: boolean;
-  latency?: number; // MT5 bridge latency in ms
-  slippage?: number; // MT5 trade slippage in pips/points
+  latency?: number; // Broker bridge latency in ms
+  slippage?: number; // Broker trade slippage in pips/points
   trailingStopActive?: boolean;
   trailingStopDistance?: number;
   trailingTakeProfitActive?: boolean;
@@ -167,50 +154,6 @@ export function getSymbolCorrelations(symbol: MarketSymbol): CorrelationData[] {
   const list: { sym: MarketSymbol; coef: number; desc: string }[] = [];
 
   switch (symbol) {
-    case 'EUR/USD':
-      list.push({ sym: 'GBP/USD', coef: 0.88, desc: 'Highly synchronized European USD proxy' });
-      list.push({ sym: 'USD/JPY', coef: -0.82, desc: 'Strong dollar safe-haven safeflow' });
-      list.push({ sym: 'GOLD/USD', coef: 0.45, desc: 'Commodity inflation hedge connection' });
-      list.push({ sym: 'EUR/GBP', coef: 0.21, desc: 'Regional cross exchange valuation' });
-      list.push({ sym: 'BTC/USDT', coef: 0.35, desc: 'Macro risk-on liquid drift' });
-      break;
-    case 'GBP/USD':
-      list.push({ sym: 'EUR/USD', coef: 0.88, desc: 'High positive coordinate synchronization' });
-      list.push({ sym: 'USD/JPY', coef: -0.72, desc: 'Inverse safe-haven demand disparity' });
-      list.push({ sym: 'EUR/GBP', coef: -0.35, desc: 'Regional cross relative value shift' });
-      list.push({ sym: 'GOLD/USD', coef: 0.38, desc: 'Dollar-denominated commodity alignment' });
-      break;
-    case 'USD/JPY':
-      list.push({ sym: 'EUR/USD', coef: -0.82, desc: 'Inverse safe-haven exchange tracking' });
-      list.push({ sym: 'GBP/USD', coef: -0.72, desc: 'Stereotyped sterling safe-haven flight' });
-      list.push({ sym: 'GOLD/USD', coef: -0.35, desc: 'Interest rate yield differential drag' });
-      list.push({ sym: 'US30', coef: 0.65, desc: 'Blue-chip export competitiveness inflow' });
-      break;
-    case 'BTC/USDT':
-      list.push({ sym: 'ETH/USDT', coef: 0.92, desc: 'Direct locked leader-to-beta correlation' });
-      list.push({ sym: 'SOL/USDT', coef: 0.85, desc: 'Macro high-beta asset cycle synchronization' });
-      list.push({ sym: 'NAS100', coef: 0.58, desc: 'Global speculative capital pool drift' });
-      list.push({ sym: 'GOLD/USD', coef: 0.25, desc: 'Digital hedge store-of-value narrative' });
-      break;
-    case 'ETH/USDT':
-      list.push({ sym: 'BTC/USDT', coef: 0.92, desc: 'Locked index leader beta alignment' });
-      list.push({ sym: 'SOL/USDT', coef: 0.82, desc: 'Layer-1 smart contract correlation' });
-      list.push({ sym: 'NAS100', coef: 0.52, desc: 'High-tech risk capital correlation' });
-      break;
-    case 'SOL/USDT':
-      list.push({ sym: 'BTC/USDT', coef: 0.85, desc: 'Speculative network beta alignment' });
-      list.push({ sym: 'ETH/USDT', coef: 0.82, desc: 'DeFi & developer resource tracking' });
-      break;
-    case 'GOLD/USD':
-      list.push({ sym: 'SILVER/USD', coef: 0.81, desc: 'Locked coordinate physical precious metals' });
-      list.push({ sym: 'EUR/USD', coef: 0.45, desc: 'Anti-dollar inflation hedge alignment' });
-      list.push({ sym: 'USD/JPY', coef: -0.35, desc: 'Dollar yield competition allocation' });
-      list.push({ sym: 'BTC/USDT', coef: 0.25, desc: 'Digital gold capital flow relationship' });
-      break;
-    case 'SILVER/USD':
-      list.push({ sym: 'GOLD/USD', coef: 0.81, desc: 'Coordinate physical demand lockstep' });
-      list.push({ sym: 'EUR/USD', coef: 0.38, desc: 'Broad inflation hedge commodity flows' });
-      break;
     case 'US30':
       list.push({ sym: 'SPX500', coef: 0.94, desc: 'Lockstep broad industrialized stock indexes' });
       list.push({ sym: 'NAS100', coef: 0.87, desc: 'Systemic US equity capital allocation' });
@@ -219,7 +162,7 @@ export function getSymbolCorrelations(symbol: MarketSymbol): CorrelationData[] {
     case 'NAS100':
       list.push({ sym: 'SPX500', coef: 0.92, desc: 'US growth capital capitalization tracking' });
       list.push({ sym: 'US30', coef: 0.87, desc: 'Coordinate domestic industrial capital drift' });
-      list.push({ sym: 'BTC/USDT', coef: 0.58, desc: 'Macro tech speculative alignment' });
+      list.push({ sym: 'AAPL', coef: 0.88, desc: 'Heavy weighting inside tech growth index' });
       break;
     case 'SPX500':
       list.push({ sym: 'US30', coef: 0.94, desc: 'Coordinate domestic corporate index' });
@@ -229,21 +172,6 @@ export function getSymbolCorrelations(symbol: MarketSymbol): CorrelationData[] {
     case 'GER40':
       list.push({ sym: 'SPX500', coef: 0.82, desc: 'Coordinate global investment covariance' });
       list.push({ sym: 'US30', coef: 0.78, desc: 'Exporter-driven machinery alignment' });
-      break;
-    case 'DXY':
-      list.push({ sym: 'EUR/USD', coef: -0.95, desc: 'Primary component of dollar index weight' });
-      list.push({ sym: 'USD/JPY', coef: 0.85, desc: 'Highly correlated dollar interest rate tracker' });
-      list.push({ sym: 'GOLD/USD', coef: -0.55, desc: 'Inverse precious metal commodity denominator' });
-      list.push({ sym: 'BTC/USDT', coef: -0.45, desc: 'Inverse speculative risk asset denominator' });
-      break;
-    case 'US10Y':
-      list.push({ sym: 'DXY', coef: 0.60, desc: 'Treasury yields driving strong USD indexing' });
-      list.push({ sym: 'USD/JPY', coef: 0.75, desc: 'Yield-differential carry-trade pairing' });
-      list.push({ sym: 'GOLD/USD', coef: -0.40, desc: 'Yield asset competition with safe-haven metal' });
-      break;
-    case 'BRENT':
-      list.push({ sym: 'GOLD/USD', coef: 0.45, desc: 'Commodity inflation indexing synchronization' });
-      list.push({ sym: 'DXY', coef: -0.30, desc: 'Inverse pricing against American Dollar' });
       break;
     case 'AAPL':
       list.push({ sym: 'NAS100', coef: 0.88, desc: 'Heavy weighting inside tech growth index' });
@@ -257,13 +185,14 @@ export function getSymbolCorrelations(symbol: MarketSymbol): CorrelationData[] {
       break;
     case 'NVDA':
       list.push({ sym: 'NAS100', coef: 0.91, desc: 'High-beta growth semiconductor momentum' });
-      list.push({ sym: 'BTC/USDT', coef: 0.48, desc: 'Speculative liquidity cycle synchronization' });
+      list.push({ sym: 'AAPL', coef: 0.65, desc: 'Tech hardware sector co-drift' });
       break;
     case 'TSLA':
       list.push({ sym: 'NAS100', coef: 0.72, desc: 'High-volatility growth vehicle benchmark' });
+      list.push({ sym: 'SPX500', coef: 0.60, desc: 'Broad-market index inclusion volatility' });
       break;
     default:
-      list.push({ sym: 'EUR/USD', coef: 0.30, desc: 'Market benchmark reference' });
+      list.push({ sym: 'SPX500', coef: 0.30, desc: 'Market benchmark reference' });
   }
 
   return list.map((item) => {

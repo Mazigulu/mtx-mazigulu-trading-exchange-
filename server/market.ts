@@ -101,36 +101,14 @@ function calculateATR(highs: number[], lows: number[], closes: number[], period 
 }
 
 function getDecimals(symbol: string): number {
-  if (symbol.includes('JPY') || symbol.includes('GOLD') || symbol.includes('SILVER') || symbol === 'SOL/USDT' || symbol === 'US30' || symbol === 'NAS100' || symbol === 'GER40' || symbol === 'SPX500' || symbol === 'DXY' || symbol === 'BRENT' || ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(symbol)) {
-    return 2;
-  }
-  if (symbol === 'US10Y') {
-    return 3;
-  }
-  if (symbol === 'BTC/USDT' || symbol === 'ETH/USDT') {
-    return 1;
-  }
-  return 5;
+  return 2;
 }
 
 const tradingViewSymbols: Record<MarketSymbol, string> = {
-  'EUR/USD': 'FX:EURUSD',
-  'GBP/USD': 'FX:GBPUSD',
-  'USD/JPY': 'FX:USDJPY',
-  'AUD/USD': 'FX:AUDUSD',
-  'EUR/GBP': 'FX:EURGBP',
-  'GOLD/USD': 'FX:XAUUSD',
-  'SILVER/USD': 'FX:XAGUSD',
-  'BTC/USDT': 'BINANCE:BTCUSDT',
-  'ETH/USDT': 'BINANCE:ETHUSDT',
-  'SOL/USDT': 'BINANCE:SOLUSDT',
   'US30': 'FOREXCOM:DJI',
   'NAS100': 'NASDAQ:NDX',
   'GER40': 'INDEX:DEU40',
   'SPX500': 'FOREXCOM:SPX500',
-  'DXY': 'CAPITALCOM:DXY',
-  'US10Y': 'TVC:US10Y',
-  'BRENT': 'TVC:UKOIL',
   'AAPL': 'NASDAQ:AAPL',
   'MSFT': 'NASDAQ:MSFT',
   'NVDA': 'NASDAQ:NVDA',
@@ -194,47 +172,21 @@ function parseTradingViewCandles(data: any): Candlestick[] {
 
 export class MarketSimulator {
   private candles: Record<MarketSymbol, Candlestick[]> = {
-    'EUR/USD': [],
-    'GBP/USD': [],
-    'USD/JPY': [],
-    'AUD/USD': [],
-    'EUR/GBP': [],
-    'GOLD/USD': [],
-    'SILVER/USD': [],
-    'BTC/USDT': [],
-    'ETH/USDT': [],
-    'SOL/USDT': [],
     'US30': [],
     'NAS100': [],
     'GER40': [],
     'SPX500': [],
-    'DXY': [],
-    'US10Y': [],
-    'BRENT': [],
     'AAPL': [],
     'MSFT': [],
     'NVDA': [],
     'TSLA': []
   };
 
-  private mt5Active: Record<MarketSymbol, boolean> = {
-    'EUR/USD': false,
-    'GBP/USD': false,
-    'USD/JPY': false,
-    'AUD/USD': false,
-    'EUR/GBP': false,
-    'GOLD/USD': false,
-    'SILVER/USD': false,
-    'BTC/USDT': false,
-    'ETH/USDT': false,
-    'SOL/USDT': false,
+  private gatewayActive: Record<MarketSymbol, boolean> = {
     'US30': false,
     'NAS100': false,
     'GER40': false,
     'SPX500': false,
-    'DXY': false,
-    'US10Y': false,
-    'BRENT': false,
     'AAPL': false,
     'MSFT': false,
     'NVDA': false,
@@ -244,23 +196,10 @@ export class MarketSimulator {
   public lastTvStatus: Record<string, any> = {};
 
   private basePrices: Record<MarketSymbol, number> = {
-    'EUR/USD': 1.1645,
-    'GBP/USD': 1.2680,
-    'USD/JPY': 155.40,
-    'AUD/USD': 0.6650,
-    'EUR/GBP': 0.8520,
-    'GOLD/USD': 2355.50,
-    'SILVER/USD': 29.50,
-    'BTC/USDT': 67500.0,
-    'ETH/USDT': 3450.0,
-    'SOL/USDT': 148.50,
     'US30': 38850.0,
     'NAS100': 18550.0,
     'GER40': 18200.0,
     'SPX500': 5300.0,
-    'DXY': 105.20,
-    'US10Y': 4.250,
-    'BRENT': 82.50,
     'AAPL': 188.30,
     'MSFT': 415.50,
     'NVDA': 945.00,
@@ -268,23 +207,10 @@ export class MarketSimulator {
   };
 
   private tickSizes: Record<MarketSymbol, number> = {
-    'EUR/USD': 0.0001,
-    'GBP/USD': 0.0001,
-    'USD/JPY': 0.01,
-    'AUD/USD': 0.0001,
-    'EUR/GBP': 0.0001,
-    'GOLD/USD': 0.10,
-    'SILVER/USD': 0.01,
-    'BTC/USDT': 10.0,
-    'ETH/USDT': 1.0,
-    'SOL/USDT': 0.05,
     'US30': 1.0,
     'NAS100': 1.0,
     'GER40': 1.0,
     'SPX500': 0.10,
-    'DXY': 0.01,
-    'US10Y': 0.001,
-    'BRENT': 0.01,
     'AAPL': 0.05,
     'MSFT': 0.05,
     'NVDA': 0.10,
@@ -343,6 +269,21 @@ export class MarketSimulator {
         signal: AbortSignal.timeout(5000)
       });
 
+      if (response.status === 429) {
+        // Increase throttle to 15 minutes to back off nicely
+        this.lastTvFetch[symbol] = now + 900000;
+        this.lastTvStatus[symbol] = {
+          status: 'RATE_LIMITED',
+          timestamp: new Date().toISOString(),
+          error: 'Rate limiting (429) encountered. Backing off gracefully to prevent excessive traffic.',
+          symbolUsed: tvSymbol,
+          apiKeyLength: apiKey.length,
+          responseStatus: 429
+        };
+        console.log(`[TradingView API] Rate limit (429) active for ${symbol}. Throttling requests and using high-fidelity simulation.`);
+        return false;
+      }
+
       if (!response.ok) {
         throw new Error(`HTTP error ${response.status} (${response.statusText || 'Unknown'})`);
       }
@@ -369,7 +310,7 @@ export class MarketSimulator {
           for (let i = gap; i >= 1; i--) {
             const time = new Date(firstTvTime.getTime() - i * 4 * 60 * 60 * 1000);
             const isUp = Math.random() > 0.45;
-            const isHighVol = symbol.startsWith('BTC') || symbol.startsWith('ETH') || symbol === 'SOL/USDT' || ['AAPL', 'TSLA', 'NVDA', 'US10Y'].includes(symbol);
+            const isHighVol = ['AAPL', 'TSLA', 'NVDA'].includes(symbol);
             const bodySize = (Math.random() * 5 + 1) * tick * (isHighVol ? 15 : 5);
             const wickHigh = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
             const wickLow = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
@@ -406,7 +347,7 @@ export class MarketSimulator {
 
         this.candles[symbol] = mergedList.slice(-240);
         this.recalculateIndicators(this.candles[symbol]);
-        this.mt5Active[symbol] = true;
+        this.gatewayActive[symbol] = true;
 
         this.lastTvStatus[symbol] = {
           status: 'SUCCESS',
@@ -434,9 +375,13 @@ export class MarketSimulator {
       }
     } catch (err: any) {
       const errMsg = err.message || String(err);
-      console.log(`[TradingView API] Notice fetching for ${symbol}:`, errMsg);
+      if (errMsg.includes('429')) {
+        console.log(`[TradingView API] Rate limit (429) active for ${symbol}. Using simulated fallback.`);
+      } else {
+        console.log(`[TradingView API] Status for ${symbol}: Fallback active (${errMsg})`);
+      }
       this.lastTvStatus[symbol] = {
-        status: 'ERROR',
+        status: 'OFFLINE_FALLBACK',
         timestamp: new Date().toISOString(),
         error: errMsg,
         symbolUsed: tvSymbol,
@@ -464,7 +409,7 @@ export class MarketSimulator {
     for (let i = 240; i >= 1; i--) {
       const time = new Date(now.getTime() - i * 4 * 60 * 60 * 1000);
       const isUp = Math.random() > 0.45; // slight bullish tint
-      const isHighVol = symbol.startsWith('BTC') || symbol.startsWith('ETH') || symbol === 'SOL/USDT' || ['AAPL', 'TSLA', 'NVDA', 'US10Y'].includes(symbol);
+      const isHighVol = ['AAPL', 'TSLA', 'NVDA'].includes(symbol);
       const bodySize = (Math.random() * 5 + 1) * tick * (isHighVol ? 15 : 5);
       const wickHigh = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
       const wickLow = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
@@ -518,7 +463,7 @@ export class MarketSimulator {
 
       const last = list[list.length - 1];
       const tick = this.tickSizes[sym];
-      const drift = (Math.random() - 0.495) * tick * (sym.startsWith('BTC') ? 8 : 4);
+      const drift = (Math.random() - 0.495) * tick * 4;
 
       // Mutate current (last) candle's close
       const newClose = last.close + drift;
@@ -527,8 +472,8 @@ export class MarketSimulator {
       if (last.close > last.high) last.high = last.close;
       if (last.close < last.low) last.low = last.close;
 
-      // Occasional new candle generation (10% chance) - ONLY if MT5 Python bridge is not active
-      if (!this.mt5Active[sym] && Math.random() > 0.90) {
+      // Occasional new candle generation (10% chance) - ONLY if live gateway connector is not active
+      if (!this.gatewayActive[sym] && Math.random() > 0.90) {
         // Shift list, add new candle
         const nextTime = new Date(new Date(last.timestamp).getTime() + 4 * 60 * 60 * 1000);
         list.shift();
@@ -547,19 +492,19 @@ export class MarketSimulator {
   }
 
   public getCandles(symbol: MarketSymbol): Candlestick[] {
-    // Return live H4 price streams (if active, these are fetched from the live MT5 Python Terminal bridge)
+    // Return live H4 price streams (if active, these are fetched from the live broker gateway)
     return this.candles[symbol] || [];
   }
 
   public getMarketMetrics(symbol: MarketSymbol): MarketMetrics {
-    // Wrapper for live market validation integrated with the MT5 bridge
+    // Wrapper for live market validation integrated with the broker execution bridge
     return this.getMetrics(symbol);
   }
 
-  public updateFromMT5(symbol: MarketSymbol, rawCandles: any[]): boolean {
+  public updateFromGateway(symbol: MarketSymbol, rawCandles: any[]): boolean {
     if (!this.candles[symbol]) return false;
 
-    // Map and sanitize the incoming rates from the MetaTrader 5 terminal Python connector
+    // Map and sanitize the incoming rates from the broker terminal gateway connector
     const formatted: Candlestick[] = rawCandles.map(c => ({
       timestamp: c.timestamp,
       open: parseFloat(c.open),
@@ -572,12 +517,12 @@ export class MarketSimulator {
     // Retain a fixed size of historical bars to keep indicator calculation responsive
     this.candles[symbol] = formatted.slice(-50);
     this.recalculateIndicators(this.candles[symbol]);
-    this.mt5Active[symbol] = true;
+    this.gatewayActive[symbol] = true;
     return true;
   }
 
-  public getMT5Status(): Record<MarketSymbol, boolean> {
-    return this.mt5Active;
+  public getGatewayStatus(): Record<MarketSymbol, boolean> {
+    return this.gatewayActive;
   }
 
   public getFVGs(symbol: MarketSymbol): FVG[] {
@@ -637,14 +582,7 @@ export class MarketSimulator {
       // Net change calculation to measure institutional displacement
       const displacement = next3.close - next1.open;
       const minDisplacement = this.tickSizes[symbol] * (
-        symbol.includes('USDT') ? 35 :
-        symbol === 'GOLD/USD' ? 15 :
-        symbol === 'USD/JPY' ? 0.3 :
-        ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(symbol) ? 5.0 :
-        symbol === 'BRENT' ? 0.5 :
-        symbol === 'DXY' ? 0.15 :
-        symbol === 'US10Y' ? 0.02 :
-        0.0020
+        ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(symbol) ? 5.0 : 25.0
       );
 
       if (isRed && isNextBullish && displacement > minDisplacement) {

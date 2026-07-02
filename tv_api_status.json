@@ -3,12 +3,13 @@
   "apiKeyLength": 50,
   "apiKeyPlaceholder": false,
   "lastTvStatus": {
-    "EUR/USD": {
-      "status": "ERROR",
-      "timestamp": "2026-06-28T19:05:00.418Z",
-      "error": "HTTP error 429 (Too Many Requests)",
-      "symbolUsed": "FX:EURUSD",
-      "apiKeyLength": 50
+    "NAS100": {
+      "status": "RATE_LIMITED",
+      "timestamp": "2026-07-01T19:44:53.309Z",
+      "error": "Rate limiting (429) encountered. Backing off gracefully to prevent excessive traffic.",
+      "symbolUsed": "NASDAQ:NDX",
+      "apiKeyLength": 50,
+      "responseStatus": 429
     }
   }
 }

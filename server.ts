@@ -12,7 +12,6 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI, Type } from '@google/genai';
 import { MarketSimulator } from './server/market';
 import { MarketSymbol, Trade, NewsEvent, BreachEvent } from './src/types';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
@@ -31,75 +30,6 @@ app.use(express.json());
 // Initialize Market Simulator
 const simulator = new MarketSimulator();
 
-// Setup trades database filename
-const DB_FILE = path.join(process.cwd(), 'trades_db.json');
-
-// Helper to read trades
-function readTrades(): Trade[] {
-  try {
-    if (!fs.existsSync(DB_FILE)) {
-      fs.writeFileSync(DB_FILE, JSON.stringify([], null, 2));
-      return [];
-    }
-    const data = fs.readFileSync(DB_FILE, 'utf-8').trim();
-    if (!data) {
-      fs.writeFileSync(DB_FILE, JSON.stringify([], null, 2));
-      return [];
-    }
-    const parsed = JSON.parse(data) as Trade[];
-    let changed = false;
-    const enriched = parsed.map(trade => {
-      let isLocalModified = false;
-      if (trade.latency === undefined) {
-        const seedVal = parseInt(trade.id.replace(/\D/g, '') || '0') || 42;
-        const isSpike = (seedVal % 10) === 0 || (seedVal % 7) === 0;
-        trade.latency = isSpike 
-          ? 46 + (seedVal % 85)
-          : 18 + (seedVal % 27);
-        isLocalModified = true;
-      }
-      if (trade.slippage === undefined) {
-        const seedVal = parseInt(trade.id.replace(/\D/g, '') || '0') || 42;
-        const isSpike = (seedVal % 10) === 0 || (seedVal % 7) === 0;
-        trade.slippage = isSpike
-          ? parseFloat((0.8 + (seedVal % 15) / 10).toFixed(2))
-          : parseFloat(((seedVal % 5) / 10).toFixed(2));
-        isLocalModified = true;
-      }
-      if (isLocalModified) {
-        changed = true;
-      }
-      return trade;
-    });
-    if (changed) {
-      fs.writeFileSync(DB_FILE, JSON.stringify(enriched, null, 2));
-    }
-    return enriched;
-  } catch (error) {
-    console.error('Error reading trades DB, resetting to empty list:', error);
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify([], null, 2));
-    } catch (e) {
-      console.error('Failed to reset trades DB:', e);
-    }
-    return [];
-  }
-}
-
-// Helper to write trades
-function writeTrades(trades: Trade[]): boolean {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(trades, null, 2));
-    return true;
-  } catch (error) {
-    console.error('Error writing trades DB:', error);
-    return false;
-  }
-}
-
-// Ensure database file is initialized
-readTrades();
-
 // Setup breaches database filename
 const BREACH_DB_FILE = path.join(process.cwd(), 'breaches_db.json');
 
@@ -110,31 +40,31 @@ function readBreaches(): BreachEvent[] {
         {
           id: "breach-1",
           timestamp: "2026-06-04T14:30:00Z",
-          symbol: "BTC/USDT",
+          symbol: "NVDA",
           exposure: 1.95,
           pnlAtBreach: -195.00,
-          reason: "Sudden FOMC interest rate spike triggered high-volatility stop-loss aggregate deviation."
+          reason: "Sudden earnings-related volatility spike triggered stop-loss aggregate deviation."
         },
         {
           id: "breach-2",
           timestamp: "2026-06-03T20:15:22Z",
-          symbol: "GOLD/USD",
+          symbol: "AAPL",
           exposure: 1.62,
           pnlAtBreach: -162.00,
-          reason: "Precious metals resistance breakout exceeded localized asset-class limit cap."
+          reason: "Intraday resistance breakout exceeded localized asset-class limit cap."
         },
         {
           id: "breach-3",
           timestamp: "2026-06-02T10:05:11Z",
-          symbol: "GBP/USD",
+          symbol: "TSLA",
           exposure: 1.58,
           pnlAtBreach: -158.00,
-          reason: "Liquidity sweep consolidation over-leveraged the 1% maximum target parameter limit during Asian session close."
+          reason: "High volatility pre-market volume exceeded localized risk tolerances."
         },
         {
           id: "breach-4",
           timestamp: "2026-05-31T15:42:00Z",
-          symbol: "EUR/USD",
+          symbol: "SPX500",
           exposure: 1.74,
           pnlAtBreach: -174.00,
           reason: "Overlapping directional buy lots triggered systemic margin escalation warning."
@@ -142,7 +72,7 @@ function readBreaches(): BreachEvent[] {
         {
           id: "breach-5",
           timestamp: "2026-05-28T09:12:45Z",
-          symbol: "USD/JPY",
+          symbol: "NAS100",
           exposure: 1.52,
           pnlAtBreach: -152.00,
           reason: "Averaging down into negative momentum structure breached compliance threshold."
@@ -186,21 +116,10 @@ async function checkForNewBreaches(): Promise<void> {
       const slDistance = Math.abs(t.entryPrice - t.stopLoss);
       
       let tradeRiskDollar = 0;
-      if (t.symbol === 'BTC/USDT' || t.symbol === 'ETH/USDT' || t.symbol === 'SOL/USDT') {
-        tradeRiskDollar = slDistance * t.size;
-      } else if (t.symbol === 'USD/JPY') {
-        tradeRiskDollar = (slDistance / 0.01) * t.size * 0.1;
-      } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(t.symbol)) {
+      if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(t.symbol)) {
         tradeRiskDollar = slDistance * t.size * 100;
-      } else if (t.symbol === 'US10Y') {
-        tradeRiskDollar = slDistance * t.size * 10000;
-      } else if (t.symbol === 'DXY' || t.symbol === 'BRENT') {
-        tradeRiskDollar = slDistance * t.size * 1000;
-      } else if (['US30', 'NAS100', 'SPX500', 'GER40'].includes(t.symbol)) {
-        tradeRiskDollar = slDistance * t.size * 10;
       } else {
-        const contractLots = t.size * 100000;
-        tradeRiskDollar = slDistance * contractLots;
+        tradeRiskDollar = slDistance * t.size * 10;
       }
       
       totalRiskAtStake += Math.max(tradeRiskDollar, 50);
@@ -212,7 +131,7 @@ async function checkForNewBreaches(): Promise<void> {
       const breaches = readBreaches();
       
       // Determine dominant symbol causing risk
-      let maxRiskSymbol = openTrades[0]?.symbol || 'EUR/USD';
+      let maxRiskSymbol = openTrades[0]?.symbol || 'AAPL';
       let maxRiskAmt = 0;
       openTrades.forEach(t => {
         const slDistance = Math.abs(t.entryPrice - t.stopLoss);
@@ -256,210 +175,78 @@ readBreaches();
 const economicEvents: NewsEvent[] = [
   {
     id: 'news-1',
-    currency: 'USD',
-    title: 'ISM Manufacturing PMI',
+    currency: 'NVDA',
+    title: 'NVIDIA Corp. Q2 Earnings Release & Forward Guidance',
     time: '2026-06-01T14:00:00Z',
     impact: 'HIGH',
-    forecast: '49.1',
-    previous: '48.6',
+    forecast: 'EPS: $0.64 | Rev: $28.5B',
+    previous: 'EPS: $0.59 | Rev: $26.0B',
     actual: undefined,
   },
   {
     id: 'news-2',
-    currency: 'GBP',
-    title: 'CPI y/y (Inflation)',
-    time: '2026-06-02T07:00:00Z',
-    impact: 'HIGH',
-    forecast: '2.1%',
-    previous: '2.3%',
-    actual: undefined,
+    currency: 'MSFT',
+    title: 'Microsoft SEC Form 4 (CEO Satya Nadella Insider Purchase $20M)',
+    time: '2026-06-02T08:30:00Z',
+    impact: 'MEDIUM',
+    forecast: 'Insider BUY',
+    previous: 'N/A',
+    actual: 'Form 4 Filed',
   },
   {
     id: 'news-3',
-    currency: 'EUR',
-    title: 'Flash CPI Estimate y/y',
-    time: '2026-06-03T09:00:00Z',
+    currency: 'AAPL',
+    title: 'Apple Inc. WWDC Keynote: AI System Integration Framework',
+    time: '2026-06-03T17:00:00Z',
     impact: 'HIGH',
-    forecast: '2.4%',
-    previous: '2.4%',
+    forecast: 'Keynote Launch',
+    previous: 'N/A',
     actual: undefined,
   },
   {
     id: 'news-4',
-    currency: 'USD',
-    title: 'ADP Non-Farm Employment Change',
-    time: '2026-06-04T12:15:00Z',
-    impact: 'MEDIUM',
-    forecast: '155K',
-    previous: '188K',
+    currency: 'TSLA',
+    title: 'Tesla, Inc. Q2 Vehicle Production & Delivery Numbers',
+    time: '2026-06-04T13:00:00Z',
+    impact: 'HIGH',
+    forecast: 'Deliveries: 442K',
+    previous: 'Deliveries: 412K',
     actual: undefined,
   },
   {
     id: 'news-5',
-    currency: 'USD',
-    title: 'Unemployment Claims',
-    time: '2026-06-04T12:30:00Z',
+    currency: 'GOOG',
+    title: 'Alphabet Inc. SEC Form 10-Q (Quarterly Financial Disclosure)',
+    time: '2026-06-04T15:30:00Z',
     impact: 'LOW',
-    forecast: '215K',
-    previous: '220K',
-    actual: undefined,
+    forecast: 'Form 10-Q',
+    previous: 'N/A',
+    actual: 'Filing Ingress',
   },
   {
     id: 'news-6',
-    currency: 'USD',
-    title: 'Non-Farm Employment Change (NFP) & Unemployment Rate',
+    currency: 'META',
+    title: 'Meta Platforms Inc. Cash Dividend Declaration ($0.50/share)',
     time: '2026-06-05T12:30:00Z',
-    impact: 'HIGH',
-    forecast: '180K / 3.9%',
-    previous: '175K / 3.8%',
+    impact: 'MEDIUM',
+    forecast: '$0.50 Payout',
+    previous: '$0.50 Payout',
     actual: undefined,
   }
 ];
 
-// Initialize Gemini SDK safely with a dynamic fallback helper
-let aiClient: GoogleGenAI | null = null;
-
-function getGeminiClient(): GoogleGenAI | null {
-  if (aiClient) return aiClient;
-
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-      aiClient = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
-      console.log('Successfully initialized GoogleGenAI client.');
-    }
-  } catch (e) {
-    console.warn('Failed to initialize GoogleGenAI client (will run in simulation/offline mode):', e);
-  }
-  return aiClient;
-}
-
-// Resilient wrapper with exponential backoff for transient Gemini errors (like 503 unavailable or 429 rate limit)
-let isGeminiQuotaExhausted = false;
-let quotaExhaustedResetTime = 0;
-const QUOTA_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes cooldown
-
-function checkGeminiQuotaStatus(): boolean {
-  if (isGeminiQuotaExhausted) {
-    if (Date.now() > quotaExhaustedResetTime) {
-      isGeminiQuotaExhausted = false;
-      console.log('[Gemini Quota Sentry] Cooldown period completed. Re-enabling Gemini API.');
-      return true;
-    }
-    return false;
-  }
-  return true;
-}
-
-function handleGeminiQuotaError(err: any): void {
-  const errMsg = err.message || '';
-  const isQuotaLimit = 
-    errMsg.includes('quota') || 
-    errMsg.includes('Quota') || 
-    errMsg.includes('limit') || 
-    errMsg.includes('Limit') || 
-    errMsg.includes('429') || 
-    errMsg.includes('RESOURCE_EXHAUSTED') ||
-    err.status === 429;
-
-  if (isQuotaLimit) {
-    isGeminiQuotaExhausted = true;
-    quotaExhaustedResetTime = Date.now() + QUOTA_COOLDOWN_MS;
-    console.warn(`[Gemini Quota Sentry] Quota limit/Resource Exhausted detected. Activating offline simulation cooldown for ${QUOTA_COOLDOWN_MS / 1000}s.`);
-  }
-}
-
-async function generateContentWithRetry(
-  client: GoogleGenAI,
-  params: { model: string; contents: any; config?: any },
-  retries = 3,
-  initialDelay = 1500
-): Promise<any> {
-  if (!checkGeminiQuotaStatus()) {
-    throw new Error('Gemini API quota currently exhausted (serving in fast mock cooling period).');
-  }
-
-  let attempt = 0;
-  let currentModel = params.model;
-  while (true) {
-    try {
-      const executeParams = { ...params, model: currentModel };
-      return await client.models.generateContent(executeParams);
-    } catch (err: any) {
-      attempt++;
-      const errMsg = err.message || '';
-      
-      handleGeminiQuotaError(err);
-
-      const isQuotaLimit = 
-        errMsg.includes('quota') || 
-        errMsg.includes('Quota') || 
-        errMsg.includes('limit') || 
-        errMsg.includes('Limit') || 
-        errMsg.includes('429') || 
-        errMsg.includes('RESOURCE_EXHAUSTED') ||
-        err.status === 429;
-
-      // If it is a quota limit exhaustion, do NOT retry. Retrying wastes time and adds large latency.
-      const isTransient = 
-        (errMsg.includes('503') || 
-        errMsg.includes('UNAVAILABLE') || 
-        errMsg.includes('demand') ||
-        err.status === 503) && !isQuotaLimit;
-
-      if (isTransient && currentModel === 'gemini-3.5-flash') {
-        console.warn(`[Gemini SDK Sentry] Detected transient unavailable error (${errMsg.substring(0, 80)}). Falling back from 'gemini-3.5-flash' to 'gemini-3.1-flash-lite' for resilience.`);
-        currentModel = 'gemini-3.1-flash-lite';
-        continue;
-      }
-
-      if (isTransient && attempt < retries) {
-        const delay = initialDelay * Math.pow(2, attempt - 1);
-        console.warn(`[Gemini SDK] Transient unavailable error (Attempt ${attempt}/${retries}). Retrying in ${delay}ms... details: ${errMsg.substring(0, 150)}`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-      throw err;
-    }
-  }
-}
-
 function getSymbolPrecision(sym: string): number {
-  if (sym === 'US10Y') return 3;
-  if (sym.includes('JPY') || sym.includes('GOLD') || sym.includes('SILVER') || sym === 'SOL/USDT' || sym === 'US30' || sym === 'NAS100' || sym === 'GER40' || sym === 'SPX500' || sym === 'DXY' || sym === 'BRENT' || ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(sym)) {
-    return 2;
-  }
-  if (sym === 'BTC/USDT' || sym === 'ETH/USDT') {
-    return 1;
-  }
-  return 5;
+  return 2;
 }
 
 function calculateTradePnL(sym: string, entryPrice: number, currentPrice: number, size: number, side: string): number {
   const pnlMultiplier = side === 'BUY' ? 1 : -1;
   const priceDiff = currentPrice - entryPrice;
   
-  if (sym === 'BTC/USDT' || sym === 'ETH/USDT' || sym === 'SOL/USDT') {
-    return priceDiff * size * pnlMultiplier;
-  } else if (sym === 'USD/JPY') {
-    return (priceDiff / 0.01) * size * 0.1 * pnlMultiplier;
-  } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(sym)) {
+  if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(sym)) {
     return priceDiff * size * 100 * pnlMultiplier;
-  } else if (sym === 'US10Y') {
-    return priceDiff * size * 10000 * pnlMultiplier;
-  } else if (sym === 'DXY' || sym === 'BRENT') {
-    return priceDiff * size * 1000 * pnlMultiplier;
-  } else if (['US30', 'NAS100', 'SPX500', 'GER40'].includes(sym)) {
-    return priceDiff * size * 10 * pnlMultiplier;
   } else {
-    return (priceDiff / 0.0001) * size * 1.0 * pnlMultiplier;
+    return priceDiff * size * 10 * pnlMultiplier;
   }
 }
 
@@ -691,41 +478,6 @@ async function checkAndAutoCloseTrades(): Promise<void> {
 
 // Express API Routes
 
-// Express endpoints for MT5 Python Bridge to publish OHLCV candles
-app.post('/api/mt5/rates', (req, res) => {
-  const { symbol, candles } = req.body;
-  if (!symbol || !candles || !Array.isArray(candles)) {
-    res.status(400).json({ error: 'Missing symbol or candles array' });
-    return;
-  }
-
-  // Normalize MT5 symbol pairs (e.g. EURUSD, EUR/USD, EURUSD.pro) to internal model symbols
-  let stdSymbol: MarketSymbol | null = null;
-  const cleanSymbol = symbol.replace('/', '').toUpperCase();
-  if (cleanSymbol.startsWith('EURUSD')) stdSymbol = 'EUR/USD';
-  else if (cleanSymbol.startsWith('GBPUSD')) stdSymbol = 'GBP/USD';
-  else if (cleanSymbol.startsWith('USDJPY')) stdSymbol = 'USD/JPY';
-  else if (cleanSymbol.startsWith('BTCUSD') || cleanSymbol.startsWith('BTCUSDT')) stdSymbol = 'BTC/USDT';
-  else if (cleanSymbol.startsWith('XAUUSD') || cleanSymbol.startsWith('GOLDUSD')) stdSymbol = 'GOLD/USD';
-
-  if (!stdSymbol) {
-    res.status(400).json({ error: `Unsupported symbol: ${symbol}` });
-    return;
-  }
-
-  const result = simulator.updateFromMT5(stdSymbol, candles);
-  if (result) {
-    res.json({ success: true, message: `Successfully integrated MT5 data for ${stdSymbol}` });
-  } else {
-    res.status(500).json({ error: 'Failed to update simulator state' });
-  }
-});
-
-// Endpoint to retrieve connection status of MT5 terminal
-app.get('/api/mt5/status', (req, res) => {
-  res.json(simulator.getMT5Status());
-});
-
 // Endpoint to retrieve diagnostics for the TradingView RapidAPI connection
 app.get('/api/tradingview/status', (req, res) => {
   const apiKey = process.env.RAPIDAPI_KEY;
@@ -748,7 +500,7 @@ app.get('/api/market-data', async (req, res) => {
   // Always verify open positions prior to returning data to guarantee fresh real-time financial accuracy
   checkAndAutoCloseTrades();
 
-  const symbol = (req.query.symbol as MarketSymbol) || 'EUR/USD';
+  const symbol = (req.query.symbol as MarketSymbol) || 'AAPL';
   
   // Dynamically load real-time data from TradingView if RAPIDAPI_KEY is available
   await simulator.fetchTradingViewData(symbol);
@@ -786,10 +538,7 @@ app.get('/api/market-data', async (req, res) => {
 app.get('/api/market-prices', (req, res) => {
   const result: Record<string, number> = {};
   const symbols = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD', 'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500',
-    'DXY', 'US10Y', 'BRENT', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
+    'US30', 'NAS100', 'GER40', 'SPX500', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
   for (const sym of symbols) {
     const candles = simulator.getCandles(sym as MarketSymbol) || [];
@@ -805,11 +554,7 @@ app.get('/api/market-prices', (req, res) => {
 // get asset correlation matrix based on past 30 candle closes
 app.get('/api/market-correlation', (req, res) => {
   const symbols: MarketSymbol[] = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD',
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500',
-    'DXY', 'US10Y', 'BRENT', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
+    'US30', 'NAS100', 'GER40', 'SPX500', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
   const matrix: Record<string, Record<string, number>> = {};
   const candleSeries: Record<string, number[]> = {};
@@ -860,11 +605,7 @@ app.get('/api/market-correlation', (req, res) => {
 app.get('/api/market-sentiment', (req, res) => {
   try {
     const symbols: MarketSymbol[] = [
-      'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-      'GOLD/USD', 'SILVER/USD',
-      'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-      'US30', 'NAS100', 'GER40', 'SPX500',
-      'DXY', 'US10Y', 'BRENT', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
+      'US30', 'NAS100', 'GER40', 'SPX500', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
     ];
     const sentimentMap: Record<string, any> = {};
 
@@ -885,9 +626,7 @@ app.get('/api/market-sentiment', (req, res) => {
       // Match events related to these currencies
       const relatedEvents = economicEvents.filter(ev => 
         ev.currency === baseCur || 
-        ev.currency === quoteCur ||
-        (sym === 'BTC/USDT' && ev.currency === 'USD') ||
-        (sym === 'GOLD/USD' && ev.currency === 'USD')
+        ev.currency === quoteCur
       );
 
       // Calculate News Impact score and bias
@@ -954,8 +693,7 @@ app.get('/api/market-sentiment', (req, res) => {
       
       // Thresholds: Volatility trigger
       // Crypto/Gold typically have higher volatility ratio, Forex is lower
-      const isCryptoOrGold = sym === 'BTC/USDT' || sym === 'GOLD/USD';
-      const volatilityThreshold = isCryptoOrGold ? 0.007 : 0.0016;
+      const volatilityThreshold = 0.007;
 
       if (atrRatio > volatilityThreshold || highImpactSoon || netImpactStrength > 50) {
         state = 'Volatile';
@@ -993,12 +731,17 @@ app.get('/api/market-sentiment', (req, res) => {
 
 // get orderbook depth
 app.get('/api/order-book', (req, res) => {
-  const symbol = (req.query.symbol as MarketSymbol) || 'EUR/USD';
+  const symbol = (req.query.symbol as MarketSymbol) || 'AAPL';
   const orderBook = simulator.getOrderBook(symbol);
   res.json(orderBook);
 });
 
 // get econ calendar
+app.get('/api/economic-calendar', (req, res) => {
+  res.json(economicEvents);
+});
+
+// Also keep fallback alias for compatibility
 app.get('/api/forex-factory', (req, res) => {
   res.json(economicEvents);
 });
@@ -1020,25 +763,25 @@ const defaultInstitutionalNews = [
   {
     id: "term-2",
     timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    title: "ON-CHAIN ALERT: Institutional Whales move over $340M in BTC into high-security offline vaults.",
-    excerpt: "Glassnode metrics indicate the largest single aggregate outflow from public centralized liquid exchange storage pools since early February. Historically, large custody sweeps precede long-term multi-week consolidation expansions.",
+    title: "CORPORATE ALERT: Institutional Whales accumulate Microsoft (MSFT) stock via dark pools.",
+    excerpt: "Institutional orderflow metrics indicate the largest single aggregate block purchase of MSFT from public centralized exchanges since early February. Historically, large dark pool sweeps precede long-term multi-week expansion legs.",
     source: "Interbank Liquidity Scan",
     impact: "HIGH",
-    category: "CRYPTO",
-    symbol: "BTC/USDT",
+    category: "LIQUIDITY",
+    symbol: "MSFT",
     sentiment: "BULLISH",
     readTimeMins: 2
   },
   {
     id: "term-3",
     timestamp: new Date(Date.now() - 32 * 60 * 1000).toISOString(),
-    title: "EUROZONE: ECB member Joachim Nagel signals potential pause on upcoming asset purchasing programs.",
-    excerpt: "Deutsche Bundesbank President states inflation pressures inside the Union are moderating, but caution over energy supply shocks dictates a conservative quantitative tightening drawdown pace. Euro currency gains minor traction on sovereign bonds spread narrowing.",
-    source: "Bloomberg Interbank Feed",
+    title: "SEMICONDUCTORS: Nvidia (NVDA) Blackwell chip demand surges as hyper-scalers scale up AI infrastructure.",
+    excerpt: "Analyst reports state semiconductor supply pressures are rising, and backlogs extend through Q4. High demand indicates robust corporate capital expenditures across tech giants, supporting risk-on equity market biases.",
+    source: "Bloomberg Technology Feed",
     impact: "MEDIUM",
-    category: "FOREX",
-    symbol: "EUR/USD",
-    sentiment: "NEUTRAL",
+    category: "MACRO",
+    symbol: "NVDA",
+    sentiment: "BULLISH",
     readTimeMins: 4
   },
   {
@@ -1068,12 +811,12 @@ const defaultInstitutionalNews = [
   {
     id: "term-6",
     timestamp: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
-    title: "PRECIOUS METALS: Central gold buying reserves expand by record 42 tonnes in monthly sovereign reporting.",
-    excerpt: "Emerging markets sovereign reserves continue aggressive rotation into physical bullion assets. Physical gold premium surges over London paper spot values as physical shipping logistics report congestion bottlenecks.",
+    title: "INDEX FUNDS: Institutional stock portfolios expand by record inflows in monthly sovereign reporting.",
+    excerpt: "Emerging market sovereign reserves continue aggressive rotation into premium stock indices. Equity premium surges over bond yields as physical sovereign wealth funds report massive allocation pipelines.",
     source: "Sovereign Reserves Registry",
     impact: "MEDIUM",
     category: "MACRO",
-    symbol: "GOLD/USD",
+    symbol: "SPX500",
     sentiment: "BULLISH",
     readTimeMins: 2
   }
@@ -1084,8 +827,8 @@ let lastNewsFetchTime = 0;
 
 async function fetchLiveRSSNews(): Promise<any[]> {
   const feeds = [
-    { url: 'https://www.coindesk.com/arc/outboundfeed/rss/', source: 'CoinDesk', defaultCategory: 'CRYPTO' },
-    { url: 'https://www.cnbc.com/id/15839069/device/rss/rss.html', source: 'CNBC', defaultCategory: 'MACRO' }
+    { url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html', source: 'CNBC Stocks', defaultCategory: 'MACRO' },
+    { url: 'https://www.cnbc.com/id/15839069/device/rss/rss.html', source: 'CNBC Business', defaultCategory: 'MACRO' }
   ];
   
   const fetchedAlerts: any[] = [];
@@ -1128,17 +871,14 @@ async function fetchLiveRSSNews(): Promise<any[]> {
           }
           
           let symbol: string | undefined = undefined;
-          if (lowercaseTitle.includes('bitcoin') || lowercaseTitle.includes('btc')) symbol = 'BTC/USDT';
-          else if (lowercaseTitle.includes('ethereum') || lowercaseTitle.includes('eth')) symbol = 'ETH/USDT';
-          else if (lowercaseTitle.includes('solana') || lowercaseTitle.includes('sol ')) symbol = 'SOL/USDT';
-          else if (lowercaseTitle.includes('euro') || lowercaseTitle.includes('eur')) symbol = 'EUR/USD';
-          else if (lowercaseTitle.includes('pound') || lowercaseTitle.includes('gbp')) symbol = 'GBP/USD';
-          else if (lowercaseTitle.includes('yen') || lowercaseTitle.includes('jpy')) symbol = 'USD/JPY';
-          else if (lowercaseTitle.includes('gold') || lowercaseTitle.includes('bullion')) symbol = 'GOLD/USD';
-          else if (lowercaseTitle.includes('silver') || lowercaseTitle.includes('xag')) symbol = 'SILVER/USD';
+          if (lowercaseTitle.includes('apple') || lowercaseTitle.includes('aapl')) symbol = 'AAPL';
+          else if (lowercaseTitle.includes('microsoft') || lowercaseTitle.includes('msft')) symbol = 'MSFT';
+          else if (lowercaseTitle.includes('nvidia') || lowercaseTitle.includes('nvda')) symbol = 'NVDA';
+          else if (lowercaseTitle.includes('tesla') || lowercaseTitle.includes('tsla')) symbol = 'TSLA';
           else if (lowercaseTitle.includes('nas100') || lowercaseTitle.includes('nasdaq')) symbol = 'NAS100';
           else if (lowercaseTitle.includes('spx') || lowercaseTitle.includes('s&p 500')) symbol = 'SPX500';
           else if (lowercaseTitle.includes('dow ') || lowercaseTitle.includes('us30')) symbol = 'US30';
+          else if (lowercaseTitle.includes('dax') || lowercaseTitle.includes('ger40')) symbol = 'GER40';
           
           let sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
           if (lowercaseTitle.includes('surge') || lowercaseTitle.includes('rally') || lowercaseTitle.includes('gain') || lowercaseTitle.includes('bullish') || lowercaseTitle.includes('soar') || lowercaseTitle.includes('all-time high')) {
@@ -1184,21 +924,21 @@ const simulatorMacroBullets = [
     sentiment: "BULLISH"
   },
   {
-    title: "LIQUIDITY RUN: Standard Chartered reports aggressive aggregate sell blocks on spot EUR/USD pairs.",
-    excerpt: "Institutional orderbooks clocked a consecutive line of 1,200 Lot sweep blocks on the Chicago Mercantile Exchange. High density limits are consolidating around retail stop-pools down near the 1.0820 support band.",
+    title: "LIQUIDITY RUN: Key institutional desks report aggressive buy order blocks on Apple (AAPL) equity lines.",
+    excerpt: "Aggregated orderbooks clocked sequential blocks of 500,000 shares on major dark pools. High density limits are consolidating around the primary support zone near previous quarterly consolidation boundaries.",
     source: "Liquidity Pulse Engine",
     impact: "CRITICAL",
     category: "LIQUIDITY",
-    symbol: "EUR/USD",
-    sentiment: "BEARISH"
+    symbol: "AAPL",
+    sentiment: "BULLISH"
   },
   {
-    title: "WHALE TRANSACTIONS: Spot Bitcoin exchange inventories record largest supply cliff drop in 4 months.",
-    excerpt: "Aggregated wallet tracers noted that a private asset management trust withdrew 4,120 BTC in sequential batches of 100 BTC. Decreases in liquid availability historically set the stage for major supply-squeeze breakouts.",
-    source: "Glassnode On-Chain Stream",
+    title: "INSTITUTIONAL TRANSACTIONS: Passive index flows drive massive block accumulation across S&P 500 constituents.",
+    excerpt: "Global asset managers completed major rebalancing allocations totaling $4.2B in sequential batches. The resulting purchase momentum has set the stage for a volatility contraction squeeze near recent record highs.",
+    source: "Glassnode Institutional Tracker",
     impact: "HIGH",
     category: "LIQUIDITY",
-    symbol: "BTC/USDT",
+    symbol: "SPX500",
     sentiment: "BULLISH"
   },
   {
@@ -1497,7 +1237,7 @@ app.post('/api/trades', requireAuth, async (req: AuthRequest, res) => {
 
     const userId = req.dbUser.id;
 
-    // Generate simulated execution efficiency metrics for the MT5 bridge
+    // Generate simulated execution efficiency metrics for the broker bridge
     // ~17% rate of latency spikes above the 45ms bridge health threshold
     const isSpike = Math.random() < 0.17;
     const simulatedLatency = isSpike 
@@ -1565,18 +1305,7 @@ app.post('/api/trades/:id/close', requireAuth, async (req: AuthRequest, res) => 
     }
 
     const price = exitPrice ? parseFloat(exitPrice) : simulator.getMarketMetrics(trade.symbol as MarketSymbol).currentPrice;
-    const pnlMultiplier = trade.side === 'BUY' ? 1 : -1;
-    const priceDiff = price - trade.entryPrice;
-    
-    // simple pip value conversion
-    let rawPnl = 0;
-    if (trade.symbol === 'BTC/USDT') {
-      rawPnl = priceDiff * trade.size * pnlMultiplier;
-    } else if (trade.symbol === 'USD/JPY') {
-      rawPnl = (priceDiff / 0.01) * trade.size * 0.1 * pnlMultiplier;
-    } else {
-      rawPnl = (priceDiff / 0.0001) * trade.size * 1.0 * pnlMultiplier;
-    }
+    const rawPnl = calculateTradePnL(trade.symbol, trade.entryPrice, price, trade.size, trade.side);
 
     const [updated] = await db.update(tradesTable)
       .set({
@@ -1617,35 +1346,19 @@ app.post('/api/trades/:id/partial-close', requireAuth, async (req: AuthRequest, 
     }
 
     const price = simulator.getMarketMetrics(trade.symbol as MarketSymbol).currentPrice;
-    const pnlMultiplier = trade.side === 'BUY' ? 1 : -1;
-    const priceDiff = price - trade.entryPrice;
 
     // Calculate sizes
     const closedSize = Math.max(0.01, parseFloat((trade.size * ratio).toFixed(2)));
     const remainingSize = Math.max(0, parseFloat((trade.size - closedSize).toFixed(2)));
 
-    // simple pip value conversion for closed portion
-    let rawPnl = 0;
-    if (trade.symbol === 'BTC/USDT') {
-      rawPnl = priceDiff * closedSize * pnlMultiplier;
-    } else if (trade.symbol === 'USD/JPY') {
-      rawPnl = (priceDiff / 0.01) * closedSize * 0.1 * pnlMultiplier;
-    } else {
-      rawPnl = (priceDiff / 0.0001) * closedSize * 1.0 * pnlMultiplier;
-    }
+    // simple conversion for closed portion
+    const rawPnl = calculateTradePnL(trade.symbol, trade.entryPrice, price, closedSize, trade.side);
     const closedPnl = parseFloat(rawPnl.toFixed(2));
 
     // If remaining size is close to zero, close the entire trade instead
     if (remainingSize <= 0.01) {
       // Total PnL gets calculated on the original size
-      let fullRawPnl = 0;
-      if (trade.symbol === 'BTC/USDT') {
-        fullRawPnl = priceDiff * trade.size * pnlMultiplier;
-      } else if (trade.symbol === 'USD/JPY') {
-        fullRawPnl = (priceDiff / 0.01) * trade.size * 0.1 * pnlMultiplier;
-      } else {
-        fullRawPnl = (priceDiff / 0.0001) * trade.size * 1.0 * pnlMultiplier;
-      }
+      const fullRawPnl = calculateTradePnL(trade.symbol, trade.entryPrice, price, trade.size, trade.side);
 
       await db.update(tradesTable)
         .set({
@@ -1804,125 +1517,6 @@ app.post('/api/trades/:id/journal', requireAuth, async (req: AuthRequest, res) =
   } catch (err) {
     console.error('Error journaling trade:', err);
     res.status(500).json({ error: 'Server error journaling trade details.' });
-  }
-});
-
-// Gemini RAG advisory chatbot model endpoint (Strictly Server-Side)
-app.post('/api/gemini/analyze', async (req, res) => {
-  const { prompt, history, currentSymbol } = req.body;
-
-  if (!prompt) {
-    res.status(400).json({ error: 'Prompt is required' });
-    return;
-  }
-
-  const activeSymbol = currentSymbol || 'EUR/USD';
-  const metrics = simulator.getMarketMetrics(activeSymbol);
-  const fvgs = simulator.getFVGs(activeSymbol);
-  const obs = simulator.getOrderBlocks(activeSymbol);
-
-  // Compile active strategy indicators list as reference for Gemini context
-  const contextString = `
-Current Active Market context for ${activeSymbol}:
-- Current Price: ${metrics.currentPrice}
-- Daily Bio Bias: ${metrics.dailyBias} (50 EMA rule)
-- RSI: ${metrics.rsi} (Threshold level)
-- Average True Range (ATR 14): ${metrics.atr} (Volatility proxy)
-- Plotted Order Blocks: ${JSON.stringify(obs.filter(o => !o.isBroken).slice(-2))}
-- Plotted Fair Value Gaps (FVGs): ${JSON.stringify(fvgs.filter(f => !f.isMitigated).slice(-2))}
-`;
-
-  const systemInstruction = `
-You are the Apex Institutional Elite Trading Agent, a quantitative trading coach trained thoroughly in "The Trading Bible" and Inner Circle Trader (ICT) core principles.
-Your purpose is to provide users with pristine instructions on high timeframe (4H & Daily) trading set-ups.
-
-Strict Guidelines you MUST follow based on "The Trading Bible" and ICT methodologies:
-1. High Time Frame Swing Alignment: Always determine structural focus on 4H/Daily. If the price lies above the 50-period EMA, our daily structural bias is strictly BULLISH. Tell users to only focus on buy mitigation triggers. If price lies below, our focus is strictly BEARISH (sell setups only). Ignoring direction is retail noise of higher ruin.
-2. Entry Triggers: We look for institutional displacement creating a clear "Fair Value Gap" (FVG) or an unbroken bullish/bearish "Order Block" (OB) on the 4H timeframe, combined with a "Market Structure Shift" (MSS) or Liquidity Sweeps of previous session highs/lows.
-3. Risk Management: Explain calculated fractals based on the fixed fractional model risking no more than 1% of account equity. Instruct users to place their stop loss safely beyond the structural swing high/low that created the displacement gap. 
-4. News Avoidance Doctrine: Always mention that high impact economic news (like NFP, CPI, etc.) requires immediate execution hold. Do not enter any trade 30 minutes before and after red news events.
-5. Tone: Be authoritative, objective, hyper-quantitative, and professional. Speak in the term of elite capital preservation. Use crisp bullet points, bolding, and human-like clarity. Do not write filler.
-`;
-
-  const client = getGeminiClient();
-
-  const getSimulatedResponse = (extraNotice: string = '') => {
-    return `
-### 🤖 APEX INSTITUTIONAL INSIGHT (Offline Model Simulation)
-
-${extraNotice ? `*Notice: ${extraNotice}*\n` : ''}
-I am providing a deterministic expert analysis of **${activeSymbol}** based on **The Trading Bible & ICT principles**:
-
-1. **Higher Timeframe Alignment (Bias)**:
-   - Current price reads **${metrics.currentPrice}**, sitting in a **${metrics.dailyBias}** market state (conforming to the 50-EMA rule).
-   - *Trading Rule*: We are strictly seeking **${metrics.dailyBias === 'BULLISH' ? 'Long entries on discount pullbacks' : 'Short entries on premium retracements'}**.
-
-2. **Market Structure & Footprints (OBs / FVGs)**:
-   ${obs.filter(o => !o.isBroken && o.type === (metrics.dailyBias === 'BULLISH' ? 'BULLISH' : 'BEARISH')).length > 0
-     ? `- Identified an active **${metrics.dailyBias} Order Block** near **${metrics.supportLevels[0] || metrics.currentPrice}**. This represents institutional buy walls.`
-     : `- Scanning for upcoming displacement blocks. Wait for a Market Structure Shift (MSS) before execution.`}
-   ${fvgs.filter(f => !f.isMitigated && f.type === metrics.dailyBias).length > 0
-     ? `- A pristine **${metrics.dailyBias} Fair Value Gap** is open between **${fvgs[0].gapStart}** and **${fvgs[0].gapEnd}** on the 4H timeframe.`
-     : `- Gap imbalances are currently filled. Wait for displacement.`}
-
-3. **Risk & Sizing (Apex fixed fractional risk system)**:
-   - Place your stop loss exactly outside the invalidation swing level. 
-   - Rule check: Risk must be capped at exactly **1%** of total account equity. 
-
-*Configuration tip*: Make sure you added your **GEMINI_API_KEY** in the Secrets panel on the side to support full live reasoning! Over time, the model will dynamically integrate active order book liquidations.
-    `.trim();
-  };
-
-  if (!client) {
-    console.warn('GoogleGenAI is running in simulation mode because GEMINI_API_KEY is not defined.');
-    res.json({ text: getSimulatedResponse('Gemini API Key is not configured yet in the Settings > Secrets panel.') });
-    return;
-  }
-
-  try {
-    // Prepare complete query prompt
-    const queryContent = `
-Current Active Market context for ${activeSymbol}:
-${contextString}
-
-User Query: ${prompt}
-    `;
-
-    // Reconstruct conversation contents for generateContent
-    const contents: any[] = [];
-    if (history && Array.isArray(history)) {
-      history.forEach((msg: any) => {
-        if (msg && msg.role && msg.parts && Array.isArray(msg.parts)) {
-          contents.push({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: msg.parts.map((p: any) => ({ text: p.text || '' })),
-          });
-        }
-      });
-    }
-
-    // Add the current query to contents list
-    contents.push({
-      role: 'user',
-      parts: [{ text: queryContent }],
-    });
-
-    const result = await generateContentWithRetry(client, {
-      model: 'gemini-3.5-flash',
-      contents: contents,
-      config: {
-        systemInstruction,
-        temperature: 0.2, // Conservative trading mindset
-      }
-    });
-
-    res.json({ text: result.text || 'Error generating trade guidance.' });
-
-  } catch (error: any) {
-    console.warn('Gemini generateContent transient bypass (falling back to ICT simulation mode):', error.message || error);
-    // Graceful fallback to simulated output on API key failure/quota issues
-    const notice = `Live API service unavailable (${error.message || 'Dynamic connection failure'}). Running offline ICT simulation:`;
-    res.json({ text: getSimulatedResponse(notice) });
   }
 });
 
@@ -2328,17 +1922,14 @@ app.get('/api/market-briefing', async (req, res) => {
   const force = req.query.force === 'true';
   const now = new Date();
 
-  // If cache is valid and not forced, return cached briefing directly to bypass Gemini calls and prevent 429 quota exhaustion
+  // If cache is valid and not forced, return cached briefing directly to preserve resources
   if (cachedBriefingSnapshot && !force && (now.getTime() - lastBriefingTime) < BRIEFING_CACHE_TTL) {
     res.json(cachedBriefingSnapshot);
     return;
   }
 
   const symbols: MarketSymbol[] = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD',
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500'
+    'US30', 'NAS100', 'GER40', 'SPX500', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
 
   // 1. Gather all current indicators
@@ -2393,37 +1984,35 @@ app.get('/api/market-briefing', async (req, res) => {
     `ICT Playbook rule dictates waiting for high/low liquidity sweeps of the previous sessions.`
   ];
 
-  const client = getGeminiClient();
-
   const getSimulatedBriefing = () => {
-    const eurMD = marketDetails.find(m => m.symbol === 'EUR/USD') || { currentPrice: 1.0850, dailyBias: 'BULLISH', trend: 'BULLISH', rsi: 52 };
-    const goldMD = marketDetails.find(m => m.symbol === 'GOLD/USD') || { currentPrice: 2350.0, dailyBias: 'BEARISH', trend: 'NEUTRAL', rsi: 48 };
-    const btcMD = marketDetails.find(m => m.symbol === 'BTC/USDT') || { currentPrice: 67200.0, dailyBias: 'BULLISH', trend: 'BULLISH', rsi: 61 };
-    const jpyMD = marketDetails.find(m => m.symbol === 'USD/JPY') || { currentPrice: 156.40, dailyBias: 'BULLISH', trend: 'BULLISH', rsi: 55 };
+    const spxMD = marketDetails.find(m => m.symbol === 'SPX500') || { currentPrice: 5300.0, dailyBias: 'BULLISH', trend: 'BULLISH', rsi: 62 };
+    const aaplMD = marketDetails.find(m => m.symbol === 'AAPL') || { currentPrice: 188.30, dailyBias: 'BULLISH', trend: 'BULLISH', rsi: 58 };
+    const nvdaMD = marketDetails.find(m => m.symbol === 'NVDA') || { currentPrice: 945.00, dailyBias: 'BULLISH', trend: 'BULLISH', rsi: 68 };
+    const tslaMD = marketDetails.find(m => m.symbol === 'TSLA') || { currentPrice: 175.50, dailyBias: 'BEARISH', trend: 'NEUTRAL', rsi: 44 };
 
-    return `### 🌅 APEX INSTITUTIONAL MORNING DAILY BRIEF
+    return `### 🌅 APEX STOCK MARKET DAILY BRIEF
 
 **Date Directive**: June 3, 2026 (Morning Session Analysis)
-**Security Handshake State**: SMC Strategic Assessment
+**Security Handshake State**: Stock Market Strategic Assessment
 **Overall Sentiment Indicator**: **${sentimentBias}** Momentum Zone
 **Asset Volatility index**: **${volatilityIndex}** Index
 
 ---
 
-#### 1. Core Macro Narrative & Bias State
-Currently, our multi-pair consensus bias registers as a **${sentimentBias}** framework. Intraday correlation charts reflect active algorithmic adjustments following high timeframe structure shifts.
+#### 1. Core Equities Narrative & Bias State
+Currently, our stock and index consensus bias registers as a **${sentimentBias}** framework. Intraday correlation charts reflect active algorithmic adjustments following high timeframe structure shifts.
 
-*   **EUR/USD**: Current price averages **${eurMD.currentPrice.toFixed(4)}**, showing a **${eurMD.dailyBias}** bias (${eurMD.trend} trend, RSI: ${Math.round(eurMD.rsi)}).
-*   **GOLD/USD**: Safe-haven demand averages **$${goldMD.currentPrice.toFixed(2)}** demonstrating a **${goldMD.dailyBias}** daily bias context.
-*   **BTC/USDT**: Consolidating at **$${btcMD.currentPrice.toFixed(0)}** indicating a **${btcMD.dailyBias}** bias.
-*   **USD/JPY**: Currently at **${jpyMD.currentPrice.toFixed(2)}** on a **${jpyMD.dailyBias}** profile.
+*   **S&P 500 (SPX500)**: Index averages **${spxMD.currentPrice.toFixed(2)}**, showing a **${spxMD.dailyBias}** bias (${spxMD.trend} trend, RSI: ${Math.round(spxMD.rsi)}).
+*   **Apple Inc. (AAPL)**: Mega-cap averages **${aaplMD.currentPrice.toFixed(2)}** demonstrating a **${aaplMD.dailyBias}** daily bias context.
+*   **Nvidia (NVDA)**: Semiconductor leader averages **${nvdaMD.currentPrice.toFixed(2)}** indicating a **${nvdaMD.dailyBias}** bias.
+*   **Tesla (TSLA)**: EV pioneer averages **${tslaMD.currentPrice.toFixed(2)}** on a **${tslaMD.dailyBias}** profile.
 
 ---
 
 #### 2. Liquidity & Order Block Plotted footprint
-*   **EUR/USD Key Zones**: Look to capture discounted orderblock mitigations near the primary 4H institutional support level. Avoid middle range noise.
-*   **GOLD/USD Key Zones**: High tension is recorded across defensive grids. Unmitigated Fair Value Gaps (FVGs) remain open below the current price, creating strong magnetic targets.
-*   **BTC/USDT Key Zones**: Trading tight inside active session ranges. Breakout sweeps of Asian session highs are expected to trigger rapid displacement.
+*   **S&P 500 Key Zones**: Look to capture discounted orderblock mitigations near the primary 4H institutional support level. Avoid middle range noise.
+*   **Apple Key Zones**: High tension is recorded across defensive grids. Unmitigated Fair Value Gaps (FVGs) remain open below the current price, creating strong magnetic targets.
+*   **Nvidia Key Zones**: Trading tight inside active session ranges. Breakout sweeps of Asian session highs are expected to trigger rapid displacement.
 
 ---
 
@@ -2439,545 +2028,15 @@ Currently, our multi-pair consensus bias registers as a **${sentimentBias}** fra
     `.trim();
   };
 
-  if (!client) {
-    res.json({
-      narrative: getSimulatedBriefing(),
-      majorThemes,
-      sentimentBias,
-      volatilityIndex,
-      economicAlarms: highImpactEventsCount,
-      lastUpdated: now.toISOString(),
-      isLive: false
-    });
-    return;
-  }
-
-  try {
-    const promptMessage = `
-System Time: ${now.toISOString()} (Morning Session Analysis)
-Act as the Senior Market Strategist. Parse the daily economic news impact and active indicator confluences below and synthesize an elegant daily morning market briefing narrative.
-
-Here is the current state of our multi-asset simulator:
-${JSON.stringify(marketDetails, null, 2)}
-
-Here are today's scheduled economic events:
-${JSON.stringify(todayEvents, null, 2)}
-
-Provide a beautiful, highly professional and detailed narrative outlining the expected global daily flows, ICT/SMC levels, and macroeconomic cautions.
-    `;
-
-    const result = await generateContentWithRetry(client, {
-      model: 'gemini-3.5-flash',
-      contents: promptMessage,
-      config: {
-        systemInstruction: `You are the chief quantitative macro analyst for an institutional prop trading firm. You operate under 'The Trading Bible' and Inner Circle Trader (SMC) principles. Output should be highly professional, structured, and objective. Avoid clickbait or casual phrases.`,
-        temperature: 0.1, // Highly precise and consistent
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            narrative: {
-              type: Type.STRING,
-              description: "Markdown formatted string: morning session overview, SMC technical level analysis (OBs, FVGs), currency specific outlooks, and news warning guidelines."
-            },
-            majorThemes: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "Exactly 3 concise session themes representing the macroeconomic narrative headlines."
-            },
-            sentimentBias: {
-              type: Type.STRING,
-              description: "Consensus sentiment, must be exactly: BULLISH, BEARISH, or MIXED."
-            },
-            volatilityIndex: {
-              type: Type.STRING,
-              description: "Overall expected volatility, must be exactly: HIGH, MEDIUM, or LOW."
-            }
-          },
-          required: ["narrative", "majorThemes", "sentimentBias", "volatilityIndex"]
-        }
-      }
-    });
-
-    const briefText = result.text;
-    if (briefText) {
-      const parsed = JSON.parse(briefText.trim());
-      const payload = {
-        narrative: parsed.narrative,
-        majorThemes: parsed.majorThemes || majorThemes,
-        sentimentBias: parsed.sentimentBias || sentimentBias,
-        volatilityIndex: parsed.volatilityIndex || volatilityIndex,
-        economicAlarms: highImpactEventsCount,
-        lastUpdated: now.toISOString(),
-        isLive: true
-      };
-
-      // Save to server cache
-      cachedBriefingSnapshot = payload;
-      lastBriefingTime = now.getTime();
-      saveBriefingToDisk(payload);
-
-      res.json(payload);
-    } else {
-      throw new Error('Gemini model returned empty response body');
-    }
-
-  } catch (err: any) {
-    console.warn('Gemini briefing generation transient bypass (falling back to ICT simulated briefing):', err.message || err);
-    
-    // EXTREME RESILIENCE: If we have an existing cached live briefing (even if expired or from previous load), 
-    // return that to the client rather than resorting to default offline mock/dummy data!
-    if (cachedBriefingSnapshot) {
-      res.json({
-        ...cachedBriefingSnapshot,
-        lastUpdated: now.toISOString(), // indicate serving timestamp
-        isCachedFallback: true
-      });
-      return;
-    }
-
-    res.json({
-      narrative: getSimulatedBriefing(),
-      majorThemes,
-      sentimentBias,
-      volatilityIndex,
-      economicAlarms: highImpactEventsCount,
-      lastUpdated: now.toISOString(),
-      isLive: false,
-      err: err.message
-    });
-  }
-});
-
-// AI Trader Composer: Draft multi-leg setups from natural language (Strictly Server-Side)
-app.post('/api/gemini/compose', async (req, res) => {
-  const { prompt, currentSymbol, currentPrice, strategyProfile, metrics } = req.body;
-
-  if (!prompt) {
-    res.status(400).json({ error: 'Prompt is required' });
-    return;
-  }
-
-  const symbol = currentSymbol || 'EUR/USD';
-  
-  // Calculate intelligence pillars on-the-fly for the prompt context
-  const hasMetrics = metrics && typeof metrics.atr === 'number';
-  const liveAtr = hasMetrics ? metrics.atr : (symbol.includes('USDT') ? 450 : symbol.includes('JPY') ? 0.35 : 0.0035);
-  const liveRsi = hasMetrics ? metrics.rsi : 50;
-  const liveTrend = hasMetrics ? metrics.trend : 'NEUTRAL';
-  const liveBias = hasMetrics ? metrics.dailyBias : 'BULLISH';
-  const price = currentPrice || (hasMetrics ? metrics.currentPrice : (symbol.includes('USDT') ? 64000 : 1.0850));
-
-  // Pillar 1: Liquidity Sweep Map
-  const pdh = price + liveAtr * 1.25;
-  const pdl = price - liveAtr * 1.4;
-  const londonH = price + liveAtr * 0.65;
-  const nyL = price - liveAtr * 0.95;
-
-  // Pillar 2: Capital Regime
-  let score = 50;
-  if (liveRsi > 70 || liveRsi < 30) score += 20;
-  if (liveTrend !== 'NEUTRAL') score += 15;
-  let regimeType = 'MEAN REVERTING';
-  if (score > 75) regimeType = 'VOLATILITY TREND RUN';
-  else if (score < 35) regimeType = 'CONGESTION SQUEEZE';
-
-  // Pillar 3: Intermarket Confluence Match
-  let dxyBias = 'NEUTRAL';
-  let matchPct = 78;
-  if (symbol === 'USD/JPY') {
-    dxyBias = liveBias === 'BULLISH' ? 'UPWARD BIAS' : 'DOWNWARD BIAS';
-    matchPct = 84;
-  } else if (symbol.includes('USDT')) {
-    dxyBias = 'DXY LIQUIDITY CAPTURE';
-    matchPct = 91;
-  } else {
-    dxyBias = liveBias === 'BULLISH' ? 'DOWNWARD BIAS' : 'UPWARD BIAS';
-    matchPct = 72;
-  }
-
-  // Pillar 4: OB Invalidation cushions
-  const cushionBuffer = liveAtr * 1.2;
-  const lowerBoundInvalidation = price - cushionBuffer;
-  const upperBoundInvalidation = price + cushionBuffer;
-
-  // Multi-leg compound mock structure depending on symbol and instructions
-  const getSimulatedDraft = (noticeMsg = '') => {
-    const isSell = /sell|short|bear|down/i.test(prompt);
-    const side = isSell ? 'SELL' : 'BUY';
-    const isCrypto = /btc|eth|sol/i.test(symbol);
-    const defaultLot = isCrypto ? 0.1 : 1.5;
-    
-    // Calculate entry stops targets
-    const tickSign = side === 'BUY' ? 1 : -1;
-    const isScalpingActive = strategyProfile === 'SCALPING';
-    
-    // For scalping, we force wider ATR/swing offset to fit the Institutional Swing rules
-    const offset = isScalpingActive ? (price * 0.008) : (price * 0.003); // ~80 pips for compliance swing vs ~30 pips
-    const isGrid = /grid|ladder|multi/i.test(prompt);
-    const isHedged = /hedge|cover|protect|ratio/i.test(prompt);
-
-    const orders = [];
-    
-    if (isGrid) {
-      // 3-step grid ladder
-      for (let i = 0; i < 3; i++) {
-        const entryOffset = -1 * tickSign * (price * 0.001 * (i + 1));
-        const entry = parseFloat((price + entryOffset).toFixed(isCrypto ? 2 : 5));
-        const sl = parseFloat((entry - tickSign * offset).toFixed(isCrypto ? 2 : 5));
-        const tp = parseFloat((entry + tickSign * offset * 2.2).toFixed(isCrypto ? 2 : 5));
-        orders.push({
-          symbol: symbol as MarketSymbol,
-          side: side as 'BUY' | 'SELL',
-          entryPrice: entry,
-          stopLoss: sl,
-          takeProfit: tp,
-          size: parseFloat((defaultLot * (1 - i * 0.2)).toFixed(2)),
-          reason: isScalpingActive 
-            ? `Compliance Sanitized: swing grid leg #${i + 1} (H4 timeframe anchor)`
-            : `AI Multi-Grid Leg #${i + 1} (${prompt.slice(0, 15)}...)`
-        });
-      }
-    } else {
-      // Single leg or standard bracket
-      const sl = parseFloat((price - tickSign * offset).toFixed(isCrypto ? 2 : 5));
-      const tp = parseFloat((price + tickSign * offset * 2.5).toFixed(isCrypto ? 2 : 5));
-      orders.push({
-        symbol: symbol as MarketSymbol,
-        side: side as 'BUY' | 'SELL',
-        entryPrice: price,
-        stopLoss: sl,
-        takeProfit: tp,
-        size: defaultLot,
-        reason: isScalpingActive 
-          ? `Compliance Sanitized: H4 trend swing anchor`
-          : `AI Composer Core Position (${prompt.slice(0, 20)}...)`
-      });
-
-      // Add a smart hedge if user requested hedging
-      if (isHedged) {
-        const hedgeSymbol = symbol === 'EUR/USD' ? 'USD/JPY' : symbol === 'BTC/USDT' ? 'ETH/USDT' : 'EUR/USD';
-        const hedgeSide = side === 'BUY' ? 'BUY' : 'SELL'; // co-trending or inversely correlated
-        const hedgePrice = hedgeSymbol === 'USD/JPY' ? 154.50 : hedgeSymbol === 'ETH/USDT' ? 2450.00 : 1.0850;
-        const hedgeOffset = hedgePrice * (isScalpingActive ? 0.009 : 0.004);
-        orders.push({
-          symbol: hedgeSymbol as MarketSymbol,
-          side: hedgeSide as 'BUY' | 'SELL',
-          entryPrice: hedgePrice,
-          stopLoss: parseFloat((hedgePrice - (hedgeSide === 'BUY' ? 1 : -1) * hedgeOffset).toFixed(hedgeSymbol === 'USD/JPY' ? 2 : 5)),
-          takeProfit: parseFloat((hedgePrice + (hedgeSide === 'BUY' ? 1 : -1) * hedgeOffset * 2.0).toFixed(hedgeSymbol === 'USD/JPY' ? 2 : 5)),
-          size: parseFloat((defaultLot * 0.6).toFixed(2)),
-          reason: `AI Bracket Protection Hedge (${hedgeSymbol} Proxy)`
-        });
-      }
-    }
-
-    const explanationPrefix = isScalpingActive
-      ? `[COMPLIANCE NOTICE: SCALPING BLOCKED] All client-initiated scalp orders are automatically sanitized to H4/D1 Swing structures under Rule IRB-91. `
-      : (noticeMsg ? `[Simulated] ` : '');
-
-    return {
-      orders,
-      reasoningExplanation: `${explanationPrefix}Constructed compound ${side.toLowerCase()} blueprint. The requested portfolio setup was evaluated under ${isScalpingActive ? 'Strict Swing-Only safety limits' : 'standard signal guidelines'}. Wider risk targets deployed representing ${isSell ? 'Premium margin resistance' : 'Discount mitigation pools'}.`,
-      totalRisk: `${(orders.length * 0.5).toFixed(1)}% total systemic equity risk (1% fixed fraction lock)`,
-      confluences: isScalpingActive 
-        ? ['Rule IRB-91 Compliance Override Filter', 'High-Timeframe Liquidity Block Mitigation', 'Average True Range (ATR) SL safety mapping']
-        : ['Structural directional bias alignment', 'Average True Range (ATR) SL safety mapping', 'Fair Value Gap mitigation fill indicator']
-    };
-  };
-
-  const client = getGeminiClient();
-  if (!client) {
-    res.json(getSimulatedDraft('Offline simulation active: GEMINI_API_KEY is not defined.'));
-    return;
-  }
-
-  try {
-    let systemInstruction = `
-You are the APEX MTX-QUANT Institutional Strategy Composer with embedded 4-tier analytics decision brain-power.
-Your job is to read user trading instructions, evaluate the LIVE 4-pillar system intelligence metrics below, and respond with a highly precise trade layout JSON object.
-
-LIVE INTELLIGENCE PILLARS DATA for ${symbol}:
---------------------------------------------------
-Pillar 1: Liquidity Sweep Map & Volume Imbalances:
-- PDH Sweep resistance level: ${pdh.toFixed(5)}
-- PDL Sweep support level: ${pdl.toFixed(5)}
-- London session High: ${londonH.toFixed(5)}
-- NY session Low: ${nyL.toFixed(5)}
-
-Pillar 2: Capital Regime Classifier:
-- Current Regime: ${regimeType} (Volatility stress level: ${score}/100)
-
-Pillar 3: Intermarket Confluence Match:
-- DXY Dollar Index proxy bias: ${dxyBias}
-- Macro Confluence Strength: ${matchPct}%
-
-Pillar 4: Order Block Invalidation Cushion:
-- Safety Margin ATR buffer size: ${cushionBuffer.toFixed(5)} (Stops must be padded by at least this amount to survive wick sweeps)
-- Upper safety boundary: ${upperBoundInvalidation.toFixed(5)}
-- Lower safety boundary: ${lowerBoundInvalidation.toFixed(5)}
---------------------------------------------------
-
-CONSTRAINTS & RULES:
-- You MUST act as the FINAL DECISION LAYER. Take these 4 analytic pillars into account when setting stopLoss and takeProfit values.
-- For BUY positions, your stopLoss MUST be set below the Lower safety boundary (${lowerBoundInvalidation.toFixed(5)}).
-- For SELL positions, your stopLoss MUST be set above the Upper safety boundary (${upperBoundInvalidation.toFixed(5)}).
-- Under 'MEAN REVERTING' regime, place conservative takeProfit steps targets. Under 'VOLATILITY TREND RUN', write wider targets conforming to momentum continuation.
-- In each order's 'reason' text, you MUST explicitly comment on how the 4-tier intelligence values (like PDH/PDL sweeps or ATR cushions) justified that leg's execution parameter decisions!
-
-JSON scheme matches this exactly:
-{
-  "orders": [
-    {
-      "symbol": "${symbol}" (must strictly match system symbol names),
-      "side": "BUY" or "SELL",
-      "entryPrice": number,
-      "stopLoss": number,
-      "takeProfit": number,
-      "size": number,
-      "reason": "text explanation citing specific analytic pillars"
-    }
-  ],
-  "reasoningExplanation": "Detailed analytic desk decision narrative synthesis combining regime, macro, and OB cushions",
-  "totalRisk": "text describing calculated lot metric fractions",
-  "confluences": ["string list of system confluences based on pillars"]
-}
-
-Available symbols: "EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "EUR/GBP", "GOLD/USD", "SILVER/USD", "BTC/USDT", "ETH/USDT", "SOL/USDT", "US30", "NAS100", "GER40", "SPX500".
-Current symbol is: ${symbol}. Current symbol price is: ${price}.
-
-Return ONLY the raw valid JSON block. Do not wrap in markdown tags like \`\`\`json. Keep numbers realistic, with standard Forex pips (5 decimal places, e.g. 1.08345) and gold/crypto (2 decimal places, e.g. 2350.50). Place Stop Losses and Take Profits logically depending on side!
-`;
-
-    if (strategyProfile === 'SCALPING') {
-      systemInstruction += `
-
-CRITICAL COMPLIANCE DIRECTIVE: The user has activated a 'Scalping' strategy profile, but this platform is STRICTLY an Institutional Swing platform. You MUST reject all short-term/scalping mechanics (e.g. 1-minute, 5-minute charts, 5-pip stop losses, tick-scalping, high frequency trades). Modify the draft orders to use Institutional Swing parameters (4-Hour to Daily swing levels, wider ATR stop losses of 40-100 pips, and larger swing take profits of 100-300 pips) instead.
-In the reasoningExplanation field, you MUST prepend this compliance notice: "[COMPLIANCE WARNING: SCALPING BLOCKED] This platform is strictly restricted to Institutional Swing positions. Under Rule IRB-91, high frequency scalping orders are automatically overridden to H4/D1 Swing profiles to mitigate systemic leverage risk."
-`;
-    }
-
-    const result = await generateContentWithRetry(client, {
-      model: 'gemini-3.5-flash',
-      contents: [{ role: 'user', parts: [{ text: `Generate trade layout for prompt: "${prompt}". Current asset is ${symbol} priced at ${price}.` }] }],
-      config: {
-        systemInstruction,
-        temperature: 0.1,
-        responseMimeType: 'application/json'
-      }
-    });
-
-    const parsed = JSON.parse(result.text);
-    res.json(parsed);
-
-  } catch (error: any) {
-    console.warn('Composer AI endpoint fallback:', error.message || error);
-    res.json(getSimulatedDraft(`API fallback active (${error.message || 'connection bypass'}).`));
-  }
-});
-
-// AI Script Compiler: Generate MQL5 Expert Advisor and TradingView Pine Script (Strictly Server-Side)
-app.post('/api/gemini/compile', async (req, res) => {
-  const { prompt, strategyProfile } = req.body;
-
-  if (!prompt) {
-    res.status(400).json({ error: 'Prompt is required' });
-    return;
-  }
-
-  const getSimulatedCode = (noticeMsg = '') => {
-    const isEma = /ema|sma|moving|cross/i.test(prompt);
-    const isRsi = /rsi|oscillator|overbought/i.test(prompt);
-    const isScalpingActive = strategyProfile === 'SCALPING';
-
-    const title = isEma ? "EMA_Trend_Tracker_EA" : isRsi ? "RSI_Divergence_Exhaustion_EA" : "Apex_Grid_Liquidity_EA";
-
-    const complianceNotice = isScalpingActive
-      ? `// [COMPLIANCE OVERRIDE - RULE IRB-91] Scalping Mode sanitized & de-scaled.
-// All short-term HFT/scalp target boundaries have been automatically upgraded to H4 Swing levels.\n\n`
-      : '';
-
-    const mqlCode = `${complianceNotice}//+------------------------------------------------------------------+
-//|                                                 ${title}.mq5 |
-//|                                  Copyright 2026, Apex Quant Labs |
-//|                                             https://apex.quant   |
-//+------------------------------------------------------------------+
-#property copyright   "Copyright 2026, Apex Quant Labs"
-#property link        "https://apex.quant"
-#property version     "1.00"
-#property description "Cursor-composed institutional agent with safety locks"
-#property strict
-
-//--- Input parameters
-input group "=== Strategy Parameters ==="
-input int      InpFastPeriod     = 14;       // Fast Indicator Period
-input int      InpSlowPeriod     = 50;       // Slow Indicator Period
-input double   InpLotSize        = 0.10;     // Standard Exec Lot size
-input int      InpStopLossPips   = ${isScalpingActive ? '800' : '220'};      // Stop Loss (points, pips * 10)
-input int      InpTakeProfitPips = ${isScalpingActive ? '2000' : '500'};     // Take Profit (points)
-
-input group "=== Custom Risk Logic ==="
-input double   MaxDailyHedgeLoss = 2.0;      // Maximum loss percentage (%)
-input ENUM_TIMEFRAMES InpTimeframe = PERIOD_H4; // Forced Swing Timeframe bias
-
-//--- Global Variables
-int      fastHandle;
-int      slowHandle;
-datetime lastBarTime;
-
-//+------------------------------------------------------------------+
-//| Expert initialization function                                   |
-//+------------------------------------------------------------------+
-int OnInit()
-{
-   Print("Initializing Apex AI Agentic Engine: ${title}...");
-   
-   // Create handles for indicators
-   fastHandle = iMA(_Symbol, InpTimeframe, InpFastPeriod, 0, MODE_EMA, PRICE_CLOSE);
-   slowHandle = iMA(_Symbol, InpTimeframe, InpSlowPeriod, 0, MODE_EMA, PRICE_CLOSE);
-   
-   if(fastHandle == INVALID_HANDLE || slowHandle == INVALID_HANDLE)
-   {
-      Print("Error: Indicator initialization failed. Bridge abort.");
-      return(INIT_FAILED);
-   }
-   
-   lastBarTime = 0;
-   Print("${title} Agent ready for real-time MT5 bridge pipeline.");
-   return(INIT_SUCCEEDED);
-}
-
-//+------------------------------------------------------------------+
-//| Expert tick function                                             |
-//+------------------------------------------------------------------+
-void OnTick()
-{
-   // Safe high-timeframe bar checks
-   datetime currentBarTime = iTime(_Symbol, InpTimeframe, 0);
-   if(currentBarTime == lastBarTime) return; // run on bar close
-   
-   double fastValue[], slowValue[];
-   ArraySetAsSeries(fastValue, true);
-   ArraySetAsSeries(slowValue, true);
-   
-   if(CopyBuffer(fastHandle, 0, 0, 2, fastValue) < 2 ||
-      CopyBuffer(slowHandle, 0, 0, 2, slowValue) < 2)
-   {
-      return;
-   }
-   
-   // Check crossover triggers
-   bool buyTrigger  = (fastValue[0] > slowValue[0]) && (fastValue[1] <= slowValue[1]);
-   bool sellTrigger = (fastValue[0] < slowValue[0]) && (fastValue[1] >= slowValue[1]);
-   
-   if(buyTrigger)
-   {
-      Print("[AI TRIGGER] Bullish trend crossover caught. Dispatching Buy lots with target TP:" + IntegerToString(InpTakeProfitPips));
-   }
-   else if(sellTrigger)
-   {
-      Print("[AI TRIGGER] Bearish trend crossover caught. Dispatching Sell lots with stop protection.");
-   }
-   
-   lastBarTime = currentBarTime;
-}`;
-
-    const pineCode = `${complianceNotice}//@version=5
-strategy("${title}", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=1.0)
-
-// --- Inputs ---
-fastLen = input.int(14, title="Fast Line Length", group="Moving Averages")
-slowLen = input.int(50, title="Slow Line Length", group="Moving Averages")
-stopPerc = input.float(${isScalpingActive ? '3.5' : '1.5'}, title="Stop Loss (%)", group="Risk Filters")
-takePerc = input.float(${isScalpingActive ? '8.5' : '3.5'}, title="Take Profit (%)", group="Risk Filters")
-
-// --- Calculations ---
-fastEMA = ta.ema(close, fastLen)
-slowEMA = ta.ema(close, slowLen)
-
-// --- Visual Plots ---
-plot(fastEMA, color=color.indigo, linewidth=2, title="AI Fast Line")
-plot(slowEMA, color=color.rose, linewidth=2, title="AI Slow Line")
-
-// --- Signals ---
-buySignal  = ta.crossover(fastEMA, slowEMA)
-sellSignal = ta.crossunder(fastEMA, slowEMA)
-
-// --- Logic Execution ---
-if (buySignal)
-    strategy.entry("AI-Long", strategy.long, comment="Apex Bullish Entry")
-    strategy.exit("Close-Long", "AI-Long", loss=close * (stopPerc / 100) / syminfo.mintick, profit=close * (takePerc / 100) / syminfo.mintick)
-
-if (sellSignal)
-    strategy.entry("AI-Short", strategy.short, comment="Apex Bearish Entry")
-    strategy.exit("Close-Short", "AI-Short", loss=close * (stopPerc / 100) / syminfo.mintick, profit=close * (takePerc / 100) / syminfo.mintick)
-`;
-
-    const explanationPrefix = isScalpingActive
-      ? `[COMPLIANCE OVERRIDE - SCALPING SANITIZED] All scalp parameters parsed from the prompt were modified. EA logic is calibrated to Period H4 with extended swing parameters per compliance bylaws. `
-      : (noticeMsg ? `[Simulated Model Guidance]\n` : '');
-
-    return {
-      mql5Code: mqlCode,
-      pineCode: pineCode,
-      explanation: `${explanationPrefix}This automated advisor uses **EMA dynamic structures** as the main filter. When the fast line crosses the slow line, we dispatch trades with built-in slippage tolerance protections. Risk calculations are constrained strictly to 1.5% of equity per trade block.`,
-      parameters: [
-        { name: "InpFastPeriod", val: "14", desc: "Fast indicator boundary" },
-        { name: "InpSlowPeriod", val: "50", desc: "Slow baseline filter" },
-        { name: "InpStopLossPips", val: isScalpingActive ? "800" : "220", desc: "Safety stop loss limit (points)" },
-        { name: "InpTakeProfitPips", val: isScalpingActive ? "2000" : "500", desc: "Target limit (points)" }
-      ]
-    };
-  };
-
-  const client = getGeminiClient();
-  if (!client) {
-    res.json(getSimulatedCode('Offline simulation active: GEMINI_API_KEY is not defined.'));
-    return;
-  }
-
-  try {
-    let systemInstruction = `
-You are the Apex Institutional Code Sandbox Compiler.
-Your job is to read user inquiries about trading strategies or scripts (e.g. "EMA 20 cross", "RSI divergence scalper") and generate an Expert Advisor script in MQL5 (MetaTrader 5) and TradingView Pine Script v5.
-Respond with a strict, beautifully structured JSON object containing exactly these keys:
-{
-  "mql5Code": "write highly polished, realistic, compile-ready MQL5 code here as a single string",
-  "pineCode": "write highly polished, valid Pine Script v5 code here as a single string",
-  "explanation": "short markdown bullet explanation of strategy logic and how parameters align with institutional ICT or trade bible ideas",
-  "parameters": [
-    { "name": "parameter name", "val": "default value", "desc": "description of use" }
-  ]
-}
-
-Ensure the code has appropriate structure, parameters, comments, input variables, handles, and logic block definitions. Avoid mock syntax, keep it completely compilable! Keep output clean and valid JSON. Do not wrap in markdown \`\`\`json tags. Run raw string escaping where needed.
-`;
-
-    if (strategyProfile === 'SCALPING') {
-      systemInstruction += `
-
-CRITICAL COMPLIANCE DIRECTIVE: The user has activated a 'Scalping' strategy profile, but this platform is STRICTLY an Institutional Swing platform. You MUST reject all short-term/scalping parameters (e.g. tight 5-pip stop losses, fast EMA crosses under 1-minute or 5-minute timeframes, HFT/scalp triggers). Ensure your generated MQL5 code and TradingView Pine Script code strictly utilize 4-Hour / H4 or Daily timeframe filters, wider institutional swing parameters (at least 50-150 pips stop losses), and long-term trend following indicators.
-Prepend a prominent block comment stating that the advisor was automatically compliance-realigned to Swing trading. In the explanation field, explain that scalping strategy parameters were blocked and migrated to Institutional Swing per IRB-91 risk rules.
-`;
-    }
-
-    const result = await generateContentWithRetry(client, {
-      model: 'gemini-3.5-flash',
-      contents: [{ role: 'user', parts: [{ text: `Generate compilable trading script for: "${prompt}"` }] }],
-      config: {
-        systemInstruction,
-        temperature: 0.15,
-        responseMimeType: 'application/json'
-      }
-    });
-
-    const parsed = JSON.parse(result.text);
-    res.json(parsed);
-
-  } catch (error: any) {
-    console.warn('Compiler AI endpoint fallback:', error.message || error);
-    res.json(getSimulatedCode(`API fallback active (${error.message || 'connection bypass'}).`));
-  }
+  res.json({
+    narrative: getSimulatedBriefing(),
+    majorThemes,
+    sentimentBias,
+    volatilityIndex,
+    economicAlarms: highImpactEventsCount,
+    lastUpdated: now.toISOString(),
+    isLive: false
+  });
 });
 
 // Mount Vite middleware for development, handle production static assets

@@ -38,7 +38,7 @@ interface RiskExposureJournalProps {
 const DEFAULT_SESSIONS: RiskSessionLog[] = [
   {
     id: 'seq-1',
-    sessionName: 'US CPI Headline Release Sweep',
+    sessionName: 'NVIDIA Q2 Post-Earnings Spike Sweep',
     date: '2026-06-10',
     peakDrawdown: 4.65,
     endDrawdown: 1.20,
@@ -47,11 +47,11 @@ const DEFAULT_SESSIONS: RiskSessionLog[] = [
     activePositions: 5,
     volatilityGrade: 'CRITICAL',
     hedged: false,
-    notes: 'Extreme bid-ask liquidity slippage on target stop-loss levels. High-frequency algorithm sweeps triggered multiple standard buy stops before returning to base value.'
+    notes: 'High-stakes post-earnings gap and run on NVDA. Option contract pricing volatility caused wide bid-ask spread slippage on standard stop-loss executions.'
   },
   {
     id: 'seq-2',
-    sessionName: 'London Breakout Reversal Phase',
+    sessionName: 'Apple WWDC Keynote Volatility Phase',
     date: '2026-06-11',
     peakDrawdown: 1.80,
     endDrawdown: 0.40,
@@ -60,11 +60,11 @@ const DEFAULT_SESSIONS: RiskSessionLog[] = [
     activePositions: 3,
     volatilityGrade: 'MEDIUM',
     hedged: true,
-    notes: 'Correlation hedging active across EUR/USD and GBP/USD. Protected aggregate margin while capturing structural breakout continuation.'
+    notes: 'Symmetric hedging activated between AAPL and MSFT during the Siri 3.0 autonomous agent reveal. Outperformed index benchmark through alpha exposure offset.'
   },
   {
     id: 'seq-3',
-    sessionName: 'FOMC Interest Rate Speculation',
+    sessionName: 'Tesla Delivery Numbers Report Speculation',
     date: '2026-06-12',
     peakDrawdown: 3.10,
     endDrawdown: 2.85,
@@ -73,11 +73,11 @@ const DEFAULT_SESSIONS: RiskSessionLog[] = [
     activePositions: 4,
     volatilityGrade: 'HIGH',
     hedged: false,
-    notes: 'Exceeded maximum sector lot boundaries before decision announcement. High volatile swings resulted in early invalidations.'
+    notes: 'Exceeded maximum portfolio sector concentration boundaries on TSLA prior to the deliveries release. Rapid intraday swings triggered premature trailing stop-losses.'
   },
   {
     id: 'seq-4',
-    sessionName: 'Tokyo Midday Sideways Range',
+    sessionName: 'Tech Sector Co-Exposure Portfolio Rebalancing',
     date: '2026-06-15',
     peakDrawdown: 0.35,
     endDrawdown: 0.10,
@@ -86,11 +86,11 @@ const DEFAULT_SESSIONS: RiskSessionLog[] = [
     activePositions: 2,
     volatilityGrade: 'LOW',
     hedged: true,
-    notes: 'Clean low-risk mean reversion trading near supply block. Low volume pools reduced potential risk-to-reward variance.'
+    notes: 'Low beta volatility drift across Mega-Tech names. Rebalanced sector allocation from TSLA into MSFT to reduce aggregate systemic portfolio correlation risk.'
   },
   {
     id: 'seq-5',
-    sessionName: 'New York Open Liquidity Grab',
+    sessionName: 'Nasdaq Dark Pool Liquidity Sweep Ingress',
     date: '2026-06-16',
     peakDrawdown: 2.15,
     endDrawdown: -0.80, // Negative drawdown means ending in net profit high above start water mark
@@ -99,7 +99,7 @@ const DEFAULT_SESSIONS: RiskSessionLog[] = [
     activePositions: 6,
     volatilityGrade: 'HIGH',
     hedged: true,
-    notes: 'Swept sell-side liquidity pools on Gold before institutional bid expansion. Captured 1:3.2 risk-reward ratios.'
+    notes: 'Swept sell-side institutional block orders on AAPL near key demand levels. Executed a buy bracket position following institutional orderflow expansion.'
   }
 ];
 

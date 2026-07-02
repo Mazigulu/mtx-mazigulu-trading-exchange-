@@ -47,7 +47,7 @@ export default function AnalyticDeskIntelligence({
   const spread = 0.0001; // default fallback
 
   // Determine decimal places for symbol formatting
-  const decimalPlaces = symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : symbol === 'ETH/USDT' ? 2 : symbol === 'SOL/USDT' ? 2 : 5;
+  const decimalPlaces = 2;
 
   // Stop Loss & Take Profit calculations based on ATR and Safety Risk Weight
   const stopLossPips = atr * selectedIntegrationWeight;

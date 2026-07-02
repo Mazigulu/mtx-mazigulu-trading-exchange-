@@ -753,7 +753,7 @@ export default function TradeJournal({ trades, onTradeUpdated, onReplayTrade }: 
                                 {t.latency !== undefined && (
                                   <span className={`text-[7.5px] px-1 rounded font-bold leading-none ${
                                     t.latency > 45 ? 'text-amber-400' : 'text-white/40'
-                                  }`} title={`MT5 Latency: ${t.latency}ms`}>
+                                  }`} title={`Broker Latency: ${t.latency}ms`}>
                                     ⚡ {t.latency}ms
                                   </span>
                                 )}

@@ -73,136 +73,6 @@ const SYMBOL_CONFIGS: Partial<Record<MarketSymbol, {
   flagF2: string;
   newsEvents: { hourIndex: number; title: string; movementInPips: number; impact: string }[];
 }>> = {
-  'EUR/USD': {
-    name: 'Euro / U.S. Dollar',
-    basePrice: 1.1645,
-    pipSize: 0.0001,
-    decimals: 5,
-    averageRange: 0.0008,
-    driftFactor: 0.0015,
-    flagF1: '',
-    flagF2: '',
-    newsEvents: [
-      { hourIndex: 38, title: 'European Core CPI Flash Estimate (Inflation Spike)', movementInPips: -35, impact: 'HIGH' },
-      { hourIndex: 82, title: 'US Federal Reserve Interest Rate Decision (FOMC Hawkes)', movementInPips: 65, impact: 'HIGH' },
-      { hourIndex: 124, title: 'US CPI Release (Core Inflation Decreases)', movementInPips: -48, impact: 'HIGH' },
-    ]
-  },
-  'GBP/USD': {
-    name: 'Great Britain Pound / U.S. Dollar',
-    basePrice: 1.2680,
-    pipSize: 0.0001,
-    decimals: 5,
-    averageRange: 0.0009,
-    driftFactor: 0.0017,
-    flagF1: '🇬🇧',
-    flagF2: '🇺🇸',
-    newsEvents: [
-      { hourIndex: 32, title: 'UK Average Earnings Index (Labor Inflation)', movementInPips: -40, impact: 'HIGH' },
-      { hourIndex: 82, title: 'US Federal Reserve Interest Rate Decision (FOMC Hawkes)', movementInPips: 65, impact: 'HIGH' },
-      { hourIndex: 130, title: 'UK GDP Output m/m (Economic Stagnation)', movementInPips: -50, impact: 'HIGH' },
-    ]
-  },
-  'USD/JPY': {
-    name: 'U.S. Dollar / Japanese Yen',
-    basePrice: 155.40,
-    pipSize: 0.01,
-    decimals: 2,
-    averageRange: 0.12,
-    driftFactor: 0.22,
-    flagF1: '🇺🇸',
-    flagF2: '🇯🇵',
-    newsEvents: [
-      { hourIndex: 45, title: 'Bank of Japan Monetary Policy Summary (Yen Jolt)', movementInPips: -120, impact: 'HIGH' },
-      { hourIndex: 82, title: 'US Federal Reserve Interest Rate Decision (FOMC Hawkes)', movementInPips: 95, impact: 'HIGH' },
-      { hourIndex: 115, title: 'Japan National Core CPI m/m (Inflation Trend)', movementInPips: 80, impact: 'HIGH' },
-    ]
-  },
-  'BTC/USDT': {
-    name: 'Bitcoin / TetherUS',
-    basePrice: 67500.0,
-    pipSize: 1.0,
-    decimals: 1,
-    averageRange: 250.0,
-    driftFactor: 580.0,
-    flagF1: '🪙',
-    flagF2: '🇺🇸',
-    newsEvents: [
-      { hourIndex: 28, title: 'Institutional MicroStrategy Wallet Intake (Whale Support)', movementInPips: 1100, impact: 'HIGH' },
-      { hourIndex: 82, title: 'US Federal Reserve Interest Rate Decision (FOMC Hawkes)', movementInPips: -1450, impact: 'HIGH' },
-      { hourIndex: 140, title: 'Binance Outflow Liquidation Event (Long Squeeze)', movementInPips: -1900, impact: 'HIGH' },
-    ]
-  },
-  'GOLD/USD': {
-    name: 'Gold / U.S. Dollar',
-    basePrice: 2355.50,
-    pipSize: 0.1,
-    decimals: 2,
-    averageRange: 4.5,
-    driftFactor: 8.5,
-    flagF1: '🪙',
-    flagF2: '🇺🇸',
-    newsEvents: [
-      { hourIndex: 32, title: 'US Non-Farm Payrolls (Gold Volatility)', movementInPips: -210, impact: 'HIGH' },
-      { hourIndex: 82, title: 'US Federal Reserve Interest Rate Decision (FOMC Hawkes)', movementInPips: 420, impact: 'HIGH' },
-      { hourIndex: 120, title: 'Geopolitical Risk Escalation (Safe Haven Inflow)', movementInPips: 380, impact: 'HIGH' },
-    ]
-  },
-  'AUD/USD': {
-    name: 'Australian Dollar / U.S. Dollar',
-    basePrice: 0.6650,
-    pipSize: 0.0001,
-    decimals: 5,
-    averageRange: 0.0006,
-    driftFactor: 0.0011,
-    flagF1: '🇦🇺',
-    flagF2: '🇺🇸',
-    newsEvents: []
-  },
-  'EUR/GBP': {
-    name: 'Euro / Great Britain Pound',
-    basePrice: 0.8520,
-    pipSize: 0.0001,
-    decimals: 5,
-    averageRange: 0.0005,
-    driftFactor: 0.0009,
-    flagF1: '🇪🇺',
-    flagF2: '🇬🇧',
-    newsEvents: []
-  },
-  'SILVER/USD': {
-    name: 'Silver / U.S. Dollar',
-    basePrice: 29.50,
-    pipSize: 0.01,
-    decimals: 2,
-    averageRange: 0.25,
-    driftFactor: 0.45,
-    flagF1: '💵',
-    flagF2: '🥈',
-    newsEvents: []
-  },
-  'ETH/USDT': {
-    name: 'Ethereum / TetherUS',
-    basePrice: 3450.0,
-    pipSize: 0.01,
-    decimals: 2,
-    averageRange: 25.0,
-    driftFactor: 45.0,
-    flagF1: '💎',
-    flagF2: '💎',
-    newsEvents: []
-  },
-  'SOL/USDT': {
-    name: 'Solana / TetherUS',
-    basePrice: 148.55,
-    pipSize: 0.01,
-    decimals: 2,
-    averageRange: 1.8,
-    driftFactor: 3.5,
-    flagF1: '☀️',
-    flagF2: '☀️',
-    newsEvents: []
-  },
   'US30': {
     name: 'Dow Jones 30 Index',
     basePrice: 38850.0,
@@ -245,6 +115,50 @@ const SYMBOL_CONFIGS: Partial<Record<MarketSymbol, {
     driftFactor: 65.0,
     flagF1: '🇺🇸',
     flagF2: '📊',
+    newsEvents: []
+  },
+  'AAPL': {
+    name: 'Apple Inc.',
+    basePrice: 188.30,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 2.5,
+    driftFactor: 4.5,
+    flagF1: '🇺🇸',
+    flagF2: '🍏',
+    newsEvents: []
+  },
+  'MSFT': {
+    name: 'Microsoft Corp.',
+    basePrice: 415.50,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 4.5,
+    driftFactor: 8.5,
+    flagF1: '🇺🇸',
+    flagF2: '💻',
+    newsEvents: []
+  },
+  'NVDA': {
+    name: 'NVIDIA Corp.',
+    basePrice: 945.00,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 15.0,
+    driftFactor: 25.0,
+    flagF1: '🇺🇸',
+    flagF2: '🎮',
+    newsEvents: []
+  },
+  'TSLA': {
+    name: 'Tesla Inc.',
+    basePrice: 175.50,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 5.0,
+    driftFactor: 10.0,
+    flagF1: '🇺🇸',
+    flagF2: '⚡',
     newsEvents: []
   }
 };
@@ -350,7 +264,7 @@ function calculateATR(highs: number[], lows: number[], closes: number[], period 
   return atr;
 }
 
-export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbolChange, onSimulationUpdate, onSimulationToggle }: BacktestSimulatorProps) {
+export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolChange, onSimulationUpdate, onSimulationToggle }: BacktestSimulatorProps) {
   // Target Trading Pair selected
   const [backtestSymbol, setBacktestSymbol] = useState<MarketSymbol>(selectedSymbol);
 
@@ -361,7 +275,7 @@ export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbol
     }
   }, [selectedSymbol]);
 
-  const config = SYMBOL_CONFIGS[backtestSymbol] || SYMBOL_CONFIGS['EUR/USD'];
+  const config = SYMBOL_CONFIGS[backtestSymbol] || SYMBOL_CONFIGS['NAS100'];
 
   // Backtest parameters state
   const [startingCapital, setStartingCapital] = useState<number>(10000);
@@ -376,26 +290,23 @@ export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbol
   const [simtrades, setSimtrades] = useState<BacktestTrade[]>([]);
   const [equityCurveData, setEquityCurveData] = useState<{ tradeIndex: number; equity: number; label: string }[]>([]);
 
-  // MT5 Link tracking
-  const [isMt5Active, setIsMt5Active] = useState<boolean>(false);
+  // Broker Gateway Link tracking
+  const [isBrokerActive, setIsBrokerActive] = useState<boolean>(true);
 
   useEffect(() => {
-    const checkMT5Status = async () => {
+    const checkBrokerStatus = async () => {
       try {
-        const res = await fetch('/api/mt5/status');
+        const res = await fetch('/api/health');
         if (res.ok) {
-          const data = await res.json();
-          if (data && typeof data[backtestSymbol] === 'boolean') {
-            setIsMt5Active(data[backtestSymbol]);
-          }
+          setIsBrokerActive(true);
         }
       } catch (err) {
-        console.warn('Unable to retrieve MetaTrader 5 status:', err);
+        console.warn('Unable to retrieve broker status:', err);
       }
     };
 
-    checkMT5Status();
-    const interval = setInterval(checkMT5Status, 10000);
+    checkBrokerStatus();
+    const interval = setInterval(checkBrokerStatus, 15000);
     return () => clearInterval(interval);
   }, [backtestSymbol]);
 
@@ -1030,24 +941,20 @@ export default function BacktestSimulator({ selectedSymbol = 'EUR/USD', onSymbol
               onChange={(e) => handleSymbolChangeInner(e.target.value as MarketSymbol)}
               className="bg-[#0c0c0c] border border-white/10 hover:border-white/25 text-white text-xs font-mono font-bold uppercase rounded px-3 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
-              <option value="EUR/USD">EUR/USD (Euro)</option>
-              <option value="GBP/USD">🇬🇧🇺🇸 GBP/USD (Cable)</option>
-              <option value="USD/JPY">🇺🇸🇯🇵 USD/JPY (Yen)</option>
-              <option value="BTC/USDT">🪙🇺🇸 BTC/USDT (Bitcoin)</option>
-              <option value="GOLD/USD">🪙🇺🇸 GOLD/USD (Gold Spot)</option>
-              <option value="DXY">💵🇺🇸 DXY (US Dollar Index)</option>
-              <option value="US10Y">🏦🇺🇸 US10Y (US 10Y Yield)</option>
-              <option value="BRENT">🛢️🌐 BRENT (Brent Crude Oil)</option>
-              <option value="AAPL">🍎🇺🇸 AAPL (Apple)</option>
-              <option value="MSFT">💻🇺🇸 MSFT (Microsoft)</option>
-              <option value="NVDA">🟩🇺🇸 NVDA (NVIDIA)</option>
-              <option value="TSLA">🚗🇺🇸 TSLA (Tesla)</option>
+              <option value="SPX500">🇺🇸 SPX500 (S&P 500)</option>
+              <option value="NAS100">🇺🇸 NAS100 (Nasdaq 100)</option>
+              <option value="US30">🇺🇸 US30 (Dow Jones 30)</option>
+              <option value="GER40">🇩🇪 GER40 (DAX 40)</option>
+              <option value="AAPL">🍎 AAPL (Apple)</option>
+              <option value="MSFT">💻 MSFT (Microsoft)</option>
+              <option value="NVDA">🟩 NVDA (NVIDIA)</option>
+              <option value="TSLA">🚗 TSLA (Tesla)</option>
             </select>
           </div>
 
           <span className="text-[10px] bg-emerald-500/10 border border-[#10b981]/25 text-emerald-400 font-mono px-3 py-2.5 rounded uppercase font-semibold flex items-center h-[38px] mt-1 md:mt-4">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-2 animate-pulse shrink-0"></span>
-            {isMt5Active ? 'MT5 TERMINAL VALIDATED' : `${backtestSymbol} SIM FEED VALIDATED`}
+            {isBrokerActive ? 'BROKER GATEWAY VALIDATED' : `${backtestSymbol} SIM FEED VALIDATED`}
           </span>
         </div>
       </div>

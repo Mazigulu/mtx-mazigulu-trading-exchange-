@@ -37,7 +37,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
   const faqs = [
     {
       q: "What is MTXquant?",
-      a: "MTXquant is a next-generation high-fidelity quantitative analysis and trade execution terminal. It integrates real-time institutional-grade order-flow modeling, depth of market (DOM) pricing arrays, and advanced algorithmic execution engines with MT5 and custom proprietary bridges.",
+      a: "MTXquant is a next-generation high-fidelity quantitative analysis and trade execution terminal. It integrates real-time institutional-grade order-flow modeling, depth of market (DOM) pricing arrays, and advanced algorithmic execution engines with custom proprietary bridges.",
       tag: "General",
     },
     {
@@ -51,8 +51,8 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
       tag: "Technical Analysis",
     },
     {
-      q: "How do the MT5 Bridge latency safeguards protect my execution?",
-      a: "The terminal maintains a continuous high-frequency ping loop with the MetaTrader 5 (MT5) Gateway instance. If packet latency rises above the critical threshold of 45ms, visual alarms are triggered and automatic position mitigation triggers are set. You are immediately warned to avoid executing rapid-scale scale-in sweeps until stable connection speeds resume.",
+      q: "How do the Broker Bridge latency safeguards protect my execution?",
+      a: "The terminal maintains a continuous high-frequency ping loop with the Broker Gateway instance. If packet latency rises above the critical threshold of 45ms, visual alarms are triggered and automatic position mitigation triggers are set. You are immediately warned to avoid executing rapid-scale scale-in sweeps until stable connection speeds resume.",
       tag: "Execution",
     },
     {
@@ -260,7 +260,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                           </p>
                         </div>
 
-                        {/* Section 3: High-Frequency MT5 Bridge */}
+                        {/* Section 3: High-Frequency Broker Bridge */}
                         <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4 space-y-2.5 md:col-span-2">
                           <h4 className="text-xs font-black text-indigo-300 font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> Execution Bridge & Latency Controls
@@ -268,7 +268,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[10px] text-white/50 leading-relaxed font-mono">
                             <div className="bg-black/20 p-2.5 rounded border border-white/5 text-left">
                               <span className="text-white font-bold block mb-1 uppercase text-[9px] text-indigo-400">Heartbeat check</span>
-                              Constant loop evaluators measure ping response intervals from active MetaTrader 5 wrappers.
+                              Constant loop evaluators measure ping response intervals from active broker wrappers.
                             </div>
                             <div className="bg-black/20 p-2.5 rounded border border-white/5 text-left">
                               <span className="text-white font-bold block mb-1 uppercase text-[9px] text-indigo-400">Slippage Limiter</span>
@@ -354,7 +354,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                               <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded text-[8.5px] uppercase border border-emerald-500/20">Active</span>
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className="text-white/70">4. MT5 Bridge High Frequency Circuit Breaker</span>
+                              <span className="text-white/70">4. Broker Bridge High Frequency Circuit Breaker</span>
                               <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded text-[8.5px] uppercase border border-emerald-500/20">Active</span>
                             </div>
                           </div>
@@ -484,7 +484,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                         </p>
                         <ul className="list-disc pl-4 space-y-1.5 text-white/50">
                           <li>Accept that the 1% maximum fixed fractional safe protection layer is a client-side and proxy control mechanism and cannot guarantee avoidance of market slippage in highly displaced environments (such as Silver Bullet or Judas Swings).</li>
-                          <li>Acknowledge that dynamic data pipelines is for backtest visualization, and real-time live trading requires consistent broker infrastructure alignments (MT5 Gateways).</li>
+                          <li>Acknowledge that dynamic data pipelines are for backtest visualization, and real-time live trading requires consistent broker infrastructure alignments.</li>
                           <li>Accept entire self-sovereign fiduciary accountability for any resulting balances, including unexpected balance drawdowns from automated execution mistakes.</li>
                         </ul>
                         <p className="border-t border-white/5 pt-3 text-[10px] text-white/35">
@@ -542,8 +542,8 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                                 <td className="p-2.5 text-white/40">Browser Session</td>
                               </tr>
                               <tr>
-                                <td className="p-2.5 font-bold text-indigo-300">mt5_cfg_jwt</td>
-                                <td className="p-2.5 text-white/60">Caches encrypted tokens for the local MT5 execution bridge interface.</td>
+                                <td className="p-2.5 font-bold text-indigo-300">broker_cfg_jwt</td>
+                                <td className="p-2.5 text-white/60">Caches encrypted tokens for the local brokerage execution bridge interface.</td>
                                 <td className="p-2.5 text-white/40">7 Days (Standard)</td>
                               </tr>
                             </tbody>
@@ -588,7 +588,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                             <strong className="text-white">Encrypted Local Logic:</strong> All strategies, economic calendar triggers, and backtest results operate entirely on sandbox environments or safe server systems without central database tracking.
                           </li>
                           <li>
-                            <strong className="text-white">API Key Safety:</strong> Secrets loaded into `.env` configurations remain server-side and are loaded instantaneously exclusively during direct MT5 trade execution events.
+                            <strong className="text-white">API Key Safety:</strong> Secrets loaded into `.env` configurations remain server-side and are loaded instantaneously exclusively during direct broker trade execution events.
                           </li>
                           <li>
                             <strong className="text-white">Telemetry Exclusion:</strong> The system logs debugging errors (e.g., websocket heartbeat losses) strictly on localized system runtimes. No central telemetry server is pinged.

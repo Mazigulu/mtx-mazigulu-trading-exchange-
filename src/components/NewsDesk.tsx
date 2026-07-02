@@ -140,10 +140,6 @@ export default function NewsDesk() {
   // Selected detail modal
   const [activeArticle, setActiveArticle] = useState<NewsArticle | null>(null);
 
-  // Gemini predictive AI integration state
-  const [aiAnalysis, setAiAnalysis] = useState<string>('');
-  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
-
   // Pagination structure
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 6;
@@ -451,7 +447,6 @@ export default function NewsDesk() {
   // Reset pagination on sub-page transition or search
   useEffect(() => {
     setCurrentPage(1);
-    setAiAnalysis('');
   }, [selectedSubTab, searchQuery, sortBy, showOnlyRedFolders, providerFilter, staleFilter]);
 
   // News Volatility Impact Analytics Data Generator for Recharts
@@ -730,56 +725,6 @@ export default function NewsDesk() {
     const startIdx = (currentPage - 1) * itemsPerPage;
     return filteredArticles.slice(startIdx, startIdx + itemsPerPage);
   }, [filteredArticles, currentPage]);
-
-  // Run AI Impact Analyzer with server side route
-  const handleAnalyzeArticleImpact = async (article: NewsArticle, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setAnalyzingId(article.id);
-    setAiAnalysis('');
-    
-    try {
-      const promptText = `
-Please analyze this financial bulletin carefully and predict its precise trading impacts:
-Title: "${article.title}"
-Excerpt: "${article.excerpt}"
-Source: "${article.source}"
-Severity: "${article.impact}"
-Category: "${article.category}"
-Sentiment: "${article.sentiment}"
-
-Based on "The Trading Bible" guidelines, summarize:
-1. Short-term asset spread volatility prediction.
-2. Order Flow expectation & Liquidity Pools/rejections to monitor.
-3. Precise action advice (e.g. bracket rules, direct avoid windows, swing alignment).
-Keep the analysis clean, dense, authoritative, and strictly professional.
-`;
-
-      const res = await fetch('/api/gemini/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptText,
-          currentSymbol: article.symbol !== 'GLOBAL' ? article.symbol : 'EUR/USD'
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.text) {
-          setAiAnalysis(data.text);
-        } else {
-          setAiAnalysis(data.response || 'Unable to retrieve standard AI analysis output stream.');
-        }
-      } else {
-        setAiAnalysis('Failsafe: News analysis server reported brief congestion. Please retry.');
-      }
-    } catch (err) {
-      console.error('Failed to trace Gemini predictions:', err);
-      setAiAnalysis('Failsafe: Network connection interrupted during AI computation.');
-    } finally {
-      setAnalyzingId(null);
-    }
-  };
 
   const renderHighlightedHeadline = (title: string) => {
     if (!sentimentHighlight) return title;
@@ -1968,7 +1913,6 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
                     key={article.id}
                     onClick={() => {
                       setActiveArticle(article);
-                      setAiAnalysis('');
                     }}
                     className={`bg-black/40 border p-4.5 rounded-xl flex flex-col justify-between gap-3.5 transition-all duration-200 cursor-pointer ${
                       colors.border
@@ -2070,7 +2014,6 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
                     key={article.id}
                     onClick={() => {
                       setActiveArticle(article);
-                      setAiAnalysis('');
                     }}
                     className={`p-3 md:p-3.5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-[10px] hover:bg-white/5 transition-colors cursor-pointer ${colors.border}`}
                   >
@@ -2194,7 +2137,6 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
             className="fixed inset-0 bg-black/85 backdrop-blur-md z-[200] flex items-center justify-center p-4"
             onClick={() => {
               setActiveArticle(null);
-              setAiAnalysis('');
             }}
           >
             <motion.div
@@ -2222,7 +2164,6 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
                   <button
                     onClick={() => {
                       setActiveArticle(null);
-                      setAiAnalysis('');
                     }}
                     className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-white/40 hover:text-white transition-colors cursor-pointer text-[9.5px] font-bold uppercase"
                   >
@@ -2327,58 +2268,7 @@ Keep the analysis clean, dense, authoritative, and strictly professional.
                   );
                 })()}
 
-                {/* AI TARGET IMPACT ANALYSIS WORKSPACE */}
-                <div className="bg-gradient-to-br from-indigo-950/20 to-black/30 border border-indigo-500/20 p-4 rounded-xl space-y-3 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-3 opacity-10">
-                    <Sparkles className="w-14 h-14 text-indigo-400" />
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Cpu className="w-4 h-4 text-indigo-400 animate-pulse" />
-                      <span className="text-[9.5px] font-black uppercase text-white tracking-wider flex items-center gap-1.5">
-                        GEMINI COGNITIVE ACTION ANALYZER
-                        <span className="text-[7.5px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2.5 rounded uppercase">RAG v3</span>
-                      </span>
-                    </div>
-
-                    {!aiAnalysis && !analyzingId && (
-                      <button
-                        onClick={(e) => handleAnalyzeArticleImpact(activeArticle, e)}
-                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400/30 rounded font-bold text-[8.5px] tracking-tight cursor-pointer shadow-[0_0_8px_rgba(99,102,241,0.22)] active:scale-95 transition-all"
-                      >
-                        RUN MODEL INTERACTION
-                      </button>
-                    )}
-                  </div>
-
-                  {analyzingId === activeArticle.id ? (
-                    <div className="flex flex-col items-center justify-center py-6 text-center select-none">
-                      <RefreshCw className="w-5 h-5 text-indigo-400 animate-spin mb-2" />
-                      <span className="text-[8.5px] font-bold text-white/50 tracking-wider uppercase">Running prediction matrix parameters...</span>
-                      <p className="text-[8px] font-sans text-white/20 mt-0.5">Applying ICT swing rules & volatility filters.</p>
-                    </div>
-                  ) : aiAnalysis ? (
-                    <div className="space-y-2 text-[10px] leading-relaxed text-[#dfdfe8] font-sans border-t border-indigo-500/10 pt-3">
-                      <div className="flex items-center justify-between text-[8px] font-mono font-bold text-indigo-300 pb-1 border-b border-indigo-500/5 uppercase">
-                        <span>MODEL OUTPUT FOR {activeArticle.symbol || 'GLOBAL_MACRO'}</span>
-                        <span className="text-white/25">LLM LATENCY ~480ms</span>
-                      </div>
-                      <div className="space-y-1.5 select-text text-white/90">
-                        {aiAnalysis.split('\n').map((line, lIdx) => {
-                          if (line.trim().startsWith('-') || line.trim().startsWith('*') || /^\d+\./.test(line.trim())) {
-                            return <p key={lIdx} className="pl-3.5 pr-1 relative font-mono text-[9.5px] text-[#e5e7eb] font-semibold leading-relaxed before:content-['•'] before:absolute before:left-1 before:text-indigo-400">{line.replace(/^[-*\d.]\s*/, '')}</p>;
-                          }
-                          return <p key={lIdx} className="font-sans leading-relaxed tracking-wide font-medium">{line}</p>;
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-[9px] text-[#9999a0] font-sans leading-normal border-t border-indigo-500/10 pt-2.5">
-                      Analyze immediate market liquidity pools, directional biases, and volatility alerts with server-side Gemini.
-                    </p>
-                  )}
-                </div>
+                {/* AI workspace removed entirely */}
               </div>
 
               {/* Bottom control triggers */}

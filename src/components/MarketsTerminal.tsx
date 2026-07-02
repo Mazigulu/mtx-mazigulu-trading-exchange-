@@ -81,7 +81,7 @@ interface Fundamentals {
 }
 
 export default function MarketsTerminal() {
-  const [activeSubTab, setActiveSubTab] = useState<'ANALYSIS' | 'SCREENER' | 'BACKTEST' | 'PORTFOLIO'>('ANALYSIS');
+  const [activeSubTab, setActiveSubTab] = useState<'ANALYSIS' | 'SCREENER'>('ANALYSIS');
   const [ticker, setTicker] = useState('AAPL');
   const [searchInput, setSearchInput] = useState('AAPL');
   const [range, setRange] = useState<'5d' | '1mo' | '3mo' | '1y'>('1mo');
@@ -184,13 +184,6 @@ export default function MarketsTerminal() {
     'EURUSD=X': { ret: 0.02, vol: 0.08, price: 1.0850 }
   };
 
-  // New Ticker AI Copilot Integration
-  const [tickerSummary, setTickerSummary] = useState<string>('');
-  const [summaryLoading, setSummaryLoading] = useState<boolean>(false);
-  const [tickerChatHistory, setTickerChatHistory] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
-  const [tickerChatInput, setTickerChatInput] = useState<string>('');
-  const [tickerChatSending, setTickerChatSending] = useState<boolean>(false);
-
   // Simple Markdown formatting helper to build beautiful HTML structures
   const formatMarkdown = (text: string) => {
     if (!text) return null;
@@ -268,78 +261,6 @@ export default function MarketsTerminal() {
         </p>
       );
     });
-  };
-
-  // Fetch active ticker summary and set up chat room on ticker change
-  useEffect(() => {
-    const fetchAiSummary = async () => {
-      setSummaryLoading(true);
-      setTickerSummary('');
-      try {
-        const response = await fetch('/api/gemini/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: `Write an expert quantitative summary (2-3 sentences max) outlining the core investment thesis and daily trend bias for active equity/ticker ${ticker.toUpperCase()} based on macro factor and Order Block metrics. Be precise, authoritative, and concise.`,
-            currentSymbol: ticker
-          })
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setTickerSummary(data.text);
-        } else {
-          setTickerSummary(`Quantitative summary for **${ticker.toUpperCase()}** constructed. Structure is currently balancing at key structural intervals under general interest duration pressures.`);
-        }
-      } catch (err) {
-        setTickerSummary(`Quantitative summary for **${ticker.toUpperCase()}** constructed. Structure is currently balancing at key structural intervals under general interest duration pressures.`);
-      } finally {
-        setSummaryLoading(false);
-      }
-    };
-
-    setTickerChatHistory([
-      {
-        role: 'assistant',
-        text: `### 🤖 APEX MULTI-ASSET INTEL: ${ticker.toUpperCase()}\n\nWelcome to the active **Investment Advisory Terminal**. I am online and calibrated specifically to analyze **${ticker.toUpperCase()}** fundamental metrics, corporate filings, structural footprints, and its correlation offsets within your wider quantitative portfolio.\n\n*How would you like to stress-test or analyze ${ticker.toUpperCase()} today? select a preset query below or ask any tailored technical/fundamental question.*`
-      }
-    ]);
-
-    fetchAiSummary();
-  }, [ticker]);
-
-  const handleSendTickerChat = async (customPrompt?: string) => {
-    const input = customPrompt || tickerChatInput;
-    if (!input.trim() || tickerChatSending) return;
-
-    const userMsg = { role: 'user' as const, text: input };
-    setTickerChatHistory(prev => [...prev, userMsg]);
-    setTickerChatInput('');
-    setTickerChatSending(true);
-
-    try {
-      const response = await fetch('/api/gemini/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: input,
-          history: tickerChatHistory.map(m => ({
-            role: m.role,
-            parts: [{ text: m.text }]
-          })),
-          currentSymbol: ticker
-        })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTickerChatHistory(prev => [...prev, { role: 'assistant', text: data.text }]);
-      } else {
-        setTickerChatHistory(prev => [...prev, { role: 'assistant', text: `Failed to receive real-time intelligence for ${ticker.toUpperCase()}. Please check API key configurations in the Settings panel.` }]);
-      }
-    } catch (err) {
-      setTickerChatHistory(prev => [...prev, { role: 'assistant', text: `Failed to receive real-time intelligence for ${ticker.toUpperCase()}. Please check API key configurations in the Settings panel.` }]);
-    } finally {
-      setTickerChatSending(false);
-    }
   };
 
   // Trigger load on ticker/range change
@@ -510,11 +431,11 @@ export default function MarketsTerminal() {
     setAgentConsoleLogs([]);
     
     const logs = [
-      'Initializing Autonomous Investment Agent Core...',
+      'Initializing Autonomous Investment Optimizer Core...',
       'Scanning screener metrics database for alpha signals...',
       'Computing standard asset beta correlations...',
       'Synthesizing macro factors with historical return averages...',
-      'Querying server-side Gemini intelligence engine on narrative thesis...'
+      'Computing target multi-asset weight matrix parameters...'
     ];
 
     logs.forEach((log, index) => {
@@ -523,35 +444,15 @@ export default function MarketsTerminal() {
       }, (index + 1) * 300);
     });
 
-    const agentArchetypePrompt = activeAgent === 'ALPHA'
-      ? `Write a brief, high-level (2 sentences max) investment thesis for an aggressive high-beta sector momentum tech portfolio focusing on AAPL, NVDA, and BTC-USD. Explain how these assets are leveraged for high-growth trends.`
-      : activeAgent === 'INCOME'
-        ? `Write a brief, high-level (2 sentences max) investment thesis for a conservative dividend income compounding portfolio focusing on SPY, JNJ, and PG. Explain how these safe compounders preserve capital and compound yields.`
-        : `Write a brief, high-level (2 sentences max) investment thesis for an inflation-hedged All-Weather risk parity portfolio focusing on SPY, GLD, and crypto assets. Explain why blending these uncorrelated factors protects against macro shocks.`;
-
-    setTimeout(async () => {
+    setTimeout(() => {
       try {
-        const response = await fetch('/api/gemini/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: agentArchetypePrompt,
-            currentSymbol: ticker
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setAgentResponse(data.text);
-        } else {
-          setAgentResponse(
-            activeAgent === 'ALPHA'
-              ? 'Sector rotation is heavily favoring AI acceleration chips and digital reserve ledger assets. Momentum signals predict near-term index expansion, with AAPL and NVDA serving as critical structural cornerstones.'
-              : activeAgent === 'INCOME'
-                ? 'Defensive structural stability is locking in consumer staple compounds and healthcare value loops. High cash flow yields preserve capital and mitigate global interest fluctuations.'
-                : 'Balanced multi-asset diversification blends classic equities, hard commodity assets, and alternative crypto reserves to insulate capital against macro interest shocks.'
-          );
-        }
+        setAgentResponse(
+          activeAgent === 'ALPHA'
+            ? 'Sector rotation is heavily favoring high-growth tech sectors and digital reserve assets. Momentum signals predict near-term index expansion, with AAPL and NVDA serving as critical structural cornerstones.'
+            : activeAgent === 'INCOME'
+              ? 'Defensive structural stability is locking in consumer staple compounds and healthcare value loops. High cash flow yields preserve capital and mitigate global interest fluctuations.'
+              : 'Balanced multi-asset diversification blends classic equities, hard commodity assets, and alternative crypto reserves to insulate capital against macro interest shocks.'
+        );
 
         if (activeAgent === 'ALPHA') {
           setAgentProposedAssets(['AAPL', 'MSFT', 'NVDA', 'BTC-USD']);
@@ -566,7 +467,7 @@ export default function MarketsTerminal() {
 
         setAgentConsoleLogs(prev => [
           ...prev, 
-          '✓ AI Model analysis complete.',
+          '✓ Factor analysis complete.',
           '✓ Formulated optimal multi-asset target matrix weights.',
           'Ready for execution routing.'
         ]);
@@ -940,45 +841,9 @@ export default function MarketsTerminal() {
   const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6', '#a855f7', '#14b8a6'];
 
   return (
-    <div id="markets-terminal-container" className="flex flex-col h-full bg-[#050507] border border-white/5 rounded-xl overflow-hidden p-6 text-white font-sans">
+    <div id="markets-terminal-container" className="space-y-6 text-white font-sans">
       
-      {/* SECTION TITLE & NAVIGATION SUBTABS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-white/10 gap-4">
-        <div>
-          <h2 className="text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2">
-            <TrendingUp className="w-5.5 h-5.5 text-indigo-400" />
-            Markets Terminal Desk
-          </h2>
-          <p className="text-xs text-white/40 font-mono mt-0.5">yfinance • pandas • plotly • vectorbt • pyportfolioOpt</p>
-        </div>
 
-        {/* SUBTAB CONTROLLER */}
-        <div className="flex bg-white/5 p-1 rounded-lg border border-white/5 shrink-0 self-start md:self-center">
-          {[
-            { id: 'ANALYSIS', label: 'Ticker Analysis', icon: Search },
-            { id: 'SCREENER', label: 'Pandas Screener', icon: Filter },
-            { id: 'BACKTEST', label: 'vectorbt Backtest', icon: Activity },
-            { id: 'PORTFOLIO', label: 'pyportfolioOpt', icon: Sliders }
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const active = activeSubTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveSubTab(tab.id as any)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-mono uppercase font-bold transition-all cursor-pointer ${
-                  active 
-                    ? 'bg-indigo-600 text-white shadow' 
-                    : 'text-white/50 hover:text-white/80'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* ERRORS PANEL */}
       {errorMsg && (
@@ -989,7 +854,7 @@ export default function MarketsTerminal() {
       )}
 
       {/* SUBTAB CONTENT PORTAL */}
-      <div className="flex-1 overflow-y-auto mt-5">
+      <div>
 
           {/* 1. TICKER ANALYSIS SUBTAB */}
         {activeSubTab === 'ANALYSIS' && (
@@ -1017,13 +882,13 @@ export default function MarketsTerminal() {
                 </button>
 
                 {/* Range selectors */}
-                <div className="flex bg-[#040405] border border-white/10 p-0.5 rounded">
+                <div className="flex bg-[#040405] border border-white/10 p-0.5 rounded text-white/40">
                   {(['5d', '1mo', '3mo', '1y'] as const).map((r) => (
                     <button
                       key={r}
                       type="button"
                       onClick={() => setRange(r)}
-                      className={`px-2.5 py-1.5 text-[9px] font-mono rounded ${
+                      className={`px-2.5 py-1.5 text-[9px] font-mono rounded cursor-pointer ${
                         range === r 
                           ? 'bg-indigo-600/20 text-indigo-300 font-bold border border-indigo-500/20' 
                           : 'text-white/40 hover:text-white/70'
@@ -1033,6 +898,17 @@ export default function MarketsTerminal() {
                     </button>
                   ))}
                 </div>
+
+                {/* Discover toggle button next to range selectors */}
+                <button
+                  type="button"
+                  onClick={() => setActiveSubTab('SCREENER')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono uppercase tracking-wider font-extrabold text-xs rounded flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Switch to Discover Screener"
+                >
+                  <Filter className="w-3.5 h-3.5" />
+                  <span>DISCOVER</span>
+                </button>
               </div>
             </form>
 
@@ -1053,22 +929,20 @@ export default function MarketsTerminal() {
                     
                     {/* Visual Chart Canvas */}
                     <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col h-full flex-1">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-baseline gap-3">
-                            <h4 className="text-xl font-black font-mono tracking-tight text-white">
-                              {marketData.symbol}
-                            </h4>
-                            <span className="text-lg font-bold font-mono text-indigo-400">
-                              ${marketData.regularMarketPrice ? marketData.regularMarketPrice.toLocaleString() : '0.00'}
-                            </span>
-                            <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">
-                              {marketData.currency || 'USD'}
-                            </span>
-                          </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/5">
+                        <div className="flex items-center gap-3">
+                          <h4 className="text-xl font-black font-mono tracking-tight text-white">
+                            {marketData.symbol}
+                          </h4>
+                          <span className="text-lg font-bold font-mono text-indigo-400">
+                            ${marketData.regularMarketPrice ? marketData.regularMarketPrice.toLocaleString() : '0.00'}
+                          </span>
+                          <span className="text-[10px] text-white/30 font-mono uppercase tracking-wider">
+                            {marketData.currency || 'USD'}
+                          </span>
                         </div>
                         {marketData.bars && marketData.bars.length > 1 && (
-                          <div className="flex items-center gap-3.5">
+                          <div className="flex items-center gap-3 ml-auto">
                             {/* Financials Toggle Button */}
                             <button
                               type="button"
@@ -1083,7 +957,7 @@ export default function MarketsTerminal() {
                               <span>{showFinancialsOverlay ? 'Hide Financials' : 'Financials'}</span>
                             </button>
 
-                            <div className="text-right">
+                            <div>
                               {(() => {
                                 const first = marketData.bars[0].close;
                                 const last = marketData.bars[marketData.bars.length - 1].close;
@@ -1098,7 +972,6 @@ export default function MarketsTerminal() {
                                   </span>
                                 );
                               })()}
-                              <p className="text-[10px] text-white/30 font-mono mt-1">Currency: {marketData.currency || 'USD'}</p>
                             </div>
                           </div>
                         )}
@@ -1211,14 +1084,6 @@ export default function MarketsTerminal() {
 
                     {/* MULTI-ASSET BROKERAGE ORDER TICKET */}
                     <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 flex flex-col h-full flex-1">
-                      <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span className="text-[11px] font-mono font-black uppercase tracking-wider text-white">Order Entry Form Broker Order Entry</span>
-                        </div>
-                        <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-bold">ONLINE</span>
-                      </div>
-
                       {/* BUY / SELL Action Tabs */}
                       <div className="grid grid-cols-2 bg-[#040405] p-0.5 rounded border border-white/5">
                         <button
@@ -1413,20 +1278,30 @@ export default function MarketsTerminal() {
                   <Filter className="w-4 h-4 text-indigo-400" />
                   <span className="text-[11px] font-mono font-black uppercase tracking-wider text-indigo-400 font-sans">DataFrame Query Parameters (Pandas Filters)</span>
                 </div>
-                <button
-                  onClick={() => {
-                    setScreenerPEFilter(100);
-                    setScreenerROEFilter(-0.2);
-                    setScreenerSearch('');
-                    setScreenerSector('ALL');
-                    setScreenerMinCap(0);
-                    setScreenerMinMomentum(-0.5);
-                    setScreenerDivOnly(false);
-                  }}
-                  className="px-2.5 py-1 text-[10px] font-mono border border-white/10 hover:border-white/20 hover:bg-white/5 rounded text-white/60 hover:text-white transition-all cursor-pointer"
-                >
-                  Reset All Filters
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubTab('ANALYSIS')}
+                    className="px-2.5 py-1 text-[10px] font-mono border border-indigo-500/30 hover:border-indigo-500/50 bg-indigo-500/10 hover:bg-indigo-500/20 rounded text-indigo-300 font-bold transition-all cursor-pointer"
+                  >
+                    ← Back to Ticker Analysis
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScreenerPEFilter(100);
+                      setScreenerROEFilter(-0.2);
+                      setScreenerSearch('');
+                      setScreenerSector('ALL');
+                      setScreenerMinCap(0);
+                      setScreenerMinMomentum(-0.5);
+                      setScreenerDivOnly(false);
+                    }}
+                    className="px-2.5 py-1 text-[10px] font-mono border border-white/10 hover:border-white/20 hover:bg-white/5 rounded text-white/60 hover:text-white transition-all cursor-pointer"
+                  >
+                    Reset All Filters
+                  </button>
+                </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1792,446 +1667,7 @@ print(f"Dataframe compilation success: {sorted_df.shape[0]} rows matched.")`}
                   </table>
                 </div>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* 3. vectorbt/BACKTESTER SUBTAB */}
-        {activeSubTab === 'BACKTEST' && (
-          <div className="space-y-6">
-            
-            {/* CONFIGURATION BAR */}
-            <div className="bg-[#09090c] p-5 rounded-xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-5">
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-4 flex-1">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-mono text-white/40 block">BACKTEST TARGET</span>
-                  <span className="text-sm font-bold font-mono text-indigo-400 uppercase tracking-wider">{ticker} (Active Range: {range.toUpperCase()})</span>
-                </div>
-
-                {/* Strategy dropdown */}
-                <div className="space-y-1">
-                  <span className="text-[10px] font-mono text-white/40 block">STRATEGY ENGINE (vectorbt)</span>
-                  <div className="flex bg-[#040405] border border-white/10 p-0.5 rounded">
-                    {[
-                      { id: 'EMA', label: '9/21 EMA Cross' },
-                      { id: 'RSI', label: 'RSI Momentum' },
-                      { id: 'MACD', label: 'MACD Trend' }
-                    ].map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => setBacktestStrategy(s.id as any)}
-                        className={`px-3 py-1 text-[10px] font-mono rounded transition-all ${
-                          backtestStrategy === s.id 
-                            ? 'bg-indigo-600/20 text-indigo-300 font-bold border border-indigo-500/20' 
-                            : 'text-white/40 hover:text-white/70'
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={handleBacktest}
-                disabled={isBacktesting || !marketData}
-                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-mono font-extrabold uppercase tracking-widest flex items-center gap-2 cursor-pointer self-start md:self-center"
-              >
-                {isBacktesting ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    RUNNING SIMULATION...
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 fill-white" />
-                    RUN vectorbt BACKTEST
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* RESULTS PANEL */}
-            {backtestResults ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
-                
-                {/* Equity Curve Area Chart */}
-                <div className="lg:col-span-2 bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4">
-                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-400 block">vectorbt Equity Performance Curve</span>
-                  <div className="h-[280px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsLineChart data={backtestResults.chartData}>
-                        <XAxis 
-                          dataKey="date" 
-                          tick={{ fill: '#ffffff20', fontSize: 9 }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis 
-                          tick={{ fill: '#ffffff20', fontSize: 9 }}
-                          axisLine={false}
-                          tickLine={false}
-                          orientation="right"
-                        />
-                        <Tooltip
-                          contentStyle={{ backgroundColor: '#0c0c0e', border: '1px solid #ffffff10', borderRadius: '8px' }}
-                        />
-                        <RechartsLine type="monotone" dataKey="Buy & Hold" stroke="#ffffff30" strokeWidth={1.5} dot={false} />
-                        <RechartsLine type="monotone" dataKey="Backtest Strategy" stroke="#10b981" strokeWidth={2.5} dot={false} />
-                      </RechartsLineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Backtester KPIs & Trades List */}
-                <div className="space-y-4">
-                  <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4">
-                    <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-400 block">Quantitative Metrics</span>
-                    
-                    <div className="grid grid-cols-2 gap-3.5">
-                      <div className="bg-[#040405] p-3 rounded border border-white/5">
-                        <span className="text-[8px] font-mono text-white/30 block">STRATEGY RETURN</span>
-                        <span className={`text-base font-bold font-mono mt-0.5 inline-block ${backtestResults.strategyReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {backtestResults.strategyReturn}%
-                        </span>
-                      </div>
-                      <div className="bg-[#040405] p-3 rounded border border-white/5">
-                        <span className="text-[8px] font-mono text-white/30 block">BUY & HOLD RETURN</span>
-                        <span className={`text-base font-bold font-mono mt-0.5 inline-block ${backtestResults.buyHoldReturn >= 0 ? 'text-white/80' : 'text-rose-400'}`}>
-                          {backtestResults.buyHoldReturn}%
-                        </span>
-                      </div>
-                      <div className="bg-[#040405] p-3 rounded border border-white/5">
-                        <span className="text-[8px] font-mono text-white/30 block">WIN RATE (TRADES)</span>
-                        <span className="text-base font-bold font-mono text-white mt-0.5 inline-block">
-                          {backtestResults.winRate}% ({backtestResults.trades} trades)
-                        </span>
-                      </div>
-                      <div className="bg-[#040405] p-3 rounded border border-white/5">
-                        <span className="text-[8px] font-mono text-white/30 block">SHARPE RATIO</span>
-                        <span className="text-base font-bold font-mono text-white mt-0.5 inline-block">
-                          {backtestResults.sharpeRatio}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Log of execution trades */}
-                  <div className="bg-[#09090c] border border-white/5 rounded-xl p-5">
-                    <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-400 block mb-3">Order Log (backtrader sync)</span>
-                    <div className="space-y-2.5 max-h-[160px] overflow-y-auto">
-                      {backtestResults.tradeLog.slice(0, 10).map((trade: any, idx: number) => (
-                        <div key={idx} className="flex items-center justify-between text-[10px] font-mono border-b border-white/5 pb-1.5 last:border-none last:pb-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`px-1 rounded text-[8px] font-bold ${
-                              trade.type === 'BUY' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
-                            }`}>{trade.type}</span>
-                            <span className="text-white/40">{trade.date}</span>
-                          </div>
-                          <div>
-                            <span className="text-white/80">${trade.price.toLocaleString()}</span>
-                            {trade.type === 'SELL' && (
-                              <span className={`ml-1.5 font-bold ${trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {trade.pnl >= 0 ? '+' : ''}{trade.pnl}%
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            ) : (
-              <div className="text-center py-20 bg-[#09090c] border border-white/5 rounded-xl text-white/30 text-xs font-mono">
-                Click "Run vectorbt Backtest" above to compile quantitative strategy equity curves.
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 4. pyportfolioOpt PORTFOLIO OPTIMIZER SUBTAB */}
-        {activeSubTab === 'PORTFOLIO' && (
-          <div className="space-y-6">
-
-            {/* INTEGRATED MULTI-ASSET BROKER ACCOUNT METRICS */}
-            <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 font-mono">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-[10px] font-bold text-white uppercase tracking-wider">Simulated Multi-Asset Broker Wallet</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm('Reset brokerage portfolio to initial $50,000.00 cash?')) {
-                      setBrokerCash(50000.00);
-                      setBrokerHoldings({
-                        'AAPL': 50,
-                        'MSFT': 30,
-                        'NVDA': 100,
-                        'BTC-USD': 0.15
-                      });
-                      setOrderStatus(null);
-                    }
-                  }}
-                  className="px-2.5 py-1 bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-500/10 text-[9px] font-bold uppercase rounded cursor-pointer transition-colors"
-                >
-                  Reset Portfolio Account
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-3.5 bg-[#040405]/60 rounded-lg border border-white/5 space-y-1">
-                  <span className="text-[9px] text-white/35 uppercase tracking-wider block">Net Portfolio Equity</span>
-                  <span className="text-sm font-black text-white">
-                    ${(brokerCash + Object.entries(brokerHoldings).reduce((sum, [symbol, shares]) => {
-                      const price = symbol === ticker && marketData?.regularMarketPrice ? marketData.regularMarketPrice : (assetsMeta[symbol]?.price || 150.0);
-                      return sum + ((shares as number) * price);
-                    }, 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="p-3.5 bg-[#040405]/60 rounded-lg border border-white/5 space-y-1">
-                  <span className="text-[9px] text-white/35 uppercase tracking-wider block">Available Cash</span>
-                  <span className="text-sm font-black text-emerald-400">
-                    ${brokerCash.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="p-3.5 bg-[#040405]/60 rounded-lg border border-white/5 space-y-1">
-                  <span className="text-[9px] text-white/35 uppercase tracking-wider block">Stock Asset Value</span>
-                  <span className="text-sm font-black text-indigo-300">
-                    ${Object.entries(brokerHoldings).reduce((sum, [symbol, shares]) => {
-                      const price = symbol === ticker && marketData?.regularMarketPrice ? marketData.regularMarketPrice : (assetsMeta[symbol]?.price || 150.0);
-                      return sum + ((shares as number) * price);
-                    }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="p-3.5 bg-[#040405]/60 rounded-lg border border-white/5 space-y-1">
-                  <span className="text-[9px] text-white/35 uppercase tracking-wider block">Active Positions</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-black text-amber-400">
-                      {Object.keys(brokerHoldings).length}
-                    </span>
-                    <span className="text-[8px] text-white/20 uppercase font-black">Assets Held</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-
-            
-            {/* CONFIGURATION TERMINAL */}
-            <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-5">
-              <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-400 block">Portfolio Covariance Assembly</span>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Active Assets list */}
-                <div className="space-y-3">
-                  <label className="text-[11px] font-mono text-white/50 uppercase tracking-wider block">Add / Remove Assets (yfinance array)</label>
-                  
-                  <div className="flex flex-wrap gap-2 min-h-[48px] p-3 bg-[#040405] rounded border border-white/10">
-                    {portfolioAssets.map((asset) => (
-                      <span key={asset} className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600/10 border border-indigo-500/25 text-indigo-300 text-[10px] font-mono rounded font-bold uppercase">
-                        <span>{asset}</span>
-                        <button onClick={() => handleRemovePortfolioAsset(asset)} className="text-white/35 hover:text-white transition-colors cursor-pointer">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add asset symbol (e.g., TSLA, ETH-USD, AMZN)..."
-                      value={newAssetInput}
-                      onChange={(e) => setNewAssetInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddPortfolioAsset()}
-                      className="flex-1 bg-[#040405] border border-white/10 rounded px-3 py-1.5 text-xs font-mono uppercase focus:outline-none focus:border-indigo-500"
-                    />
-                    <button
-                      onClick={handleAddPortfolioAsset}
-                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-mono font-bold uppercase flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> ADD
-                    </button>
-                  </div>
-                </div>
-
-                {/* Optimization Method options */}
-                <div className="space-y-3.5 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-mono text-white/50 uppercase tracking-wider block">Objective Optimization Algorithm</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'SHARPE', label: 'Max Sharpe', desc: 'Mean-Variance optimum' },
-                        { id: 'MIN_VOL', label: 'Min Volatility', desc: 'Minimal variance' },
-                        { id: 'RISK_PARITY', label: 'Risk Parity', desc: 'Equal risk balance' }
-                      ].map((m) => (
-                        <button
-                          key={m.id}
-                          onClick={() => setOptMethod(m.id as any)}
-                          className={`p-3 border rounded text-left transition-all cursor-pointer ${
-                            optMethod === m.id 
-                              ? 'border-indigo-500 bg-indigo-500/10 text-white' 
-                              : 'border-white/5 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white'
-                          }`}
-                        >
-                          <span className="text-[11px] font-mono font-bold block">{m.label}</span>
-                          <span className="text-[8px] text-white/40 font-sans block mt-1 leading-tight">{m.desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleOptimizePortfolio}
-                    disabled={isOptimizing || portfolioAssets.length === 0}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-mono font-extrabold uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    {isOptimizing ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        RUNNING NUMPY MATRIX MATH...
-                      </>
-                    ) : (
-                      <>
-                        <Sliders className="w-4 h-4" />
-                        SOLVE pyportfolioOpt MODEL
-                      </>
-                    )}
-                  </button>
-                </div>
-
-              </div>
-            </div>
-
-            {/* RESULTS PANEL */}
-            {optimizationResults ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
-                
-                {/* Visual Allocation Weight Pie Chart */}
-                <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 flex flex-col justify-between space-y-4">
-                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-400 block">Optimal Asset Weights Allocation</span>
-                  
-                  <div className="h-[220px] flex items-center justify-center">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={optimizationResults.weights}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={85}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {optimizationResults.weights.map((entry: any, index: number) => (
-                            <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => `${value}%`} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {/* Weights table */}
-                  <div className="space-y-2 max-h-[140px] overflow-y-auto">
-                    {optimizationResults.weights.map((row: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between text-[11px] font-mono border-b border-white/5 pb-1 last:border-none last:pb-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors[idx % colors.length] }} />
-                          <span className="text-white/80 font-bold">{row.name}</span>
-                        </div>
-                        <span className="text-white font-extrabold">{row.value}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Efficient frontier Scatter Chart */}
-                <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4">
-                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-400 block">Markowitz Efficient Frontier</span>
-                  
-                  <div className="h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
-                        <XAxis 
-                          type="number" 
-                          dataKey="volatility" 
-                          name="Expected Volatility" 
-                          unit="%" 
-                          tick={{ fill: '#ffffff20', fontSize: 9 }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis 
-                          type="number" 
-                          dataKey="return" 
-                          name="Expected Return" 
-                          unit="%" 
-                          tick={{ fill: '#ffffff20', fontSize: 9 }}
-                          axisLine={false}
-                          tickLine={false}
-                          orientation="right"
-                        />
-                        <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                        <Scatter name="Portfolios" data={optimizationResults.frontierPoints} fill="#10b981" opacity={0.6} />
-                      </ScatterChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="bg-[#040405] p-3.5 rounded border border-white/5 flex items-center gap-2 text-[10px] text-white/40 font-mono">
-                    <Info className="w-4 h-4 shrink-0 text-emerald-400" />
-                    <span>The green dots outline the space of efficient asset allocations based on optimized variance and return distributions.</span>
-                  </div>
-                </div>
-
-                {/* Performance stats summary */}
-                <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4">
-                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-400 block">Objective Optimal Performance</span>
-                  
-                  <div className="space-y-4 py-2">
-                    <div className="border-b border-white/5 pb-3 font-mono">
-                      <span className="text-[9px] text-white/30 uppercase">EXPECTED ANNUAL RETURN</span>
-                      <h4 className="text-2xl font-black text-emerald-400 mt-1">{optimizationResults.expectedReturn}%</h4>
-                    </div>
-
-                    <div className="border-b border-white/5 pb-3 font-mono">
-                      <span className="text-[9px] text-white/30 uppercase">EXPECTED ANNUAL VOLATILITY</span>
-                      <h4 className="text-2xl font-black text-indigo-300 mt-1">{optimizationResults.expectedVolatility}%</h4>
-                    </div>
-
-                    <div className="pb-2 font-mono">
-                      <span className="text-[9px] text-white/30 uppercase">COMPOSITE PORTFOLIO SHARPE RATIO</span>
-                      <h4 className="text-2xl font-black text-amber-400 mt-1">{optimizationResults.sharpeRatio}</h4>
-                    </div>
-                  </div>
-
-                  <div className="bg-[#040405] p-3.5 rounded border border-white/10 space-y-1 text-[10px] font-mono">
-                    <span className="text-white/60 font-bold uppercase tracking-wider block">Objective Description:</span>
-                    <span className="text-white/30 leading-relaxed block">
-                      {optMethod === 'SHARPE' 
-                        ? 'Solves standard Quadratic Programming to allocate weights that maximize expected excess return divided by annualized portfolio volatility.'
-                        : optMethod === 'MIN_VOL'
-                          ? 'Locates the global minimum variance node on the efficient frontier, giving you the absolute lowest risk matrix distribution.'
-                          : 'Balances absolute risk contributions evenly across all assets so no single ticker dominates the portfolio drawdown risk.'
-                      }
-                    </span>
-                  </div>
-                </div>
-
-              </div>
-            ) : (
-              <div className="text-center py-20 bg-[#09090c] border border-white/5 rounded-xl text-white/30 text-xs font-mono">
-                Add asset tickers above and click "Solve pyportfolioOpt Model" to compute covariance matrix risk weights.
-              </div>
-            )}
+              )}
           </div>
         )}
 

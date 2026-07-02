@@ -48,7 +48,7 @@ export default function PortfolioCorrelationWidget({ trades }: PortfolioCorrelat
   // Virtual Sandbox Positions
   const [virtualPositions, setVirtualPositions] = useState<VirtualPosition[]>([]);
   // Form state for adding virtual positions
-  const [newSymbol, setNewSymbol] = useState<MarketSymbol>('GBP/USD');
+  const [newSymbol, setNewSymbol] = useState<MarketSymbol>('NAS100');
   const [newSide, setNewSide] = useState<'BUY' | 'SELL'>('BUY');
   const [newSize, setNewSize] = useState<number>(0.1);
 
@@ -56,10 +56,8 @@ export default function PortfolioCorrelationWidget({ trades }: PortfolioCorrelat
   const [showExplanation, setShowExplanation] = useState(false);
 
   const ALL_SYMBOLS: MarketSymbol[] = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD',
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500'
+    'US30', 'NAS100', 'GER40', 'SPX500',
+    'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
 
   const fetchCorrelations = async (showRefreshIndicator = false) => {
@@ -114,9 +112,9 @@ export default function PortfolioCorrelationWidget({ trades }: PortfolioCorrelat
   // If no actual trades and no virtual positions exist, we pre-seed with a realistic set of initial demo positions
   // so the UI never displays broken and has functional, high-fidelity mock assets to interact with
   const demoVirtualPositions: VirtualPosition[] = useMemo(() => [
-    { id: 'v1', symbol: 'EUR/USD', side: 'BUY', size: 1.0 },
-    { id: 'v2', symbol: 'GBP/USD', side: 'BUY', size: 0.5 },
-    { id: 'v3', symbol: 'USD/JPY', side: 'SELL', size: 1.2 }
+    { id: 'v1', symbol: 'NAS100', side: 'BUY', size: 1.0 },
+    { id: 'v2', symbol: 'SPX500', side: 'BUY', size: 0.5 },
+    { id: 'v3', symbol: 'AAPL', side: 'SELL', size: 1.2 }
   ], []);
 
   const ultimatePortfolio = useMemo(() => {

@@ -50,7 +50,7 @@ export default function InstitutionalSentimentGauge() {
   const [error, setError] = useState<string | null>(null);
   
   // Selected asset
-  const [selectedSymbol, setSelectedSymbol] = useState<MarketSymbol>('EUR/USD');
+  const [selectedSymbol, setSelectedSymbol] = useState<MarketSymbol>('NAS100');
 
   // Multiplier weights
   const [newsWeight, setNewsWeight] = useState<number>(50);
@@ -60,10 +60,8 @@ export default function InstitutionalSentimentGauge() {
   const [tick, setTick] = useState<number>(0);
 
   const symbols: MarketSymbol[] = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD',
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500'
+    'US30', 'NAS100', 'GER40', 'SPX500',
+    'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
 
   // Fetch sentiment aggregates and經濟行事曆

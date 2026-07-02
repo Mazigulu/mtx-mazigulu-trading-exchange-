@@ -35,10 +35,8 @@ interface SweepEvent {
 }
 
 const SYMBOLS: MarketSymbol[] = [
-  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-  'GOLD/USD', 'SILVER/USD',
-  'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-  'US30', 'NAS100', 'GER40', 'SPX500'
+  'US30', 'NAS100', 'GER40', 'SPX500',
+  'AAPL', 'MSFT', 'NVDA', 'TSLA'
 ];
 
 const SWEEP_ZONES = [
@@ -118,9 +116,9 @@ export default function InstitutionalSweepAlert() {
     const initialLogs: SweepEvent[] = [
       {
         id: 'initial-1',
-        symbol: 'EUR/USD',
+        symbol: 'NAS100',
         timestamp: historicalTime(12),
-        price: 1.08450,
+        price: 18450.00,
         lots: 742,
         type: 'BUY_SIDE',
         zone: 'Previous Day High Rest-Pool',
@@ -128,9 +126,9 @@ export default function InstitutionalSweepAlert() {
       },
       {
         id: 'initial-2',
-        symbol: 'BTC/USDT',
+        symbol: 'SPX500',
         timestamp: historicalTime(25),
-        price: 68420.50,
+        price: 5210.50,
         lots: 1250,
         type: 'SELL_SIDE',
         zone: 'Retail Double Bottom Hunt',
@@ -138,9 +136,9 @@ export default function InstitutionalSweepAlert() {
       },
       {
         id: 'initial-3',
-        symbol: 'GOLD/USD',
+        symbol: 'AAPL',
         timestamp: historicalTime(41),
-        price: 2315.40,
+        price: 176.40,
         lots: 680,
         type: 'BUY_SIDE',
         zone: 'Asia Session Swing High',
@@ -164,16 +162,14 @@ export default function InstitutionalSweepAlert() {
       
       // Fetch latest price if possible, or randomize realistically
       let price = 1.0;
-      if (sym.startsWith('EUR')) price = 1.08 + Math.random() * 0.01;
-      else if (sym.startsWith('GBP')) price = 1.27 + Math.random() * 0.01;
-      else if (sym.startsWith('USD/JPY')) price = 156.40 + Math.random() * 1.5;
-      else if (sym.startsWith('BTC')) price = 67000 + Math.random() * 3000;
-      else if (sym.startsWith('ETH')) price = 3400 + Math.random() * 200;
-      else if (sym.startsWith('SOL')) price = 145 + Math.random() * 15;
-      else if (sym.startsWith('GOLD')) price = 2300 + Math.random() * 50;
-      else if (sym.startsWith('SILVER')) price = 29.50 + Math.random() * 1.5;
-      else if (sym.startsWith('NAS') || sym.startsWith('SPX')) price = 18000 + Math.random() * 500;
-      else price = 39000 + Math.random() * 1000;
+      if (sym === 'US30') price = 39000 + Math.random() * 1000;
+      else if (sym === 'NAS100') price = 18000 + Math.random() * 500;
+      else if (sym === 'GER40') price = 18000 + Math.random() * 400;
+      else if (sym === 'SPX500') price = 5100 + Math.random() * 150;
+      else if (sym === 'AAPL') price = 170 + Math.random() * 10;
+      else if (sym === 'MSFT') price = 410 + Math.random() * 15;
+      else if (sym === 'NVDA') price = 880 + Math.random() * 30;
+      else if (sym === 'TSLA') price = 170 + Math.random() * 15;
 
       // Random lot size of the executed block order (some small, some giant)
       const isGiant = Math.random() < 0.45;
@@ -190,7 +186,7 @@ export default function InstitutionalSweepAlert() {
           id: `sweep-${Date.now()}`,
           symbol: sym,
           timestamp: new Date().toLocaleTimeString(),
-          price: parseFloat(price.toFixed(sym === 'USD/JPY' ? 2 : sym.includes('BTC') ? 1 : 5)),
+          price: parseFloat(price.toFixed(2)),
           lots: lots,
           type: typeValue,
           zone: zoneString,

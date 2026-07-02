@@ -7,41 +7,16 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import { MarketSymbol, Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, OrderBook, NewsEvent, Trade, PriceAlert } from './types';
 import { motion, AnimatePresence } from 'motion/react';
-import ChartContainer from './components/ChartContainer';
-import AdvisorChat, { Message } from './components/AdvisorChat';
-import EconomicCalendar from './components/EconomicCalendar';
-import SessionConfluenceTracker from './components/SessionConfluenceTracker';
-import BacktestSimulator from './components/BacktestSimulator';
-
-const TradeTerminal = React.lazy(() => import('./components/TradeTerminal'));
-const PerformanceTracker = React.lazy(() => import('./components/PerformanceTracker'));
-const RiskDashboard = React.lazy(() => import('./components/RiskDashboard'));
-import SystemStatus from './components/SystemStatus';
-import TradeExplainability from './components/TradeExplainability';
-import AnalyticDeskIntelligence from './components/AnalyticDeskIntelligence';
-import CorrelationMatrix from './components/CorrelationMatrix';
-import PositionDependencyView from './components/PositionDependencyView';
-import CorrelationHeatmap from './components/CorrelationHeatmap';
-import InstitutionalSentimentGauge from './components/InstitutionalSentimentGauge';
-import InstitutionalSweepAlert from './components/InstitutionalSweepAlert';
 import InstitutionalSentimentAlertSystem from './components/InstitutionalSentimentAlertSystem';
-import InstitutionalNewsTicker from './components/InstitutionalNewsTicker';
-import MarketSentimentHeatmap from './components/MarketSentimentHeatmap';
-import DailyBriefing from './components/DailyBriefing';
-import MarketMomentumGauge from './components/MarketMomentumGauge';
-import TickerPrice from './components/TickerPrice';
-import TradeJournal from './components/TradeJournal';
-import StrategyPerformanceChart from './components/StrategyPerformanceChart';
-import { TradePositionRowItem } from './components/TradePositionRowItem';
 import { BureaucracyModal } from './components/BureaucracyModal';
 import LoginPage from './components/LoginPage';
-import NewsDesk from './components/NewsDesk';
-import AiCopilotWorkspace from './components/AiCopilotWorkspace';
 import { auth } from './lib/firebase.ts';
 import { onAuthStateChanged } from 'firebase/auth';
-import InstitutionalFlowWidget from './components/InstitutionalFlowWidget';
-import RiskExposureJournal from './components/RiskExposureJournal';
 import MarketsTerminal from './components/MarketsTerminal';
+import PortfolioDesk from './components/PortfolioDesk';
+import FundingDesk from './components/FundingDesk';
+import ActivityDesk from './components/ActivityDesk';
+import AccountControlCenter from './components/AccountControlCenter';
 
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
@@ -101,7 +76,10 @@ import {
   Volume2,
   VolumeX,
   Lock,
-  Shield
+  Shield,
+  Briefcase,
+  Coins,
+  Wallet
 } from 'lucide-react';
 
 const TerminalWorkspaceLoader = () => (
@@ -291,6 +269,66 @@ export default function App() {
     setIsLoggedIn(false);
   };
 
+  // Auto-Logout idle timer setting (in minutes)
+  const [idleTimeout, setIdleTimeout] = useState<string>(() => {
+    try {
+      return localStorage.getItem('apex_idle_timeout') || 'off';
+    } catch {
+      return 'off';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_idle_timeout', idleTimeout);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [idleTimeout]);
+
+  // Track global user activity for idle timeout
+  useEffect(() => {
+    if (!isLoggedIn || idleTimeout === 'off') return;
+
+    const timeoutMs = parseInt(idleTimeout, 10) * 60 * 1000;
+    let timer: NodeJS.Timeout;
+
+    const performAutoLogout = () => {
+      console.log('User activity idle limit exceeded. Terminating session.');
+      handleLogout();
+    };
+
+    const resetTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(performAutoLogout, timeoutMs);
+    };
+
+    // Events that register user activity
+    const activityEvents = [
+      'mousedown',
+      'mousemove',
+      'keypress',
+      'scroll',
+      'touchstart',
+      'click'
+    ];
+
+    // Add global event listeners
+    activityEvents.forEach((evt) => {
+      window.addEventListener(evt, resetTimer, { passive: true });
+    });
+
+    // Initialize timer
+    resetTimer();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      activityEvents.forEach((evt) => {
+        window.removeEventListener(evt, resetTimer);
+      });
+    };
+  }, [isLoggedIn, idleTimeout]);
+
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {
       const saved = localStorage.getItem('apex_global_theme');
@@ -318,13 +356,11 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [activeTab, setActiveTab] = useState<'RISK' | 'RESEARCH' | 'NEWS' | 'COPILOT' | 'ANALYTICS' | 'MARKETS'>('MARKETS');
-  const [analyticsSubTab, setAnalyticsSubTab] = useState<'ORDER_FLOW' | 'CORRELATION' | 'DEPENDENCY'>('ORDER_FLOW');
-  const [researchSubTab, setResearchSubTab] = useState<'CALENDAR' | 'REPLAY' | 'LEDGER' | 'RISK_EXPOSURE'>('CALENDAR');
+  const [activeTab, setActiveTab] = useState<'MARKETS' | 'PORTFOLIO' | 'FUNDING' | 'ACTIVITY'>('MARKETS');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isChartExpanded, setIsChartExpanded] = useState(true);
-  const [symbol, setSymbol] = useState<MarketSymbol>('EUR/USD');
+  const [symbol, setSymbol] = useState<MarketSymbol>('NAS100');
   const [timeframe, setTimeframe] = useState<'M15' | 'H1' | 'H4' | 'D1'>('H4');
   const [jumpRange, setJumpRange] = useState<{ start: string; end: string; triggerId: number } | null>(null);
   const [sessionStartDate, setSessionStartDate] = useState('');
@@ -393,10 +429,9 @@ export default function App() {
       });
     }
   };
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isMt5BridgePaused, setIsMt5BridgePaused] = useState<boolean>(() => {
+  const [isBrokerBridgePaused, setIsBrokerBridgePaused] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('apex_mt5_bridge_paused') === 'true';
+      return localStorage.getItem('apex_broker_bridge_paused') === 'true';
     } catch {
       return false;
     }
@@ -406,13 +441,13 @@ export default function App() {
   useEffect(() => {
     const handleStorageChange = () => {
       try {
-        setIsMt5BridgePaused(localStorage.getItem('apex_mt5_bridge_paused') === 'true');
+        setIsBrokerBridgePaused(localStorage.getItem('apex_broker_bridge_paused') === 'true');
       } catch {}
     };
 
     const handleCustomChange = (e: any) => {
       if (e.detail && typeof e.detail.paused === 'boolean') {
-        setIsMt5BridgePaused(e.detail.paused);
+        setIsBrokerBridgePaused(e.detail.paused);
       }
     };
 
@@ -425,7 +460,7 @@ export default function App() {
     };
   }, []);
 
-  const [mt5Ping, setMt5Ping] = useState<number>(12);
+  const [brokerPing, setBrokerPing] = useState<number>(12);
   const [isSimulatingSpike, setIsSimulatingSpike] = useState<boolean>(false);
   const [isTestingPing, setIsTestingPing] = useState<boolean>(false);
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
@@ -435,12 +470,6 @@ export default function App() {
   // Compliance & Bureaucracy Modal State
   const [isBureaucracyModalOpen, setIsBureaucracyModalOpen] = useState(false);
   const [bureaucracyActiveTab, setBureaucracyActiveTab] = useState<'faq' | 'cookies' | 'privacy' | 'terms' | 'risk' | 'docs' | 'compliance'>('faq');
-
-  // Research Tab quick-action filter toggles
-  const [showSentimentGauge, setShowSentimentGauge] = useState<boolean>(true);
-  const [showMarketSentimentHeatmap, setShowMarketSentimentHeatmap] = useState<boolean>(true);
-  const [showSweepAlert, setShowSweepAlert] = useState<boolean>(true);
-  const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
 
   const openBureaucracyTab = (tab: 'faq' | 'cookies' | 'privacy' | 'terms' | 'risk' | 'docs' | 'compliance') => {
     setBureaucracyActiveTab(tab);
@@ -554,12 +583,12 @@ export default function App() {
   const [isCompilingMql, setIsCompilingMql] = useState<boolean>(false);
   const [compileSuccess, setCompileSuccess] = useState<boolean>(false);
   const [mqlConsoleLogs, setMqlConsoleLogs] = useState<string[]>([
-    "2026.06.08 08:00:15.012 MetaTrader 5 Terminal Build 4022 started (Pepperstone Group)",
-    "2026.06.08 08:00:15.845 MQL5 Cloud Network service initialized successfully",
+    "2026.06.08 08:00:15.012 Brokerage Terminal started (Standard Bridge Group)",
+    "2026.06.08 08:00:15.845 Execution Network service initialized successfully",
     "2026.06.08 08:00:16.110 Secured socket link established with MTXquant Cloud Server",
-    "2026.06.08 08:00:16.112 Terminal connected to Account #234567 on Pepperstone-MT5-Live-3",
-    "2026.06.08 08:00:17.301 EX5 Analyzer: expert 'MTXquant_Agentic_ICT.ex5' loaded successfully",
-    "2026.06.08 08:00:17.320 Expert Advisor initialized: 'MTXquant_Agentic_ICT.ex5' on EUR/USD, H4. Signal mode active."
+    "2026.06.08 08:00:16.112 Terminal connected to Account #234567 on Broker-Live-3",
+    "2026.06.08 08:00:17.301 Strategy Analyzer: expert 'MTXquant_Agentic_ICT' loaded successfully",
+    "2026.06.08 08:00:17.320 Expert Advisor initialized: 'MTXquant_Agentic_ICT' on AAPL, H4. Signal mode active."
   ]);
 
   // Append symbol-switch logs dynamically
@@ -656,7 +685,7 @@ export default function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (isTestingPing) return;
-      setMt5Ping((prev) => {
+      setBrokerPing((prev) => {
         // Institutional alert threshold is 45ms.
         // Normal state: fluctuates safely between 8ms and 18ms.
         // Simulated spike state: peaks between 52ms and 84ms.
@@ -672,7 +701,7 @@ export default function App() {
   const handleTestPingSpeed = () => {
     setIsTestingPing(true);
     setTimeout(() => {
-      setMt5Ping(() => {
+      setBrokerPing(() => {
         const targetBase = isSimulatingSpike ? 65 : 12;
         const jitter = Math.round(Math.random() * 6 - 3); 
         return Math.max(4, targetBase + jitter);
@@ -680,28 +709,6 @@ export default function App() {
       setIsTestingPing(false);
     }, 800);
   };
-  const [chatMessages, setChatMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      text: `Hello, trader. I am **MTX AI**, your Institutional Elite Advisor.
-
-I am primed on **The Trading Bible** and **ICT methodologies** to steer you towards capital conservation. 
-
-*Select one of our institutional confluences below, or prompt any query on the market Structure, Fair Value Gaps, or Risk models.*`,
-    },
-  ]);
-
-  const handleLogEventToAdvisor = (timestamp: string, price: number) => {
-    setIsChatOpen(true);
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        role: 'user',
-        text: `📈 **Institutional Backtesting Analysis Log**\n\n- **Asset/Symbol**: \`${symbol}\`\n- **Identified Price Point**: \`${price.toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5)}\`\n- **Execution Timestamp**: \`${timestamp}\`\n- **Status**: OVEREXTENDED (Mean Reversion Trigger Confirmed)\n\n*This data point has been logged to the Advisor Memory for Backtesting Analysis.*`
-      }
-    ]);
-  };
-
   // Market & Simulation States
   const [candles, setCandles] = useState<Candlestick[]>([]);
   const [fvgs, setFvgs] = useState<FVG[]>([]);
@@ -757,7 +764,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       return [];
     }
   });
-  const [newAlertSymbol, setNewAlertSymbol] = useState<MarketSymbol>('EUR/USD');
+  const [newAlertSymbol, setNewAlertSymbol] = useState<MarketSymbol>('NAS100');
   const [newAlertPrice, setNewAlertPrice] = useState<string>('');
   const [newAlertCondition, setNewAlertCondition] = useState<'ABOVE' | 'BELOW'>('ABOVE');
   const [notificationPermissionGranted, setNotificationPermissionGranted] = useState<boolean>(
@@ -1663,7 +1670,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       let emergencyCloseBind = 'ALT+X';
       let toggleVolatilityBind = 'ALT+V';
       let tabDashboardBind = 'ALT+D';
-      let tabResearchBind = 'ALT+R';
 
       try {
         const saved = localStorage.getItem('apex_institutional_settings');
@@ -1672,7 +1678,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
           if (parsed.keybindEmergencyClose) emergencyCloseBind = parsed.keybindEmergencyClose.toUpperCase();
           if (parsed.keybindToggleVolatility) toggleVolatilityBind = parsed.keybindToggleVolatility.toUpperCase();
           if (parsed.keybindTabDashboard) tabDashboardBind = parsed.keybindTabDashboard.toUpperCase();
-          if (parsed.keybindTabResearch) tabResearchBind = parsed.keybindTabResearch.toUpperCase();
         }
       } catch (err) {
         console.warn('Failed to read bindings in hotkey tracker:', err);
@@ -1706,9 +1711,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
       } else if (pressedShortcut === tabDashboardBind) {
         e.preventDefault();
         setActiveTab('MARKETS');
-      } else if (pressedShortcut === tabResearchBind) {
-        e.preventDefault();
-        setActiveTab('RESEARCH');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -2079,23 +2081,10 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
   // Simulated live prices for ticker blocks
   const tickerStats: Record<MarketSymbol, { name: string; price: number; pChange: number }> = {
-    'EUR/USD': { name: 'EURUSD', price: symbol === 'EUR/USD' ? (candles[candles.length - 1]?.close || 1.1645) : 1.1645, pChange: +0.25 },
-    'GBP/USD': { name: 'GBPUSD', price: symbol === 'GBP/USD' ? (candles[candles.length - 1]?.close || 1.2680) : 1.2680, pChange: +0.14 },
-    'USD/JPY': { name: 'USDJPY', price: symbol === 'USD/JPY' ? (candles[candles.length - 1]?.close || 155.40) : 155.40, pChange: -0.32 },
-    'AUD/USD': { name: 'AUDUSD', price: symbol === 'AUD/USD' ? (candles[candles.length - 1]?.close || 0.6650) : 0.6650, pChange: +0.11 },
-    'EUR/GBP': { name: 'EURGBP', price: symbol === 'EUR/GBP' ? (candles[candles.length - 1]?.close || 0.8520) : 0.8520, pChange: -0.05 },
-    'GOLD/USD': { name: 'GOLDUSD', price: symbol === 'GOLD/USD' ? (candles[candles.length - 1]?.close || 2355.50) : 2355.50, pChange: +0.42 },
-    'SILVER/USD': { name: 'SILVERUSD', price: symbol === 'SILVER/USD' ? (candles[candles.length - 1]?.close || 29.50) : 29.50, pChange: +0.58 },
-    'BTC/USDT': { name: 'BTCUSDT', price: symbol === 'BTC/USDT' ? (candles[candles.length - 1]?.close || 67500.0) : 67500.0, pChange: +1.82 },
-    'ETH/USDT': { name: 'ETHUSDT', price: symbol === 'ETH/USDT' ? (candles[candles.length - 1]?.close || 3450.0) : 3450.0, pChange: +1.45 },
-    'SOL/USDT': { name: 'SOLUSDT', price: symbol === 'SOL/USDT' ? (candles[candles.length - 1]?.close || 148.55) : 148.55, pChange: +2.10 },
     'US30': { name: 'US30', price: symbol === 'US30' ? (candles[candles.length - 1]?.close || 38850.0) : 38850.0, pChange: +0.35 },
     'NAS100': { name: 'NAS100', price: symbol === 'NAS100' ? (candles[candles.length - 1]?.close || 18550.0) : 18550.0, pChange: +0.52 },
     'GER40': { name: 'GER40', price: symbol === 'GER40' ? (candles[candles.length - 1]?.close || 18200.0) : 18200.0, pChange: -0.15 },
     'SPX500': { name: 'SPX500', price: symbol === 'SPX500' ? (candles[candles.length - 1]?.close || 5300.0) : 5300.0, pChange: +0.28 },
-    'DXY': { name: 'DXY', price: symbol === 'DXY' ? (candles[candles.length - 1]?.close || 105.20) : 105.20, pChange: -0.12 },
-    'US10Y': { name: 'US10Y', price: symbol === 'US10Y' ? (candles[candles.length - 1]?.close || 4.250) : 4.250, pChange: +0.08 },
-    'BRENT': { name: 'BRENT', price: symbol === 'BRENT' ? (candles[candles.length - 1]?.close || 82.50) : 82.50, pChange: +0.65 },
     'AAPL': { name: 'AAPL', price: symbol === 'AAPL' ? (candles[candles.length - 1]?.close || 188.30) : 188.30, pChange: +0.88 },
     'MSFT': { name: 'MSFT', price: symbol === 'MSFT' ? (candles[candles.length - 1]?.close || 415.50) : 415.50, pChange: +0.55 },
     'NVDA': { name: 'NVDA', price: symbol === 'NVDA' ? (candles[candles.length - 1]?.close || 945.00) : 945.00, pChange: +3.20 },
@@ -2127,7 +2116,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
         <div className="flex flex-col h-full justify-between py-5 overflow-y-auto overflow-x-hidden no-scrollbar">
           <div>
             {/* Top section: Brand Identity Logo */}
-            <div className="px-3 mb-8 flex items-center min-h-[40px]">
+            <button
+              id="desktop-logo-home-button"
+              onClick={() => setActiveTab('MARKETS')}
+              className="w-full text-left px-3 mb-8 flex items-center min-h-[40px] hover:opacity-80 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent"
+              title="Return to Markets"
+            >
               {!isSidebarExpanded ? (
                 <div className="w-full flex justify-center animate-fadeIn">
                   <span className="text-sm font-black tracking-tight text-white lowercase">
@@ -2149,17 +2143,15 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   </p>
                 </div>
               )}
-            </div>
+            </button>
 
             {/* Middle section: Navigation Links */}
             <nav className="space-y-2 px-2.5">
               {[
-                { id: 'MARKETS', label: 'Markets Desk', icon: TrendingUp },
-                { id: 'ANALYTICS', label: 'Analytics Desk', icon: BarChart3 },
-                { id: 'COPILOT', label: 'MTX Engine', icon: Sparkles },
-                { id: 'RISK', label: 'Risk Desk', icon: ShieldAlert },
-                { id: 'NEWS', label: 'News Desk', icon: Newspaper },
-                { id: 'RESEARCH', label: 'Research', icon: Award }
+                { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
+                { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
+                { id: 'FUNDING', label: 'Funding', icon: Wallet },
+                { id: 'ACTIVITY', label: 'Activity', icon: History }
               ].map((item) => {
                 const active = activeTab === item.id;
                 const Icon = item.icon;
@@ -2225,17 +2217,25 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               </button>
 
               {/* Logo block rendered exclusively on mobile devices */}
-              <div id="mobile-brand-logo" className="flex md:hidden items-center gap-1.5 shrink-0 select-none">
+              <button
+                id="mobile-logo-home-button"
+                onClick={() => setActiveTab('MARKETS')}
+                className="flex md:hidden items-center gap-1.5 shrink-0 hover:opacity-80 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent"
+                title="Return to Markets"
+              >
                 <span className="text-sm font-black tracking-tight text-white lowercase">
                   mtxquant
                 </span>
-              </div>
+              </button>
 
               {/* Standard workspace indicator for desktop screens only */}
               <div className="hidden md:flex items-center space-x-1.5 lg:space-x-2.5 text-[10px] font-mono">
                 <span className="hidden lg:inline text-white/30 uppercase tracking-wider font-bold">Workspace:</span>
                 <span className="px-2 py-0.5 lg:px-2.5 lg:py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold uppercase tracking-wider text-[9px] lg:text-[10px]">
-                  {activeTab === 'RISK' ? 'Risk Desk' : activeTab === 'NEWS' ? 'News Desk' : activeTab}
+                  {activeTab === 'MARKETS' && 'Markets'}
+                  {activeTab === 'PORTFOLIO' && 'Portfolio'}
+                  {activeTab === 'FUNDING' && 'Funding'}
+                  {activeTab === 'ACTIVITY' && 'Activity'}
                 </span>
               </div>
             </div>
@@ -2284,147 +2284,21 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   <ChevronDown className={`w-3 h-3 text-white/50 transition-transform duration-200 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                <AnimatePresence>
-                  {isProfileMenuOpen && (
-                    <motion.div
-                      id="institutional-dropdown-menu"
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                      transition={{ duration: 0.15, ease: 'easeOut' }}
-                      className="absolute right-0 mt-2 w-72 bg-[#08080c] border border-white/10 rounded-lg shadow-[0_15px_40px_rgba(0,0,0,0.85)] z-[999] overflow-hidden divide-y divide-white/5 font-mono text-[10px]"
-                    >
-                      {/* Section 1: Trader Identity Profile & Status */}
-                      <div className="p-3 bg-gradient-to-b from-white/[0.03] to-transparent">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-white/40 block font-bold uppercase tracking-wider text-[8px]">Trader Profile</span>
-                          <span className="px-1.5 py-0.2 rounded bg-indigo-500/10 border border-indigo-500/25 text-[7px] text-indigo-400 font-bold tracking-widest uppercase">
-                            TIER-1 CORE
-                          </span>
-                        </div>
-                        <div className="text-[11px] font-bold text-white max-w-full truncate font-mono" title={traderEmail}>
-                          {traderEmail}
-                        </div>
-                        <div className="mt-2 space-y-1 text-white/50 leading-relaxed bg-black/40 border border-white/5 p-2 rounded">
-                          <div className="flex justify-between items-center">
-                            <span>CLEARANCE:</span>
-                            <span className="text-[#e2e8f0] font-bold flex items-center gap-1">
-                              <Shield className="w-2.5 h-2.5 text-indigo-400 inline" /> LEVEL-2 DESK
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span>MQL STREAM:</span>
-                            <span className="text-[#10b981] font-bold flex items-center gap-1">
-                              <Wifi className="w-2.5 h-2.5 text-[#10b981] inline" /> {mt5Ping}ms (LIVE)
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span>SESSION:</span>
-                            <span className="text-white/70 font-bold">
-                              {Math.floor(sessionSeconds / 60)}m {sessionSeconds % 60}s
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section 2: Quick Navigation & Desks */}
-                      <div className="p-2 space-y-0.5">
-                        <span className="text-white/40 px-2 py-1 block uppercase tracking-wider text-[7px] font-bold">Terminal Desks Shortcuts</span>
-                        <button
-                          onClick={() => { setActiveTab('ANALYTICS'); setIsProfileMenuOpen(false); }}
-                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
-                        >
-                          <span className="flex items-center gap-2"><BarChart3 className="w-3.5 h-3.5 text-indigo-400" /> ANALYTICS DESK</span>
-                          <span className="text-[8px] text-white/30 tracking-tight uppercase font-mono">Desk</span>
-                        </button>
-                        <button
-                          onClick={() => { setActiveTab('RISK'); setIsProfileMenuOpen(false); }}
-                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
-                        >
-                          <span className="flex items-center gap-2"><ShieldAlert className="w-3.5 h-3.5 text-[#ef4444]" /> RISK MANAGEMENT</span>
-                          <span className="text-[8px] text-white/30 tracking-tight uppercase font-mono">Control</span>
-                        </button>
-                        <button
-                          onClick={() => { setActiveTab('COPILOT'); setIsProfileMenuOpen(false); }}
-                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
-                        >
-                          <span className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-amber-400" /> MTX INTELLIGENT CO-OP</span>
-                          <span className="text-[8px] text-white/30 tracking-tight uppercase font-mono">Agentic</span>
-                        </button>
-                      </div>
-
-                      {/* Section 3: Calibre Utilities & Configurations */}
-                      <div className="p-2 space-y-0.5">
-                        <span className="text-white/40 px-2 py-1 block uppercase tracking-wider text-[7px] font-bold">Core Controls & Utilities</span>
-                        
-                        {/* Sound Alert Toggle */}
-                        <button
-                          onClick={toggleSoundAlertsInMenu}
-                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
-                        >
-                          <span className="flex items-center gap-2">
-                            {soundAlertsEnabled ? (
-                              <>
-                                <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
-                                <span>SYSTEM AUDIO ALERTS</span>
-                              </>
-                            ) : (
-                              <>
-                                <VolumeX className="w-3.5 h-3.5 text-white/30" />
-                                <span className="text-white/50">SYSTEM AUDIO ALERTS</span>
-                              </>
-                            )}
-                          </span>
-                          <span className={`text-[8px] font-bold px-1 rounded uppercase ${soundAlertsEnabled ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-white/30 bg-white/5 border border-white/5'}`}>
-                            {soundAlertsEnabled ? 'ON' : 'MUTED'}
-                          </span>
-                        </button>
-
-                        {/* Copy API token */}
-                        <button
-                          onClick={copyApiBearerToken}
-                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
-                        >
-                          <span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5 text-sky-400" /> ACCESS BEARER TOKEN</span>
-                          <span className={`text-[8px] px-1 rounded transition-all duration-150 font-bold uppercase ${copiedTokenState ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20' : 'text-white/30 border border-transparent'}`}>
-                            {copiedTokenState ? 'COPIED' : 'COPY'}
-                          </span>
-                        </button>
-
-                        {/* Regulation Policy and Compliance audit */}
-                        <button
-                          onClick={() => { openBureaucracyTab('compliance'); setIsProfileMenuOpen(false); }}
-                          className="w-full text-left px-2 py-1.5 rounded hover:bg-white/5 text-white/70 hover:text-white flex items-center justify-between cursor-pointer transition-all"
-                        >
-                          <span className="flex items-center gap-2"><FileCode className="w-3.5 h-3.5 text-emerald-400" /> AUDIT & COMPLIANCE</span>
-                          <span className="text-[8px] text-white/30 tracking-tight uppercase">SEC</span>
-                        </button>
-
-                        {/* Cache purger */}
-                        <button
-                          onClick={wipeTerminalAndReset}
-                          className="w-full text-left px-2 py-1.5 rounded hover:bg-yellow-500/10 text-white/70 hover:text-yellow-400 flex items-center justify-between cursor-pointer transition-all"
-                          title="Flush all terminal local storage cache properties"
-                        >
-                          <span className="flex items-center gap-2"><Trash2 className="w-3.5 h-3.5 text-yellow-500" /> FACTORY CALIBRATION</span>
-                          <span className="text-[8px] text-yellow-500/40 tracking-tight uppercase font-mono font-bold">Wipe</span>
-                        </button>
-                      </div>
-
-                      {/* Section 4: Secure Terminate Session */}
-                      <div className="p-2">
-                        <button
-                          id="header-logout-btn"
-                          onClick={() => { setIsProfileMenuOpen(false); handleLogout(); }}
-                          className="w-full text-left px-2.5 py-2.5 rounded bg-rose-500/5 hover:bg-rose-500/15 text-rose-400 hover:text-rose-300 border border-rose-500/10 hover:border-rose-500/25 transition-all flex items-center justify-between cursor-pointer text-[10px] font-mono font-bold uppercase tracking-wider leading-none"
-                        >
-                          <span className="flex items-center gap-2"><LogOut className="w-3.5 h-3.5" /> SECURE TERMINATE SESSION</span>
-                          <span className="text-[8.5px] px-1 bg-rose-500/10 rounded uppercase tracking-tighter">Exit</span>
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                <AccountControlCenter
+                  isOpen={isProfileMenuOpen}
+                  onClose={() => setIsProfileMenuOpen(false)}
+                  traderEmail={traderEmail}
+                  sessionSeconds={sessionSeconds}
+                  brokerPing={brokerPing}
+                  soundAlertsEnabled={soundAlertsEnabled}
+                  onToggleSoundAlerts={toggleSoundAlertsInMenu}
+                  onWipeTerminal={wipeTerminalAndReset}
+                  onLogout={handleLogout}
+                  theme={theme}
+                  onToggleTheme={toggleTheme}
+                  idleTimeout={idleTimeout}
+                  onIdleTimeoutChange={setIdleTimeout}
+                />
               </div>
             </div>
 
@@ -2435,44 +2309,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
 
       {/* Core Dynamic Workplace Area */}
       <main className="max-w-[1400px] mx-auto w-full px-3 md:px-6 py-2 md:py-6 flex-1">
-        
-        {/* Persistent Backtest Replay Notification Banner */}
-        {isBacktestActive && backtestData && (
-          <div 
-            id="persistent-backtest-mode-notification"
-            className="mb-6 bg-gradient-to-r from-[#1b1509] via-[#0c0c0e] to-[#0a0a0c] border border-amber-500/40 rounded-lg p-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xl animate-fadeIn relative overflow-hidden"
-          >
-            <div className="absolute right-0 top-0 bottom-0 w-24 bg-amber-500/5 blur-2xl pointer-events-none" />
-            
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-500 shrink-0 mt-0.5 animate-pulse">
-                <History className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/40 rounded text-[9px] font-mono font-black text-amber-400 uppercase tracking-widest leading-none">
-                    BACKTEST ACTIVE
-                  </span>
-                  <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-                    Viewing Simulated Backtest Session for {symbol}
-                  </h4>
-                </div>
-                <p className="text-[11px] text-white/60 font-sans mt-1 leading-relaxed">
-                  You are in Backtest/Replay mode. The main chart, Fair Value Gaps, Order Blocks, Liquidity Sweeps, and trade signals are currently wired directly to the past-week backtest simulator results. Timeframe selectors (M15, H1, H4, D1) will align perfectly with your simulation.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 w-full md:w-auto justify-end shrink-0 border-t border-white/5 md:border-0 pt-2 md:pt-0">
-              <button
-                onClick={() => setIsBacktestActive(false)}
-                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 border border-transparent rounded font-mono text-[10px] text-black font-extrabold transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.25)] flex items-center gap-1 shrink-0"
-              >
-                <span>RETURN TO LIVE TICKER</span>
-              </button>
-            </div>
-          </div>
-        )}
         
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -2533,375 +2369,27 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               </div>
             )}
 
-            {activeTab === 'COPILOT' ? (
-              <div id="mtx-engine-workspace-deck" className="space-y-6">
-                <AiCopilotWorkspace
-                  symbol={symbol}
-                  metrics={metrics}
-                  onTradeExecuted={fetchMarketData}
-                  trades={trades}
-                  onSelectTab={(tab) => setActiveTab(tab)}
-                />
-              </div>
-            ) : false ? (
-              null
-            ) : activeTab === 'ANALYTICS' ? (
-              <div id="analytics-workspace" className="space-y-6 animate-fadeIn">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-2">
-                  <div>
-                    <h3 className="text-sm font-black uppercase tracking-wider text-white font-mono flex items-center gap-2">
-                      <BarChart3 className="w-4 h-4 text-indigo-400" />
-                      MTX ANALYTICS DESK
-                    </h3>
-                    <p className="text-[10px] text-white/35 mt-0.5">Four-tiered institutional analytic engine. Aligned to the MTXQUANT skeleton blueprint.</p>
-                  </div>
-
-                  {/* High fidelity horizontal page tabs */}
-                  <div className="flex bg-[#050507] p-1 rounded border border-white/5 space-x-1 font-mono text-[9px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setAnalyticsSubTab('ORDER_FLOW')}
-                      className={`px-3.5 py-1.5 uppercase tracking-wide rounded transition-all cursor-pointer ${
-                        analyticsSubTab === 'ORDER_FLOW'
-                          ? 'bg-indigo-650 text-indigo-200 border border-indigo-500/20 font-black shadow-sm'
-                          : 'text-white/40 hover:text-white/80'
-                      }`}
-                    >
-                      Session Confluence & Velocity
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAnalyticsSubTab('CORRELATION')}
-                      className={`px-3.5 py-1.5 uppercase tracking-wide rounded transition-all cursor-pointer ${
-                        analyticsSubTab === 'CORRELATION'
-                          ? 'bg-indigo-650 text-indigo-200 border border-indigo-500/20 font-black shadow-sm'
-                          : 'text-white/40 hover:text-white/80'
-                      }`}
-                    >
-                      Correlations & Sentiment
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAnalyticsSubTab('DEPENDENCY')}
-                      className={`px-3.5 py-1.5 uppercase tracking-wide rounded transition-all cursor-pointer ${
-                        analyticsSubTab === 'DEPENDENCY'
-                          ? 'bg-indigo-650 text-indigo-200 border border-indigo-500/20 font-black shadow-sm'
-                          : 'text-white/40 hover:text-white/80'
-                      }`}
-                    >
-                      Position Dependency
-                    </button>
-                  </div>
-                </div>
-
-                <div className="animate-fadeIn">
-                  {analyticsSubTab === 'ORDER_FLOW' ? (
-                    <SessionConfluenceTracker
-                      symbol={symbol}
-                      metrics={metrics}
-                    />
-                  ) : analyticsSubTab === 'CORRELATION' ? (
-                    <div className="space-y-6 animate-fadeIn font-mono">
-                      <div className="bg-[#0a0a0c] border border-white/5 p-4 rounded-lg">
-                        <h4 className="text-xs font-bold text-white mb-1 uppercase tracking-wide">Dynamic Cross-Asset Alignment</h4>
-                        <p className="text-[10px] text-white/40 leading-relaxed mb-4">Tracking alignment matrices across primary financial baskets in real-time.</p>
-                        <CorrelationMatrix />
-                      </div>
-                      <div className="bg-[#0a0a0c] border border-white/5 p-4 rounded-lg">
-                        <h4 className="text-xs font-bold text-white mb-1 uppercase tracking-wide">News Stream Sentiment Radar</h4>
-                        <p className="text-[10px] text-white/40 leading-relaxed mb-4">Aggregating natural language bias scores across standard news wires.</p>
-                        <MarketSentimentHeatmap />
-                      </div>
-                    </div>
-                  ) : (
-                    <PositionDependencyView
-                      currentSymbol={symbol}
-                      trades={trades}
-                    />
-                  )}
-                </div>
-              </div>
-            ) : activeTab === 'RISK' ? (
-              <div id="risk-workspace" className="animate-fadeIn space-y-6">
-                {metrics && (
-                  <React.Suspense fallback={<TerminalWorkspaceLoader />}>
-                    <RiskDashboard 
-                      trades={trades} 
-                      symbol={symbol} 
-                      onEmergencyCloseAll={handleEmergencyCloseAll}
-                      onPartialCloseAll={handlePartialCloseAll}
-                      onRefreshTrades={handleManualRefresh}
-                    />
-                  </React.Suspense>
-                )}
-              </div>
-            ) : activeTab === 'MARKETS' ? (
+            {activeTab === 'MARKETS' && (
               <div id="markets-workspace" className="animate-fadeIn">
                 <MarketsTerminal />
               </div>
-            ) : activeTab === 'RESEARCH' ? (
-              <div id="backtest-workspace" className="animate-fadeIn space-y-6">
-                
-                {/* RESEARCH SUBTAB NAV PANEL */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-[#0a0a0c]/90 border border-white/5 rounded-lg p-3 font-mono">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 bg-indigo-500/10 rounded-md border border-indigo-500/20 text-indigo-400">
-                      <Award className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-xs font-black uppercase text-white tracking-widest">RESEARCH DESK</h2>
-                      <p className="text-[9px] text-white/35 font-sans mt-0.5">Modular workspaces for macroeconomic events, replay simulation and historical records</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center bg-[#070709] border border-white/5 rounded-lg p-0.5 gap-1 self-end sm:self-auto overflow-x-auto max-w-full">
-                    {[
-                      { id: 'CALENDAR', label: '📅 Economic Calendar' },
-                      { id: 'REPLAY', label: '📊 Simulation & Replay' },
-                      { id: 'LEDGER', label: '📜 Trade History Ledger' },
-                      { id: 'RISK_EXPOSURE', label: '📉 Risk Exposure Journal' }
-                    ].map((st) => {
-                      const active = researchSubTab === st.id;
-                      return (
-                        <button
-                          key={st.id}
-                          onClick={() => setResearchSubTab(st.id as any)}
-                          className={`px-3 py-1.5 text-[9.5px] font-bold uppercase rounded-md tracking-wider transition-all cursor-pointer whitespace-nowrap ${
-                            active
-                              ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30 font-black shadow-[0_0_8px_rgba(99,102,241,0.12)]'
-                              : 'text-white/40 hover:text-white/70 border border-transparent'
-                          }`}
-                        >
-                          {st.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+            )}
 
-                {researchSubTab === 'CALENDAR' && (
-                  <div className="space-y-6 animate-fadeIn">
-                    <EconomicCalendar events={newsEvents} />
-                  </div>
-                )}
-
-                {researchSubTab === 'REPLAY' && (
-                  <div className="space-y-6 animate-fadeIn">
-                    {/* Historical Replay Engine controls relocated from top of Intelligence */}
-                    <div id="intelligence-control-bar" className="bg-[#0c0c0e]/95 border border-white/5 rounded-lg p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 font-mono select-none">
-                      
-                      {/* Left block: Title and Icon */}
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2 bg-indigo-500/10 rounded border border-indigo-500/25 text-indigo-400 shrink-0">
-                          <Calendar className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <h3 className="text-xs font-bold uppercase text-white tracking-wider">Historical Replay Engine</h3>
-                          <p className="text-[9.5px] text-white/30 font-sans mt-0.5">Focus charts and price ladder metrics on historic key sessions or custom date bounds</p>
-                        </div>
-                      </div>
-
-                      {/* Center & Right sections: Preset Session Jumpers & Custom Date Fields */}
-                      <div className="flex flex-wrap items-center gap-3 md:gap-4 flex-1 justify-end">
-                        
-                        {/* Presets Jumper */}
-                        <div className="flex items-center space-x-2">
-                          <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">Sessions:</span>
-                          <select 
-                            id="session-preset-select"
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (!val || candles.length === 0) return;
-                              
-                              let startIdx = 0;
-                              let endIdx = 0;
-                              
-                              if (val === 'london_breakout') {
-                                startIdx = Math.max(0, Math.floor(candles.length * 0.15));
-                                endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.25));
-                              } else if (val === 'ny_reversal') {
-                                startIdx = Math.max(0, Math.floor(candles.length * 0.40));
-                                endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.50));
-                              } else if (val === 'asia_consolidation') {
-                                startIdx = Math.max(0, Math.floor(candles.length * 0.65));
-                                endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.75));
-                              } else if (val === 'fomc_spike') {
-                                startIdx = Math.max(0, Math.floor(candles.length * 0.82));
-                                endIdx = Math.min(candles.length - 1, Math.floor(candles.length * 0.90));
-                              }
-                              
-                              const startCandle = candles[startIdx];
-                              const endCandle = candles[endIdx];
-                              if (startCandle && endCandle) {
-                                setJumpRange({
-                                  start: startCandle.timestamp,
-                                  end: endCandle.timestamp,
-                                  triggerId: Date.now()
-                                });
-                              }
-                            }}
-                            className="bg-[#050505] text-[11px] text-indigo-300 font-bold border border-white/10 hover:border-indigo-500/30 px-3 py-1.5 rounded cursor-pointer outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/50 transition-all font-mono leading-tight border-indigo-400/30"
-                          >
-                            <option value="">-- Jump to Market Session --</option>
-                            {candles.length > 0 && (
-                              <>
-                                <option value="london_breakout">
-                                  🇬🇧 London Breakout Peak ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.15))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
-                                </option>
-                                <option value="ny_reversal">
-                                  🇺🇸 NY PM Liquidity Reversal ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.40))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
-                                </option>
-                                <option value="asia_consolidation">
-                                  🇯🇵 Tokyo Tight Consolidation ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.65))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
-                                </option>
-                                <option value="fomc_spike">
-                                  🔥 FOMC Post-Rate Expansion ({new Date(candles[Math.max(0, Math.floor(candles.length * 0.82))].timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})})
-                                </option>
-                              </>
-                            )}
-                          </select>
-                        </div>
-
-                        <div className="h-6 w-[1px] bg-white/10 hidden sm:block" />
-
-                        {/* Custom Date Picker inputs */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="flex items-center space-x-1">
-                            <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">From:</span>
-                            <input 
-                              type="date"
-                              id="replay-date-start"
-                              value={sessionStartDate}
-                              onChange={(e) => setSessionStartDate(e.target.value)}
-                              min={candles.length > 0 ? candles[0].timestamp.substring(0, 10) : ''}
-                              max={candles.length > 0 ? candles[candles.length - 1].timestamp.substring(0, 10) : ''}
-                              className="bg-[#050505] text-[10.5px] text-white/80 border border-white/10 hover:border-white/20 px-2.5 py-1.5 rounded outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 font-mono transition-colors [color-scheme:dark]"
-                            />
-                          </div>
-
-                          <div className="flex items-center space-x-1">
-                            <span className="text-[9px] text-white/40 uppercase tracking-widest font-sans">To:</span>
-                            <input 
-                              type="date"
-                              id="replay-date-end"
-                              value={sessionEndDate}
-                              onChange={(e) => setSessionEndDate(e.target.value)}
-                              min={sessionStartDate || (candles.length > 0 ? candles[0].timestamp.substring(0, 10) : '')}
-                              max={candles.length > 0 ? candles[candles.length - 1].timestamp.substring(0, 10) : ''}
-                              className="bg-[#050505] text-[10.5px] text-white/80 border border-white/10 hover:border-white/20 px-2.5 py-1.5 rounded outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 font-mono transition-colors [color-scheme:dark]"
-                            />
-                          </div>
-
-                          {/* Custom Date Picker trigger buttons */}
-                          <div className="flex items-center gap-1.5 ml-1">
-                            <button
-                              id="btn-apply-replay-range"
-                              onClick={() => {
-                                if (!sessionStartDate || !sessionEndDate) return;
-                                setJumpRange({
-                                  start: `${sessionStartDate}T00:00:00.000Z`,
-                                  end: `${sessionEndDate}T23:59:59.999Z`,
-                                  triggerId: Date.now()
-                                });
-                              }}
-                              disabled={!sessionStartDate || !sessionEndDate}
-                              className={`px-3 py-1.5 rounded font-mono text-[10px] font-bold tracking-tight border h-[34px] flex items-center justify-center cursor-pointer transition-all ${
-                                sessionStartDate && sessionEndDate
-                                  ? 'bg-indigo-600 border-indigo-500 hover:bg-indigo-500 text-white shadow-md active:scale-95'
-                                  : 'bg-[#050505] border-white/5 text-white/20 cursor-not-allowed'
-                              }`}
-                            >
-                              APPLY
-                            </button>
-
-                            {/* Candle-by-candle Step Controls */}
-                            <div className="flex items-center bg-[#050505] border border-white/5 rounded h-[34px] p-0.5">
-                              <button
-                                id="btn-replay-step-backward"
-                                onClick={() => handleStepReplay('backward')}
-                                title="Step Backward (one candle)"
-                                className="h-full px-2 rounded hover:bg-white/5 text-white/50 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-1 group"
-                              >
-                                <ChevronLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
-                                <span className="text-[9px] font-extrabold uppercase tracking-wider hidden sm:inline">Back</span>
-                              </button>
-                              <div className="h-4 w-[1px] bg-white/10" />
-                              <button
-                                id="btn-replay-step-forward"
-                                onClick={() => handleStepReplay('forward')}
-                                title="Step Forward (one candle)"
-                                className="h-full px-2 rounded hover:bg-white/5 text-white/50 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-1 group"
-                              >
-                                <span className="text-[9px] font-extrabold uppercase tracking-wider hidden sm:inline">Forward</span>
-                                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                              </button>
-                            </div>
-
-                            <button
-                              id="btn-reset-replay-view"
-                              onClick={() => {
-                                setSessionStartDate('');
-                                setSessionEndDate('');
-                                const selectEl = document.getElementById('session-preset-select') as HTMLSelectElement;
-                                if (selectEl) selectEl.value = '';
-                                
-                                setJumpRange(null);
-                                setResetChartKey(prev => prev + 1);
-                              }}
-                              title="Return to the latest live ticker session"
-                              className="px-2.5 py-1.5 bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/10 text-white/70 hover:text-white rounded font-mono text-[10px] font-bold tracking-tight h-[34px] flex items-center justify-center cursor-pointer transition-all"
-                            >
-                              LIVE
-                            </button>
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                    <InstitutionalFlowWidget
-                      symbol={symbol}
-                      candles={candles}
-                      metrics={metrics}
-                    />
-                    <StrategyPerformanceChart />
-                    <BacktestSimulator 
-                      selectedSymbol={symbol} 
-                      onSymbolChange={(sym) => setSymbol(sym)} 
-                      onSimulationUpdate={(data) => setBacktestData(data as any)}
-                      onSimulationToggle={setIsBacktestActive}
-                    />
-                  </div>
-                )}
-
-                {researchSubTab === 'LEDGER' && (
-                  <div className="space-y-6 animate-fadeIn">
-                    <React.Suspense fallback={<TerminalWorkspaceLoader />}>
-                      <PerformanceTracker trades={trades} onTradeUpdated={fetchMarketData} />
-                    </React.Suspense>
-                    <TradeJournal trades={trades} onTradeUpdated={fetchMarketData} onReplayTrade={handleReplayClosedTrade} />
-                  </div>
-                )}
-
-                {researchSubTab === 'RISK_EXPOSURE' && (
-                  <div className="animate-fadeIn">
-                    <RiskExposureJournal trades={trades} />
-                  </div>
-                )}
-
+            {activeTab === 'PORTFOLIO' && (
+              <div id="portfolio-workspace" className="animate-fadeIn">
+                <PortfolioDesk traderEmail={traderEmail} />
               </div>
-            ) : activeTab === 'NEWS' ? (
-              <div id="news-workspace" className="animate-fadeIn space-y-6">
-                {/* Unified News Desk Workspace: Bloomberg Ticker Ribbon & Live Institutional Briefings */}
-                <div id="news-ticker-container" className="animate-fadeIn">
-                  <InstitutionalNewsTicker />
-                </div>
-                
-                {/* Full Dedicated News board & Impact predictive scanner */}
-                <NewsDesk />
+            )}
+            {activeTab === 'FUNDING' && (
+              <div id="funding-workspace" className="animate-fadeIn">
+                <FundingDesk />
               </div>
-            ) : null}
+            )}
+            {activeTab === 'ACTIVITY' && (
+              <div id="activity-workspace" className="animate-fadeIn">
+                <ActivityDesk />
+              </div>
+            )}
           </>
         )}
 
@@ -2916,11 +2404,16 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
             
             {/* Column 1: App Branding & Status */}
             <div className="md:col-span-4 space-y-3.5">
-              <div className="flex items-center space-x-2.5">
-                <span className="text-white text-base font-black tracking-tight select-none lowercase">
+              <button
+                id="footer-logo-home-button"
+                onClick={() => setActiveTab('MARKETS')}
+                className="flex items-center space-x-2.5 hover:opacity-80 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent"
+                title="Return to Markets Desk"
+              >
+                <span className="text-white text-base font-black tracking-tight lowercase">
                   mtxquant
                 </span>
-              </div>
+              </button>
               <p className="text-[10px] text-white/30 leading-relaxed max-w-sm select-none">
                 Next-generation institutional-grade quantitative analysis and trade execution terminal. Integrates algorithmic displacement modeling with risk insulation.
               </p>
@@ -2936,7 +2429,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                 <BookOpen className="w-3.5 h-3.5" /> SYSTEM DOCUMENTATION
               </h4>
               <p className="text-[9.5px] text-white/30 leading-relaxed select-none">
-                Unlock deeper mechanical heuristics of spatial OB/FVG alignments and MT5 execution configurations.
+                Unlock deeper mechanical heuristics of spatial OB/FVG alignments and broker execution configurations.
               </p>
               <div className="grid grid-cols-2 gap-2 text-[10px]">
                 <button 
@@ -2961,7 +2454,7 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   onClick={() => openBureaucracyTab('docs')} 
                   className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
                 >
-                  &raquo; MT5 Setup
+                  &raquo; Gateway Setup
                 </button>
                 <button 
                   onClick={() => openBureaucracyTab('faq')} 
@@ -3027,19 +2520,19 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
               {/* Latency Monitor */}
               <div className="flex flex-wrap items-center gap-2 lg:gap-3.5 lg:border-l lg:border-white/10 lg:pl-4">
                 <div className="flex items-center space-x-2 select-none">
-                  {mt5Ping > 45 ? (
+                  {brokerPing > 45 ? (
                     <Wifi className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
                   ) : (
                     <Wifi className="w-3.5 h-3.5 text-emerald-400 opacity-70" />
                   )}
-                  <span className="text-white/40">MT5 Bridge Ping:</span>
-                  <span id="mt5-ping-value" className={`font-bold ${isTestingPing ? 'text-indigo-400 animate-pulse' : mt5Ping > 45 ? 'text-rose-400 font-extrabold animate-pulse' : 'text-emerald-400'}`}>
-                    {isTestingPing ? 'pinging...' : `${mt5Ping}ms`}
+                  <span className="text-white/40">Broker Gateway Ping:</span>
+                  <span id="broker-ping-value" className={`font-bold ${isTestingPing ? 'text-indigo-400 animate-pulse' : brokerPing > 45 ? 'text-rose-400 font-extrabold animate-pulse' : 'text-emerald-400'}`}>
+                    {isTestingPing ? 'pinging...' : `${brokerPing}ms`}
                   </span>
                 </div>
 
                 <div className="relative flex h-2 w-2">
-                  {mt5Ping > 45 ? (
+                  {brokerPing > 45 ? (
                     <>
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
@@ -3052,12 +2545,12 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                   )}
                 </div>
 
-                {isMt5BridgePaused ? (
+                {isBrokerBridgePaused ? (
                   <div className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-rose-500/15 border border-rose-500/30 text-[9px] text-rose-400 font-bold tracking-tight animate-pulse uppercase">
                     <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0 animate-ping" />
-                    <span>MT5 Bridge Paused (Threshold Exceeded)</span>
+                    <span>Broker Bridge Paused (Threshold Exceeded)</span>
                   </div>
-                ) : mt5Ping > 45 && (
+                ) : brokerPing > 45 && (
                   <div className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 text-[9px] text-rose-300 font-bold tracking-tight animate-pulse uppercase">
                     <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
                     <span>Latency warning threshold exceeded (Limit: 45ms)</span>
@@ -3095,48 +2588,6 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
         </div>
       </footer>
       </div>
-
-      {/* Floating Bottom-Left Advisor Chat */}
-      {metrics && (
-        <div 
-          className="fixed bottom-18 md:bottom-6 left-3 md:left-[84px] z-[950] flex flex-col items-start transition-all duration-300 ease-in-out"
-        >
-          {/* Chat Panel Popover */}
-          {isChatOpen && (
-            <div className="mb-3 w-[360px] sm:w-[400px] md:w-[420px] max-w-[calc(100vw-3rem)] rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 bg-[#080808] overflow-hidden transition-all duration-300 animate-fadeIn h-[510px] max-h-[80vh] flex flex-col">
-              <AdvisorChat 
-                symbol={symbol} 
-                metrics={metrics} 
-                onClose={() => setIsChatOpen(false)} 
-                messages={chatMessages}
-                setMessages={setChatMessages}
-              />
-            </div>
-          )}
-
-          {/* Floating toggle button */}
-          <button
-            id="toggle-floating-chat-btn"
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            className={`flex items-center space-x-2 px-4 py-3 rounded-full border shadow-lg transition-all duration-300 cursor-pointer ${
-              isChatOpen
-                ? 'bg-[#121214] border-white/20 text-white/90 hover:bg-[#18181b]'
-                : 'bg-indigo-600 hover:bg-indigo-500 hover:scale-105 border-indigo-500/40 text-white shadow-[0_0_20px_rgba(99,102,241,0.25)]'
-            }`}
-          >
-            <div className="relative flex items-center justify-center">
-              <Bot className="w-4.5 h-4.5 text-indigo-150" />
-              {!isChatOpen && (
-                <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-              )}
-            </div>
-            <span className="text-xs font-mono font-bold tracking-tight uppercase">MTX AI</span>
-          </button>
-        </div>
-      )}
 
       {/* Session Summary Modal */}
       <AnimatePresence>
@@ -3407,81 +2858,62 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
         )}
       </AnimatePresence>
 
-      {/* Mobile Sticky Bottom Navigation Dock */}
-      <nav id="mobile-sticky-bottom-nav" className="fixed bottom-0 left-0 right-0 z-[300] bg-[#080808]/95 backdrop-blur-md border-t border-white/10 flex md:hidden items-center justify-around py-1.5 px-2 safe-bottom">
-        {[
-          { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
-          { id: 'ANALYTICS', label: 'Analytic', icon: BarChart3 },
-          { id: 'COPILOT', label: 'MTX Eng', icon: Sparkles },
-          { id: 'RISK', label: 'Risk', icon: ShieldAlert },
-          { id: 'NEWS', label: 'News', icon: Newspaper },
-          { id: 'RESEARCH', label: 'Research', icon: Award }
-        ].map((item) => {
-          const active = activeTab === item.id;
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id as any)}
-              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg transition-all ${
-                active 
-                  ? 'text-indigo-400 font-extrabold scale-105' 
-                  : 'text-[#e5e5e5]/50 hover:text-white/80'
-              }`}
-            >
-              <Icon className={`w-4.5 h-4.5 ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
-              <span className="text-[8px] font-mono tracking-tight mt-0.5 uppercase">{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Mobile Drawer Navigation Menu */}
+      {/* Mobile drawer navigation menu */}
       <AnimatePresence>
         {isMobileMenuOpen && (
-          <>
-            {/* Backdrop */}
+          <div className="fixed inset-0 z-[400] md:hidden flex">
+            {/* Backdrop overlay */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 z-[400] bg-black/65 backdrop-blur-sm md:hidden"
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
-            
-            {/* Drawer */}
+
+            {/* Slide-out drawer menu panel */}
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed inset-y-0 left-0 w-72 z-[410] bg-[#080808] border-r border-white/10 p-5 flex flex-col justify-between md:hidden shadow-[8px_0_32px_rgba(0,0,0,0.85)]"
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-64 max-w-xs h-full bg-[#0a0a0d] border-r border-white/10 flex flex-col justify-between py-6 px-4 z-10"
             >
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                  <div className="flex items-center gap-2">
+              <div>
+                {/* Brand Ident and close trigger */}
+                <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+                  <button
+                    id="mobile-drawer-logo-home-button"
+                    onClick={() => {
+                      setActiveTab('MARKETS');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center space-x-1.5 hover:opacity-80 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent text-left"
+                    title="Return to Markets Desk"
+                  >
                     <span className="text-sm font-black tracking-tight text-white lowercase">
                       mtxquant
                     </span>
-                  </div>
+                    <span className="px-1 py-0.2 rounded bg-white/5 border border-white/10 text-[7px] font-mono uppercase tracking-wide text-[#e5e5e5]/60 font-bold">
+                      v2.0
+                    </span>
+                  </button>
+
                   <button
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="p-1.5 hover:bg-white/5 border border-white/10 rounded-md text-white/60 hover:text-white transition-all cursor-pointer"
+                    className="p-1 text-white/40 hover:text-white hover:bg-white/5 rounded transition-colors cursor-pointer"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                {/* Navigation Items */}
+                {/* Mobile Drawer Navigation Links */}
                 <nav className="space-y-1.5">
                   {[
-                    { id: 'MARKETS', label: 'Markets Terminal Desk', icon: TrendingUp, desc: 'yfinance, Pandas screens, backtesting, portfolio opt' },
-                    { id: 'ANALYTICS', label: 'Analytics Desk', icon: BarChart3, desc: 'Heuristics, sentiment, micro order-book depth' },
-                    { id: 'COPILOT', label: 'MTX Engine Workspace', icon: Sparkles, desc: 'Cursor Multi-leg Composer & Compiler' },
-                    { id: 'RISK', label: 'Risk Desk Management', icon: ShieldAlert, desc: 'Leverage, Limits & Heatmap' },
-                    { id: 'NEWS', label: 'Dedicated News Desk', icon: Newspaper, desc: 'External feeds & global risk announcements' },
-                    { id: 'RESEARCH', label: 'Research & Calendar', icon: Award, desc: 'Economic events & insights' }
+                    { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
+                    { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
+                    { id: 'FUNDING', label: 'Funding', icon: Wallet },
+                    { id: 'ACTIVITY', label: 'Activity', icon: History }
                   ].map((item) => {
                     const active = activeTab === item.id;
                     const Icon = item.icon;
@@ -3492,40 +2924,32 @@ I am primed on **The Trading Bible** and **ICT methodologies** to steer you towa
                           setActiveTab(item.id as any);
                           setIsMobileMenuOpen(false);
                         }}
-                        className={`w-full p-3 rounded-lg text-left transition-all flex items-start gap-3.5 cursor-pointer border ${
+                        className={`w-full py-2.5 px-3.5 rounded-lg text-xs font-mono font-bold uppercase transition-all flex items-center gap-3 cursor-pointer ${
                           active
-                            ? 'bg-indigo-600/15 text-white border-indigo-500/30'
-                            : 'text-[#e5e5e5]/60 hover:text-white hover:bg-white/[0.02] border-transparent'
+                            ? 'bg-indigo-600/15 text-white border border-indigo-500/40 shadow-[0_0_12px_rgba(99,102,241,0.15)]'
+                            : 'text-[#e5e5e5]/50 hover:text-white hover:bg-white/[0.03] border border-transparent'
                         }`}
                       >
-                        <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${active ? 'text-indigo-400' : 'text-white/35'}`} />
-                        <div className="flex flex-col">
-                          <span className="text-xs font-mono font-bold uppercase tracking-wide leading-none">{item.label}</span>
-                          <span className="text-[9px] text-[#e5e5e5]/30 mt-1">{item.desc}</span>
-                        </div>
+                        <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
+                        <span>{item.label}</span>
                       </button>
                     );
                   })}
                 </nav>
               </div>
 
-              {/* Footer */}
-              <div className="border-t border-white/5 pt-4 flex flex-col space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider">
-                    Institutional Node Active
-                  </span>
+              {/* Bottom indicators */}
+              <div className="pt-4 border-t border-white/5 flex items-center gap-2.5 px-1">
+                <div className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </div>
-                <div className="text-[8px] font-mono text-white/20">
-                  MTXQUANT GATEWAY S9 &middot; BUILD 4108
-                </div>
+                <span className="text-[8.5px] font-mono text-emerald-400 font-bold uppercase tracking-wider">
+                  System Online
+                </span>
               </div>
             </motion.div>
-          </>
+          </div>
         )}
       </AnimatePresence>
 

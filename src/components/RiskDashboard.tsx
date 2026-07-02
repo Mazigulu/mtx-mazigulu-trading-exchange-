@@ -179,9 +179,9 @@ export default function RiskDashboard({
     }
   });
 
-  const [isMt5BridgePaused, setIsMt5BridgePaused] = useState<boolean>(() => {
+  const [isBrokerBridgePaused, setIsBrokerBridgePaused] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('apex_mt5_bridge_paused');
+      const saved = localStorage.getItem('apex_broker_bridge_paused');
       return saved === 'true';
     } catch {
       return false;
@@ -193,14 +193,10 @@ export default function RiskDashboard({
     if (slDistance === 0) return 50;
 
     let tradeRiskDollar = 0;
-    if (t.symbol === 'BTC/USDT') {
-      tradeRiskDollar = slDistance * t.size;
-    } else if (t.symbol === 'USD/JPY') {
-      const contractLots = t.size * 100000;
-      tradeRiskDollar = slDistance * contractLots * (1 / t.entryPrice); // Approximate USD value
+    if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(t.symbol)) {
+      tradeRiskDollar = slDistance * t.size * 100;
     } else {
-      const contractLots = t.size * 100000;
-      tradeRiskDollar = slDistance * contractLots;
+      tradeRiskDollar = slDistance * t.size * 10;
     }
     
     return Math.max(tradeRiskDollar, 50);
@@ -311,9 +307,8 @@ export default function RiskDashboard({
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object') {
           return {
-            FOREX: typeof parsed.FOREX === 'number' ? parsed.FOREX : 3,
-            CRYPTO: typeof parsed.CRYPTO === 'number' ? parsed.CRYPTO : 1,
-            METALS: typeof parsed.METALS === 'number' ? parsed.METALS : 1,
+            INDICES: typeof parsed.INDICES === 'number' ? parsed.INDICES : 3,
+            STOCKS: typeof parsed.STOCKS === 'number' ? parsed.STOCKS : 2,
           };
         }
       }
@@ -321,9 +316,8 @@ export default function RiskDashboard({
       console.error('Error loading asset limits:', e);
     }
     return {
-      FOREX: 3,
-      CRYPTO: 1,
-      METALS: 1
+      INDICES: 3,
+      STOCKS: 2
     };
   });
 
@@ -342,15 +336,13 @@ export default function RiskDashboard({
 
   // Count active open trades per asset class dynamically
   const assetClassCounts = useMemo(() => {
-    const counts = { FOREX: 0, CRYPTO: 0, METALS: 0 };
+    const counts = { INDICES: 0, STOCKS: 0 };
     openTrades.forEach((t) => {
       const sym = t.symbol;
-      if (['EUR/USD', 'GBP/USD', 'USD/JPY'].includes(sym)) {
-        counts.FOREX++;
-      } else if (sym === 'BTC/USDT') {
-        counts.CRYPTO++;
-      } else if (sym === 'GOLD/USD') {
-        counts.METALS++;
+      if (['US30', 'NAS100', 'GER40', 'SPX500'].includes(sym)) {
+        counts.INDICES++;
+      } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(sym)) {
+        counts.STOCKS++;
       }
     });
     return counts;
@@ -359,9 +351,8 @@ export default function RiskDashboard({
   // Determine if any asset classes exceed set limits
   const assetClassBreaches = useMemo(() => {
     return {
-      FOREX: assetClassCounts.FOREX > assetClassLimits.FOREX,
-      CRYPTO: assetClassCounts.CRYPTO > assetClassLimits.CRYPTO,
-      METALS: assetClassCounts.METALS > assetClassLimits.METALS,
+      INDICES: assetClassCounts.INDICES > assetClassLimits.INDICES,
+      STOCKS: assetClassCounts.STOCKS > assetClassLimits.STOCKS,
     };
   }, [assetClassCounts, assetClassLimits]);
 
@@ -492,23 +483,23 @@ export default function RiskDashboard({
 
   useEffect(() => {
     try {
-      localStorage.setItem('apex_mt5_bridge_paused', String(isMt5BridgePaused));
+      localStorage.setItem('apex_broker_bridge_paused', String(isBrokerBridgePaused));
       
       // Dispatch a storage event or standard custom event to sync across components immediately
       window.dispatchEvent(new Event('storage'));
-      window.dispatchEvent(new CustomEvent('apex_bridge_status_changed', { detail: { paused: isMt5BridgePaused } }));
+      window.dispatchEvent(new CustomEvent('apex_bridge_status_changed', { detail: { paused: isBrokerBridgePaused } }));
     } catch {}
-  }, [isMt5BridgePaused]);
+  }, [isBrokerBridgePaused]);
 
   // Automatic Safety Guard calculation and state trigger
   useEffect(() => {
-    if (isSafetyGuardEnabled && !isMt5BridgePaused) {
+    if (isSafetyGuardEnabled && !isBrokerBridgePaused) {
       const dailyLoss = dailyProfitToday < 0 ? Math.abs(dailyProfitToday) : 0;
       if (dailyLoss >= safetyGuardThreshold) {
-        setIsMt5BridgePaused(true);
+        setIsBrokerBridgePaused(true);
       }
     }
-  }, [isSafetyGuardEnabled, isMt5BridgePaused, dailyProfitToday, safetyGuardThreshold]);
+  }, [isSafetyGuardEnabled, isBrokerBridgePaused, dailyProfitToday, safetyGuardThreshold]);
 
   useEffect(() => {
     if (dailyProfitToday >= dailyProfitTarget && dailyProfitTarget > 0) {
@@ -662,9 +653,9 @@ export default function RiskDashboard({
     } else {
       // Simulator mode / baseline default if no actual trades
       const mockPositions = [
-        { symbol: 'EUR/USD' as MarketSymbol, side: 'BUY' as const, size: 1.10, riskUSD: 105.00 },
-        { symbol: 'BTC/USDT' as MarketSymbol, side: 'BUY' as const, size: 0.35, riskUSD: 55.00 },
-        { symbol: 'GOLD/USD' as MarketSymbol, side: 'BUY' as const, size: 0.15, riskUSD: 25.00 }
+        { symbol: 'NAS100' as MarketSymbol, side: 'BUY' as const, size: 1.10, riskUSD: 105.00 },
+        { symbol: 'AAPL' as MarketSymbol, side: 'BUY' as const, size: 0.35, riskUSD: 55.00 },
+        { symbol: 'SPX500' as MarketSymbol, side: 'BUY' as const, size: 0.15, riskUSD: 25.00 }
       ];
       
       const totalRisk = mockPositions.reduce((acc, p) => acc + p.riskUSD, 0); // $185
@@ -702,10 +693,8 @@ export default function RiskDashboard({
 
   // Net Symbol Exposure aggregation (For summary block)
   const symbolsList: MarketSymbol[] = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD',
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500'
+    'US30', 'NAS100', 'GER40', 'SPX500',
+    'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
   
   const netSymbolExposure = useMemo(() => {
@@ -838,13 +827,13 @@ export default function RiskDashboard({
     const finalTpPotential = hasActive ? aggregateTakeProfitPotential : 540.00;
     const finalOpenPnl = hasActive ? totalOpenPnl : -45.50;
 
-    // Evaluate USD Correlation risks (EUR/USD vs GBP/USD direction co-exposure warning)
-    const eurUsdDir = netSymbolExposure.find(s => s.symbol === 'EUR/USD')?.netDirection || 'FLAT';
-    const gbpUsdDir = netSymbolExposure.find(s => s.symbol === 'GBP/USD')?.netDirection || 'FLAT';
+    // Evaluate Tech Correlation risks (AAPL vs MSFT direction co-exposure warning)
+    const aaplDir = netSymbolExposure.find(s => s.symbol === 'AAPL')?.netDirection || 'FLAT';
+    const msftDir = netSymbolExposure.find(s => s.symbol === 'MSFT')?.netDirection || 'FLAT';
     
     let correlationHedgeStatus: 'NOMINAL' | 'USD_COEXPOSURE_WARNING' | 'USD_HEDGE_ACTIVE' = 'NOMINAL';
-    if (eurUsdDir !== 'FLAT' && gbpUsdDir !== 'FLAT') {
-      if (eurUsdDir === gbpUsdDir) {
+    if (aaplDir !== 'FLAT' && msftDir !== 'FLAT') {
+      if (aaplDir === msftDir) {
         correlationHedgeStatus = 'USD_COEXPOSURE_WARNING';
       } else {
         correlationHedgeStatus = 'USD_HEDGE_ACTIVE';
@@ -864,55 +853,40 @@ export default function RiskDashboard({
 
   // Visual dynamic sector-specific exposure donut configuration
   const assetClassExposureData = useMemo(() => {
-    let forexValue = 0;
-    let cryptoValue = 0;
-    let metalsValue = 0;
+    let indicesValue = 0;
+    let stocksValue = 0;
 
     openTrades.forEach((t) => {
-      let value = 0;
-      if (t.symbol === 'BTC/USDT') {
-        value = t.size * t.entryPrice;
-        cryptoValue += value;
-      } else if (t.symbol === 'GOLD/USD') {
-        value = t.size * 100000; // standard $100k contract equivalent
-        metalsValue += value;
+      const value = t.size * t.entryPrice;
+      if (['US30', 'NAS100', 'GER40', 'SPX500'].includes(t.symbol)) {
+        indicesValue += value;
       } else {
-        value = t.size * 100000; // standard base forex lot lot equivalent
-        forexValue += value;
+        stocksValue += value;
       }
     });
 
     const hasActive = openTrades.length > 0;
-    // Align fallback values perfectly with the $110,000 summary baseline when no trade is open
-    const displayForex = hasActive ? forexValue : 75000;
-    const displayCrypto = hasActive ? cryptoValue : 20000;
-    const displayMetals = hasActive ? metalsValue : 15000;
-    const displayTotal = displayForex + displayCrypto + displayMetals;
+    // Align fallback values perfectly when no trade is open
+    const displayIndices = hasActive ? indicesValue : 75000;
+    const displayStocks = hasActive ? stocksValue : 35000;
+    const displayTotal = displayIndices + displayStocks;
 
     return [
       { 
-        name: 'Forex', 
-        value: displayForex, 
-        percentage: displayTotal > 0 ? (displayForex / displayTotal) * 100 : 0,
+        name: 'Equity Indices', 
+        value: displayIndices, 
+        percentage: displayTotal > 0 ? (displayIndices / displayTotal) * 100 : 0,
         color: '#6366f1',
-        count: hasActive ? assetClassCounts.FOREX : 3,
-        symbolsDesc: 'EUR/USD, GBP/USD, USD/JPY'
+        count: hasActive ? assetClassCounts.INDICES : 3,
+        symbolsDesc: 'NAS100, SPX500, US30, GER40'
       },
       { 
-        name: 'Crypto', 
-        value: displayCrypto, 
-        percentage: displayTotal > 0 ? (displayCrypto / displayTotal) * 100 : 0,
+        name: 'Tech Stocks', 
+        value: displayStocks, 
+        percentage: displayTotal > 0 ? (displayStocks / displayTotal) * 100 : 0,
         color: '#f59e0b',
-        count: hasActive ? assetClassCounts.CRYPTO : 1,
-        symbolsDesc: 'BTC/USDT'
-      },
-      { 
-        name: 'Metals', 
-        value: displayMetals, 
-        percentage: displayTotal > 0 ? (displayMetals / displayTotal) * 100 : 0,
-        color: '#10b981',
-        count: hasActive ? assetClassCounts.METALS : 1,
-        symbolsDesc: 'GOLD/USD'
+        count: hasActive ? assetClassCounts.STOCKS : 1,
+        symbolsDesc: 'AAPL, MSFT, NVDA, TSLA'
       }
     ];
   }, [openTrades, assetClassCounts]);
@@ -955,35 +929,25 @@ export default function RiskDashboard({
     const hasActive = openTrades.length > 0;
 
     const initialSectors = {
-      FOREX: { 
-        name: 'Forex (Currencies)', 
-        symbols: ['EUR/USD', 'GBP/USD', 'USD/JPY'], 
+      INDICES: { 
+        name: 'Equity Indices', 
+        symbols: ['NAS100', 'SPX500', 'US30', 'GER40'], 
         color: '#6366f1', 
-        baseValue: 70000, 
-        baseRisk: 105.00, 
-        baseTp: 320.00,
+        baseValue: 75000, 
+        baseRisk: 125.00, 
+        baseTp: 360.00,
         basePnl: -15.50, 
-        icon: 'Globe'
+        icon: 'Layers'
       },
-      CRYPTO: { 
-        name: 'Crypto (Digital Assets)', 
-        symbols: ['BTC/USDT'], 
+      STOCKS: { 
+        name: 'Tech Stocks', 
+        symbols: ['AAPL', 'MSFT', 'NVDA', 'TSLA'], 
         color: '#f59e0b', 
-        baseValue: 25000, 
-        baseRisk: 55.00, 
-        baseTp: 140.00,
-        basePnl: -22.00, 
-        icon: 'Coins'
-      },
-      METALS: { 
-        name: 'Metals (Precious Alloys)', 
-        symbols: ['GOLD/USD'], 
-        color: '#10b981', 
-        baseValue: 15000, 
-        baseRisk: 25.00, 
-        baseTp: 80.00,
-        basePnl: -8.00, 
-        icon: 'Gem'
+        baseValue: 35000, 
+        baseRisk: 60.00, 
+        baseTp: 180.00,
+        basePnl: -30.00, 
+        icon: 'Briefcase'
       },
     };
 
@@ -1003,43 +967,20 @@ export default function RiskDashboard({
         count++;
         pnl += t.pnl;
 
-        let value = 0;
-        if (t.symbol === 'BTC/USDT') {
-          value = t.size * t.entryPrice;
-        } else {
-          value = t.size * 100000;
-        }
+        const value = t.size * t.entryPrice;
         grossValue += value;
 
         const slDistance = Math.abs(t.entryPrice - t.stopLoss);
-        let tradeRisk = 0;
-        if (t.symbol === 'BTC/USDT') {
-          tradeRisk = slDistance * t.size;
-        } else if (t.symbol === 'USD/JPY') {
-          const contractLots = t.size * 100000;
-          tradeRisk = slDistance * contractLots * (1 / t.entryPrice);
-        } else {
-          const contractLots = t.size * 100000;
-          tradeRisk = slDistance * contractLots;
-        }
+        const tradeRisk = slDistance * t.size;
         slRisk += Math.max(tradeRisk, t.stopLoss > 0 ? 0 : 45);
 
         const tpDistance = Math.abs(t.entryPrice - t.takeProfit);
-        let tradeTp = 0;
-        if (t.symbol === 'BTC/USDT') {
-          tradeTp = tpDistance * t.size;
-        } else if (t.symbol === 'USD/JPY') {
-          const contractLots = t.size * 100000;
-          tradeTp = tpDistance * contractLots * (1 / t.entryPrice);
-        } else {
-          const contractLots = t.size * 100000;
-          tradeTp = tpDistance * contractLots;
-        }
+        const tradeTp = tpDistance * t.size;
         tpPotential += Math.max(tradeTp, t.takeProfit > 0 ? 0 : 135);
       });
 
-      const actualCount = hasActive ? count : (key === 'FOREX' ? 2 : key === 'CRYPTO' ? 1 : 0);
-      const actualLots = hasActive ? sizeSum : (key === 'FOREX' ? 1.10 : key === 'CRYPTO' ? 0.35 : 0.0);
+      const actualCount = hasActive ? count : (key === 'INDICES' ? 2 : key === 'STOCKS' ? 1 : 0);
+      const actualLots = hasActive ? sizeSum : (key === 'INDICES' ? 1.10 : key === 'STOCKS' ? 0.35 : 0.0);
       const finalValue = hasActive ? grossValue : info.baseValue;
       const finalRisk = hasActive ? slRisk : info.baseRisk;
       const finalTp = hasActive ? tpPotential : info.baseTp;
@@ -1071,26 +1012,25 @@ export default function RiskDashboard({
 
     return {
       sectors: sorted,
-      highestSectName: sorted[0]?.name || 'Forex',
-      highestSectKey: sorted[0]?.key || 'FOREX',
+      highestSectName: sorted[0]?.name || 'Equity Indices',
+      highestSectKey: sorted[0]?.key || 'INDICES',
       highestSectVol: sorted[0]?.volContribution || 57,
     };
   }, [openTrades]);
 
-  // Allocation splits dataset (Forex, Crypto, Indices)
+  // Allocation splits dataset (Indices, Stocks, Cash Reserve)
   const exposureAllocations = [
-    { name: 'Forex (EUR/USD, GBP/USD, USD/JPY)', value: 45, color: '#6366f1' },
-    { name: 'Crypto (BTC/USDT)', value: 15, color: '#f59e0b' },
-    { name: 'Indices (SPX/NDX Equivalent)', value: 10, color: '#10b981' },
-    { name: 'Cash Reserve (Protected US Premium Bonds)', value: 30, color: '#374151' },
+    { name: 'Equity Indices (NAS100, SPX500, US30, GER40)', value: 55, color: '#6366f1' },
+    { name: 'Tech Stocks (AAPL, MSFT, NVDA, TSLA)', value: 25, color: '#f59e0b' },
+    { name: 'Cash Reserve (Protected Treasury Bonds)', value: 20, color: '#374151' },
   ];
 
   // Stress-Testing parameters (Predictive scenarios simulating drawdowns)
   const stressTestScenarios = [
-    { name: 'CPI Surprise (+0.5% Spike)', EUR_USD: -12.5, GBP_USD: -15.0, BTC: -4.2, status: 'BUFFER ACTIVE', color: '#10b981' },
-    { name: 'BOJ Emergency Revision', EUR_USD: -4.1, GBP_USD: -3.2, BTC: -1.5, status: 'STABLE RISK', color: '#10b981' },
-    { name: 'Crypto Liquidity Squeeze (-10%)', EUR_USD: +1.2, GBP_USD: +0.8, BTC: -12.8, status: 'AUTO LOCK TRIGGERED', color: '#f59e0b' },
-    { name: 'Black Swan Volatility Shift', EUR_USD: -25.8, GBP_USD: -28.4, BTC: -32.0, status: 'MAX SL MITIGATED', color: '#ef4444' },
+    { name: 'CPI Surprise (+0.5% Spike)', INDICES: -2.5, STOCKS: -4.0, status: 'BUFFER ACTIVE', color: '#10b981' },
+    { name: 'BOJ Emergency Revision', INDICES: -1.1, STOCKS: -0.8, status: 'STABLE RISK', color: '#10b981' },
+    { name: 'Big Tech Liquidity Squeeze (-10%)', INDICES: -4.8, STOCKS: -10.0, status: 'AUTO LOCK TRIGGERED', color: '#f59e0b' },
+    { name: 'Black Swan Volatility Shift', INDICES: -15.8, STOCKS: -22.4, status: 'MAX SL MITIGATED', color: '#ef4444' },
   ];
 
   const totalExposureSum = exposureAllocations.slice(0, 3).reduce((acc, v) => acc + v.value, 0);
@@ -1599,7 +1539,7 @@ export default function RiskDashboard({
                     {/* Execute action footer */}
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-white/5">
                       <span className="text-[10px] text-white/30 block text-center sm:text-left">
-                        * Execution simulates firing parallel MT5 bridge socket events for Partial Close.
+                        * Execution simulates firing parallel broker gateway events for Partial Close.
                       </span>
 
                       <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -2276,23 +2216,23 @@ export default function RiskDashboard({
               </div>
             )}
 
-            {/* 3column Grid for FOREX, CRYPTO, METALS limit controllers */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 2column Grid for INDICES, STOCKS limit controllers */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
-              {/* Asset class 1: FOREX */}
-              <div className={`p-4 rounded-lg bg-black/40 border transition-all ${assetClassBreaches.FOREX ? 'border-rose-500/20 shadow-lg shadow-rose-950/5' : 'border-white/5'}`}>
+              {/* Asset class 1: INDICES */}
+              <div className={`p-4 rounded-lg bg-black/40 border transition-all ${assetClassBreaches.INDICES ? 'border-rose-500/20 shadow-lg shadow-rose-950/5' : 'border-white/5'}`}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-indigo-500/10 rounded border border-indigo-500/20">
-                      <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                      <Layers className="w-3.5 h-3.5 text-indigo-400" />
                     </div>
                     <div>
-                      <span className="text-[11px] font-bold font-mono text-white block">Forex Trades</span>
-                      <span className="text-[8.5px] text-white/40 uppercase font-mono tracking-wider">EUR, GBP, JPY</span>
+                      <span className="text-[11px] font-bold font-mono text-white block">Equity Indices</span>
+                      <span className="text-[8.5px] text-white/40 uppercase font-mono tracking-wider">NAS100, SPX500, US30, GER40</span>
                     </div>
                   </div>
                   
-                  {assetClassBreaches.FOREX ? (
+                  {assetClassBreaches.INDICES ? (
                     <span className="px-1.5 py-0.5 rounded text-[8px] font-black font-mono tracking-wide bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1 uppercase">
                       <span className="w-1 h-1 rounded-full bg-rose-500 animate-ping"></span>
                       Overweight
@@ -2308,15 +2248,15 @@ export default function RiskDashboard({
                 <div className="flex items-center justify-between text-[10px] font-mono mb-1.5 select-none">
                   <span className="text-white/40">Open Positions:</span>
                   <span className="font-bold text-white">
-                    {assetClassCounts.FOREX} <span className="text-white/30">/</span> {assetClassLimits.FOREX} Max
+                    {assetClassCounts.INDICES} <span className="text-white/30">/</span> {assetClassLimits.INDICES} Max
                   </span>
                 </div>
 
                 {/* Progress bar visual */}
                 <div className="w-full bg-[#050505] h-1.5 rounded-full overflow-hidden border border-white/5 mb-4">
                   <div 
-                    className={`h-full rounded-full transition-all duration-300 ${assetClassBreaches.FOREX ? 'bg-rose-500 animate-pulse' : 'bg-indigo-500'}`}
-                    style={{ width: `${Math.min(100, (assetClassCounts.FOREX / assetClassLimits.FOREX) * 100)}%` }}
+                    className={`h-full rounded-full transition-all duration-300 ${assetClassBreaches.INDICES ? 'bg-rose-500 animate-pulse' : 'bg-indigo-500'}`}
+                    style={{ width: `${Math.min(100, (assetClassCounts.INDICES / assetClassLimits.INDICES) * 100)}%` }}
                   />
                 </div>
 
@@ -2324,44 +2264,44 @@ export default function RiskDashboard({
                 <div className="flex items-center justify-between bg-[#050505] p-1 rounded border border-white/5">
                   <button 
                     onClick={() => {
-                      setAssetClassLimits(prev => ({ ...prev, FOREX: Math.max(1, prev.FOREX - 1) }));
+                      setAssetClassLimits(prev => ({ ...prev, INDICES: Math.max(1, prev.INDICES - 1) }));
                     }}
                     className="h-6 w-8 bg-white/5 hover:bg-white/10 active:bg-white/15 text-white/80 rounded font-mono text-sm font-bold flex items-center justify-center transition-all cursor-pointer select-none"
-                    title="Decrease Forex limit"
-                    disabled={assetClassLimits.FOREX <= 1}
+                    title="Decrease Indices limit"
+                    disabled={assetClassLimits.INDICES <= 1}
                   >
                     -
                   </button>
                   <span className="text-xs font-mono font-black text-indigo-400">
-                    {assetClassLimits.FOREX} {assetClassLimits.FOREX === 1 ? 'Trade' : 'Trades'}
+                    {assetClassLimits.INDICES} {assetClassLimits.INDICES === 1 ? 'Trade' : 'Trades'}
                   </span>
                   <button 
                     onClick={() => {
-                      setAssetClassLimits(prev => ({ ...prev, FOREX: Math.min(10, prev.FOREX + 1) }));
+                      setAssetClassLimits(prev => ({ ...prev, INDICES: Math.min(10, prev.INDICES + 1) }));
                     }}
                     className="h-6 w-8 bg-white/5 hover:bg-white/10 active:bg-white/15 text-white/80 rounded font-mono text-sm font-bold flex items-center justify-center transition-all cursor-pointer select-none"
-                    title="Increase Forex limit"
-                    disabled={assetClassLimits.FOREX >= 10}
+                    title="Increase Indices limit"
+                    disabled={assetClassLimits.INDICES >= 10}
                   >
                     +
                   </button>
                 </div>
               </div>
 
-              {/* Asset class 2: CRYPTO */}
-              <div className={`p-4 rounded-lg bg-black/40 border transition-all ${assetClassBreaches.CRYPTO ? 'border-rose-500/20 shadow-lg shadow-rose-950/5' : 'border-white/5'}`}>
+              {/* Asset class 2: STOCKS */}
+              <div className={`p-4 rounded-lg bg-black/40 border transition-all ${assetClassBreaches.STOCKS ? 'border-rose-500/20 shadow-lg shadow-rose-950/5' : 'border-white/5'}`}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-amber-500/10 rounded border border-amber-500/20">
-                      <Coins className="w-3.5 h-3.5 text-amber-400" />
+                      <Briefcase className="w-3.5 h-3.5 text-amber-400" />
                     </div>
                     <div>
-                      <span className="text-[11px] font-bold font-mono text-white block">Crypto Trades</span>
-                      <span className="text-[8.5px] text-white/40 uppercase font-mono tracking-wider">BTC / Digital</span>
+                      <span className="text-[11px] font-bold font-mono text-white block">Tech Stocks</span>
+                      <span className="text-[8.5px] text-white/40 uppercase font-mono tracking-wider">AAPL, MSFT, NVDA, TSLA</span>
                     </div>
                   </div>
                   
-                  {assetClassBreaches.CRYPTO ? (
+                  {assetClassBreaches.STOCKS ? (
                     <span className="px-1.5 py-0.5 rounded text-[8px] font-black font-mono tracking-wide bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1 uppercase">
                       <span className="w-1 h-1 rounded-full bg-rose-500 animate-ping"></span>
                       Overweight
@@ -2377,15 +2317,15 @@ export default function RiskDashboard({
                 <div className="flex items-center justify-between text-[10px] font-mono mb-1.5 select-none">
                   <span className="text-white/40">Open Positions:</span>
                   <span className="font-bold text-white">
-                    {assetClassCounts.CRYPTO} <span className="text-white/30">/</span> {assetClassLimits.CRYPTO} Max
+                    {assetClassCounts.STOCKS} <span className="text-white/30">/</span> {assetClassLimits.STOCKS} Max
                   </span>
                 </div>
 
                 {/* Progress bar visual */}
                 <div className="w-full bg-[#050505] h-1.5 rounded-full overflow-hidden border border-white/5 mb-4">
                   <div 
-                    className={`h-full rounded-full transition-all duration-300 ${assetClassBreaches.CRYPTO ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}`}
-                    style={{ width: `${Math.min(100, (assetClassCounts.CRYPTO / assetClassLimits.CRYPTO) * 100)}%` }}
+                    className={`h-full rounded-full transition-all duration-300 ${assetClassBreaches.STOCKS ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}`}
+                    style={{ width: `${Math.min(100, (assetClassCounts.STOCKS / assetClassLimits.STOCKS) * 100)}%` }}
                   />
                 </div>
 
@@ -2393,93 +2333,24 @@ export default function RiskDashboard({
                 <div className="flex items-center justify-between bg-[#050505] p-1 rounded border border-white/5">
                   <button 
                     onClick={() => {
-                      setAssetClassLimits(prev => ({ ...prev, CRYPTO: Math.max(1, prev.CRYPTO - 1) }));
+                      setAssetClassLimits(prev => ({ ...prev, STOCKS: Math.max(1, prev.STOCKS - 1) }));
                     }}
                     className="h-6 w-8 bg-white/5 hover:bg-white/10 active:bg-white/15 text-white/80 rounded font-mono text-sm font-bold flex items-center justify-center transition-all cursor-pointer select-none"
-                    title="Decrease Crypto limit"
-                    disabled={assetClassLimits.CRYPTO <= 1}
+                    title="Decrease Stocks limit"
+                    disabled={assetClassLimits.STOCKS <= 1}
                   >
                     -
                   </button>
                   <span className="text-xs font-mono font-black text-amber-400">
-                    {assetClassLimits.CRYPTO} {assetClassLimits.CRYPTO === 1 ? 'Trade' : 'Trades'}
+                    {assetClassLimits.STOCKS} {assetClassLimits.STOCKS === 1 ? 'Trade' : 'Trades'}
                   </span>
                   <button 
                     onClick={() => {
-                      setAssetClassLimits(prev => ({ ...prev, CRYPTO: Math.min(10, prev.CRYPTO + 1) }));
+                      setAssetClassLimits(prev => ({ ...prev, STOCKS: Math.min(10, prev.STOCKS + 1) }));
                     }}
                     className="h-6 w-8 bg-white/5 hover:bg-white/10 active:bg-white/15 text-white/80 rounded font-mono text-sm font-bold flex items-center justify-center transition-all cursor-pointer select-none"
-                    title="Increase Crypto limit"
-                    disabled={assetClassLimits.CRYPTO >= 10}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* Asset class 3: METALS */}
-              <div className={`p-4 rounded-lg bg-black/40 border transition-all ${assetClassBreaches.METALS ? 'border-rose-500/20 shadow-lg shadow-rose-950/5' : 'border-white/5'}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-emerald-500/10 rounded border border-emerald-500/20">
-                      <Gem className="w-3.5 h-3.5 text-emerald-400" />
-                    </div>
-                    <div>
-                      <span className="text-[11px] font-bold font-mono text-white block">Metals Trades</span>
-                      <span className="text-[8.5px] text-white/40 uppercase font-mono tracking-wider">GOLD / Precious</span>
-                    </div>
-                  </div>
-                  
-                  {assetClassBreaches.METALS ? (
-                    <span className="px-1.5 py-0.5 rounded text-[8px] font-black font-mono tracking-wide bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1 uppercase">
-                      <span className="w-1 h-1 rounded-full bg-rose-500 animate-ping"></span>
-                      Overweight
-                    </span>
-                  ) : (
-                    <span className="px-1.5 py-0.5 rounded text-[8px] font-bold font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">
-                      Safe Bias
-                    </span>
-                  )}
-                </div>
-
-                {/* Progress bar info */}
-                <div className="flex items-center justify-between text-[10px] font-mono mb-1.5 select-none">
-                  <span className="text-white/40">Open Positions:</span>
-                  <span className="font-bold text-white">
-                    {assetClassCounts.METALS} <span className="text-white/30">/</span> {assetClassLimits.METALS} Max
-                  </span>
-                </div>
-
-                {/* Progress bar visual */}
-                <div className="w-full bg-[#050505] h-1.5 rounded-full overflow-hidden border border-white/5 mb-4">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-300 ${assetClassBreaches.METALS ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}
-                    style={{ width: `${Math.min(100, (assetClassCounts.METALS / assetClassLimits.METALS) * 100)}%` }}
-                  />
-                </div>
-
-                {/* Counter controls with high-tactility +/- */}
-                <div className="flex items-center justify-between bg-[#050505] p-1 rounded border border-white/5">
-                  <button 
-                    onClick={() => {
-                      setAssetClassLimits(prev => ({ ...prev, METALS: Math.max(1, prev.METALS - 1) }));
-                    }}
-                    className="h-6 w-8 bg-white/5 hover:bg-white/10 active:bg-white/15 text-white/80 rounded font-mono text-sm font-bold flex items-center justify-center transition-all cursor-pointer select-none"
-                    title="Decrease Metals limit"
-                    disabled={assetClassLimits.METALS <= 1}
-                  >
-                    -
-                  </button>
-                  <span className="text-xs font-mono font-black text-emerald-400">
-                    {assetClassLimits.METALS} {assetClassLimits.METALS === 1 ? 'Trade' : 'Trades'}
-                  </span>
-                  <button 
-                    onClick={() => {
-                      setAssetClassLimits(prev => ({ ...prev, METALS: Math.min(10, prev.METALS + 1) }));
-                    }}
-                    className="h-6 w-8 bg-white/5 hover:bg-white/10 active:bg-white/15 text-white/80 rounded font-mono text-sm font-bold flex items-center justify-center transition-all cursor-pointer select-none"
-                    title="Increase Metals limit"
-                    disabled={assetClassLimits.METALS >= 10}
+                    title="Increase Stocks limit"
+                    disabled={assetClassLimits.STOCKS >= 10}
                   >
                     +
                   </button>
@@ -2642,13 +2513,13 @@ export default function RiskDashboard({
                   </div>
                 </div>
 
-                {/* MT5 Bridge Safety Guard Circuit Breaker */}
-                <div className="relative p-4 rounded-lg bg-black/40 border border-indigo-500/10 space-y-3.5" id="mt5-safety-guard-card">
+                {/* Broker Bridge Safety Guard Circuit Breaker */}
+                <div className="relative p-4 rounded-lg bg-black/40 border border-indigo-500/10 space-y-3.5" id="broker-safety-guard-card">
                   <div className="flex items-center justify-between border-b border-white/5 pb-2">
                     <div className="flex items-center space-x-1.5">
                       <Sliders className="w-3.5 h-3.5 text-indigo-400" />
                       <h4 className="text-[11px] font-mono font-bold text-white uppercase tracking-wider">
-                        MT5 Bridge Safety Guard
+                        Broker Bridge Safety Guard
                       </h4>
                     </div>
                     {/* Toggle Switch */}
@@ -2689,12 +2560,12 @@ export default function RiskDashboard({
 
                   {/* Operational Status Display */}
                   <div className="pt-1.5 font-mono text-[10px]">
-                    {isMt5BridgePaused ? (
+                    {isBrokerBridgePaused ? (
                       <div className="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 flex flex-col gap-2 animate-fadeIn">
                         <div className="flex items-center justify-between">
                           <span className="font-bold flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-                            ⚠️ MT5 BRIDGE PAUSED
+                            ⚠️ BROKER BRIDGE PAUSED
                           </span>
                           <span className="text-[8.5px] text-rose-400/80">CIRCUIT BREAKER TRIGGERED</span>
                         </div>
@@ -2703,7 +2574,7 @@ export default function RiskDashboard({
                         </p>
                         <button
                           onClick={() => {
-                            setIsMt5BridgePaused(false);
+                            setIsBrokerBridgePaused(false);
                           }}
                           className="w-full py-1.5 px-2 bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/30 text-rose-300 rounded font-bold text-[9.5px] uppercase transition-all select-none cursor-pointer text-center"
                         >
@@ -2714,7 +2585,7 @@ export default function RiskDashboard({
                       <div className={`p-2.5 rounded border text-[9.5px] flex items-center justify-between transition-colors ${isSafetyGuardEnabled ? 'bg-indigo-500/5 border-indigo-500/10 text-indigo-300' : 'bg-zinc-950 border-white/5 text-white/40'}`}>
                         <div className="flex items-center gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${isSafetyGuardEnabled ? 'bg-indigo-400 animate-pulse' : 'bg-zinc-500'}`}></span>
-                          <span>MT5 Bridge Guard: {isSafetyGuardEnabled ? 'MONITORING LOSSES' : 'INACTIVE'}</span>
+                          <span>Broker Bridge Guard: {isSafetyGuardEnabled ? 'MONITORING LOSSES' : 'INACTIVE'}</span>
                         </div>
                         <span className="text-[8px] opacity-60 uppercase font-bold tracking-wider">
                           {isSafetyGuardEnabled ? 'STANDBY' : 'BYPASS'}
@@ -2883,7 +2754,7 @@ export default function RiskDashboard({
                     <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-lg text-[10px] font-mono flex items-center space-x-2.5 mb-5 font-sans leading-relaxed">
                       <AlertTriangle className="w-4.5 h-4.5 text-amber-400 shrink-0 animate-pulse" />
                       <span>
-                        <strong>⚠️ HIGH USD CO-EXPOSURE ALERT:</strong> EUR/USD and GBP/USD active net directions align. Your account portfolio is highly exposed to systemic American Dollar indexing swings. Offset with a contrary directional hedge or limit overall lot size.
+                        <strong>⚠️ TECH SECTOR CO-EXPOSURE ALERT:</strong> AAPL and MSFT active net directions align. Your account portfolio is highly exposed to systemic Big Tech indexing swings. Offset with a contrary directional hedge or limit overall lot size.
                       </span>
                     </div>
                   )}
@@ -2891,7 +2762,7 @@ export default function RiskDashboard({
                     <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded-lg text-[10px] font-mono flex items-center space-x-2.5 mb-5 font-sans leading-relaxed">
                       <ShieldCheck className="w-4.5 h-4.5 text-emerald-400 shrink-0" />
                       <span>
-                        <strong>🛡️ USD CORRELATION HEDGE NOMINAL:</strong> EUR/USD and GBP/USD directions drift contrarily. Linear Pearson exposure is protected by symmetric inter-market offsets, safeguarding Account Capital from systemic dollar moves.
+                        <strong>🛡️ TECH SECTOR CORRELATION HEDGE NOMINAL:</strong> AAPL and MSFT directions drift contrarily. Linear Pearson exposure is protected by symmetric tech-sector offsets, safeguarding Account Capital from systemic Tech moves.
                       </span>
                     </div>
                   )}
@@ -3505,8 +3376,8 @@ export default function RiskDashboard({
                 <thead>
                   <tr className="border-b border-white/5 text-[9px] uppercase text-white/40">
                     <th className="pb-2">Simulated Crisis Mode</th>
-                    <th className="pb-2 text-right">Forex Shift</th>
-                    <th className="pb-2 text-right">Crypto Shift</th>
+                    <th className="pb-2 text-right">Indices Shift</th>
+                    <th className="pb-2 text-right">Stocks Shift</th>
                     <th className="pb-2 text-center">Auto Shield Protection</th>
                   </tr>
                 </thead>
@@ -3514,8 +3385,8 @@ export default function RiskDashboard({
                   {stressTestScenarios.map((scene, index) => (
                     <tr key={`stress-${index}`} className="hover:bg-white/[0.01] transition-colors">
                       <td className="py-2.5 font-bold text-white/95">{scene.name}</td>
-                      <td className="text-right text-rose-400 font-bold">{scene.EUR_USD >= 0 ? '+' : ''}{scene.EUR_USD.toFixed(1)}%</td>
-                      <td className="text-right text-rose-400 font-bold">{scene.BTC >= 0 ? '+' : ''}{scene.BTC.toFixed(1)}%</td>
+                      <td className="text-right text-rose-400 font-bold">{scene.INDICES >= 0 ? '+' : ''}{scene.INDICES.toFixed(1)}%</td>
+                      <td className="text-right text-rose-400 font-bold">{scene.STOCKS >= 0 ? '+' : ''}{scene.STOCKS.toFixed(1)}%</td>
                       <td className="text-center py-2">
                         <span className={`px-2 py-0.5 rounded text-[8.5px] font-black ${
                           scene.status.includes('BUFFER') 

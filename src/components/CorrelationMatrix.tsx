@@ -32,36 +32,28 @@ export default function CorrelationMatrix() {
   const [hoveredCell, setHoveredCell] = useState<{ s1: string; s2: string } | null>(null);
 
   const ALL_SYMBOLS: MarketSymbol[] = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD',
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500'
+    'US30', 'NAS100', 'GER40', 'SPX500',
+    'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
 
   const CATEGORIES = [
     { id: 'ALL', name: 'All Instruments' },
-    { id: 'FOREX', name: 'Forex' },
-    { id: 'METALS', name: 'Metals' },
-    { id: 'CRYPTO', name: 'Crypto' },
     { id: 'INDICES', name: 'Indices' },
+    { id: 'EQUITIES', name: 'Equities' },
   ];
 
-  const [selectedCategory, setSelectedCategory] = useState('FOREX');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
 
   const getFilteredSymbols = () => {
     switch (selectedCategory) {
       case 'ALL':
         return ALL_SYMBOLS;
-      case 'FOREX':
-        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP'];
-      case 'METALS':
-        return ['GOLD/USD', 'SILVER/USD'];
-      case 'CRYPTO':
-        return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
       case 'INDICES':
-        return ['US30', 'NAS100', 'GER40', 'SPX500'];
+        return ['US30', 'NAS100', 'GER40', 'SPX500'] as MarketSymbol[];
+      case 'EQUITIES':
+        return ['AAPL', 'MSFT', 'NVDA', 'TSLA'] as MarketSymbol[];
       default:
-        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USDT', 'GOLD/USD'];
+        return ALL_SYMBOLS;
     }
   };
 

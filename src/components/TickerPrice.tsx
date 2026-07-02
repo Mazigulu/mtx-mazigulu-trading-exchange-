@@ -29,9 +29,7 @@ export default function TickerPrice({ price, symbol }: TickerPriceProps) {
   }, [price]);
 
   // Format decimals based on symbol type
-  const formattedPrice = price.toFixed(
-    symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 0 : 4
-  );
+  const formattedPrice = price.toFixed(2);
 
   // Transition color styling
   let flashStyle = 'text-white/60';

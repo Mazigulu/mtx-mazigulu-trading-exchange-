@@ -47,7 +47,7 @@ export default function MarketSentimentHeatmap() {
   const [error, setError] = useState<string | null>(null);
   
   // Selected asset for highlighting detailed macro composition
-  const [selectedSymbol, setSelectedSymbol] = useState<MarketSymbol>('EUR/USD');
+  const [selectedSymbol, setSelectedSymbol] = useState<MarketSymbol>('NAS100');
 
   // Pagination for list of instruments exceeding 5 items
   const [currentPage, setCurrentPage] = useState(0);
@@ -81,32 +81,24 @@ export default function MarketSentimentHeatmap() {
   }, []);
 
   const symbols: MarketSymbol[] = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD',
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-    'US30', 'NAS100', 'GER40', 'SPX500'
+    'US30', 'NAS100', 'GER40', 'SPX500',
+    'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
 
   const CATEGORIES = [
     { id: 'ALL', name: 'All Instruments' },
-    { id: 'FOREX', name: 'Forex' },
-    { id: 'METALS', name: 'Metals' },
-    { id: 'CRYPTO', name: 'Crypto' },
     { id: 'INDICES', name: 'Indices' },
+    { id: 'EQUITIES', name: 'Equities' },
   ];
 
   const [selectedCategory, setSelectedCategory] = useState('ALL');
 
   const getFilteredSymbols = () => {
     switch (selectedCategory) {
-      case 'FOREX':
-        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP'];
-      case 'METALS':
-        return ['GOLD/USD', 'SILVER/USD'];
-      case 'CRYPTO':
-        return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
       case 'INDICES':
         return ['US30', 'NAS100', 'GER40', 'SPX500'];
+      case 'EQUITIES':
+        return ['AAPL', 'MSFT', 'NVDA', 'TSLA'];
       default:
         return symbols;
     }
@@ -305,15 +297,41 @@ export default function MarketSentimentHeatmap() {
                       </div>
                     </div>
 
-                    {/* Right: Technical quick glance summary */}
+                    {/* Right: Technical quick glance summary with Framer Motion animations */}
                     <div className="text-right font-mono text-[9.5px] text-white/45 sm:w-28 flex sm:flex-col justify-between sm:justify-start">
-                      <div className="flex justify-end gap-1 text-[10px] text-white font-extrabold">
-                        <span>RSI: {asset.rsi}</span>
+                      <div className="flex justify-end items-center gap-1.5 text-[10px] text-white font-extrabold">
+                        <span className="text-white/40">RSI:</span>
+                        <motion.span
+                          key={asset.rsi}
+                          initial={{ opacity: 0.3, scale: 0.85, color: '#a5b4fc' }}
+                          animate={{ opacity: 1, scale: 1, color: '#ffffff' }}
+                          transition={{ type: 'spring', stiffness: 200, damping: 12 }}
+                          className="min-w-[14px] text-right"
+                        >
+                          {asset.rsi}
+                        </motion.span>
                         <span className="text-white/20">|</span>
-                        <span>{asset.trend === 'BULLISH' ? '▲' : asset.trend === 'BEARISH' ? '▼' : '⬌'}</span>
+                        <motion.span
+                          key={asset.trend}
+                          initial={{ opacity: 0.2, scale: 0.7, y: asset.trend === 'BULLISH' ? 2 : asset.trend === 'BEARISH' ? -2 : 0 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          transition={{ type: 'spring', stiffness: 300, damping: 10 }}
+                          className={`font-black ${asset.trend === 'BULLISH' ? 'text-emerald-400' : asset.trend === 'BEARISH' ? 'text-rose-400' : 'text-white/40'}`}
+                        >
+                          {asset.trend === 'BULLISH' ? '▲' : asset.trend === 'BEARISH' ? '▼' : '⬌'}
+                        </motion.span>
                       </div>
                       <span className="text-[8px] text-white/35 block mt-0.5 font-sans">
-                        Imb: {asset.imbalance >= 0 ? `+${asset.imbalance}` : asset.imbalance}%
+                        Imb:{' '}
+                        <motion.span
+                          key={asset.imbalance}
+                          initial={{ opacity: 0.3, scale: 0.9, x: asset.imbalance >= 0 ? 1 : -1 }}
+                          animate={{ opacity: 1, scale: 1, x: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className={`font-bold font-mono ${asset.imbalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+                        >
+                          {asset.imbalance >= 0 ? `+${asset.imbalance}` : asset.imbalance}%
+                        </motion.span>
                       </span>
                     </div>
 
@@ -448,31 +466,57 @@ export default function MarketSentimentHeatmap() {
                         </motion.span>
                         <span className="text-[8px] text-white/35 block italic">Score</span>
                       </div>
-                      <span className="text-[8px] text-white/30 block mt-1 font-sans">
-                        RSI Momentum: <motion.span 
+                      <div className="text-[8px] text-white/30 block mt-1 font-sans flex flex-wrap items-center gap-1.5">
+                        <span>RSI:</span>
+                        <motion.span 
                           key={activeAsset.rsi}
-                          initial={{ opacity: 0.5 }}
-                          animate={{ opacity: 1 }}
-                          className="font-bold text-indigo-300"
+                          initial={{ opacity: 0.3, y: -2, scale: 1.15 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                          className="font-black text-indigo-300"
                         >
                           {activeAsset.rsi}
                         </motion.span>
-                      </span>
+                        <span className="text-white/20">|</span>
+                        <span>Trend:</span>
+                        <motion.span
+                          key={activeAsset.trend}
+                          initial={{ opacity: 0.3, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.2 }}
+                          className={`text-[8.5px] font-extrabold ${activeAsset.trend === 'BULLISH' ? 'text-emerald-400' : activeAsset.trend === 'BEARISH' ? 'text-rose-400' : 'text-white/40'}`}
+                        >
+                          {activeAsset.trend}
+                        </motion.span>
+                      </div>
                     </div>
 
                   </div>
 
-                  {/* ATR Metrics Block */}
-                  <div className="pt-2">
+                  {/* ATR & Orderbook Volume Imbalance Metrics Block */}
+                  <div className="pt-2.5 border-t border-white/5 space-y-2">
                     <div className="flex justify-between items-center text-[9px] font-mono text-white/30">
                       <span>AVERAGE TRUE RANGE (30 CANDLES):</span>
                       <motion.span 
                         key={activeAsset.atr}
-                        initial={{ opacity: 0.5, scale: 0.95 }}
+                        initial={{ opacity: 0.3, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         className="font-bold text-white/80"
                       >
                         {activeAsset.atr?.toFixed(selectedSymbol === 'USD/JPY' ? 3 : selectedSymbol === 'BTC/USDT' ? 1 : 5)}
+                      </motion.span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-[9px] font-mono text-white/30">
+                      <span>ORDERBOOK VOLUME IMBALANCE:</span>
+                      <motion.span 
+                        key={activeAsset.imbalance}
+                        initial={{ opacity: 0.3, x: 2 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className={`font-black ${activeAsset.imbalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+                      >
+                        {activeAsset.imbalance >= 0 ? `+${activeAsset.imbalance}%` : `${activeAsset.imbalance}%`}
                       </motion.span>
                     </div>
                   </div>

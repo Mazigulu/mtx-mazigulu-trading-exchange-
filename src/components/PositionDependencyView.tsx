@@ -74,15 +74,15 @@ export default function PositionDependencyView({ currentSymbol, trades }: Positi
   const [sandboxTrades, setSandboxTrades] = useState<VirtualTrade[]>(() => {
     // Seed some initial sandbox positions so it has beautiful content out of the box if no actual open trades exist
     return [
-      { id: 'sb-1', symbol: 'EUR/USD', side: 'BUY', size: 1.5 },
-      { id: 'sb-2', symbol: 'GBP/USD', side: 'SELL', size: 1.0 },
-      { id: 'sb-3', symbol: 'GOLD/USD', side: 'BUY', size: 0.8 },
-      { id: 'sb-4', symbol: 'BTC/USDT', side: 'SELL', size: 0.5 },
+      { id: 'sb-1', symbol: 'NAS100', side: 'BUY', size: 1.5 },
+      { id: 'sb-2', symbol: 'SPX500', side: 'SELL', size: 1.0 },
+      { id: 'sb-3', symbol: 'AAPL', side: 'BUY', size: 0.8 },
+      { id: 'sb-4', symbol: 'NVDA', side: 'SELL', size: 0.5 },
     ];
   });
 
   // Sandbox inputs
-  const [sbSymbol, setSbSymbol] = useState<MarketSymbol>('EUR/USD');
+  const [sbSymbol, setSbSymbol] = useState<MarketSymbol>('NAS100');
   const [sbSide, setSbSide] = useState<'BUY' | 'SELL'>('BUY');
   const [sbSize, setSbSize] = useState<number>(1.0);
 
@@ -90,11 +90,8 @@ export default function PositionDependencyView({ currentSymbol, trades }: Positi
   const [showExplanation, setShowExplanation] = useState(false);
 
   const ALL_SYMBOLS: MarketSymbol[] = [
-    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-    'GOLD/USD', 'SILVER/USD',
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
     'US30', 'NAS100', 'GER40', 'SPX500',
-    'DXY', 'US10Y', 'BRENT', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
+    'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
 
   const fetchCorrelations = async (showRefreshIndicator = false) => {

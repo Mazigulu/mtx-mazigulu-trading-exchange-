@@ -36,23 +36,10 @@ const FRIENDLY_NAMES: Record<string, string> = {
 };
 
 const FEED_SOURCES: Record<string, string> = {
-  'EUR/USD': 'OANDA',
-  'GBP/USD': 'OANDA',
-  'USD/JPY': 'OANDA',
-  'AUD/USD': 'OANDA',
-  'EUR/GBP': 'OANDA',
-  'GOLD/USD': 'LMAX',
-  'SILVER/USD': 'LMAX',
-  'BTC/USDT': 'BINANCE',
-  'ETH/USDT': 'BINANCE',
-  'SOL/USDT': 'BINANCE',
-  'US30': 'MT5_FEED',
-  'NAS100': 'MT5_FEED',
-  'GER40': 'MT5_FEED',
-  'SPX500': 'MT5_FEED',
-  'DXY': 'ICE',
-  'US10Y': 'FRED_CBOE',
-  'BRENT': 'ICE_SPOT',
+  'US30': 'BROKER_FEED',
+  'NAS100': 'BROKER_FEED',
+  'GER40': 'BROKER_FEED',
+  'SPX500': 'BROKER_FEED',
   'AAPL': 'NASDAQ',
   'MSFT': 'NASDAQ',
   'NVDA': 'NASDAQ',
@@ -60,23 +47,10 @@ const FEED_SOURCES: Record<string, string> = {
 };
 
 const FLAG_EMOJIS: Record<string, { f1: string; f2: string }> = {
-  'EUR/USD': { f1: '', f2: '' },
-  'GBP/USD': { f1: '🇬🇧', f2: '🇺🇸' },
-  'USD/JPY': { f1: '🇺🇸', f2: '🇯🇵' },
-  'AUD/USD': { f1: '🇦🇺', f2: '🇺🇸' },
-  'EUR/GBP': { f1: '🇪🇺', f2: '🇬🇧' },
-  'GOLD/USD': { f1: '🪙', f2: '🇺🇸' },
-  'SILVER/USD': { f1: '💵', f2: '🥈' },
-  'BTC/USDT': { f1: '🪙', f2: '🪙' },
-  'ETH/USDT': { f1: '💎', f2: '💎' },
-  'SOL/USDT': { f1: '☀️', f2: '☀️' },
   'US30': { f1: '🇺🇸', f2: '📈' },
   'NAS100': { f1: '🇺🇸', f2: '📊' },
   'GER40': { f1: '🇩🇪', f2: '📈' },
   'SPX500': { f1: '🇺🇸', f2: '📊' },
-  'DXY': { f1: '🇺🇸', f2: '💵' },
-  'US10Y': { f1: '🇺🇸', f2: '🏦' },
-  'BRENT': { f1: '🛢️', f2: '🌐' },
   'AAPL': { f1: '🍎', f2: '🇺🇸' },
   'MSFT': { f1: '💻', f2: '🇺🇸' },
   'NVDA': { f1: '🟩', f2: '🇺🇸' },
@@ -186,28 +160,16 @@ const DEFAULT_TEMPLATES: RiskTemplate[] = [
 
 const ASSET_CLASSES = [
   {
-    id: 'CURRENCIES',
-    label: 'Forex Currencies',
-    color: 'text-sky-400',
-    assets: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP'] as MarketSymbol[]
-  },
-  {
     id: 'INDICES',
     label: 'Equity Indices',
     color: 'text-purple-400',
     assets: ['US30', 'NAS100', 'GER40', 'SPX500'] as MarketSymbol[]
   },
   {
-    id: 'METALS',
-    label: 'Precious Metals',
+    id: 'STOCKS',
+    label: 'Tech Stocks',
     color: 'text-amber-400',
-    assets: ['GOLD/USD', 'SILVER/USD'] as MarketSymbol[]
-  },
-  {
-    id: 'CRYPTO',
-    label: 'Cryptocurrencies',
-    color: 'text-emerald-400',
-    assets: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'] as MarketSymbol[]
+    assets: ['AAPL', 'MSFT', 'NVDA', 'TSLA'] as MarketSymbol[]
   }
 ];
 
@@ -381,11 +343,8 @@ export default function ChartContainer({
     }
 
     const allSymbols: MarketSymbol[] = [
-      'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'EUR/GBP',
-      'GOLD/USD', 'SILVER/USD',
-      'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
       'US30', 'NAS100', 'GER40', 'SPX500',
-      'DXY', 'US10Y', 'BRENT', 'AAPL', 'MSFT', 'NVDA', 'TSLA'
+      'AAPL', 'MSFT', 'NVDA', 'TSLA'
     ];
     const currentIndex = allSymbols.indexOf(symbol);
     if (currentIndex !== -1) {
@@ -543,10 +502,7 @@ export default function ChartContainer({
   } | null>(null);
 
   const getPipValue = () => {
-    if (symbol === 'USD/JPY') return 0.01;
-    if (symbol === 'BTC/USDT') return 1.0;
-    if (symbol === 'GOLD/USD') return 0.1;
-    return 0.0001;
+    return 0.01;
   };
 
   // Reset chart view options to standard values upon request (resetKey triggers)
@@ -724,7 +680,16 @@ export default function ChartContainer({
 
   // Sub-second ticking engine for high-fidelity TradingView mockup style
   const lastCandle = candles[candles.length - 1];
-  const basePrice = lastCandle ? lastCandle.close : (symbol === 'BTC/USDT' ? 67500 : symbol === 'USD/JPY' ? 155.4 : symbol === 'GBP/USD' ? 1.268 : 1.1645);
+  const basePrice = lastCandle ? lastCandle.close : (
+    symbol === 'US30' ? 39000 :
+    symbol === 'NAS100' ? 18000 :
+    symbol === 'GER40' ? 18000 :
+    symbol === 'SPX500' ? 5100 :
+    symbol === 'AAPL' ? 170 :
+    symbol === 'MSFT' ? 410 :
+    symbol === 'NVDA' ? 880 :
+    symbol === 'TSLA' ? 170 : 150
+  );
 
   const [livePrice, setLivePrice] = useState(basePrice);
   const [lastTickDir, setLastTickDir] = useState<'UP' | 'DOWN' | 'NEUTRAL'>('NEUTRAL');
@@ -742,13 +707,13 @@ export default function ChartContainer({
       }
     } catch (_) {}
     return [
-      { id: '1', symbol: 'EUR/USD', type: 'TREND_STRENGTH', comparison: 'EXCEEDS', value: 80, isActive: true, triggeredCount: 0 },
-      { id: '2', symbol: 'BTC/USDT', type: 'GAP_PIPS_PRICE', comparison: 'EXCEEDS', value: 150, isActive: true, triggeredCount: 0 },
-      { id: '3', symbol: 'USD/JPY', type: 'GAP_PIPS_PRICE', comparison: 'EXCEEDS', value: 0.1, isActive: true, triggeredCount: 0 },
+      { id: '1', symbol: 'NAS100', type: 'TREND_STRENGTH', comparison: 'EXCEEDS', value: 80, isActive: true, triggeredCount: 0 },
+      { id: '2', symbol: 'AAPL', type: 'GAP_PIPS_PRICE', comparison: 'EXCEEDS', value: 150, isActive: true, triggeredCount: 0 },
+      { id: '3', symbol: 'SPX500', type: 'GAP_PIPS_PRICE', comparison: 'EXCEEDS', value: 0.1, isActive: true, triggeredCount: 0 },
     ];
   });
 
-  const [newAlertSymbol, setNewAlertSymbol] = useState('EUR/USD');
+  const [newAlertSymbol, setNewAlertSymbol] = useState('NAS100');
   const [newAlertType, setNewAlertType] = useState<'GAP_PIPS_PRICE' | 'TREND_STRENGTH'>('TREND_STRENGTH');
   const [newAlertComparison, setNewAlertComparison] = useState<'EXCEEDS' | 'BELOW'>('EXCEEDS');
   const [newAlertValue, setNewAlertValue] = useState<number>(80);
@@ -796,8 +761,8 @@ export default function ChartContainer({
       }
     } catch (_) {}
     return [
-      { id: 'pa-1', symbol: 'EUR/USD', type: 'FVG_TAP', direction: 'BULLISH', isActive: true, isTriggered: false, createdAt: new Date().toLocaleTimeString() },
-      { id: 'pa-2', symbol: 'BTC/USDT', type: 'BREAKING_OB', direction: 'ANY', isActive: true, isTriggered: false, createdAt: new Date().toLocaleTimeString() }
+      { id: 'pa-1', symbol: 'NAS100', type: 'FVG_TAP', direction: 'BULLISH', isActive: true, isTriggered: false, createdAt: new Date().toLocaleTimeString() },
+      { id: 'pa-2', symbol: 'AAPL', type: 'BREAKING_OB', direction: 'ANY', isActive: true, isTriggered: false, createdAt: new Date().toLocaleTimeString() }
     ];
   });
 
@@ -814,7 +779,7 @@ export default function ChartContainer({
   const [alertsActiveTab, setAlertsActiveTab] = useState<'STANDARD' | 'PRICE_ACTION'>('PRICE_ACTION');
   
   // New Price-Action Alert Form settings
-  const [newPaSymbol, setNewPaSymbol] = useState('EUR/USD');
+  const [newPaSymbol, setNewPaSymbol] = useState('NAS100');
   const [newPaType, setNewPaType] = useState<'BREAKING_OB' | 'FVG_TAP'>('BREAKING_OB');
   const [newPaDirection, setNewPaDirection] = useState<'BULLISH' | 'BEARISH' | 'ANY'>('ANY');
 
@@ -978,31 +943,28 @@ export default function ChartContainer({
     setLivePrice(basePrice);
   }, [basePrice]);
 
-  const [isMt5Active, setIsMt5Active] = useState(false);
+  const [isBrokerActive, setIsBrokerActive] = useState(true);
 
   useEffect(() => {
-    const checkMT5Status = async () => {
+    const checkBrokerStatus = async () => {
       try {
-        const res = await fetch('/api/mt5/status');
-        if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
-          const data = await res.json();
-          if (data && typeof data[symbol] === 'boolean') {
-            setIsMt5Active(data[symbol]);
-          }
+        const res = await fetch('/api/health');
+        if (res.ok) {
+          setIsBrokerActive(true);
         }
       } catch (err) {
-        console.warn('Unable to retrieve MetaTrader 5 status:', err);
+        console.warn('Unable to retrieve broker gateway status:', err);
       }
     };
 
-    checkMT5Status();
-    const interval = setInterval(checkMT5Status, 10000);
+    checkBrokerStatus();
+    const interval = setInterval(checkBrokerStatus, 15000);
     return () => clearInterval(interval);
   }, [symbol]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const pipSize = symbol === 'BTC/USDT' ? 1.0 : symbol === 'USD/JPY' ? 0.01 : 0.0001;
+      const pipSize = ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(symbol) ? 0.01 : 1.0;
       const isUp = Math.random() > 0.49;
       // standard micro jitter: e.g. 0.1 to 0.5 pips
       const tickDelta = (Math.random() * 0.4 + 0.1) * pipSize * (isUp ? 1 : -1);
@@ -1010,20 +972,20 @@ export default function ChartContainer({
       setLivePrice((prev) => {
         const next = prev + tickDelta;
         // Keep it bounded to backend state value limit
-        const limitRange = symbol === 'BTC/USDT' ? 60 : 0.0025;
+        const limitRange = 15.0;
         if (Math.abs(next - basePrice) > limitRange) {
           return basePrice;
         }
-        return parseFloat(next.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 1 : 5));
+        return parseFloat(next.toFixed(2));
       });
 
       setLastTickDir(isUp ? 'UP' : 'DOWN');
       setTicksCount((p) => p + Math.floor(Math.random() * 3) - 1);
       
       setLiveSpread(() => {
-        const baseSpread = symbol === 'BTC/USDT' ? 15.0 : symbol === 'USD/JPY' ? 1.2 : 1.6;
-        const delta = (Math.random() * 0.4 - 0.2);
-        return parseFloat((baseSpread + delta).toFixed(1));
+        const baseSpread = 0.5;
+        const delta = (Math.random() * 0.1 - 0.05);
+        return parseFloat((baseSpread + delta).toFixed(2));
       });
 
       setIsTickActive(true);
@@ -1034,13 +996,13 @@ export default function ChartContainer({
     return () => clearInterval(interval);
   }, [basePrice, symbol]);
 
-  const pipFactor = symbol === 'BTC/USDT' ? 1.0 : symbol === 'USD/JPY' ? 0.01 : 0.0001;
+  const pipFactor = 0.01;
   const spreadValueInUnits = liveSpread * pipFactor;
   const sellPriceVal = livePrice - (spreadValueInUnits / 2);
   const buyPriceVal = livePrice + (spreadValueInUnits / 2);
 
-  const formattedSell = sellPriceVal.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 1 : 5);
-  const formattedBuy = buyPriceVal.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 1 : 5);
+  const formattedSell = sellPriceVal.toFixed(2);
+  const formattedBuy = buyPriceVal.toFixed(2);
 
   const pairName = FRIENDLY_NAMES[symbol] || symbol;
   const feedSource = FEED_SOURCES[symbol] || 'OANDA';
@@ -1049,16 +1011,16 @@ export default function ChartContainer({
   // Visual progress bar calculating the strength of the 50 EMA Trend Bias
   const trendIntensity = useMemo(() => {
     const lastCandle = candles[candles.length - 1];
-    const basePrice = lastCandle ? lastCandle.close : (symbol === 'BTC/USDT' ? 67500 : symbol === 'USD/JPY' ? 155.4 : symbol === 'GBP/USD' ? 1.268 : 1.1645);
+    const basePrice = lastCandle ? lastCandle.close : 150.0;
     const activePrice = hoveredCandle ? hoveredCandle.close : (typeof livePrice !== 'undefined' ? livePrice : basePrice);
     
-    if (!lastCandle) return { percent: 0, label: 'NONE', displayDistance: '0.0 Pips' };
+    if (!lastCandle) return { percent: 0, label: 'NONE', displayDistance: '0.0 Points' };
     
     const currentEma = lastCandle.ema50 || basePrice;
     const distancePrice = Math.abs(activePrice - currentEma);
     
     // Fallbacks for ATR to normalize the metrics
-    const atr = metrics.atr || (symbol === 'BTC/USDT' ? 450 : symbol === 'USD/JPY' ? 0.35 : 0.0025);
+    const atr = metrics.atr || 5.0;
     const multiplier = distancePrice / (atr || 1);
     
     // Normalize percentage from 0 to 100% based on 1.5 ATR expectation
@@ -1070,15 +1032,8 @@ export default function ChartContainer({
     else if (percent > 45) label = 'STRONG';
     else if (percent > 20) label = 'MODERATE';
     
-    // Helper to format in pips / points depending on symbol
-    let displayDistance = '';
-    if (symbol === 'USD/JPY') {
-      displayDistance = `${(distancePrice).toFixed(3)} ¥`;
-    } else if (symbol === 'BTC/USDT') {
-      displayDistance = `${Math.round(distancePrice)} USDT`;
-    } else {
-      displayDistance = `${(distancePrice * 10000).toFixed(1)} Pips`;
-    }
+    // Helper to format in points depending on symbol
+    let displayDistance = `${distancePrice.toFixed(2)} Points`;
 
     return {
       percent,
@@ -1128,7 +1083,7 @@ export default function ChartContainer({
       ? Math.abs(new Date(candles[1].timestamp).getTime() - new Date(candles[0].timestamp).getTime())
       : 3600000;
 
-    const pipFactor = symbol === 'BTC/USDT' ? 1.0 : symbol === 'USD/JPY' ? 0.01 : 0.0001;
+    const pipFactor = 0.01;
 
     return newsEvents.map((news) => {
       const newsTime = new Date(news.time).getTime();
@@ -1240,13 +1195,7 @@ export default function ChartContainer({
       if (alert.type === 'TREND_STRENGTH') {
         currentVal = trendIntensity.percent;
       } else {
-        if (symbol === 'USD/JPY') {
-          currentVal = distancePrice;
-        } else if (symbol === 'BTC/USDT') {
-          currentVal = distancePrice;
-        } else {
-          currentVal = distancePrice * 10000;
-        }
+        currentVal = distancePrice;
       }
 
       const isMet = alert.comparison === 'EXCEEDS' 
@@ -1365,7 +1314,7 @@ export default function ChartContainer({
 
           if (crossedObLow || crossedObHigh) {
             triggered = true;
-            reason = `Price crossed the ${ob.type.toLowerCase()} Order Block boundary [${ob.low.toFixed(symbol === 'USD/JPY' ? 2 : 4)} - ${ob.high.toFixed(symbol === 'USD/JPY' ? 2 : 4)}] with live price at ${livePrice.toFixed(symbol === 'USD/JPY' ? 2 : 4)}`;
+            reason = `Price crossed the ${ob.type.toLowerCase()} Order Block boundary [${ob.low.toFixed(2)} - ${ob.high.toFixed(2)}] with live price at ${livePrice.toFixed(2)}`;
             badge = `OB BREAK`;
             break;
           }
@@ -1382,7 +1331,7 @@ export default function ChartContainer({
 
           if (tappedTop || tappedBottom) {
             triggered = true;
-            reason = `Price tapped into ${fvg.type.toLowerCase()} Fair Value Gap range [${minGap.toFixed(symbol === 'USD/JPY' ? 2 : 4)} - ${maxGap.toFixed(symbol === 'USD/JPY' ? 2 : 4)}] at live price ${livePrice.toFixed(symbol === 'USD/JPY' ? 2 : 4)}`;
+            reason = `Price tapped into ${fvg.type.toLowerCase()} Fair Value Gap range [${minGap.toFixed(2)} - ${maxGap.toFixed(2)}] at live price ${livePrice.toFixed(2)}`;
             badge = `FVG TAP`;
             break;
           }
@@ -2269,7 +2218,7 @@ export default function ChartContainer({
     });
 
     // 3. Populate bin stop loss density
-    const atr = metrics.atr || (symbol === 'BTC/USDT' ? 450 : symbol === 'USD/JPY' ? 0.35 : 0.0025);
+    const atr = metrics.atr || 5.0;
 
     swings.forEach((swing) => {
       bins.forEach((bin) => {
@@ -2668,7 +2617,7 @@ export default function ChartContainer({
       const relativeY = e.clientY - rect.top;
       
       const clickedPrice = getPriceFromY(relativeY);
-      const targetAlertPrice = parseFloat(clickedPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5));
+      const targetAlertPrice = parseFloat(clickedPrice.toFixed(2));
       const alertType = livePrice < targetAlertPrice ? 'CROSS_UP' : 'CROSS_DOWN';
       
       const newAlert: VisualPriceAlert = {
@@ -2704,7 +2653,7 @@ export default function ChartContainer({
       if (!trendlineStartPoint) {
         setTrendlineStartPoint({ xIndex: snapped.index, price: snapped.price });
       } else {
-        const finalPrice = parseFloat(snapped.price.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5));
+        const finalPrice = parseFloat(snapped.price.toFixed(2));
         const finalIdx = snapped.index;
 
         const newTrend: ManualTrendline = {
@@ -2724,7 +2673,7 @@ export default function ChartContainer({
         setIsDrawingTrendline(false);
 
         if (onLogEventToAdvisor) {
-          onLogEventToAdvisor(`Drew manual trendline for ${symbol} from price ${trendlineStartPoint.price.toFixed(symbol === 'USD/JPY' ? 2 : 4)} to ${finalPrice.toFixed(symbol === 'USD/JPY' ? 2 : 4)}`, livePrice);
+          onLogEventToAdvisor(`Drew manual trendline for ${symbol} from price ${trendlineStartPoint.price.toFixed(2)} to ${finalPrice.toFixed(2)}`, livePrice);
         }
       }
       return;
@@ -3096,12 +3045,12 @@ export default function ChartContainer({
                 </AnimatePresence>
               </div>
               
-              {/* OANDA FEED ON THE VERY TOP */}
+              {/* FEED SOURCE INDICATOR */}
               <div className="relative group cursor-help z-[210] hover:z-[280] font-mono">
-                {isMt5Active ? (
+                {isBrokerActive ? (
                   <span className="flex items-center text-emerald-400 font-extrabold uppercase bg-[#071911] border border-emerald-500/50 hover:border-emerald-500/70 px-2 py-0.5 rounded text-[8.5px] tracking-wider transition-all h-5.5 select-none cursor-pointer">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1 animate-ping shrink-0" />
-                    MT5 INSTITUTIONAL
+                    BROKER DIRECT FEED
                   </span>
                 ) : (
                   <span className="text-indigo-300 hover:text-indigo-200 font-bold uppercase tracking-wider bg-[#0c0d1a] border border-indigo-500/55 hover:border-indigo-500/75 px-2 py-0.5 rounded text-[8.5px] transition-all flex items-center gap-1.5 h-5.5 select-none cursor-pointer duration-200">
@@ -3110,7 +3059,7 @@ export default function ChartContainer({
                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-400"></span>
                     </span>
                     <Server className="w-3 h-3 text-indigo-400 shrink-0" />
-                    <span className="uppercase font-bold text-[8.5px] tracking-wider text-indigo-200">Oanda Feed</span>
+                    <span className="uppercase font-bold text-[8.5px] tracking-wider text-indigo-200">Broker Feed</span>
                   </span>
                 )}
                 
@@ -3125,7 +3074,7 @@ export default function ChartContainer({
                   <div className="space-y-1.5 text-white/75 text-[9px]">
                     <div className="flex justify-between">
                       <span className="text-white/40">Feed Endpoint:</span>
-                      <span className="font-semibold text-white">{isMt5Active ? 'MetaTrader 5 Bridge' : `${feedSource} API`}</span>
+                      <span className="font-semibold text-white">{isBrokerActive ? 'Broker Gateway Direct' : `${feedSource} API`}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/40">Gateway Security:</span>
@@ -3150,26 +3099,6 @@ export default function ChartContainer({
               <span className="text-[9.5px] text-white/50 font-mono tracking-tight font-semibold items-center bg-white/[0.02] border border-white/5 px-2 py-0.5 rounded-md hidden sm:inline-flex">
                 {pairName}
               </span>
-
-              {isBacktestActive && (
-                <>
-                  <span className="text-white/20 select-none hidden sm:inline-flex">•</span>
-                  <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/35 text-amber-400 rounded-md px-2 py-0.5 text-[8.5px] font-mono font-bold uppercase animate-pulse select-none h-5">
-                    <span>● BACKTEST SIM FEED</span>
-                    {onGoLive && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onGoLive();
-                        }}
-                        className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-sans font-bold px-1.5 py-0.5 rounded transition-colors text-[8px] cursor-pointer"
-                      >
-                        GO LIVE
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
             </div>
           </div>
         </div>
@@ -3279,7 +3208,7 @@ export default function ChartContainer({
                           animate={{ opacity: 1, scale: 1 }}
                           className="font-bold text-white font-mono"
                         >
-                          {(metrics?.atr || 0).toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5)}
+                          {(metrics?.atr || 0).toFixed(2)}
                         </motion.span>
                       </div>
                       <div className="flex justify-between">
@@ -4358,7 +4287,7 @@ export default function ChartContainer({
                   y={getY(tick) + 2.5}
                   className="fill-white/15 font-sans text-[7.5px] select-none"
                 >
-                  {tick.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 4)}
+                  {tick.toFixed(2)}
                 </text>
               </g>
             ))}
@@ -4379,7 +4308,7 @@ export default function ChartContainer({
                   y={getY(tick) + 3}
                   className="fill-white/40 font-medium font-sans text-[9px] select-none"
                 >
-                  {tick.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 4)}
+                  {tick.toFixed(2)}
                 </text>
               </g>
             ))}
@@ -4764,7 +4693,7 @@ export default function ChartContainer({
                               : '📊 Profile Volume Node'}
                       </text>
                       <text x={10} y={28} className="fill-white/60 font-mono text-[8px]">
-                        Price: {hoveredProfileBin.minPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)} - {hoveredProfileBin.maxPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}
+                        Price: {hoveredProfileBin.minPrice.toFixed(2)} - {hoveredProfileBin.maxPrice.toFixed(2)}
                       </text>
                       <text x={10} y={39} className="fill-white/65 font-mono text-[8px]">
                         Vol: {Math.round(hoveredProfileBin.volume).toLocaleString()} units
@@ -4965,7 +4894,7 @@ export default function ChartContainer({
                               : '⚖️ Balanced Order Flow')}
                       </text>
                       <text x={10} y={28} className="fill-white/60 font-mono text-[8px]">
-                        Price: {hoveredOfiBin.minPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)} - {hoveredOfiBin.maxPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}
+                        Price: {hoveredOfiBin.minPrice.toFixed(2)} - {hoveredOfiBin.maxPrice.toFixed(2)}
                       </text>
                       <text x={10} y={39} className="fill-white/65 font-mono text-[8px]">
                         Delta: <tspan className={hoveredOfiBin.delta >= 0 ? "fill-sky-400 font-bold" : "fill-rose-400 font-bold"}>{hoveredOfiBin.delta >= 0 ? '+' : ''}{Math.round(hoveredOfiBin.delta).toLocaleString()} lots</tspan>
@@ -5398,7 +5327,7 @@ export default function ChartContainer({
               const isSLVisible = ySL >= minVal && ySL <= maxVal;
               const isTPVisible = yTP >= minVal && yTP <= maxVal;
 
-              const displayFormat = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
+              const displayFormat = 2;
 
               return (
                 <g key={`trade-overlay-${trade.id}`} className="font-sans select-none">
@@ -5621,7 +5550,7 @@ export default function ChartContainer({
               const isSLVisible = ySL >= padding.top && ySL <= height - padding.bottom;
               const isTPVisible = yTP >= padding.top && yTP <= height - padding.bottom;
               
-              const displayFormat = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
+              const displayFormat = 2;
               const xStart = padding.left;
               const xEnd = width - padding.right;
               
@@ -5867,7 +5796,7 @@ export default function ChartContainer({
                 const isVisible = yPos >= padding.top && yPos <= height - padding.bottom;
                 if (!isVisible) return null;
 
-                const displayFormat = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
+                const displayFormat = 2;
 
                 return (
                   <g key={`vis-price-alert-${alert.id}`} className="font-sans select-none pointer-events-auto">
@@ -5940,7 +5869,7 @@ export default function ChartContainer({
                 const isVisible = yPos >= padding.top && yPos <= height - padding.bottom;
                 if (!isVisible) return null;
 
-                const displayFormat = symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5;
+                const displayFormat = 2;
 
                 return (
                   <g key={`prop-price-alert-${alert.id}`} className="font-sans select-none pointer-events-auto">
@@ -6039,7 +5968,7 @@ export default function ChartContainer({
                   textAnchor="middle"
                   className="font-mono font-bold"
                 >
-                  SET: {getPriceFromY(hoveredY).toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}
+                  SET: {getPriceFromY(hoveredY).toFixed(2)}
                 </text>
               </g>
             )}
@@ -6565,7 +6494,7 @@ export default function ChartContainer({
                       textAnchor="start"
                       className="font-mono"
                     >
-                      {cursorPrice.toFixed(symbol === 'USD/JPY' ? 2 : symbol === 'BTC/USDT' ? 0 : 5)}{densityLabel}
+                      {cursorPrice.toFixed(2)}{densityLabel}
                     </text>
 
                     {/* Vertical Timestamp Tag on bottom horizontal X-axis */}
@@ -6674,7 +6603,7 @@ export default function ChartContainer({
               Reset
             </button>
 
-            {/* MT5 Chart Shift controls spacer */}
+            {/* Pro-Style Chart Shift controls spacer */}
             <span className="text-white/10 mx-1 select-none">|</span>
 
             {/* Chart Shift toggle */}
@@ -6686,7 +6615,7 @@ export default function ChartContainer({
                   ? 'bg-indigo-600/25 text-indigo-300 border-indigo-500/40 font-black shadow-[0_0_8px_rgba(99,102,241,0.25)]' 
                   : 'bg-[#0a0a0c] text-white/40 border-white/10 hover:text-white hover:bg-white/5'
               }`}
-              title="Toggle MT5-Style Right-Margin Shift (Extra space for predictive path modeling)"
+              title="Toggle Pro-Style Right-Margin Shift (Extra space for predictive path modeling)"
             >
               <ArrowRightLeft className="w-2.5 h-2.5" />
               <span>Shift: {isChartShiftActive ? chartShiftBars : 'OFF'}</span>
@@ -6832,7 +6761,7 @@ export default function ChartContainer({
               <div className="grid grid-cols-2 gap-1.5 bg-[#050505] p-1.5 rounded border border-white/5 mb-2.5 text-center text-[9px]">
                 <div>
                   <span className="text-white/30 block text-[7.5px] uppercase font-bold font-sans">Entry Price</span>
-                  <span className="font-bold text-white/90">${hoveredTrade.trade.entryPrice.toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5)}</span>
+                  <span className="font-bold text-white/90">${hoveredTrade.trade.entryPrice.toFixed(2)}</span>
                 </div>
                 <div>
                   <span className="text-white/30 block text-[7.5px] uppercase font-bold font-sans">Exit Status PnL</span>
@@ -6849,11 +6778,11 @@ export default function ChartContainer({
                 </div>
                 <div className="flex items-center justify-between text-[11px] py-0.5">
                   <span className="text-white/50 font-sans font-medium">SL Limit:</span>
-                  <span className="text-rose-300 font-mono">${hoveredTrade.trade.stopLoss > 0 ? hoveredTrade.trade.stopLoss.toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5) : 'None'}</span>
+                  <span className="text-rose-300 font-mono">${hoveredTrade.trade.stopLoss > 0 ? hoveredTrade.trade.stopLoss.toFixed(2) : 'None'}</span>
                 </div>
                 <div className="flex items-center justify-between text-[11px] py-0.5">
                   <span className="text-white/50 font-sans font-medium">TP Limit:</span>
-                  <span className="text-emerald-300 font-mono">${hoveredTrade.trade.takeProfit > 0 ? hoveredTrade.trade.takeProfit.toFixed(symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : 5) : 'None'}</span>
+                  <span className="text-emerald-300 font-mono">${hoveredTrade.trade.takeProfit > 0 ? hoveredTrade.trade.takeProfit.toFixed(2) : 'None'}</span>
                 </div>
                 {hoveredTrade.trade.reason && (
                   <div className="mt-1.5 text-[8.5px] text-white/60 font-sans leading-relaxed border-t border-white/[0.03] pt-1">
@@ -6952,7 +6881,7 @@ export default function ChartContainer({
                         if (newAlertType === 'TREND_STRENGTH') {
                           setNewAlertValue(80);
                         } else {
-                          setNewAlertValue(e.target.value === 'BTC/USDT' ? 150 : e.target.value === 'GOLD/USD' ? 5 : e.target.value === 'USD/JPY' ? 0.1 : 10);
+                          setNewAlertValue(10);
                         }
                       }}
                       className="w-full bg-[#050505] text-[10px] text-white/90 border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
@@ -6973,7 +6902,7 @@ export default function ChartContainer({
                         if (val === 'TREND_STRENGTH') {
                           setNewAlertValue(80);
                         } else {
-                          setNewAlertValue(newAlertSymbol === 'BTC/USDT' ? 150 : newAlertSymbol === 'GOLD/USD' ? 5 : newAlertSymbol === 'USD/JPY' ? 0.1 : 10);
+                          setNewAlertValue(10);
                         }
                       }}
                       className="w-full bg-[#050505] text-[10px] text-white/90 border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
@@ -6999,11 +6928,11 @@ export default function ChartContainer({
 
                   <div>
                     <label className="text-[8.5px] uppercase font-semibold text-white/40 block mb-1 font-mono font-bold">
-                      {newAlertType === 'TREND_STRENGTH' ? 'Threshold (%)' : `Threshold (${newAlertSymbol === 'BTC/USDT' ? 'USDT' : newAlertSymbol === 'USD/JPY' ? '¥' : 'Pips'})`}
+                      {newAlertType === 'TREND_STRENGTH' ? 'Threshold (%)' : 'Threshold (Points)'}
                     </label>
                     <input
                       type="number"
-                      step={newAlertSymbol === 'USD/JPY' && newAlertType === 'GAP_PIPS_PRICE' ? '0.01' : '1'}
+                      step="1"
                       value={newAlertValue}
                       onChange={(e) => setNewAlertValue(parseFloat(e.target.value) || 0)}
                       className="w-full bg-[#050505] text-[11px] font-bold text-white border border-white/10 rounded px-1.5 py-1 outline-none focus:border-indigo-500 font-mono"
@@ -7048,7 +6977,7 @@ export default function ChartContainer({
                     const isCur = alert.symbol === symbol;
                     const unitLabel = alert.type === 'TREND_STRENGTH' 
                       ? '%' 
-                      : (alert.symbol === 'BTC/USDT' ? ' USDT' : alert.symbol === 'USD/JPY' ? ' ¥' : ' Pips');
+                      : ' Points';
                     
                     return (
                       <div 
@@ -7163,7 +7092,7 @@ export default function ChartContainer({
                   ) : (
                     <div className="space-y-2">
                       {visualPriceAlerts.map((alert) => {
-                        const displayFormat = alert.symbol === 'USD/JPY' ? 2 : alert.symbol === 'BTC/USDT' ? 0 : 5;
+                        const displayFormat = 2;
                         const isCur = alert.symbol === symbol;
                         return (
                           <div 
@@ -7267,7 +7196,7 @@ export default function ChartContainer({
                   ) : (
                     <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                       {manualTrendlines.map((tl) => {
-                        const displayFormat = tl.symbol === 'USD/JPY' ? 2 : tl.symbol === 'BTC/USDT' ? 0 : 5;
+                        const displayFormat = 2;
                         const isCur = tl.symbol === symbol;
                         return (
                           <div
@@ -7370,7 +7299,7 @@ export default function ChartContainer({
                   ) : (
                     <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                       {chartAnnotations.map((ann) => {
-                        const displayFormat = ann.symbol === 'USD/JPY' ? 2 : ann.symbol === 'BTC/USDT' ? 0 : 5;
+                        const displayFormat = 2;
                         const isCur = ann.symbol === symbol;
                         return (
                           <div
@@ -7698,7 +7627,7 @@ export default function ChartContainer({
         <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/10 bg-[#0c0c0c]/40 p-4 divide-x divide-white/5 font-mono text-center">
         <div className="py-1">
           <span className="text-white/35 text-[10px] block uppercase font-mono tracking-tight">Average True Range</span>
-          <span className="text-white/90 text-sm font-semibold">{metrics.atr.toFixed(symbol === 'BTC/USDT' ? 0 : 5)}</span>
+          <span className="text-white/90 text-sm font-semibold">{metrics.atr.toFixed(2)}</span>
         </div>
         <div className="py-1">
           <span className="text-white/35 text-[10px] block uppercase font-mono tracking-tight">Plotted FVGs</span>

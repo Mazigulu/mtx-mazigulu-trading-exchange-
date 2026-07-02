@@ -41,7 +41,7 @@ export default function SessionConfluenceTracker({ symbol, metrics }: SessionCon
   const [tickVelocity, setTickVelocity] = useState<number>(14); // Ticks per second
   const [velocityHistory, setVelocityHistory] = useState<number[]>([12, 15, 11, 14, 18, 15, 13, 14, 16, 15]);
 
-  const decimalPlaces = symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : symbol === 'ETH/USDT' ? 2 : symbol === 'SOL/USDT' ? 2 : 5;
+  const decimalPlaces = 2;
   const currentPrice = metrics?.currentPrice || 1.1000;
   const atr = metrics?.atr || 0.0012;
 

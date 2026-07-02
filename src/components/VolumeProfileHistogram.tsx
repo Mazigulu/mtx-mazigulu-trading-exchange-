@@ -51,7 +51,7 @@ export default function VolumeProfileHistogram({ symbol, metrics }: VolumeProfil
   const [seedOffset, setSeedOffset] = useState<number>(0);
   const [tickCounter, setTickCounter] = useState<number>(0);
 
-  const decimalPlaces = symbol === 'USD/JPY' ? 3 : symbol === 'BTC/USDT' ? 1 : symbol === 'ETH/USDT' ? 2 : symbol === 'SOL/USDT' ? 2 : 5;
+  const decimalPlaces = (symbol === 'US30' || symbol === 'GER40') ? 1 : 2;
   const currentPrice = metrics?.currentPrice || 1.1000;
   const atr = metrics?.atr || 0.0012;
 

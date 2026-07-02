@@ -7,7 +7,16 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { MarketSymbol, Trade, MarketMetrics, LiquiditySweep, OrderBook } from '../types';
 import { ShieldCheck, ArrowRightLeft, Landmark, Calculator, AlertTriangle, Play, CheckCircle2, History, XCircle, AlertOctagon, Percent, TrendingUp, Activity, Download, Gauge, CheckSquare, Square, Award, Fingerprint, Lock, Unlock, Cpu, RefreshCw, Sparkles, Eye, Check, X, Key, ShieldAlert, Clock, TrendingDown, HelpCircle, Layers } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
-import { getSignalInsights } from './TradeExplainability';
+
+function getSignalInsights(symbol: string, dailyBias: string) {
+  const isAligned = dailyBias === 'BULLISH' || dailyBias === 'BEARISH';
+  return {
+    confidence: isAligned ? 85 : 62,
+    ema: true,
+    volatility: true,
+    risk: true
+  };
+}
 
 const playTradeSound = (type: 'buy' | 'sell' | 'fail' | 'ai-success' | 'close') => {
   try {
@@ -197,9 +206,9 @@ export default function TradeTerminal({
 }: TradeTerminalProps) {
   const [accountBalance, setAccountBalance] = useState(10000);
 
-  const [isMt5BridgePaused, setIsMt5BridgePaused] = useState<boolean>(() => {
+  const [isBrokerBridgePaused, setIsBrokerBridgePaused] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('apex_mt5_bridge_paused') === 'true';
+      return localStorage.getItem('apex_broker_bridge_paused') === 'true';
     } catch {
       return false;
     }
@@ -209,13 +218,13 @@ export default function TradeTerminal({
   useEffect(() => {
     const handleStorageChange = () => {
       try {
-        setIsMt5BridgePaused(localStorage.getItem('apex_mt5_bridge_paused') === 'true');
+        setIsBrokerBridgePaused(localStorage.getItem('apex_broker_bridge_paused') === 'true');
       } catch {}
     };
 
     const handleCustomChange = (e: any) => {
       if (e.detail && typeof e.detail.paused === 'boolean') {
-        setIsMt5BridgePaused(e.detail.paused);
+        setIsBrokerBridgePaused(e.detail.paused);
       }
     };
 
@@ -514,7 +523,7 @@ export default function TradeTerminal({
     }
   });
 
-  const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : symbol === 'ETH/USDT' || symbol === 'SOL/USDT' ? 2 : 5;
+  const decimalLimit = 2;
 
   // ATR Position Size Calculator States
   const [atrMultiplier, setAtrMultiplier] = useState<number>(2.0);
@@ -552,23 +561,23 @@ export default function TradeTerminal({
   }, [metrics.atr, atrMultiplier]);
 
   const recommendedAtrStopLoss = useMemo(() => {
-    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    const decimalLimit = 2;
     if (side === 'BUY') {
       return parseFloat((entryPrice - calculatedAtrSlDistance).toFixed(decimalLimit));
     } else {
       return parseFloat((entryPrice + calculatedAtrSlDistance).toFixed(decimalLimit));
     }
-  }, [entryPrice, calculatedAtrSlDistance, side, symbol]);
+  }, [entryPrice, calculatedAtrSlDistance, side]);
 
   const recommendedAtrTakeProfit = useMemo(() => {
-    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    const decimalLimit = 2;
     const tpDistance = metrics.atr * atrTpMultiplier;
     if (side === 'BUY') {
       return parseFloat((entryPrice + tpDistance).toFixed(decimalLimit));
     } else {
       return parseFloat((entryPrice - tpDistance).toFixed(decimalLimit));
     }
-  }, [entryPrice, metrics.atr, atrTpMultiplier, side, symbol]);
+  }, [entryPrice, metrics.atr, atrTpMultiplier, side]);
 
   // Find the most recent applicable liquidity sweep for stop-loss suggestion based on MTX Engine
   const suggestedSweepSl = useMemo(() => {
@@ -597,7 +606,7 @@ export default function TradeTerminal({
 
   const suggestedSlPrice = useMemo(() => {
     if (!suggestedSweepSl) return null;
-    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    const decimalLimit = 2;
     const level = suggestedSweepSl.level;
     
     // Suggest the sweep level minus a small offset (buffer) of 0.1 * ATR for a safe structural buffer,
@@ -676,7 +685,7 @@ export default function TradeTerminal({
   }, [metrics?.currentPrice, metrics?.atr, side]);
 
   const formatPrice = (p: number) => {
-    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    const decimalLimit = 2;
     return p.toFixed(decimalLimit);
   };
 
@@ -684,11 +693,10 @@ export default function TradeTerminal({
     if (calculatedAtrSlDistance === 0) return 0;
     const riskDollar = accountBalance * (atrRiskPct / 100);
     let units = riskDollar / calculatedAtrSlDistance;
-    if (symbol === 'BTC/USDT') {
-      return parseFloat(units.toFixed(3));
+    if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(symbol)) {
+      return parseFloat((units / 10).toFixed(2));
     } else {
-      const contractUnits = units / 100000;
-      return parseFloat(contractUnits.toFixed(2));
+      return parseFloat((units / 100).toFixed(2));
     }
   }, [accountBalance, atrRiskPct, calculatedAtrSlDistance, symbol]);
 
@@ -729,11 +737,11 @@ export default function TradeTerminal({
   useEffect(() => {
     setEntryPrice(metrics.currentPrice);
     if (side === 'BUY') {
-      setStopLoss(parseFloat((metrics.currentPrice - metrics.atr * 2).toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)));
-      setTakeProfit(parseFloat((metrics.currentPrice + metrics.atr * 4).toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)));
+      setStopLoss(parseFloat((metrics.currentPrice - metrics.atr * 2).toFixed(2)));
+      setTakeProfit(parseFloat((metrics.currentPrice + metrics.atr * 4).toFixed(2)));
     } else {
-      setStopLoss(parseFloat((metrics.currentPrice + metrics.atr * 2).toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)));
-      setTakeProfit(parseFloat((metrics.currentPrice - metrics.atr * 4).toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)));
+      setStopLoss(parseFloat((metrics.currentPrice + metrics.atr * 2).toFixed(2)));
+      setTakeProfit(parseFloat((metrics.currentPrice - metrics.atr * 4).toFixed(2)));
     }
 
     const insights = getSignalInsights(symbol, metrics.dailyBias);
@@ -767,22 +775,18 @@ export default function TradeTerminal({
 
     let units = riskDollar / slDistance;
     
-    // lot mapping estimates for major pairs & assets
-    if (symbol === 'BTC/USDT') {
-      return parseFloat(units.toFixed(3)); // direct coins
+    if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(symbol)) {
+      return parseFloat((units / 10).toFixed(2));
     } else {
-      // standard forex lots: 1 lot = 100,000 units. $10 risk per pip.
-      // divide standard units to lots representation if appropriate
-      const contractUnits = units / 100000;
-      return parseFloat(contractUnits.toFixed(2));
+      return parseFloat((units / 100).toFixed(2));
     }
   }, [accountBalance, riskPct, entryPrice, stopLoss, symbol]);
 
   const handlePlaceTrade = async () => {
     setErrorMsg(null);
 
-    if (isMt5BridgePaused) {
-      setErrorMsg('MT5 Execution Bridge is currently PAUSED by the Safety Guard drawdown circuit breaker. Trading is restricted.');
+    if (isBrokerBridgePaused) {
+      setErrorMsg('Broker Execution Bridge is currently PAUSED by the Safety Guard drawdown circuit breaker. Trading is restricted.');
       playTradeSound('fail');
       return;
     }
@@ -873,7 +877,7 @@ export default function TradeTerminal({
       calculatedTp = entryPrice - slDistance * ratio;
     }
     
-    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    const decimalLimit = 2;
     setTakeProfit(parseFloat(calculatedTp.toFixed(decimalLimit)));
   };
 
@@ -883,7 +887,7 @@ export default function TradeTerminal({
       return;
     }
     const mostRecentSweep = sweeps[sweeps.length - 1];
-    const decimalLimit = symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5;
+    const decimalLimit = 2;
     setStopLoss(Number(mostRecentSweep.level.toFixed(decimalLimit)));
     if (errorMsg === 'No active sweeps located in engine memory.') {
       setErrorMsg(null);
@@ -985,7 +989,7 @@ export default function TradeTerminal({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `MT5_Broker_Trade_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `Broker_Trade_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -998,25 +1002,24 @@ export default function TradeTerminal({
   const getLivePnL = (t: Trade) => {
     let curPrice = metrics.currentPrice;
     if (t.symbol !== symbol) {
-      if (t.symbol === 'EUR/USD') curPrice = 1.1645;
-      else if (t.symbol === 'GBP/USD') curPrice = 1.2680;
-      else if (t.symbol === 'USD/JPY') curPrice = 155.40;
-      else if (t.symbol === 'BTC/USDT') curPrice = 67500.0;
-      else if (t.symbol === 'GOLD/USD') curPrice = 2355.50;
+      if (t.symbol === 'US30') curPrice = 39500;
+      else if (t.symbol === 'NAS100') curPrice = 18500;
+      else if (t.symbol === 'GER40') curPrice = 18000;
+      else if (t.symbol === 'SPX500') curPrice = 5200;
+      else if (t.symbol === 'AAPL') curPrice = 175;
+      else if (t.symbol === 'MSFT') curPrice = 420;
+      else if (t.symbol === 'NVDA') curPrice = 900;
+      else if (t.symbol === 'TSLA') curPrice = 180;
     }
 
     const pnlMultiplier = t.side === 'BUY' ? 1 : -1;
     const priceDiff = curPrice - t.entryPrice;
     
     let rawPnl = 0;
-    if (t.symbol === 'BTC/USDT') {
-      rawPnl = priceDiff * t.size * pnlMultiplier;
-    } else if (t.symbol === 'USD/JPY') {
-      rawPnl = (priceDiff / 0.01) * t.size * 0.1 * pnlMultiplier;
-    } else if (t.symbol === 'GOLD/USD') {
-      rawPnl = (priceDiff / 0.1) * t.size * 1.0 * pnlMultiplier;
+    if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(t.symbol)) {
+      rawPnl = priceDiff * t.size * 100 * pnlMultiplier;
     } else {
-      rawPnl = (priceDiff / 0.0001) * t.size * 1.0 * pnlMultiplier;
+      rawPnl = priceDiff * t.size * 10 * pnlMultiplier;
     }
     return parseFloat(rawPnl.toFixed(2));
   };
@@ -1156,7 +1159,7 @@ export default function TradeTerminal({
           } else if (next <= 85) {
             setScanStatusLog("COMPILING CRYPTOGRAPHIC SHA-256 SESSION KEY HANDSHAKE...");
           } else {
-            setScanStatusLog("SYNCHRONIZING WITH MT5 CORE BACKEND BROKER PORT CHIP...");
+            setScanStatusLog("SYNCHRONIZING WITH BROKER CORE BACKEND PORT CHIP...");
           }
           
           return next;
@@ -1662,14 +1665,14 @@ export default function TradeTerminal({
                         <div className="space-y-1 text-white/70">
                           <div>ATR Value: <span className="font-mono text-white">{metrics.atr.toFixed(5)}</span></div>
                           <div>Value: <span className="text-white font-mono">
-                            {symbol === 'USD/JPY' ? (metrics.atr * 100).toFixed(1) : symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? metrics.atr.toFixed(1) : (metrics.atr * 10000).toFixed(1)} {symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? 'USD' : 'pips'}
+                            {(metrics.atr * 100).toFixed(1)} points
                           </span></div>
                           <div className="pt-1 mt-1 border-t border-white/5">
                             <span className="text-amber-400 font-bold uppercase block text-[9px] mb-0.5">Safe Exit Range:</span>
                             <span className="text-white font-bold">
-                              {(side === 'BUY' ? metrics.currentPrice - 2.5 * metrics.atr : metrics.currentPrice + 1.5 * metrics.atr).toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)}
+                              {(side === 'BUY' ? metrics.currentPrice - 2.5 * metrics.atr : metrics.currentPrice + 1.5 * metrics.atr).toFixed(2)}
                               {' - '}
-                              {(side === 'BUY' ? metrics.currentPrice - 1.5 * metrics.atr : metrics.currentPrice + 2.5 * metrics.atr).toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)}
+                              {(side === 'BUY' ? metrics.currentPrice - 1.5 * metrics.atr : metrics.currentPrice + 2.5 * metrics.atr).toFixed(2)}
                             </span>
                             <span className="text-[8px] text-white/40 block mt-0.5">Ideal {side === 'BUY' ? 'Below' : 'Above'} Price (1.5x - 2.5x ATR Volatility Buffer)</span>
                           </div>
@@ -1737,7 +1740,7 @@ export default function TradeTerminal({
                 </div>
                 {sweeps && sweeps.length > 0 ? (
                   <span className="text-[9px] bg-white/5 text-amber-300 border border-white/10 px-2 py-0.5 rounded font-black">
-                    SWEEP: {sweeps[sweeps.length - 1].level.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)}
+                    SWEEP: {sweeps[sweeps.length - 1].level.toFixed(2)}
                   </span>
                 ) : (
                   <span className="text-[8px] text-white/30">NO SWEEP IN MEMORY</span>
@@ -1777,7 +1780,7 @@ export default function TradeTerminal({
                   <span className="font-mono text-white font-extrabold">{metrics.atr.toFixed(5)}</span>
                   <span className="text-white/20">|</span>
                   <span className="font-mono text-amber-400 font-bold">
-                    {symbol === 'USD/JPY' ? (metrics.atr * 100).toFixed(1) : symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? metrics.atr.toFixed(1) : (metrics.atr * 10000).toFixed(1)} {symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? 'USD' : 'pips'}
+                    {(metrics.atr * 100).toFixed(1)} points
                   </span>
                 </div>
               </div>
@@ -1874,16 +1877,16 @@ export default function TradeTerminal({
                 <div className="flex justify-between items-center text-white/40 border-t border-white/5 pt-1.5">
                   <span>SL Point Distance:</span>
                   <span className="text-white/80">
-                    {calculatedAtrSlDistance.toFixed(symbol === 'USD/JPY' || symbol === 'GOLD/USD' ? 2 : symbol === 'BTC/USDT' ? 1 : 5)}
+                    {calculatedAtrSlDistance.toFixed(2)}
                     <span className="text-white/40 ml-1">
-                      ({symbol === 'USD/JPY' ? (calculatedAtrSlDistance * 100).toFixed(1) : symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? `$${calculatedAtrSlDistance.toFixed(1)}` : (calculatedAtrSlDistance * 10000).toFixed(1)} {symbol === 'BTC/USDT' || symbol === 'GOLD/USD' ? 'USD' : 'pips'})
+                      ({(calculatedAtrSlDistance * 100).toFixed(1)} points)
                     </span>
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-white/40">
                   <span>Proposed Sizing:</span>
                   <span className="text-amber-400 font-bold text-xs">
-                    {calculatedAtrPositionSize} {symbol === 'BTC/USDT' ? 'BTC' : 'LOTS'}
+                    {calculatedAtrPositionSize} LOTS
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-white/40 pt-1.5 border-t border-white/5">
@@ -2037,7 +2040,7 @@ export default function TradeTerminal({
               <span className="text-white/40 uppercase tracking-wide text-[10px]">Calculated Lot Size:</span>
             </div>
             <span className="text-xs text-white font-bold bg-white/15 border border-white/20 px-2 py-0.5 rounded">
-              {calculatedPositionSize} {symbol === 'BTC/USDT' ? 'BTC' : 'LOTS'}
+              {calculatedPositionSize} LOTS
             </span>
           </div>
 
@@ -2127,11 +2130,11 @@ export default function TradeTerminal({
           </div>
         </div>
 
-        {isMt5BridgePaused && (
+        {isBrokerBridgePaused && (
           <div className="mt-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded text-[10px] font-mono leading-relaxed space-y-1 animate-fadeIn">
             <div className="flex items-center gap-1.5 font-bold">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-              <span>⚠️ MT5 BRIDGE EXECUTION PAUSED</span>
+              <span>⚠️ BROKER BRIDGE EXECUTION PAUSED</span>
             </div>
             <p className="text-white/60 text-[9px]">
               The Risk Safety Guard triggered because daily drawdown exceeded your threshold limit. Resume execution in the Risk Desk workspace.
@@ -2277,12 +2280,12 @@ export default function TradeTerminal({
               </div>
             </div>
 
-            {/* Real-time MT5 Bridge Trade Efficiency Ratio Widget - Stretched horizontally */}
+            {/* Real-time Broker Bridge Trade Efficiency Ratio Widget - Stretched horizontally */}
             <div id="trade-efficiency-ratio-widget" className="p-4 bg-gradient-to-r from-[#0c0c0e] to-[#070709] border border-white/5 rounded-lg flex flex-col justify-between">
               <div className="flex items-center justify-between pb-2 border-b border-white/5 mb-3 shrink-0">
                 <h5 className="text-[10px] uppercase font-bold text-white/40 font-mono tracking-wider flex items-center font-sans">
                   <Cpu className="w-3.5 h-3.5 mr-1.5 text-[#34d399] animate-pulse" />
-                  MT5 Bridge Efficiency Telemetry
+                  Broker Bridge Efficiency Telemetry
                 </h5>
                 <span className="text-[8px] font-mono text-[#34d399] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-[#10b981]/15 border border-[#10b981]/25 animate-pulse">
                   Connected
@@ -2712,11 +2715,11 @@ export default function TradeTerminal({
                             </div>
 
                             <div className="col-span-2 text-right text-white/60 font-semibold">
-                              {t.entryPrice.toFixed(t.symbol === 'BTC/USDT' ? 1 : t.symbol === 'USD/JPY' || t.symbol === 'GOLD/USD' ? 2 : 4)}
+                              {t.entryPrice.toFixed(2)}
                             </div>
 
                             <div className="col-span-2 text-right text-white/80 font-bold">
-                              {t.exitPrice?.toFixed(t.symbol === 'BTC/USDT' ? 1 : t.symbol === 'USD/JPY' || t.symbol === 'GOLD/USD' ? 2 : 4) || '—'}
+                              {t.exitPrice?.toFixed(2) || '—'}
                             </div>
 
                             <div className="col-span-1.5 text-right text-white/60 font-bold text-[11px]">
@@ -2761,7 +2764,7 @@ export default function TradeTerminal({
                                     t.latency > 45 
                                       ? 'bg-amber-500/10 text-amber-400 border border-amber-500/25 animate-pulse'
                                       : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                  }`} title={t.latency > 45 ? "EXCEEDED 45ms HEALTH TARGET" : "MT5 Bridge Healthy"}>
+                                  }`} title={t.latency > 45 ? "EXCEEDED 45ms HEALTH TARGET" : "Broker Bridge Healthy"}>
                                     <Cpu className="w-2.5 h-2.5" />
                                     {t.latency}ms Latency {t.latency > 45 && '⚠️'}
                                   </span>
@@ -2808,13 +2811,13 @@ export default function TradeTerminal({
                             <div>
                               <span className="text-[8.5px] text-white/30 uppercase block leading-none mb-1">Entry Price</span>
                               <span className="text-white/80 font-medium">
-                                {t.entryPrice.toFixed(t.symbol === 'BTC/USDT' ? 1 : t.symbol === 'USD/JPY' || t.symbol === 'GOLD/USD' ? 2 : 4)}
+                                {t.entryPrice.toFixed(2)}
                               </span>
                             </div>
                             <div className="text-right">
                               <span className="text-[8.5px] text-white/30 uppercase block leading-none mb-1">Closed Price</span>
                               <span className="text-white/80 font-bold">
-                                {t.exitPrice?.toFixed(t.symbol === 'BTC/USDT' ? 1 : t.symbol === 'USD/JPY' || t.symbol === 'GOLD/USD' ? 2 : 4) || '—'}
+                                {t.exitPrice?.toFixed(2) || '—'}
                               </span>
                             </div>
                             <div className="col-span-2 border-t border-white/5 pt-1.5 mt-1 grid grid-cols-2 gap-2.5">
@@ -2835,7 +2838,7 @@ export default function TradeTerminal({
                             {/* Bridge execution quality inside mobile card */}
                             {(t.latency !== undefined || t.slippage !== undefined) && (
                               <div className="col-span-2 border-t border-white/5 pt-1.5 mt-1 flex items-center justify-between font-mono">
-                                <span className="text-[8.5px] text-white/30 uppercase leading-none">MT5 Bridge Quality</span>
+                                <span className="text-[8.5px] text-white/30 uppercase leading-none">Broker Bridge Quality</span>
                                 <div className="flex items-center space-x-1.5">
                                   {t.latency !== undefined && (
                                     <span className={`text-[8.5px] px-1 py-0.5 rounded font-bold leading-none ${
@@ -2954,7 +2957,7 @@ export default function TradeTerminal({
                 </div>
                 <div>
                   <h4 className="font-mono font-bold text-xs tracking-wide text-white uppercase">Cryptographic Gateway</h4>
-                  <span className="text-[9.5px] font-mono text-white/45 block">MT5 TERMINAL SECURITY LAYER LEVEL 5</span>
+                  <span className="text-[9.5px] font-mono text-white/45 block">BROKER TERMINAL SECURITY LAYER LEVEL 5</span>
                 </div>
               </div>
               
