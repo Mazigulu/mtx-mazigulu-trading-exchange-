@@ -1782,7 +1782,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
                                       '#RuleViolation',
                                       '#PerfectExecution',
                                       '#RiskManaged',
-                                      '#NewsSlip'
+                                      '#Slippage'
                                     ].map((tag) => {
                                       const isSel = selectedTags.includes(tag);
                                       return (

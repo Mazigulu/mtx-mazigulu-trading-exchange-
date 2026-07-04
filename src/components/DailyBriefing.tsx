@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Newspaper, 
   RefreshCw, 
   Clock, 
   TrendingUp, 
@@ -289,14 +288,14 @@ export default function DailyBriefing() {
               </div>
             </div>
 
-            {/* News warnings */}
+            {/* Session Alarms warnings */}
             <div className="p-4 bg-zinc-900/40 border border-white/5 rounded-md flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-[9px] uppercase tracking-wide text-white/30 font-mono">Macro Calendars</span>
+                <span className="text-[9px] uppercase tracking-wide text-white/30 font-mono">Active Session Alarms</span>
                 <p className="text-[13px] font-bold text-white/90">
                   {briefing?.economicAlarms > 0 
-                    ? `${briefing.economicAlarms} Red-Folder Event`
-                    : 'Clear Calendar Today'}
+                    ? `${briefing.economicAlarms} Active System Alerts`
+                    : 'No Active System Violations'}
                 </p>
               </div>
               <div className="p-2 bg-black/20 rounded-full border border-white/5">
@@ -305,10 +304,10 @@ export default function DailyBriefing() {
             </div>
           </div>
 
-          {/* Micro Headline themes */}
+          {/* Session Directives */}
           <div className="bg-zinc-950/80 border border-white/5 rounded-md overflow-hidden">
             <div className="px-3.5 py-1.5 bg-white/[0.02] border-b border-white/5 flex items-center space-x-2">
-              <Newspaper className="w-3.5 h-3.5 text-indigo-400" />
+              <Zap className="w-3.5 h-3.5 text-indigo-400" />
               <span className="text-[9.5px] uppercase tracking-wider font-mono text-white/50">Core Session Directives</span>
             </div>
             <div className="p-3.5 space-y-2.5">

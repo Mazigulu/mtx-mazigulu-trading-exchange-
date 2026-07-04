@@ -415,7 +415,7 @@ export default function RiskExposureJournal({ trades }: RiskExposureJournalProps
             </h4>
             <p className="text-[10px] text-white/60 leading-relaxed max-w-3xl">
               {stats.criticalCount > 0 ? (
-                `Detected ${stats.criticalCount} severe systemic drawdown phases in recent sessions. Our telemetry points to peak volatility triggers surrounding sudden news events (US CPI, FOMC Speculation). To safeguard structural assets, consider establishing a maximum concurrent sector limit of 2 lots, deploying stop guarantees, and reducing primary leveraged sizes by 40% when volatility expectations exceed 4.00%.`
+                `Detected ${stats.criticalCount} severe systemic drawdown phases in recent sessions. Our telemetry points to peak volatility triggers surrounding sudden market sessions volatility expansion (Open sweeps, Asia-high breaks). To safeguard structural assets, consider establishing a maximum concurrent sector limit of 2 lots, deploying stop guarantees, and reducing primary leveraged sizes by 40% when volatility expectations exceed 4.00%.`
               ) : (
                 "Dynamic portfolio volatility looks exceptionally well stabilized. The lifetime drawdown peak resides in high-integrity bounds (under 5.0%), meaning capital exposure guidelines are respected perfectly. Keep maintaining close hedge safeguards across correlated symbol pairs like EUR/USD and Gold."
               )}

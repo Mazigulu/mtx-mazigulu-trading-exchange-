@@ -131,7 +131,7 @@ export default function AccountControlCenter({
   const [newWebhookUrl, setNewWebhookUrl] = useState('');
 
   const [connectedApps] = useState([
-    { name: 'MetaTrader 5 Gateway', status: 'CONNECTED', scope: 'Trading & Market Data' },
+    { name: 'Liquidity Provider Gateway', status: 'CONNECTED', scope: 'Trading & Market Data' },
     { name: 'TradingView Alerts Integrator', status: 'CONNECTED', scope: 'Read Alerts' }
   ]);
 

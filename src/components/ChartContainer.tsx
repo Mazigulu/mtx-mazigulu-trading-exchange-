@@ -656,7 +656,7 @@ export default function ChartContainer({
   const [cursorX, setCursorX] = useState<number | null>(null);
   const [cursorTime, setCursorTime] = useState<string | null>(null);
   const [showIndicators, setShowIndicators] = useState(false);
-  const [showNewsOverlay, setShowNewsOverlay] = useState(false);
+  const showNewsOverlay = false;
   const [showHistoricalExecutions, setShowHistoricalExecutions] = useState(true);
   const [hoveredTrade, setHoveredTrade] = useState<{
     trade: Trade;
@@ -3630,19 +3630,6 @@ export default function ChartContainer({
                     </div>
                   </div>
                 )}
-
-                <button
-                  onClick={() => setShowNewsOverlay(!showNewsOverlay)}
-                  className="w-full flex items-center justify-between px-2 py-1.5 rounded text-[10px] font-sans text-left transition-colors hover:bg-white/5"
-                >
-                  <span className="flex items-center gap-2 text-white/80">
-                    <span className={`w-1.5 h-1.5 rounded-full ${showNewsOverlay ? 'bg-rose-400 shadow-[0_0_6px_#f87171]' : 'bg-transparent border border-white/30'}`} />
-                    Timeline News flags
-                  </span>
-                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${showNewsOverlay ? 'bg-rose-500/20 text-rose-300' : 'bg-white/5 text-white/30'}`}>
-                    {showNewsOverlay ? 'ACTIVE' : 'OFF'}
-                  </span>
-                </button>
 
                 <button
                   onClick={() => setShowSessions(!showSessions)}

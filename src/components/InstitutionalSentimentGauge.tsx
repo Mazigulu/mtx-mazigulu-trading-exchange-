@@ -4,12 +4,11 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { MarketSymbol, NewsEvent } from '../types';
+import { MarketSymbol } from '../types';
 import { motion } from 'motion/react';
 import { 
   Gauge, 
   HelpCircle, 
-  Newspaper, 
   AlertTriangle,
   Zap,
   TrendingUp,
@@ -18,7 +17,6 @@ import {
   Sliders,
   Scale,
   Building2,
-  Calendar,
   Layers,
   Info
 } from 'lucide-react';
@@ -45,7 +43,6 @@ interface SentimentResponse {
 
 export default function InstitutionalSentimentGauge() {
   const [data, setData] = useState<SentimentResponse | null>(null);
-  const [newsEvents, setNewsEvents] = useState<NewsEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -53,8 +50,8 @@ export default function InstitutionalSentimentGauge() {
   const [selectedSymbol, setSelectedSymbol] = useState<MarketSymbol>('NAS100');
 
   // Multiplier weights
-  const [newsWeight, setNewsWeight] = useState<number>(50);
-  const [orderFlowWeight, setOrderFlowWeight] = useState<number>(50);
+  const newsWeight = 0;
+  const orderFlowWeight = 100;
 
   // Simulated live tick updates for visual fidelity
   const [tick, setTick] = useState<number>(0);
@@ -64,23 +61,18 @@ export default function InstitutionalSentimentGauge() {
     'AAPL', 'MSFT', 'NVDA', 'TSLA'
   ];
 
-  // Fetch sentiment aggregates and經濟行事曆
+  // Fetch sentiment aggregates
   const fetchAllData = async () => {
     try {
-      const [sentimentRes, eventsRes] = await Promise.all([
-        fetch('/api/market-sentiment'),
-        fetch('/api/forex-factory')
-      ]);
+      const sentimentRes = await fetch('/api/market-sentiment');
 
-      if (!sentimentRes.ok || !eventsRes.ok) {
+      if (!sentimentRes.ok) {
         throw new Error('Failed to retrieve institutional intelligence data.');
       }
 
       const sentimentJson = await sentimentRes.json();
-      const eventsJson = await eventsRes.json();
 
       setData(sentimentJson);
-      setNewsEvents(eventsJson);
       setError(null);
     } catch (err: any) {
       console.error(err);
@@ -109,21 +101,6 @@ export default function InstitutionalSentimentGauge() {
     return data?.sentiment[selectedSymbol] || null;
   }, [data, selectedSymbol]);
 
-  // Filter economic events related to the active symbol
-  const activeEvents = useMemo(() => {
-    if (!selectedSymbol) return [];
-    const parts = selectedSymbol.split('/');
-    const baseCur = parts[0];
-    const quoteCur = parts[1] || 'USD';
-
-    return newsEvents.filter(ev => 
-      ev.currency === baseCur || 
-      ev.currency === quoteCur ||
-      (selectedSymbol === 'BTC/USDT' && ev.currency === 'USD') ||
-      (selectedSymbol === 'GOLD/USD' && ev.currency === 'USD')
-    ).slice(0, 5); // display the top 5
-  }, [newsEvents, selectedSymbol]);
-
   // Dynamic Synthesis Calculation
   const synthesisResult = useMemo(() => {
     if (!activeAsset) return { score: 50, label: 'NEUTRAL', colorClass: 'text-white/60', description: 'No active metric telemetry' };
@@ -131,24 +108,18 @@ export default function InstitutionalSentimentGauge() {
     // Scale imbalance (-100 to +100) raw value into a 0 to 100 scale
     // e.g., -100 imbalance => 0 sentiment score, +100 imbalance => 100 sentiment score
     const flowScore = 50 + (activeAsset.imbalance / 2);
-    const nScore = activeAsset.newsScore; // 15 to 85
-
-    // Weighted mathematical average
-    const totalWeight = newsWeight + orderFlowWeight;
-    const finalScore = totalWeight > 0 
-      ? Math.round(((nScore * newsWeight) + (flowScore * orderFlowWeight)) / totalWeight)
-      : 50;
+    const finalScore = Math.round(flowScore);
 
     let label = 'BALANCED EQUILIBRIUM';
     let colorClass = 'text-indigo-400';
     let badgeBg = 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300';
-    let description = 'Macro intelligence events and low-latency order flow imbalance values are perfectly offset. Ideal ranging and high-tf channel containment zone.';
+    let description = 'Low-latency order flow imbalance values are perfectly offset. Ideal ranging and high-tf channel containment zone.';
 
     if (finalScore >= 75) {
       label = 'INSTITUTIONAL ACCUMULATION / EXTREME BULLISH';
       colorClass = 'text-emerald-400';
       badgeBg = 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300';
-      description = 'Aggressive institutional buying detected! Strong bid-side imbalance aligned with highly favorable macro economic announcements. Pivot points protect entries.';
+      description = 'Aggressive institutional buying detected! Strong bid-side imbalance with thick localized buying walls. Pivot points protect entries.';
     } else if (finalScore >= 58) {
       label = 'BULLISH BLOCK SUPPORT';
       colorClass = 'text-emerald-300';
@@ -158,7 +129,7 @@ export default function InstitutionalSentimentGauge() {
       label = 'INSTITUTIONAL DISTRIBUTION / EXTREME BEARISH';
       colorClass = 'text-rose-400';
       badgeBg = 'bg-rose-500/15 border-rose-500/30 text-rose-300';
-      description = 'Aggressive institutional liquidation. Red-folder news panic or capital flow flight combined with deep ask-side real-time DOM imbalances.';
+      description = 'Aggressive institutional liquidation. Capital flow flight combined with deep ask-side real-time DOM imbalances.';
     } else if (finalScore <= 42) {
       label = 'BEARISH DISTRIBUTION INTRUSION';
       colorClass = 'text-rose-300';
@@ -169,13 +140,13 @@ export default function InstitutionalSentimentGauge() {
     return {
       score: finalScore,
       flowScore: Math.round(flowScore),
-      newsScore: Math.round(nScore),
+      newsScore: 0,
       label,
       colorClass,
       badgeBg,
       description
     };
-  }, [activeAsset, newsWeight, orderFlowWeight]);
+  }, [activeAsset]);
 
   // Convert score (0 - 100) to rotation angle for SVG speed needle (-90 to +90 degrees)
   const needleAngle = useMemo(() => {
@@ -223,7 +194,7 @@ export default function InstitutionalSentimentGauge() {
               Institutional Sentiment Gauge
               <span className="text-[8.5px] font-mono text-indigo-400 font-extrabold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/15">SMC COGNITION</span>
             </h3>
-            <p className="text-[9.5px] text-white/40 font-sans mt-0.5">Dual-input synthesis of Macro Economic News Calendar events and Micro Level Order Flow imbalance</p>
+            <p className="text-[9.5px] text-white/40 font-sans mt-0.5">High-fidelity cognitive synthesis of real-time Micro Level Order Flow imbalance</p>
           </div>
         </div>
 
@@ -255,63 +226,18 @@ export default function InstitutionalSentimentGauge() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           
-          {/* LEFT SECTION: Interactive Weight adjustment + High-End SVG Gauge */}
+          {/* LEFT SECTION: SMC Cognitive Engine High-End SVG Gauge */}
           <div className="lg:col-span-6 bg-[#050507] border border-white/5 rounded-xl p-5 flex flex-col items-center justify-between space-y-4">
             
-            {/* Control weights */}
-            <div className="w-full space-y-3.5">
-              <div className="flex items-center justify-between text-[10px] font-mono text-white/40 uppercase font-bold tracking-wider border-b border-white/5 pb-2">
-                <span className="flex items-center gap-1.5"><Sliders className="w-3.5 h-3.5 text-indigo-400" /> Interactive Synthesis weighting</span>
-                <span className="text-white/20">W_News / W_Flow</span>
+            {/* Control weights info */}
+            <div className="w-full space-y-2 pb-2 border-b border-white/5">
+              <div className="flex items-center justify-between text-[10px] font-mono text-indigo-400 uppercase font-bold tracking-wider">
+                <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5" /> Order Book DOM Telemetry</span>
+                <span className="text-emerald-400 font-extrabold">ACTIVE L2 SYNAPSE</span>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* News Sentiment Slider */}
-                <div className="space-y-1.5 bg-[#09090b] border border-white/5 p-2.5 rounded-lg">
-                  <div className="flex justify-between items-center text-[9px] font-mono">
-                    <span className="text-indigo-300 font-bold flex items-center gap-1">
-                      <Newspaper className="w-3 h-3 text-indigo-400" /> Macro Weight:
-                    </span>
-                    <span className="text-white font-black">{newsWeight}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="5"
-                    value={newsWeight}
-                    onChange={(e) => setNewsWeight(parseInt(e.target.value))}
-                    className="w-full accent-indigo-500 h-1 bg-white/5 hover:bg-white/10 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[8px] text-white/35 font-mono">
-                    <span>Pure Micro</span>
-                    <span>Pure Macro</span>
-                  </div>
-                </div>
-
-                {/* Order Book Flow Imbalance Slider */}
-                <div className="space-y-1.5 bg-[#09090b] border border-white/5 p-2.5 rounded-lg">
-                  <div className="flex justify-between items-center text-[9px] font-mono">
-                    <span className="text-indigo-300 font-bold flex items-center gap-1">
-                      <Layers className="w-3 h-3 text-indigo-400" /> Dom Flow Weight:
-                    </span>
-                    <span className="text-white font-black">{orderFlowWeight}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="5"
-                    value={orderFlowWeight}
-                    onChange={(e) => setOrderFlowWeight(parseInt(e.target.value))}
-                    className="w-full accent-indigo-500 h-1 bg-white/5 hover:bg-white/10 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[8px] text-white/35 font-mono">
-                    <span>Pure Macro</span>
-                    <span>Pure Order Flow</span>
-                  </div>
-                </div>
-              </div>
+              <p className="text-[9px] text-white/40 leading-normal font-sans">
+                Synthesizing real-time bid/ask order volume depth, algorithmic displacement vectors, and liquidity distribution across primary institutional execution pools.
+              </p>
             </div>
 
             {/* High-Fidelity SVG SPEEDOMETER GAUGE */}
@@ -412,15 +338,15 @@ export default function InstitutionalSentimentGauge() {
             {/* Diagnostic stats list */}
             <div className="w-full grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-[9px] font-mono text-white/40">
               <div className="text-center bg-[#09090b] p-1.5 border border-white/5 rounded">
-                <span className="block text-[8px] text-white/30 uppercase font-semibold">Macro Score</span>
+                <span className="block text-[8px] text-white/30 uppercase font-semibold">L2 Imbalance</span>
                 <motion.span 
-                  key={synthesisResult.newsScore}
+                  key={activeAsset?.imbalance}
                   initial={{ opacity: 0.5, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.2 }}
                   className="text-indigo-300 font-bold text-[10.5px] block mt-0.5"
                 >
-                  {synthesisResult.newsScore}%
+                  {activeAsset?.imbalance > 0 ? '+' : ''}{activeAsset?.imbalance}%
                 </motion.span>
               </div>
               <div className="text-center bg-[#09090b] p-1.5 border border-white/5 rounded">
@@ -454,8 +380,8 @@ export default function InstitutionalSentimentGauge() {
           {/* RIGHT SECTION: Detailed dual-tab columns: Macro events & Order book Imbalances */}
           <div className="lg:col-span-6 flex flex-col justify-between space-y-4">
             
-            {/* Top right container: Real-time Orderbook Flow Imbalances */}
-            <div className="bg-[#050507] border border-white/5 rounded-xl p-4 flex flex-col justify-between flex-1">
+            {/* Top right container: Real-time Orderbook Flow Imbalances (Micro) */}
+            <div className="bg-[#050507] border border-white/5 rounded-xl p-4 flex flex-col justify-between flex-1 h-full">
               <div className="flex justify-between items-center border-b border-indigo-500/10 pb-2 mb-3">
                 <div className="flex items-center space-x-2">
                   <Zap className="w-3.5 h-3.5 text-indigo-400" />
@@ -469,7 +395,7 @@ export default function InstitutionalSentimentGauge() {
               </div>
 
               {/* DOM Imbalance visualizer */}
-              <div className="space-y-2 font-mono text-[9px]">
+              <div className="space-y-2 font-mono text-[9px] flex-1 flex flex-col justify-center">
                 <div className="flex items-center justify-between bg-[#0b0b0e] hover:bg-[#101015] border border-indigo-500/10 p-2 rounded-lg gap-3">
                   <div className="w-1/2 flex flex-col">
                     <span className="text-[8px] text-white/35">BID DENSITY (BUYERS)</span>
@@ -515,7 +441,7 @@ export default function InstitutionalSentimentGauge() {
                 </div>
 
                 {/* High frequency ladder depth ticks mock */}
-                <div className="space-y-1.5 pt-1.5 border-t border-white/5 mt-2">
+                <div className="space-y-1.5 pt-1.5 border-t border-white/5 mt-2 flex-1 flex flex-col justify-center">
                   <div className="grid grid-cols-12 text-[8px] text-white/30 uppercase pb-1 border-b border-white/5">
                     <span className="col-span-3">LIQUIDITY DEPTH</span>
                     <span className="col-span-3 text-center">BIDS</span>
@@ -524,7 +450,7 @@ export default function InstitutionalSentimentGauge() {
                   </div>
 
                   {bookVolumes.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 items-center text-[9px] font-mono leading-none py-0.5">
+                    <div key={idx} className="grid grid-cols-12 items-center text-[9px] font-mono leading-none py-1">
                       <span className="col-span-3 text-white/45">Tier Level {idx + 1}</span>
                       <span className="col-span-3 text-emerald-400/80 font-bold text-center">{item.bids} lots</span>
                       
@@ -544,66 +470,6 @@ export default function InstitutionalSentimentGauge() {
                   ))}
                 </div>
               </div>
-            </div>
-
-            {/* Bottom right container: Macro Economic News Feed Synthesis */}
-            <div className="bg-[#050507] border border-white/5 rounded-xl p-4 flex flex-col justify-between flex-1">
-              <div className="flex justify-between items-center border-b border-indigo-500/10 pb-2 mb-3">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                  <h4 className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-white">
-                    Economic News Feed Analysis (Macro)
-                  </h4>
-                </div>
-                <span className="text-[8.5px] text-white/30 font-mono">36h Window</span>
-              </div>
-
-              {activeEvents.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-white/30">
-                  <Info className="w-5 h-5 text-indigo-400/40 mb-1.5" />
-                  <span className="text-[9.5px] font-sans">No key macro reports scheduled in research queue.</span>
-                </div>
-              ) : (
-                <div className="space-y-1.5 flex-1 flex flex-col justify-center">
-                  {activeEvents.map((ev) => {
-                    // Determine bias direction
-                    const isBullishBias = ev.title.length % 2 === 0;
-                    
-                    return (
-                      <div 
-                        key={ev.id} 
-                        className="p-2 bg-[#09090b] hover:bg-[#0c0c0f] border border-white/5 rounded-lg flex items-center justify-between gap-3 text-[9px] font-mono"
-                      >
-                        <div className="flex items-center space-x-2 shrink-0">
-                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase font-mono ${
-                            ev.impact === 'HIGH' 
-                              ? 'bg-rose-500/15 border border-rose-500/20 text-rose-400' 
-                              : ev.impact === 'MEDIUM' 
-                              ? 'bg-amber-500/15 border border-amber-500/20 text-amber-400' 
-                              : 'bg-white/5 border border-white/10 text-white/50'
-                          }`}>
-                            {ev.impact}
-                          </span>
-                          <span className="text-white/80 font-bold uppercase tracking-tight">{ev.currency}</span>
-                        </div>
-
-                        <span className="text-white/60 truncate font-sans text-[10px] flex-1 font-medium">{ev.title}</span>
-
-                        <div className="text-right shrink-0">
-                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${
-                            isBullishBias 
-                              ? 'bg-emerald-500/10 text-emerald-400' 
-                              : 'bg-rose-500/10 text-rose-400'
-                          }`}>
-                            {isBullishBias ? <TrendingUp className="w-2 h-2 text-emerald-400" /> : <TrendingDown className="w-2 h-2 text-rose-400" />}
-                            {isBullishBias ? 'BULL' : 'BEAR'}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
           </div>

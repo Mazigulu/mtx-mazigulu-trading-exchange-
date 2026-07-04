@@ -908,8 +908,8 @@ export default function RiskDashboard({
       // Inject over-leveraging spikes to demonstrate high drawdown sessions
       let eventSpike = 0;
       if (i === 23) eventSpike = 1.35; // System Stress Peak
-      if (i === 15) eventSpike = 1.65; // FOMC news spike over-leverage session
-      if (i === 8) eventSpike = 1.15;  // Core PPI swing
+      if (i === 15) eventSpike = 1.65; // Session peak over-leverage spike
+      if (i === 8) eventSpike = 1.15;  // Liquidity grab cycle swing
       
       const exposurePercent = parseFloat(Math.max(0.2, baseRisk + cycleMetric + eventSpike).toFixed(2));
       const valueUSD = Math.round(INITIAL_BALANCE * (exposurePercent / 100));
@@ -3320,7 +3320,7 @@ export default function RiskDashboard({
                   </div>
                   <div>
                     <h5 className="text-[11px] font-mono text-white/95 uppercase font-bold">1% Rule Safeguard Enabled</h5>
-                    <p className="text-[10px] text-white/45 mt-0.5">Orders with risk parameters higher than $100 (1%) are soft-blocked from transmitting to the metatrader interface.</p>
+                    <p className="text-[10px] text-white/45 mt-0.5">Orders with risk parameters higher than $100 (1%) are soft-blocked from transmitting to the brokerage routing network.</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-2">

@@ -60,7 +60,7 @@ export default function SystemStatus() {
       time: '07:01:32',
       source: 'BRIDGE',
       level: 'INFO',
-      message: 'MetaTrader 5 Python connector initialized under loopback 127.0.0.1:3000.'
+      message: 'Liquidity Provider API Gateway connector initialized under loopback 127.0.0.1:3000.'
     },
     {
       time: '07:02:11',
@@ -340,7 +340,7 @@ export default function SystemStatus() {
               </span>
             </div>
             <p className="text-[10.5px] text-white/40 mt-1 max-w-md">
-              Synchronizing heartbeat packages across Lmax Gateway and MetaTrader connector nodes. Real-time diagnostic verification active.
+              Synchronizing heartbeat packages across Lmax Gateway and direct API connector nodes. Real-time diagnostic verification active.
             </p>
           </div>
         </div>

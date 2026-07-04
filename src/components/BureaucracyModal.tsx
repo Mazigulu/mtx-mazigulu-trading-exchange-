@@ -263,20 +263,20 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                         {/* Section 3: High-Frequency Broker Bridge */}
                         <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4 space-y-2.5 md:col-span-2">
                           <h4 className="text-xs font-black text-indigo-300 font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> Execution Bridge & Latency Controls
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> Cloud Infrastructure & Full-Stack Architecture
                           </h4>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[10px] text-white/50 leading-relaxed font-mono">
                             <div className="bg-black/20 p-2.5 rounded border border-white/5 text-left">
-                              <span className="text-white font-bold block mb-1 uppercase text-[9px] text-indigo-400">Heartbeat check</span>
-                              Constant loop evaluators measure ping response intervals from active broker wrappers.
+                              <span className="text-white font-bold block mb-1 uppercase text-[9px] text-indigo-400">Container Runtime</span>
+                              Server-side code is bundled and executed in an isolated Google Cloud Run container. This maintains sandboxed system processes and safe thread execution.
                             </div>
                             <div className="bg-black/20 p-2.5 rounded border border-white/5 text-left">
-                              <span className="text-white font-bold block mb-1 uppercase text-[9px] text-indigo-400">Slippage Limiter</span>
-                              Orders execute purely via Fill-or-Kill (FOK) or Immediate-or-Cancel (IOC) protocols to block retail slippage.
+                              <span className="text-white font-bold block mb-1 uppercase text-[9px] text-indigo-400">Port Ingress Routing</span>
+                              The full-stack application forces bindings strictly to Port 3000. All external requests are managed via an institutional-grade Nginx reverse proxy routing.
                             </div>
                             <div className="bg-black/20 p-2.5 rounded border border-white/5 text-left">
-                              <span className="text-white font-bold block mb-1 uppercase text-[9px] text-indigo-400">Delay Alarms</span>
-                              Pings exceeding 45 milliseconds trigger instant safeguard alerts, halting aggressive high-frequency loops.
+                              <span className="text-white font-bold block mb-1 uppercase text-[9px] text-indigo-400">Database Ledger Sync</span>
+                              Sensitive user accounts, system configuration states, and trading blotted records are persistent, utilizing Google Firebase Auth and secure Firestore blueprints.
                             </div>
                           </div>
                         </div>
@@ -298,15 +298,15 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                           <div className="flex items-center gap-2">
                             <Scale className="w-5 h-5 text-emerald-400" />
                             <h3 className="text-sm font-bold text-white uppercase tracking-wide">
-                              Institutional & Regulatory Compliance
+                              Platform & Architectural Compliance
                             </h3>
                           </div>
                           <p className="text-[10px] text-white/40 font-mono mt-0.5">
-                            Operational audit compliance registers, MiFID II standards, and client integrity
+                            Google Cloud Run microservices runtime, Firebase Auth/Firestore security, and API proxies
                           </p>
                         </div>
                         <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-mono text-[8.5px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                          Standard Certified: MIFID II Aligned
+                          Architecture: Google Cloud Run & Firebase Sandboxed
                         </div>
                       </div>
 
@@ -314,22 +314,22 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                         {/* Audit Log Table */}
                         <div className="bg-white/[0.01] border border-white/5 rounded-lg p-4 space-y-2.5">
                           <h4 className="text-xs font-black text-emerald-400 font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-1.5">
-                            Regulatory Standards & Directives
+                            Architectural Directives & Container Guardrails
                           </h4>
                           <p className="text-[10px] text-white/60 leading-relaxed font-mono">
-                            MTXquant complies with the European Markets in Financial Instruments Directive II (MiFID II) and US Commodity Futures Trading Commission (CFTC) rules governing algorithmic execution:
+                            MTXquant complies with Google AI Studio's secure cloud execution mandates, utilizing full-stack microservices and secure storage blueprints:
                           </p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px] font-mono mt-2">
                             <div className="border border-white/5 p-3 rounded bg-black/20 font-sans">
-                              <p className="text-white font-bold font-mono text-[9px] uppercase text-emerald-400">MiFID II Article 48 Checks</p>
+                              <p className="text-white font-bold font-mono text-[9px] uppercase text-emerald-400">Container Sandboxing</p>
                               <p className="text-white/40 mt-1 leading-normal text-[9.5px]">
-                                Requires real-time algorithmic sound checks, integrated circuit breakers, limits on toxic fill levels, and self-defensive hold systems.
+                                The application operates in an isolated Google Cloud Run container sandbox. All external ingress traffic is exclusively routed through Port 3000 via a secure Nginx reverse proxy layer.
                               </p>
                             </div>
                             <div className="border border-white/5 p-3 rounded bg-black/20 font-sans">
-                              <p className="text-white font-bold font-mono text-[9px] uppercase text-emerald-400">Fiduciary Separation Rules</p>
+                              <p className="text-white font-bold font-mono text-[9px] uppercase text-emerald-400">Secure Secrets Proxying</p>
                               <p className="text-white/40 mt-1 leading-normal text-[9.5px]">
-                                Client balances and execution loops remain sandbox isolated. Keys and tokens are encrypted locally and never transmitted downstream.
+                                Sensitive credentials (including Gemini API and DB keys) are kept strictly server-side in container environment configurations. Public browser leakage is prevented by routing operations through /api/* endpoints.
                               </p>
                             </div>
                           </div>
@@ -342,19 +342,19 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                           </h4>
                           <div className="space-y-2.5 text-[10.5px]">
                             <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                              <span className="text-white/70">1. Server-Side Sandbox Injections</span>
+                              <span className="text-white/70">1. Cloud Run Container Ingress Sandbox (Port 3000 Exclusive)</span>
                               <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded text-[8.5px] uppercase border border-emerald-500/20">Active</span>
                             </div>
                             <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                              <span className="text-white/70">2. Real-Time SL Safeguard Evaluator</span>
+                              <span className="text-white/70">2. Secure Server-Side Secrets Management (Non-VITE Env Keys)</span>
                               <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded text-[8.5px] uppercase border border-emerald-500/20">Active</span>
                             </div>
                             <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                              <span className="text-white/70">3. Local Storage Telemetry Block</span>
+                              <span className="text-white/70">3. Firebase Firestore Security Blueprints & Auth Safeguards</span>
                               <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded text-[8.5px] uppercase border border-emerald-500/20">Active</span>
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className="text-white/70">4. Broker Bridge High Frequency Circuit Breaker</span>
+                              <span className="text-white/70">4. Secure Auto-Logout Idle Termination System (Configure in ACC)</span>
                               <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded text-[8.5px] uppercase border border-emerald-500/20">Active</span>
                             </div>
                           </div>
@@ -537,14 +537,14 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                                 <td className="p-2.5 text-white/40">Indefinite (Local Cache)</td>
                               </tr>
                               <tr>
-                                <td className="p-2.5 font-bold text-indigo-300">mtx_exec_queue</td>
-                                <td className="p-2.5 text-white/60">Preserves critical pending order-queue buffers during active websocket refresh events.</td>
-                                <td className="p-2.5 text-white/40">Browser Session</td>
+                                <td className="p-2.5 font-bold text-indigo-300">apex_idle_timeout</td>
+                                <td className="p-2.5 text-white/60">Auto-Logout idle timer setting configured in the Account Control Center.</td>
+                                <td className="p-2.5 text-white/40">Indefinite (Local Cache)</td>
                               </tr>
                               <tr>
-                                <td className="p-2.5 font-bold text-indigo-300">broker_cfg_jwt</td>
-                                <td className="p-2.5 text-white/60">Caches encrypted tokens for the local brokerage execution bridge interface.</td>
-                                <td className="p-2.5 text-white/40">7 Days (Standard)</td>
+                                <td className="p-2.5 font-bold text-indigo-300">firebase_auth_token</td>
+                                <td className="p-2.5 text-white/60">Firebase session token for secure cloud database authentication and synchronization checks.</td>
+                                <td className="p-2.5 text-white/40">Browser Session (Auto-Refresh)</td>
                               </tr>
                             </tbody>
                           </table>

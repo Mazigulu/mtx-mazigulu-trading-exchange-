@@ -5,11 +5,10 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { jsPDF } from 'jspdf';
-import { MarketSymbol, Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, OrderBook, NewsEvent, Trade, PriceAlert } from './types';
+import { MarketSymbol, Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, OrderBook, Trade, PriceAlert } from './types';
 import { motion, AnimatePresence } from 'motion/react';
-import InstitutionalSentimentAlertSystem from './components/InstitutionalSentimentAlertSystem';
-import { BureaucracyModal } from './components/BureaucracyModal';
 import LoginPage from './components/LoginPage';
+import { BureaucracyModal } from './components/BureaucracyModal';
 import { auth } from './lib/firebase.ts';
 import { onAuthStateChanged } from 'firebase/auth';
 import MarketsTerminal from './components/MarketsTerminal';
@@ -17,6 +16,7 @@ import PortfolioDesk from './components/PortfolioDesk';
 import FundingDesk from './components/FundingDesk';
 import ActivityDesk from './components/ActivityDesk';
 import AccountControlCenter from './components/AccountControlCenter';
+import MarketAnalysisDashboard from './components/MarketAnalysisDashboard';
 
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
@@ -68,7 +68,6 @@ import {
   Trash2,
   Plus,
   Sliders,
-  Newspaper,
   Sparkles,
   BarChart3,
   User,
@@ -235,6 +234,7 @@ export default function App() {
       if (user) {
         setIsLoggedIn(true);
         setTraderEmail(user.email || 'maziguluj@gmail.com');
+        setIsProfileMenuOpen(false);
         try {
           localStorage.setItem('apex_is_logged_in', 'true');
           if (user.email) {
@@ -257,6 +257,7 @@ export default function App() {
     }
     setTraderEmail(email);
     setIsLoggedIn(true);
+    setIsProfileMenuOpen(false);
   };
 
   const handleLogout = async () => {
@@ -267,6 +268,7 @@ export default function App() {
       console.error(err);
     }
     setIsLoggedIn(false);
+    setIsProfileMenuOpen(false);
   };
 
   // Auto-Logout idle timer setting (in minutes)
@@ -356,12 +358,70 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [activeTab, setActiveTab] = useState<'MARKETS' | 'PORTFOLIO' | 'FUNDING' | 'ACTIVITY'>('MARKETS');
+  const [activeTab, setActiveTab] = useState<'MARKETS' | 'PORTFOLIO' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(() => {
+    try {
+      const saved = localStorage.getItem('apex_active_tab');
+      if (saved === 'MARKETS' || saved === 'PORTFOLIO' || saved === 'FUNDING' || saved === 'ACTIVITY' || saved === 'ANALYSIS') {
+        return saved;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    return 'MARKETS';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_active_tab', activeTab);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [activeTab]);
+
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isChartExpanded, setIsChartExpanded] = useState(true);
-  const [symbol, setSymbol] = useState<MarketSymbol>('NAS100');
-  const [timeframe, setTimeframe] = useState<'M15' | 'H1' | 'H4' | 'D1'>('H4');
+
+  const [symbol, setSymbol] = useState<MarketSymbol>(() => {
+    try {
+      const saved = localStorage.getItem('apex_selected_symbol') as MarketSymbol;
+      const validSymbols: MarketSymbol[] = ['US30', 'NAS100', 'GER40', 'SPX500', 'AAPL', 'MSFT', 'NVDA', 'TSLA'];
+      if (validSymbols.includes(saved)) {
+        return saved;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    return 'NAS100';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_selected_symbol', symbol);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [symbol]);
+
+  const [timeframe, setTimeframe] = useState<'M15' | 'H1' | 'H4' | 'D1'>(() => {
+    try {
+      const saved = localStorage.getItem('apex_timeframe') as 'M15' | 'H1' | 'H4' | 'D1';
+      if (['M15', 'H1', 'H4', 'D1'].includes(saved)) {
+        return saved;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    return 'H4';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_timeframe', timeframe);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [timeframe]);
   const [jumpRange, setJumpRange] = useState<{ start: string; end: string; triggerId: number } | null>(null);
   const [sessionStartDate, setSessionStartDate] = useState('');
   const [sessionEndDate, setSessionEndDate] = useState('');
@@ -572,35 +632,6 @@ export default function App() {
     timestamp: string;
   } | null>(null);
 
-  // --- Metatrader 5 Wrapper & EA Agentic States ---
-  const [eaInputMagicNumber, setEaInputMagicNumber] = useState<number>(234567);
-  const [eaInputRiskPct, setEaInputRiskPct] = useState<number>(1.0);
-  const [eaInputSlippage, setEaInputSlippage] = useState<number>(3);
-  const [eaInputTrailingStop, setEaInputTrailingStop] = useState<number>(10);
-  const [eaInputBreakeven, setEaInputBreakeven] = useState<number>(15);
-  const [eaActiveMode, setEaActiveMode] = useState<'COPILOT' | 'AUTOPILOT'>('COPILOT');
-  const [mqlEditorTab, setMqlEditorTab] = useState<'MQL5_CODE' | 'EA_INPUTS' | 'TERMINAL_LOGS'>('MQL5_CODE');
-  const [isCompilingMql, setIsCompilingMql] = useState<boolean>(false);
-  const [compileSuccess, setCompileSuccess] = useState<boolean>(false);
-  const [mqlConsoleLogs, setMqlConsoleLogs] = useState<string[]>([
-    "2026.06.08 08:00:15.012 Brokerage Terminal started (Standard Bridge Group)",
-    "2026.06.08 08:00:15.845 Execution Network service initialized successfully",
-    "2026.06.08 08:00:16.110 Secured socket link established with MTXquant Cloud Server",
-    "2026.06.08 08:00:16.112 Terminal connected to Account #234567 on Broker-Live-3",
-    "2026.06.08 08:00:17.301 Strategy Analyzer: expert 'MTXquant_Agentic_ICT' loaded successfully",
-    "2026.06.08 08:00:17.320 Expert Advisor initialized: 'MTXquant_Agentic_ICT' on AAPL, H4. Signal mode active."
-  ]);
-
-  // Append symbol-switch logs dynamically
-  useEffect(() => {
-    const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
-    setMqlConsoleLogs(prev => [
-      ...prev,
-      `${timeStr}.104 Chart symbol switched to ${symbol}. Synchronizing H4 candlesticks buffer...`,
-      `${timeStr}.218 MQL5 Expert Advisor updated subscription channels. Ready.`
-    ].slice(-150)); // cap at 150 lines
-  }, [symbol]);
-
   useEffect(() => {
     const timer = setInterval(() => {
       setSessionSeconds((prev) => prev + 1);
@@ -729,7 +760,6 @@ export default function App() {
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
 
   const [showTWVP, setShowTWVP] = useState<boolean>(true);
-  const [newsEvents, setNewsEvents] = useState<NewsEvent[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [expandedTradeIds, setExpandedTradeIds] = useState<Record<string, boolean>>({});
   const [activeTradePageIndex, setActiveTradePageIndex] = useState<number>(0);
@@ -810,18 +840,11 @@ export default function App() {
 
           if (isTriggered) {
             triggeredAny = true;
-            const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
             
-            // 1. Log to MQL Console
-            setMqlConsoleLogs(prev => [
-              ...prev,
-              `${timeStr}.992 [ALERT TRIGGERED] ${alert.symbol} price level crossed ${alert.condition === 'ABOVE' ? 'Above' : 'Below'} target of ${alert.targetPrice.toLocaleString()} (Current: ${currentPrice.toLocaleString()})`
-            ].slice(-150));
-
-            // 2. Play subtle UI standard push if supported
+            // 1. Play subtle UI standard push if supported
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
               try {
-                new Notification(`🔔 MTXquant Alert: ${alert.symbol}`, {
+                new Notification(`🔔 Price Alert: ${alert.symbol}`, {
                   body: `${alert.symbol} achieved alert condition ${alert.condition} ${alert.targetPrice}! (Current Price: ${currentPrice})`,
                   tag: alert.id,
                   silent: false
@@ -1431,16 +1454,6 @@ export default function App() {
         console.warn('Failed to sync trades:', err);
       }
 
-      // 4. Calendar
-      try {
-        const rCalendar = await fetch('/api/forex-factory');
-        if (rCalendar.ok) {
-          const dCalendar = await rCalendar.json();
-          setNewsEvents(dCalendar || []);
-        }
-      } catch (err) {
-        console.warn('Failed to sync forex-factory:', err);
-      }
       setLastFetchTime(new Date());
     } catch (e) {
       console.error('Failed syncing live market matrix:', e);
@@ -1571,9 +1584,6 @@ export default function App() {
       
       setBulkSuccessMessage(`Succeeded bulk altering ${targets.length} visibility positions!`);
       
-      const timeStr = new Date().toISOString().replace('T', ' ').substring(0, 19).replace(/-/g, '.');
-      setMqlConsoleLogs(prev => [...prev, `${timeStr}.295 [BULK ADJUSTED] Altered ${targets.length} visible coexposures. Target: ${bulkAdjustTarget}, Shift: ${bulkAdjustValue}${bulkAdjustType === 'PERCENT' ? '%' : ' points'}.`].slice(-150));
-
       setTimeout(() => {
         setBulkSuccessMessage('');
       }, 4500);
@@ -2102,7 +2112,6 @@ export default function App() {
 
   return (
     <div id="mtxquant-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex selection:bg-indigo-500/30 selection:text-indigo-200">
-      <InstitutionalSentimentAlertSystem bannerOnly={true} />
       
       {/* Retractable Left-Hand Side Menu Navigation - Hidden on mobile screens */}
       <aside
@@ -2151,7 +2160,8 @@ export default function App() {
                 { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
                 { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
                 { id: 'FUNDING', label: 'Funding', icon: Wallet },
-                { id: 'ACTIVITY', label: 'Activity', icon: History }
+                { id: 'ACTIVITY', label: 'Activity', icon: History },
+                { id: 'ANALYSIS', label: 'Analysis', icon: BarChart3 }
               ].map((item) => {
                 const active = activeTab === item.id;
                 const Icon = item.icon;
@@ -2167,7 +2177,7 @@ export default function App() {
                     } ${isSidebarExpanded ? 'px-4' : 'justify-center px-0'}`}
                     title={item.label}
                   >
-                    <Icon className={`w-4 h-4 shrink-0 transition-colors ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
+                    <Icon className={`w-5 h-5 shrink-0 transition-colors ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
                     {isSidebarExpanded && (
                       <span className="whitespace-nowrap animate-fadeIn">
                         {item.label}
@@ -2236,6 +2246,7 @@ export default function App() {
                   {activeTab === 'PORTFOLIO' && 'Portfolio'}
                   {activeTab === 'FUNDING' && 'Funding'}
                   {activeTab === 'ACTIVITY' && 'Activity'}
+                  {activeTab === 'ANALYSIS' && 'Market Analysis'}
                 </span>
               </div>
             </div>
@@ -2390,201 +2401,27 @@ export default function App() {
                 <ActivityDesk />
               </div>
             )}
+            {activeTab === 'ANALYSIS' && (
+              <div id="analysis-workspace" className="animate-fadeIn max-w-[1400px] mx-auto px-4 md:px-8 py-5">
+                <MarketAnalysisDashboard trades={trades} />
+              </div>
+            )}
           </>
         )}
 
       </main>
 
       {/* Footer Info strip */}
-      <footer className="border-t border-white/10 bg-[#080808] pt-10 pb-8 mt-12 font-mono">
-        <div className="max-w-[1400px] mx-auto px-4 md:px-8">
-          
-          {/* Main Footer Block Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-8 border-b border-white/5 text-[11px] text-white/30">
-            
-            {/* Column 1: App Branding & Status */}
-            <div className="md:col-span-4 space-y-3.5">
-              <button
-                id="footer-logo-home-button"
-                onClick={() => setActiveTab('MARKETS')}
-                className="flex items-center space-x-2.5 hover:opacity-80 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent"
-                title="Return to Markets Desk"
-              >
-                <span className="text-white text-base font-black tracking-tight lowercase">
-                  mtxquant
-                </span>
-              </button>
-              <p className="text-[10px] text-white/30 leading-relaxed max-w-sm select-none">
-                Next-generation institutional-grade quantitative analysis and trade execution terminal. Integrates algorithmic displacement modeling with risk insulation.
-              </p>
-              <div className="flex items-center space-x-2 bg-emerald-500/5 border border-emerald-500/10 px-2.5 py-1 rounded w-fit text-[9.5px] select-none">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-emerald-400 font-bold uppercase tracking-wider">SECURE NODE STATUS: ALIGNED</span>
-              </div>
-            </div>
-
-            {/* Column 2: Tech Documentation Hub ('docs' tab) */}
-            <div className="md:col-span-4 space-y-3 text-left">
-              <h4 className="text-[10.5px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5 select-none">
-                <BookOpen className="w-3.5 h-3.5" /> SYSTEM DOCUMENTATION
-              </h4>
-              <p className="text-[9.5px] text-white/30 leading-relaxed select-none">
-                Unlock deeper mechanical heuristics of spatial OB/FVG alignments and broker execution configurations.
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-[10px]">
-                <button 
-                  onClick={() => openBureaucracyTab('docs')} 
-                  className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
-                >
-                  &raquo; Strategy Guide
-                </button>
-                <button 
-                  onClick={() => openBureaucracyTab('faq')} 
-                  className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
-                >
-                  &raquo; Interactive FAQ
-                </button>
-                <button 
-                  onClick={() => openBureaucracyTab('docs')} 
-                  className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
-                >
-                  &raquo; Slippage Shield
-                </button>
-                <button 
-                  onClick={() => openBureaucracyTab('docs')} 
-                  className="hover:text-indigo-300 text-white/50 text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline"
-                >
-                  &raquo; Gateway Setup
-                </button>
-                <button 
-                  onClick={() => openBureaucracyTab('faq')} 
-                  className="hover:text-indigo-350 text-indigo-400 font-bold text-[10px] text-left transition-colors cursor-pointer flex items-center gap-1 hover:underline col-span-2 mt-1 pt-1.5 border-t border-white/5"
-                >
-                  &raquo; Docs & Compliance
-                </button>
-              </div>
-            </div>
-
-            {/* Column 3: Regulatory Compliance Hub ('compliance' tab) */}
-            <div className="md:col-span-4 space-y-3 text-left">
-              <h4 className="text-[10.5px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 select-none">
-                <Scale className="w-3.5 h-3.5" /> REGULATORY COMPLIANCE
-              </h4>
-              <p className="text-[9.5px] text-white/30 leading-relaxed select-none">
-                Institutional risk controls operating under MiFID II and CFTC sovereign data protection frameworks.
-              </p>
-              <div className="flex flex-wrap gap-x-3 gap-y-2 text-[10px]">
-                <button 
-                  onClick={() => openBureaucracyTab('compliance')} 
-                  className="hover:text-emerald-300 text-white/50 transition-colors cursor-pointer flex items-center gap-1 font-bold hover:underline"
-                >
-                  &raquo; MiFID Compliance
-                </button>
-                <button 
-                  onClick={() => openBureaucracyTab('risk')} 
-                  className="hover:text-amber-400 text-white/50 transition-colors cursor-pointer flex items-center gap-1 hover:underline"
-                >
-                  &raquo; Risk Disclosure
-                </button>
-                <button 
-                  onClick={() => openBureaucracyTab('privacy')} 
-                  className="hover:text-teal-400 text-white/50 transition-colors cursor-pointer flex items-center gap-1 hover:underline"
-                >
-                  &raquo; Privacy Charter
-                </button>
-                <button 
-                  onClick={() => openBureaucracyTab('terms')} 
-                  className="hover:text-blue-400 text-white/50 transition-colors cursor-pointer flex items-center gap-1 hover:underline"
-                >
-                  &raquo; Terms & Mandates
-                </button>
-                <button 
-                  onClick={() => openBureaucracyTab('cookies')} 
-                  className="hover:text-emerald-300 text-white/50 transition-colors cursor-pointer flex items-center gap-1 hover:underline"
-                >
-                  &raquo; Cookie Policy
-                </button>
-              </div>
-            </div>
-
+      <footer className="border-t border-white/10 bg-[#080808] py-6 mt-12 font-mono">
+        <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-white/30">
+          <div className="flex items-center space-x-2.5">
+            <span className="text-white text-sm font-black tracking-tight lowercase">
+              mtxquant
+            </span>
           </div>
-
-          {/* Bottom Bar: Fiduciary safeguard & Ping Speed + copyright */}
-          <div className="pt-6 flex flex-col lg:flex-row items-center justify-between gap-4 text-[10px] text-white/30">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center space-x-2 select-none">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                <span>Fiduciary Account Capital Protected by Fixed fractional (Max 1% SL invalidate) rules</span>
-              </div>
-              
-              {/* Latency Monitor */}
-              <div className="flex flex-wrap items-center gap-2 lg:gap-3.5 lg:border-l lg:border-white/10 lg:pl-4">
-                <div className="flex items-center space-x-2 select-none">
-                  {brokerPing > 45 ? (
-                    <Wifi className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
-                  ) : (
-                    <Wifi className="w-3.5 h-3.5 text-emerald-400 opacity-70" />
-                  )}
-                  <span className="text-white/40">Broker Gateway Ping:</span>
-                  <span id="broker-ping-value" className={`font-bold ${isTestingPing ? 'text-indigo-400 animate-pulse' : brokerPing > 45 ? 'text-rose-400 font-extrabold animate-pulse' : 'text-emerald-400'}`}>
-                    {isTestingPing ? 'pinging...' : `${brokerPing}ms`}
-                  </span>
-                </div>
-
-                <div className="relative flex h-2 w-2">
-                  {brokerPing > 45 ? (
-                    <>
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </>
-                  )}
-                </div>
-
-                {isBrokerBridgePaused ? (
-                  <div className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-rose-500/15 border border-rose-500/30 text-[9px] text-rose-400 font-bold tracking-tight animate-pulse uppercase">
-                    <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0 animate-ping" />
-                    <span>Broker Bridge Paused (Threshold Exceeded)</span>
-                  </div>
-                ) : brokerPing > 45 && (
-                  <div className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/25 text-[9px] text-rose-300 font-bold tracking-tight animate-pulse uppercase">
-                    <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
-                    <span>Latency warning threshold exceeded (Limit: 45ms)</span>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleTestPingSpeed}
-                  disabled={isTestingPing}
-                  className="hover:text-white transition-colors duration-200 uppercase text-[9px] tracking-wider border border-white/15 bg-white/[0.02] px-1.5 py-0.5 rounded cursor-pointer disabled:opacity-50"
-                  title="Conduct instantaneous packet Round-Trip speed evaluation test"
-                >
-                  Test Speed
-                </button>
-
-                <button
-                  onClick={() => setIsSimulatingSpike(!isSimulatingSpike)}
-                  className={`transition-colors duration-200 uppercase text-[9px] tracking-wider border px-1.5 py-0.5 rounded cursor-pointer ${
-                    isSimulatingSpike 
-                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-300 hover:text-rose-200' 
-                      : 'border-white/10 bg-white/[0.01] hover:text-white'
-                  }`}
-                  title="Mock system packet delay spike to verify safeguard warnings"
-                >
-                  {isSimulatingSpike ? 'Stop Spike' : 'Mock Spike'}
-                </button>
-              </div>
-            </div>
-
-            <div className="text-center lg:text-right select-none text-[9.5px]">
-              <span>MTXquant Quantitative Terminal &copy; 2026. Aligned with Elegant Dark guidelines.</span>
-            </div>
+          <div className="text-center sm:text-right select-none text-[9.5px]">
+            <span>MTXquant Quantitative Terminal &copy; 2026. Aligned with Elegant Dark guidelines.</span>
           </div>
-
         </div>
       </footer>
       </div>
@@ -2913,7 +2750,8 @@ export default function App() {
                     { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
                     { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
                     { id: 'FUNDING', label: 'Funding', icon: Wallet },
-                    { id: 'ACTIVITY', label: 'Activity', icon: History }
+                    { id: 'ACTIVITY', label: 'Activity', icon: History },
+                    { id: 'ANALYSIS', label: 'Analysis', icon: BarChart3 }
                   ].map((item) => {
                     const active = activeTab === item.id;
                     const Icon = item.icon;
@@ -2930,7 +2768,7 @@ export default function App() {
                             : 'text-[#e5e5e5]/50 hover:text-white hover:bg-white/[0.03] border border-transparent'
                         }`}
                       >
-                        <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
+                        <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
                         <span>{item.label}</span>
                       </button>
                     );

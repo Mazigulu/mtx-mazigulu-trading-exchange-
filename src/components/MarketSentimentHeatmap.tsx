@@ -12,7 +12,6 @@ import {
   TrendingDown, 
   RotateCcw, 
   HelpCircle, 
-  Newspaper, 
   Sparkles, 
   AlertTriangle,
   Zap,
@@ -207,17 +206,17 @@ export default function MarketSentimentHeatmap() {
         <div className="flex items-center space-x-2">
           <Gauge className="w-4.5 h-4.5 text-indigo-400 shrink-0" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-white font-mono">
-            Macro Sentiment & Market State Heatmap
+            SMC Order Flow & Market State Heatmap
           </h3>
         </div>
         <div className="text-[10px] text-white/30 font-mono flex items-center gap-1">
           <Activity className="w-3.5 h-3.5 text-rose-500/80 animate-pulse" />
-          <span>News & Price Action Stream</span>
+          <span>Micro-Liquidity & Price Action Stream</span>
         </div>
       </div>
 
       <p className="text-[10.5px] text-white/40 leading-relaxed mb-4">
-        Aggregates live exchange order-flow metrics and macroeconomic news calendar weights. Displays calculated Pearson shifts, RSI parameters, and ATR volatility boundaries.
+        Aggregates live exchange order-flow metrics, bid/ask order book volume, and local liquidity clusters. Displays calculated Pearson shifts, RSI parameters, and ATR volatility boundaries.
       </p>
 
       {/* Category Tabs Menu */}
@@ -245,7 +244,7 @@ export default function MarketSentimentHeatmap() {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-2">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-400"></div>
-              <span className="text-[9.5px] text-white/30 font-mono">Synthesizing live news impact curves...</span>
+              <span className="text-[9.5px] text-white/30 font-mono">Synthesizing real-time order flow maps...</span>
             </div>
           ) : error ? (
             <div className="flex items-center justify-center space-x-2 py-16 text-rose-400 font-mono text-[10px] bg-rose-950/10 border border-rose-900/10 rounded">
@@ -431,22 +430,22 @@ export default function MarketSentimentHeatmap() {
                     
                     <div className="bg-[#0c0c0e]/60 border border-white/5 p-2 rounded flex flex-col justify-between">
                       <span className="text-[8px] text-white/35 font-mono uppercase font-bold tracking-wide flex items-center gap-1">
-                        <Newspaper className="w-2.5 h-2.5 text-indigo-400" /> News Feed Force
+                        <Flame className="w-2.5 h-2.5 text-indigo-400" /> Order Book DOM Imbalance
                       </span>
                       <div className="flex items-baseline gap-1 mt-1.5">
                         <motion.span 
-                          key={activeAsset.newsScore}
+                          key={activeAsset.imbalance}
                           initial={{ opacity: 0.5, scale: 0.9 }}
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ duration: 0.2 }}
                           className="text-sm font-black text-white"
                         >
-                          {activeAsset.newsScore}%
+                          {activeAsset.imbalance > 0 ? '+' : ''}{activeAsset.imbalance}%
                         </motion.span>
-                        <span className="text-[8px] text-white/35 block italic">Score</span>
+                        <span className="text-[8px] text-white/35 block italic">Ratio</span>
                       </div>
                       <span className="text-[8px] text-white/30 block mt-1 font-sans">
-                        Events matched: {activeAsset.eventsCount}
+                        Bias: {activeAsset.imbalance > 0 ? 'BULLISH PRESSURE' : activeAsset.imbalance < 0 ? 'BEARISH PRESSURE' : 'NEUTRAL EQUILIBRIUM'}
                       </span>
                     </div>
 
@@ -526,7 +525,7 @@ export default function MarketSentimentHeatmap() {
 
               {/* Actionable Guideline Footnote */}
               <p className="text-[9.5px] text-white/20 leading-normal font-sans italic mt-3 lg:mt-0">
-                *Heatmap metrics are calculated through server-side regression of 36h news timelines mapped against continuous ATR parameters. Always verify key levels before order entry.
+                *Heatmap metrics are calculated through server-side regression of order-flow volume mapped against continuous ATR parameters. Always verify key levels before order entry.
               </p>
 
             </div>

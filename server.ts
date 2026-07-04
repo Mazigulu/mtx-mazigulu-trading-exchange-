@@ -618,51 +618,6 @@ app.get('/api/market-sentiment', (req, res) => {
       }
       const orderBook = simulator.getOrderBook(sym);
       
-      // Split symbol into currencies, e.g. EUR, USD
-      const parts = sym.split('/');
-      const baseCur = parts[0];
-      const quoteCur = parts[1] || 'USD'; // default to USD
-      
-      // Match events related to these currencies
-      const relatedEvents = economicEvents.filter(ev => 
-        ev.currency === baseCur || 
-        ev.currency === quoteCur
-      );
-
-      // Calculate News Impact score and bias
-      let newsScoreCumulative = 50;
-      let highImpactSoon = false;
-      let netImpactStrength = 0;
-
-      relatedEvents.forEach(ev => {
-        const evTime = new Date(ev.time);
-        const diffMs = Math.abs(evTime.getTime() - now.getTime());
-        const diffHours = diffMs / (1000 * 60 * 60);
-
-        // We consider events within 36 hours of current time to catch relevant macro news
-        if (diffHours <= 36) {
-          let weight = 5;
-          if (ev.impact === 'HIGH') {
-            weight = 40;
-            if (diffHours <= 6) {
-              highImpactSoon = true;
-            }
-          } else if (ev.impact === 'MEDIUM') {
-            weight = 20;
-          }
-
-          netImpactStrength += weight;
-          
-          // Deterministic directional bias of news:
-          // Even length titles bias positive, odd length bias negative
-          const biasDirection = ev.title.length % 2 === 0 ? 1 : -1;
-          newsScoreCumulative += biasDirection * (weight * 0.4);
-        }
-      });
-
-      // Clamp news score between 15 and 85
-      const newsScore = Math.min(85, Math.max(15, newsScoreCumulative));
-
       // Technical score derived from rsi, daily bias, trend, orderbook imbalance
       let technicalScore = 50;
       if (metrics.rsi) {
@@ -683,8 +638,8 @@ app.get('/api/market-sentiment', (req, res) => {
       // Clamp technical score between 10 and 90
       const techClamped = Math.min(90, Math.max(10, technicalScore));
 
-      // Weighted Overall Sentiment Index (0 to 100)
-      const overallScore = Math.round(techClamped * 0.6 + newsScore * 0.4);
+      // Weighted Overall Sentiment Index (0 to 100) - pure technical without news
+      const overallScore = Math.round(techClamped);
 
       // Identify Market State: 'Volatile' | 'Trending' | 'Mean Reverting'
       let state: 'Volatile' | 'Trending' | 'Mean Reverting' = 'Mean Reverting';
@@ -692,10 +647,9 @@ app.get('/api/market-sentiment', (req, res) => {
       const atrRatio = metrics.atr / metrics.currentPrice;
       
       // Thresholds: Volatility trigger
-      // Crypto/Gold typically have higher volatility ratio, Forex is lower
       const volatilityThreshold = 0.007;
 
-      if (atrRatio > volatilityThreshold || highImpactSoon || netImpactStrength > 50) {
+      if (atrRatio > volatilityThreshold) {
         state = 'Volatile';
       } else if (metrics.trend !== 'NEUTRAL' || (metrics.rsi > 58 || metrics.rsi < 42)) {
         state = 'Trending';
@@ -707,15 +661,15 @@ app.get('/api/market-sentiment', (req, res) => {
         symbol: sym,
         overallScore, // 0 - 100
         technicalScore: Math.round(techClamped),
-        newsScore: Math.round(newsScore),
+        newsScore: 50,
         state,
-        impactFactor: Math.min(100, Math.round(netImpactStrength)),
+        impactFactor: 0,
         currentPrice: metrics.currentPrice,
         rsi: Math.round(metrics.rsi),
         atr: metrics.atr,
         trend: metrics.trend,
         imbalance: Math.round(orderBook?.imbalance || 0),
-        eventsCount: relatedEvents.length
+        eventsCount: 0
       };
     }
 
@@ -738,12 +692,12 @@ app.get('/api/order-book', (req, res) => {
 
 // get econ calendar
 app.get('/api/economic-calendar', (req, res) => {
-  res.json(economicEvents);
+  res.json([]);
 });
 
 // Also keep fallback alias for compatibility
 app.get('/api/forex-factory', (req, res) => {
-  res.json(economicEvents);
+  res.json([]);
 });
 
 // Live Institutional News Ticker Cache and Aggregator
@@ -1016,53 +970,14 @@ function injectSimulatedHeadline() {
   }
 }
 
-// Periodically generate simulated market announcements every 45s to reflect live trading atmosphere
-setInterval(injectSimulatedHeadline, 45000);
-
 // News ticker API route
 app.get('/api/institutional-news', async (req, res) => {
-  try {
-    const now = Date.now();
-    // Throttle real RSS refetches to at most once every 60 seconds to safeguard system throughput
-    if (now - lastNewsFetchTime > 60000) {
-      lastNewsFetchTime = now;
-      const liveRSS = await fetchLiveRSSNews();
-      if (liveRSS && liveRSS.length > 0) {
-        // Merge without duplicates based on title similarity
-        const existingTitles = new Set(cachedInstitutionalNews.map(item => item.title.trim().toLowerCase()));
-        const uniqueRSS = liveRSS.filter(item => !existingTitles.has(item.title.trim().toLowerCase()));
-        
-        cachedInstitutionalNews = [...uniqueRSS, ...cachedInstitutionalNews].slice(0, 60);
-      }
-    }
-    res.json(cachedInstitutionalNews);
-  } catch (e: any) {
-    console.error('Error in /api/institutional-news:', e);
-    res.status(500).json({ error: 'News server offline.' });
-  }
+  res.json([]);
 });
 
 // Endpoint to prune stale news
 app.post('/api/institutional-news/prune', (req, res) => {
-  try {
-    const maxAgeMinutes = parseInt(req.body.maxAgeMinutes as string || req.query.maxAgeMinutes as string) || 30;
-    const now = Date.now();
-    const cutoff = now - maxAgeMinutes * 60 * 1000;
-
-    const initialCount = cachedInstitutionalNews.length;
-    cachedInstitutionalNews = cachedInstitutionalNews.filter(item => {
-      if (!item.timestamp) return true; // keep if invalid
-      const ts = new Date(item.timestamp).getTime();
-      if (isNaN(ts)) return true;
-      return ts >= cutoff;
-    });
-
-    const prunedCount = initialCount - cachedInstitutionalNews.length;
-    res.json({ success: true, prunedCount, remainingCount: cachedInstitutionalNews.length });
-  } catch (e: any) {
-    console.error('Error in /api/institutional-news/prune:', e);
-    res.status(500).json({ error: 'Pruning failure.' });
-  }
+  res.json({ success: true, prunedCount: 0, remainingCount: 0 });
 });
 
 // Get historical risk breaches
@@ -1070,6 +985,260 @@ app.get('/api/risk/breaches', async (req, res) => {
   await checkForNewBreaches();
   res.json(readBreaches());
 });
+
+// --- BEGIN FUNDING ENDPOINTS ---
+interface FundingTx {
+  id: string;
+  type: 'DEPOSIT' | 'WITHDRAWAL';
+  method: string;
+  currency: string;
+  amount: number;
+  status: 'Settled' | 'Pending' | 'Failed' | 'Processing' | 'Cancelled';
+  providerStatus: string;
+  date: string;
+  walletAddress?: string;
+}
+
+interface FundingDb {
+  balance: number;
+  transactions: FundingTx[];
+}
+
+const FUNDING_DB_FILE = path.join(process.cwd(), 'funding_txs_db.json');
+
+function readFundingDb(): FundingDb {
+  try {
+    if (!fs.existsSync(FUNDING_DB_FILE)) {
+      const initialDb: FundingDb = {
+        balance: 58000.00,
+        transactions: [
+          { id: 'fund-1', type: 'DEPOSIT', method: 'Bank ACH Sweep', currency: 'USD', amount: 5000.00, status: 'Settled', providerStatus: 'plaid_cleared', date: '2026-06-25 10:14' },
+          { id: 'fund-2', type: 'DEPOSIT', method: 'M-Pesa Deposit', currency: 'KES', amount: 32000.00, status: 'Settled', providerStatus: 'mpesa_completed', date: '2026-06-25 10:22' },
+          { id: 'fund-3', type: 'DEPOSIT', method: 'USDC Deposit', currency: 'USDC', amount: 1200.00, status: 'Settled', providerStatus: 'coinbase_completed', date: '2026-06-25 11:40' },
+          { id: 'fund-4', type: 'WITHDRAWAL', method: 'Withdrawal Request', currency: 'USD', amount: 2500.00, status: 'Pending', providerStatus: 'plaid_pending', date: '2026-06-25 13:55' }
+        ]
+      };
+      fs.writeFileSync(FUNDING_DB_FILE, JSON.stringify(initialDb, null, 2));
+      return initialDb;
+    }
+    const data = fs.readFileSync(FUNDING_DB_FILE, 'utf-8').trim();
+    if (!data) {
+      return { balance: 58000.00, transactions: [] };
+    }
+    return JSON.parse(data) as FundingDb;
+  } catch (error) {
+    console.error('Error reading funding DB:', error);
+    return { balance: 58000.00, transactions: [] };
+  }
+}
+
+function writeFundingDb(dbData: FundingDb): boolean {
+  try {
+    fs.writeFileSync(FUNDING_DB_FILE, JSON.stringify(dbData, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error writing funding DB:', error);
+    return false;
+  }
+}
+
+function processPendingFundingTransfers() {
+  const dbData = readFundingDb();
+  let changed = false;
+  const now = Date.now();
+
+  dbData.transactions = dbData.transactions.map(tx => {
+    if (tx.status === 'Pending' || tx.status === 'Processing') {
+      let txTimeMs = 0;
+      try {
+        if (tx.date.includes(' ')) {
+          txTimeMs = new Date(tx.date.replace(' ', 'T') + ':00').getTime();
+        } else {
+          txTimeMs = new Date(tx.date).getTime();
+        }
+      } catch (err) {
+        txTimeMs = now;
+      }
+      
+      const diffSeconds = (now - txTimeMs) / 1000;
+
+      // Simulate a provider response after 15 seconds
+      if (diffSeconds >= 15) {
+        changed = true;
+        const isFailure = tx.amount % 1 === 0.99;
+        
+        if (isFailure) {
+          tx.status = 'Failed';
+          if (tx.method.toLowerCase().includes('ach')) tx.providerStatus = 'plaid_returned';
+          else if (tx.method.toLowerCase().includes('wire')) tx.providerStatus = 'bank_reversed';
+          else if (tx.method.toLowerCase().includes('card')) tx.providerStatus = 'stripe_failed';
+          else if (tx.method.toLowerCase().includes('usdc') || tx.method.toLowerCase().includes('stablecoin')) tx.providerStatus = 'coinbase_failed';
+          else tx.providerStatus = 'provider_expired';
+          
+          if (tx.type === 'WITHDRAWAL') {
+            if (tx.currency === 'USD' || tx.currency === 'USDC') {
+              dbData.balance += tx.amount;
+            }
+          }
+        } else {
+          tx.status = 'Settled';
+          if (tx.method.toLowerCase().includes('ach')) tx.providerStatus = 'plaid_cleared';
+          else if (tx.method.toLowerCase().includes('wire')) tx.providerStatus = 'bank_settled';
+          else if (tx.method.toLowerCase().includes('card')) tx.providerStatus = 'stripe_succeeded';
+          else if (tx.method.toLowerCase().includes('usdc') || tx.method.toLowerCase().includes('stablecoin')) tx.providerStatus = 'coinbase_completed';
+          else tx.providerStatus = 'provider_completed';
+
+          if (tx.type === 'DEPOSIT') {
+            if (tx.currency === 'USD' || tx.currency === 'USDC') {
+              dbData.balance += tx.amount;
+            }
+          }
+        }
+      }
+    }
+    return tx;
+  });
+
+  if (changed) {
+    writeFundingDb(dbData);
+  }
+}
+
+// 1. GET /api/funding/state - Get balance and all funding transactions
+app.get('/api/funding/state', (req, res) => {
+  try {
+    processPendingFundingTransfers();
+    const dbData = readFundingDb();
+    res.json(dbData);
+  } catch (err: any) {
+    console.error('Error fetching funding state:', err);
+    res.status(500).json({ error: 'Failed to retrieve funding state.' });
+  }
+});
+
+// 2. POST /api/funding/transfer - Initiate deposit or withdrawal
+app.post('/api/funding/transfer', (req, res) => {
+  try {
+    const { type, method, regionalMethod, currency, amount, walletAddress } = req.body;
+    
+    if (!type || !method || !currency || isNaN(amount) || amount <= 0) {
+      res.status(400).json({ error: 'Missing or invalid transfer parameters.' });
+      return;
+    }
+
+    processPendingFundingTransfers();
+    const dbData = readFundingDb();
+
+    if (type === 'WITHDRAWAL' && (currency === 'USD' || currency === 'USDC') && amount > dbData.balance) {
+      res.status(400).json({ error: 'Insufficient funds on server to complete this withdrawal.' });
+      return;
+    }
+
+    let methodString = '';
+    let initialStatus: 'Settled' | 'Pending' | 'Failed' | 'Processing' | 'Cancelled' = 'Settled';
+    let initialProviderStatus = '';
+
+    if (method === 'ACH') {
+      methodString = 'Bank ACH Sweep';
+      initialStatus = 'Pending';
+      initialProviderStatus = 'plaid_pending';
+    } else if (method === 'WIRE') {
+      methodString = 'USD Wire';
+      initialStatus = 'Pending';
+      initialProviderStatus = 'bank_processing';
+    } else if (method === 'CARD') {
+      methodString = 'Card Instant';
+      initialStatus = 'Settled';
+      initialProviderStatus = 'stripe_succeeded';
+    } else if (method === 'STABLECOIN') {
+      methodString = 'USDC Deposit';
+      initialStatus = 'Pending';
+      initialProviderStatus = 'coinbase_unconfirmed';
+    } else if (method === 'REGIONAL') {
+      methodString = `${regionalMethod || 'M-Pesa'} Deposit`;
+      initialStatus = 'Pending';
+      initialProviderStatus = 'provider_initiated';
+    } else {
+      methodString = method;
+      initialStatus = 'Pending';
+      initialProviderStatus = 'provider_pending';
+    }
+
+    if (type === 'WITHDRAWAL') {
+      if (method === 'REGIONAL') {
+        methodString = `${regionalMethod || 'M-Pesa'} Withdrawal`;
+      } else {
+        methodString = 'Withdrawal Request';
+      }
+      initialStatus = 'Pending';
+      if (method === 'ACH') initialProviderStatus = 'plaid_pending';
+      else if (method === 'WIRE') initialProviderStatus = 'bank_processing';
+      else if (method === 'CARD') initialProviderStatus = 'stripe_processing';
+      else if (method === 'STABLECOIN') initialProviderStatus = 'coinbase_unconfirmed';
+      else initialProviderStatus = 'provider_initiated';
+    }
+
+    if (type === 'WITHDRAWAL') {
+      if (currency === 'USD' || currency === 'USDC') {
+        dbData.balance -= amount;
+      }
+    } else if (type === 'DEPOSIT' && initialStatus === 'Settled') {
+      if (currency === 'USD' || currency === 'USDC') {
+        dbData.balance += amount;
+      }
+    }
+
+    const newTx: FundingTx = {
+      id: `fund-${Date.now()}`,
+      type,
+      method: methodString,
+      currency,
+      amount,
+      status: initialStatus,
+      providerStatus: initialProviderStatus,
+      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      ...(walletAddress ? { walletAddress } : {})
+    };
+
+    dbData.transactions.unshift(newTx);
+    writeFundingDb(dbData);
+
+    res.json({
+      success: true,
+      balance: dbData.balance,
+      transaction: newTx
+    });
+  } catch (err: any) {
+    console.error('Error executing transfer:', err);
+    res.status(500).json({ error: 'Transfer transaction failed.' });
+  }
+});
+
+// 3. POST /api/funding/sync - Sync client-side trading balance updates
+app.post('/api/funding/sync', (req, res) => {
+  try {
+    const { clientBalance } = req.body;
+    if (typeof clientBalance !== 'number' || isNaN(clientBalance)) {
+      res.status(400).json({ error: 'Invalid client balance.' });
+      return;
+    }
+
+    const dbData = readFundingDb();
+    const oldBalance = dbData.balance;
+    dbData.balance = clientBalance;
+    writeFundingDb(dbData);
+
+    res.json({
+      success: true,
+      oldBalance,
+      newBalance: dbData.balance
+    });
+  } catch (err: any) {
+    console.error('Error syncing balance:', err);
+    res.status(500).json({ error: 'Balance sync failed.' });
+  }
+});
+// --- END FUNDING ENDPOINTS ---
 
 // Register user context when logged in on frontend
 app.post('/api/auth/register', requireAuth, async (req: AuthRequest, res) => {
@@ -1949,28 +2118,15 @@ app.get('/api/market-briefing', async (req, res) => {
     };
   });
 
-  // 2. Compute high-impact upcoming events
+  // 2. Compute high-impact upcoming events - news-free system
   let highImpactEventsCount = 0;
-  const todayEvents = economicEvents.filter(ev => {
-    const evTime = new Date(ev.time);
-    const diffMs = Math.abs(evTime.getTime() - now.getTime());
-    const diffHours = diffMs / (1000 * 60 * 60);
-    
-    if (diffHours <= 36) {
-      if (ev.impact === 'HIGH') {
-        highImpactEventsCount++;
-      }
-      return true;
-    }
-    return false;
-  });
 
   // 3. Compute dynamic market mood parameters
   const bullishBiases = marketDetails.filter(m => m.dailyBias === 'BULLISH').length;
   const bearishBiases = marketDetails.filter(m => m.dailyBias === 'BEARISH').length;
   const sentimentBias = bullishBiases > bearishBiases ? 'BULLISH' : (bearishBiases > bullishBiases ? 'BEARISH' : 'MIXED');
 
-  const volatilityIndex = highImpactEventsCount >= 2 ? 'HIGH' : (highImpactEventsCount === 1 ? 'MEDIUM' : 'LOW');
+  const volatilityIndex = 'LOW';
 
   const majorThemes = [
     sentimentBias === 'BULLISH' 
@@ -1978,9 +2134,7 @@ app.get('/api/market-briefing', async (req, res) => {
       : sentimentBias === 'BEARISH'
       ? `Elevated safe-haven hedging as macroeconomic risk variables compress indexes.`
       : `Broad range correlation cycles leading to structural compression across Forex pairs.`,
-    highImpactEventsCount > 0
-      ? `Macro Alert: Red-folder high-volatility scheduled news releases require defense.`
-      : `Consolidation mode dominates with no high timeframe news triggers scheduled.`,
+    `Consolidation mode dominates with no high timeframe volatility alerts scheduled.`,
     `ICT Playbook rule dictates waiting for high/low liquidity sweeps of the previous sessions.`
   ];
 
@@ -2016,9 +2170,9 @@ Currently, our stock and index consensus bias registers as a **${sentimentBias}*
 
 ---
 
-#### 3. High-Impact News Alerts & Protocols
-*   We detect **${highImpactEventsCount} high impact red folder event(s)** on today's economic schedule.
-*   *Protocol Reminder*: Strictly adhere to the **30-Minute News Avoidance Doctrine** around major release slots to safeguard institutional equity from slippage.
+#### 3. Technical Volatility Protocols
+*   No high-impact system alerts are active on today's technical schedule.
+*   *Protocol Reminder*: Strictly adhere to the **30-Minute Volatility Avoidance Doctrine** around major session opens to safeguard institutional equity from slippage.
 
 ---
 

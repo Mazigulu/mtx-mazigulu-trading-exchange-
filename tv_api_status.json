@@ -5,7 +5,7 @@
   "lastTvStatus": {
     "NAS100": {
       "status": "RATE_LIMITED",
-      "timestamp": "2026-07-01T19:44:53.309Z",
+      "timestamp": "2026-07-04T20:37:00.109Z",
       "error": "Rate limiting (429) encountered. Backing off gracefully to prevent excessive traffic.",
       "symbolUsed": "NASDAQ:NDX",
       "apiKeyLength": 50,
