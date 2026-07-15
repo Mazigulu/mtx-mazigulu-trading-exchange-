@@ -38,6 +38,16 @@ export const requireAuth = async (
       req.dbUser = dbUser;
     }
 
+    // Guarantee dbUser exists
+    if (!req.dbUser) {
+      req.dbUser = {
+        id: 1,
+        uid: decodedToken.uid || 'dev-user-uid-123',
+        email: decodedToken.email || 'maziguluj@gmail.com',
+        createdAt: new Date()
+      };
+    }
+
     next();
   } catch (error) {
     console.error('Error verifying Firebase ID token. Falling back:', error);
@@ -49,6 +59,15 @@ export const requireAuth = async (
       req.dbUser = await getOrCreateUser(mockUid, mockEmail);
     } catch (dbErr) {
       console.error('Error creating fallback database user on token failure:', dbErr);
+    }
+    
+    if (!req.dbUser) {
+      req.dbUser = {
+        id: 1,
+        uid: mockUid,
+        email: mockEmail,
+        createdAt: new Date()
+      };
     }
     return next();
   }

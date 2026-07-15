@@ -22,9 +22,13 @@ const playTradeSound = (type: 'buy' | 'sell' | 'fail' | 'ai-success' | 'close') 
   try {
     const savedSettingsRaw = localStorage.getItem('apex_institutional_settings');
     if (savedSettingsRaw) {
-      const parsed = JSON.parse(savedSettingsRaw);
-      if (parsed && parsed.soundAlerts === false) {
-        return;
+      try {
+        const parsed = JSON.parse(savedSettingsRaw);
+        if (parsed && typeof parsed === 'object' && parsed.soundAlerts === false) {
+          return;
+        }
+      } catch (innerError) {
+        console.warn('Error parsing settings for sound check', innerError);
       }
     }
 
@@ -536,7 +540,7 @@ export default function TradeTerminal({
         const raw = localStorage.getItem('copilot_execution_order_intent');
         if (raw) {
           const order = JSON.parse(raw);
-          if (order.symbol === symbol) {
+          if (order && typeof order === 'object' && order.symbol === symbol) {
             setSide(order.side);
             setEntryPrice(order.entryPrice);
             setStopLoss(order.stopLoss);
@@ -1317,7 +1321,7 @@ export default function TradeTerminal({
       </div>
 
       {/* Risk Sizing & Execution Panel */}
-      <div className={`col-span-12 bg-[#080808] border border-white/10 rounded p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between ${activeTab === 'calculator' ? '' : 'hidden'}`}>
+      <div className={`col-span-12 bg-[#080808] border border-white/10 rounded p-4 md:p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between ${activeTab === 'calculator' ? '' : 'hidden'}`}>
         <div>
           <div className="flex items-center space-x-2.5 pb-4 border-b border-white/10">
             <div className="p-2 bg-indigo-500/10 rounded">
@@ -2154,7 +2158,7 @@ export default function TradeTerminal({
       </div>
 
       {/* Trades Ledger & Positions tracker */}
-      <div className={`col-span-12 bg-[#080808] border border-white/10 rounded p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between ${activeTab === 'ledger' ? '' : 'hidden'}`}>
+      <div className={`col-span-12 bg-[#080808] border border-white/10 rounded p-4 md:p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col justify-between ${activeTab === 'ledger' ? '' : 'hidden'}`}>
         <div>
           <div className="flex items-center space-x-2.5 pb-4 border-b border-white/10">
             <div className="p-2 bg-indigo-500/10 rounded">

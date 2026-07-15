@@ -146,14 +146,14 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
             <h4 className="text-[11px] font-mono font-bold uppercase tracking-wider text-white">
               Market Momentum
             </h4>
-            <p className="text-[9px] text-white/35 font-mono">
+            <p className="text-[9px] text-neutral-200 font-mono">
               Intensity index for {symbol}
             </p>
           </div>
         </div>
         
         {/* Simple tooltip status indicator */}
-        <div className="flex items-center space-x-1 font-mono text-[8.5px] uppercase bg-white/5 px-2 py-0.5 rounded border border-white/10 text-white/50">
+        <div className="flex items-center space-x-1 font-mono text-[8.5px] uppercase bg-white/5 px-2 py-0.5 rounded border border-white/10 text-neutral-200">
           <Activity className="w-2.5 h-2.5 text-indigo-400" />
           <span>Real-time</span>
         </div>
@@ -286,7 +286,7 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
           <span className={`text-[10.5px] font-mono font-black uppercase tracking-wider block ${colorClass}`}>
             {status}
           </span>
-          <p className="text-[9.5px] text-white/50 font-sans mt-1.5 leading-relaxed max-w-[260px] mx-auto text-center px-2">
+          <p className="text-[9.5px] text-neutral-200 font-sans mt-1.5 leading-relaxed max-w-[260px] mx-auto text-center px-2">
             {description}
           </p>
         </div>
@@ -294,14 +294,14 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
 
       {/* Volatility metric factors list */}
       <div className="pt-3 border-t border-white/5 space-y-2 mt-1">
-        <h5 className="text-[8px] font-mono uppercase tracking-wider font-extrabold text-white/20">
+        <h5 className="text-[8px] font-mono uppercase tracking-wider font-extrabold text-neutral-300">
           Volatility Matrix Contributors
         </h5>
         
         <div className="grid grid-cols-3 gap-2">
           {/* Vol Ratio stat block */}
           <div className="bg-black/40 p-2.5 rounded border border-white/5 text-center">
-            <span className="text-[8px] text-white/30 uppercase tracking-tight block">Vol Ratio (3/15)</span>
+            <span className="text-[8px] text-neutral-200 uppercase tracking-tight block">Vol Ratio (3/15)</span>
             <div className="text-[10px] font-mono font-bold mt-1 text-white flex items-center justify-center space-x-1 h-4">
               <motion.span 
                 key={volRatio}
@@ -313,14 +313,14 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
                 {volRatio.toFixed(2)}x
               </motion.span>
             </div>
-            <span className="text-[7.5px] text-white/20 block font-sans mt-0.5">
+            <span className="text-[7.5px] text-neutral-300 block font-sans mt-0.5">
               {volRatio >= 1.2 ? 'Expansion' : 'Compression'}
             </span>
           </div>
 
           {/* RSI Deviation block */}
           <div className="bg-black/40 p-2.5 rounded border border-white/5 text-center">
-            <span className="text-[8px] text-white/30 uppercase tracking-tight block">RSI Deviation</span>
+            <span className="text-[8px] text-neutral-200 uppercase tracking-tight block">RSI Deviation</span>
             <div className="text-[10px] font-mono font-bold mt-1 text-white flex items-center justify-center space-x-1 h-4">
               <motion.span 
                 key={rsiVal}
@@ -332,26 +332,26 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
                 {Math.abs(Math.round(rsiVal - 50))}
               </motion.span>
             </div>
-            <span className="text-[7.5px] text-white/20 block font-sans mt-0.5">
+            <span className="text-[7.5px] text-neutral-300 block font-sans mt-0.5">
               Ref: {Math.round(rsiVal)}
             </span>
           </div>
 
           {/* Trend strength stat block */}
           <div className="bg-black/40 p-2.5 rounded border border-white/5 text-center">
-            <span className="text-[8px] text-white/30 uppercase tracking-tight block">Trend Persist</span>
+            <span className="text-[8px] text-neutral-200 uppercase tracking-tight block">Trend Persist</span>
             <div className="text-[10px] font-mono font-bold mt-1 text-white flex items-center justify-center space-x-1 h-4">
               <motion.span 
                 key={trendStrength}
                 initial={{ opacity: 0.3, scale: 0.85 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ type: 'spring', stiffness: 200, damping: 12 }}
-                className={trendStrength >= 60 ? 'text-indigo-400 font-extrabold' : 'text-neutral-400 font-semibold'}
+                className={trendStrength >= 60 ? 'text-indigo-400 font-extrabold' : 'text-neutral-200 font-semibold'}
               >
                 {Math.round(trendStrength)}%
               </motion.span>
             </div>
-            <span className="text-[7.5px] text-white/20 block font-sans mt-0.5">
+            <span className="text-[7.5px] text-neutral-300 block font-sans mt-0.5">
               {trendStrength >= 65 ? 'Impaired' : 'Balanced'}
             </span>
           </div>

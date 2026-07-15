@@ -107,7 +107,11 @@ export default function RiskExposureJournal({ trades }: RiskExposureJournalProps
   const [sessions, setSessions] = useState<RiskSessionLog[]>(() => {
     try {
       const stored = localStorage.getItem('apex_risk_sessions_journal');
-      return stored ? JSON.parse(stored) : DEFAULT_SESSIONS;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      return DEFAULT_SESSIONS;
     } catch {
       return DEFAULT_SESSIONS;
     }

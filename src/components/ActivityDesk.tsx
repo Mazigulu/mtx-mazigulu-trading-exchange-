@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   Filter, 
@@ -624,6 +624,124 @@ export default function ActivityDesk() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
+  // Fetch real-time wallet transactions and integrate them into Activity Workspace logs
+  useEffect(() => {
+    let isMounted = true;
+    let isFetching = false;
+
+    const fetchWalletActivities = async () => {
+      if (isFetching) return;
+      isFetching = true;
+      try {
+        const res = await fetch('/api/funding/state');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          const walletTxs: any[] = data.transactions || [];
+          
+          // Map wallet transactions to ActivityEvents
+          const mappedWalletActivities: ActivityEvent[] = walletTxs.map((tx: any) => {
+            const isOutbound = tx.type === 'WITHDRAWAL';
+            
+            // Format amount nicely
+            let displayAmount = `${tx.currency} ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+            if (tx.currency === 'USD') displayAmount = `$${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+            else if (tx.currency === 'EUR') displayAmount = `€${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+            else if (tx.currency === 'GBP') displayAmount = `£${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+            // Determine rate for USD calculation
+            let rate = 1.0;
+            if (tx.currency === 'EUR') rate = 1.09;
+            else if (tx.currency === 'GBP') rate = 1.28;
+            else if (tx.currency === 'KES') rate = 0.0078;
+            
+            const amountUSDValue = tx.amount * rate;
+
+            // Map status
+            let status: 'Completed' | 'Pending' | 'Processing' | 'Cancelled' | 'Failed' = 'Completed';
+            if (tx.status === 'Settled') status = 'Completed';
+            else if (tx.status === 'Pending') status = 'Pending';
+            else if (tx.status === 'Processing') status = 'Processing';
+            else if (tx.status === 'Cancelled') status = 'Cancelled';
+            else if (tx.status === 'Failed') status = 'Failed';
+
+            // Settlement rail details
+            let settlementRail = 'Apex DTC Instant Settlement';
+            if (tx.method?.includes('ACH')) settlementRail = 'Chase ACH Protocol Verification';
+            else if (tx.method?.includes('Wire')) settlementRail = 'Federal Reserve Wire Network';
+            else if (tx.method?.includes('Card')) settlementRail = 'Visa Direct Payout API';
+            else if (tx.method?.includes('M-Pesa')) settlementRail = 'Safaricom Paybill #408892';
+            else if (tx.method?.includes('Transfer') || tx.method?.includes('Deposit') || tx.method?.includes('Withdrawal')) {
+              if (['USDC', 'USDT', 'PYUSD'].includes(tx.currency)) {
+                settlementRail = 'Circle Smart Contract Vault';
+              }
+            }
+
+            // Timeline steps
+            const timelineSteps = [];
+            if (status === 'Completed') {
+              timelineSteps.push(
+                { label: 'Order Submitted', timestamp: '09:00:00', description: `Inbound transfer of ${tx.amount} ${tx.currency} initiated.` },
+                { label: 'Settlement Initiated', timestamp: '09:05:00', description: 'Internal treasury clearance validation triggered.' },
+                { label: 'Settlement Completed', timestamp: '09:15:00', description: 'Securities ledger credited and cash asset debited.' }
+              );
+            } else if (status === 'Pending' || status === 'Processing') {
+              timelineSteps.push(
+                { label: 'Order Submitted', timestamp: '09:00:00', description: `Inbound transfer of ${tx.amount} ${tx.currency} initiated.` },
+                { label: 'Awaiting Settlement', timestamp: '09:05:00', description: 'Held in clearing status. Awaiting external network authorization.' }
+              );
+            } else {
+              timelineSteps.push(
+                { label: 'Order Submitted', timestamp: '09:00:00', description: `Inbound transfer of ${tx.amount} ${tx.currency} initiated.` },
+                { label: 'Settlement Failed', timestamp: '09:15:00', description: 'External system returned decline code or network exception.' }
+              );
+            }
+
+            return {
+              id: tx.id,
+              timestamp: tx.date.length === 16 ? `${tx.date}:00` : tx.date,
+              type: tx.type,
+              category: 'funding',
+              eventName: `${tx.currency} ${tx.type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'} via ${tx.method}`,
+              asset: tx.currency,
+              methodOrDetail: tx.method,
+              amount: displayAmount,
+              amountUSDValue: amountUSDValue,
+              status: status,
+              refId: tx.id,
+              quantity: 'N/A',
+              price: `1.00 ${tx.currency}`,
+              network: ['USDC', 'USDT', 'PYUSD'].includes(tx.currency) ? 'Base L2 Network' : 'Standard Clearing Rails',
+              settlementRail: settlementRail,
+              fees: tx.method?.includes('Wire') ? '$15.00' : '$0.00',
+              timeline: timelineSteps
+            };
+          });
+
+          // Merge with INITIAL_ACTIVITIES, filtering out any existing events with matching IDs to prevent duplicates
+          if (isMounted) {
+            setActivities(prev => {
+              const filteredPrev = prev.filter(p => !mappedWalletActivities.some(w => w.id === p.id));
+              const merged = [...mappedWalletActivities, ...filteredPrev];
+              // Sort by timestamp descending
+              return merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch wallet activities:', err);
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    fetchWalletActivities();
+    const interval = setInterval(fetchWalletActivities, 5000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // 1-to-1 mappings of category filters from prompt
   const CATEGORY_CHIPS = [
     { label: 'All', value: 'ALL' },
@@ -781,7 +899,7 @@ export default function ActivityDesk() {
             <span className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/30 rounded text-[9px] font-black tracking-widest text-indigo-400">
               LEDGER CORE
             </span>
-            <span className="text-[10px] text-white/40 uppercase tracking-widest">Permanent Registry</span>
+            <span className="text-[10px] text-neutral-200 uppercase tracking-widest">Permanent Registry</span>
           </div>
           <h2 className="text-xl font-black text-white tracking-tight mt-1.5 flex items-center gap-2">
             <History className="w-5 h-5 text-indigo-400 stroke-[2.5px]" />
@@ -797,7 +915,7 @@ export default function ActivityDesk() {
               className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
                 viewMode === 'TABLE' 
                   ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30' 
-                  : 'text-white/40 hover:text-white/80'
+                  : 'text-neutral-200 hover:text-white'
               }`}
               title="Table Grid Blotter View"
             >
@@ -809,7 +927,7 @@ export default function ActivityDesk() {
               className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
                 viewMode === 'TIMELINE' 
                   ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30' 
-                  : 'text-white/40 hover:text-white/80'
+                  : 'text-neutral-200 hover:text-white'
               }`}
               title="Chronological Timeline View"
             >
@@ -835,7 +953,7 @@ export default function ActivityDesk() {
         {/* Card 1: Today's Activity */}
         <div className="bg-[#08080c] border border-white/10 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group">
           <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-500/[0.02] rounded-full blur-2xl group-hover:bg-indigo-500/[0.05] transition-all" />
-          <span className="text-white/30 text-[8.5px] font-black uppercase tracking-widest block">Today's Activity</span>
+          <span className="text-neutral-200 text-[8.5px] font-black uppercase tracking-widest block">Today's Activity</span>
           <span className="text-2xl font-black text-white block mt-1.5">
             {operationsMetrics.todaysEventsCount} Events
           </span>
@@ -848,18 +966,18 @@ export default function ActivityDesk() {
         {/* Card 2: Pending Actions */}
         <div className="bg-[#08080c] border border-white/10 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group">
           <div className="absolute right-0 top-0 w-24 h-24 bg-amber-500/[0.02] rounded-full blur-2xl group-hover:bg-amber-500/[0.05] transition-all" />
-          <span className="text-white/30 text-[8.5px] font-black uppercase tracking-widest block">Pending Actions</span>
+          <span className="text-neutral-200 text-[8.5px] font-black uppercase tracking-widest block">Pending Actions</span>
           <span className="text-2xl font-black text-amber-400 block mt-1.5">
             {operationsMetrics.pendingCount} Pending
           </span>
-          <div className="text-[9.5px] text-white/50 block mt-2 leading-relaxed space-y-0.5">
+          <div className="text-[9.5px] text-neutral-200 block mt-2 leading-relaxed space-y-0.5">
             <div className="flex justify-between">
               <span>Withdrawal Limit Queue:</span>
-              <span className="font-bold text-white/80">{operationsMetrics.pendingWithdrawals} Outbound</span>
+              <span className="font-bold text-white">{operationsMetrics.pendingWithdrawals} Outbound</span>
             </div>
             <div className="flex justify-between">
               <span>Investment Fills:</span>
-              <span className="font-bold text-white/80">{operationsMetrics.pendingInvestments} Order</span>
+              <span className="font-bold text-white">{operationsMetrics.pendingInvestments} Order</span>
             </div>
           </div>
         </div>
@@ -867,7 +985,7 @@ export default function ActivityDesk() {
         {/* Card 3: Settled Transactions */}
         <div className="bg-[#08080c] border border-white/10 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group">
           <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-500/[0.02] rounded-full blur-2xl group-hover:bg-emerald-500/[0.05] transition-all" />
-          <span className="text-white/30 text-[8.5px] font-black uppercase tracking-widest block">Settled Transactions</span>
+          <span className="text-neutral-200 text-[8.5px] font-black uppercase tracking-widest block">Settled Transactions</span>
           <span className="text-2xl font-black text-white block mt-1.5">
             {operationsMetrics.completedCount} Completed
           </span>
@@ -880,11 +998,11 @@ export default function ActivityDesk() {
         {/* Card 4: Total Transaction Volume */}
         <div className="bg-[#08080c] border border-white/10 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group">
           <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/[0.02] rounded-full blur-2xl group-hover:bg-purple-500/[0.05] transition-all" />
-          <span className="text-white/30 text-[8.5px] font-black uppercase tracking-widest block">Total Transaction Volume</span>
+          <span className="text-neutral-200 text-[8.5px] font-black uppercase tracking-widest block">Total Transaction Volume</span>
           <span className="text-2xl font-black text-indigo-300 block mt-1.5">
             ${operationsMetrics.totalVolumeUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </span>
-          <span className="text-[10px] text-white/45 font-semibold block mt-2">
+          <span className="text-[10px] text-neutral-200 font-semibold block mt-2">
             Cumulative Since Account Creation
           </span>
         </div>
@@ -899,7 +1017,7 @@ export default function ActivityDesk() {
           
           {/* Search Box */}
           <div className="lg:col-span-5 relative">
-            <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-white/30">
+            <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-neutral-200">
               <Search className="w-4 h-4" />
             </span>
             <input
@@ -907,7 +1025,7 @@ export default function ActivityDesk() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by asset, ref ID, amount, payment method..."
-              className="w-full bg-[#040406] border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-[11px] placeholder-white/35 text-white focus:outline-none focus:border-indigo-500/40 transition-colors"
+              className="w-full bg-[#040406] border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-[11px] placeholder-neutral-200 text-white focus:outline-none focus:border-indigo-500/40 transition-colors"
             />
           </div>
 
@@ -931,7 +1049,7 @@ export default function ActivityDesk() {
           {dateFilter === 'CUSTOM' && (
             <div className="lg:col-span-4 grid grid-cols-2 gap-2 animate-fadeIn">
               <div className="relative">
-                <span className="absolute top-2.5 left-2.5 text-[8px] text-white/30 uppercase tracking-widest font-black">From</span>
+                <span className="absolute top-2.5 left-2.5 text-[8px] text-neutral-200 uppercase tracking-widest font-black">From</span>
                 <input
                   type="date"
                   value={customStartDate}
@@ -940,7 +1058,7 @@ export default function ActivityDesk() {
                 />
               </div>
               <div className="relative">
-                <span className="absolute top-2.5 left-2.5 text-[8px] text-white/30 uppercase tracking-widest font-black">To</span>
+                <span className="absolute top-2.5 left-2.5 text-[8px] text-neutral-200 uppercase tracking-widest font-black">To</span>
                 <input
                   type="date"
                   value={customEndDate}
@@ -975,7 +1093,7 @@ export default function ActivityDesk() {
         {/* Filter Chips Horizontal Slider Row */}
         <div className="border-t border-white/5 pt-3.5">
           <div className="flex items-center gap-2 overflow-x-auto pb-1.5 no-scrollbar scroll-smooth">
-            <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider shrink-0 flex items-center gap-1 select-none">
+            <span className="text-[9px] text-neutral-200 font-bold uppercase tracking-wider shrink-0 flex items-center gap-1 select-none">
               <Filter className="w-3 h-3 text-indigo-400" />
               Event Filters:
             </span>
@@ -986,7 +1104,7 @@ export default function ActivityDesk() {
                 className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wide transition-all shrink-0 cursor-pointer ${
                   activeCategoryFilter === chip.value 
                     ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40 shadow-sm' 
-                    : 'bg-black/35 text-white/50 border border-white/5 hover:text-white/90 hover:bg-white/[0.02]'
+                    : 'bg-black/35 text-neutral-200 border border-white/5 hover:text-white hover:bg-white/[0.02]'
                 }`}
               >
                 {chip.label}
@@ -1000,12 +1118,12 @@ export default function ActivityDesk() {
       {/* ──────────────────── MAIN RESULTS BLOTTER LIST ──────────────────── */}
       {filteredActivities.length === 0 ? (
         <div className="border border-dashed border-white/10 bg-[#08080c] rounded-2xl p-16 text-center space-y-4">
-          <div className="p-3 bg-white/5 rounded-full w-12 h-12 flex items-center justify-center mx-auto text-white/30">
+          <div className="p-3 bg-white/5 rounded-full w-12 h-12 flex items-center justify-center mx-auto text-neutral-200">
             <History className="w-6 h-6 animate-pulse" />
           </div>
           <div className="space-y-1.5">
             <h4 className="text-xs font-black uppercase text-white tracking-widest">No matched transaction entries</h4>
-            <p className="text-[10px] text-white/35 max-w-md mx-auto leading-relaxed">
+            <p className="text-[10px] text-neutral-200 max-w-md mx-auto leading-relaxed">
               No permanently committed ledger records correspond to your criteria. Try loosening search terms or switching categories.
             </p>
           </div>
@@ -1018,7 +1136,7 @@ export default function ActivityDesk() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-white/[0.02] border-b border-white/10 text-[9px] font-bold uppercase tracking-wider text-white/40">
+                  <tr className="bg-white/[0.02] border-b border-white/10 text-[9px] font-bold uppercase tracking-wider text-neutral-200">
                     <th className="py-4 px-5">Timestamp</th>
                     <th className="py-4 px-5">Event</th>
                     <th className="py-4 px-5">Asset / Method</th>
@@ -1041,7 +1159,7 @@ export default function ActivityDesk() {
                         title="Click row to open permanent audit ledger details"
                       >
                         {/* Timestamp */}
-                        <td className="py-3.5 px-5 text-white/60 font-mono whitespace-nowrap">
+                        <td className="py-3.5 px-5 text-neutral-200 font-mono whitespace-nowrap">
                           {activity.timestamp}
                         </td>
 
@@ -1060,11 +1178,11 @@ export default function ActivityDesk() {
                         </td>
 
                         {/* Asset / Method */}
-                        <td className="py-3.5 px-5 text-white/50 whitespace-nowrap">
+                        <td className="py-3.5 px-5 text-neutral-200 whitespace-nowrap">
                           <span className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded font-semibold text-white/80">
                             {activity.asset}
                           </span>
-                          <span className="text-[9px] text-white/30 ml-2 font-normal">
+                          <span className="text-[9px] text-neutral-200 ml-2 font-normal">
                             ({activity.methodOrDetail})
                           </span>
                         </td>
@@ -1072,7 +1190,7 @@ export default function ActivityDesk() {
                         {/* Amount */}
                         <td className="py-3.5 px-5 text-right font-black whitespace-nowrap font-mono">
                           {isNeutral ? (
-                            <span className="text-white/30">N/A</span>
+                            <span className="text-neutral-200">N/A</span>
                           ) : (
                             <span className={isOutbound ? 'text-rose-400' : 'text-emerald-400'}>
                               {isOutbound ? '-' : '+'}{activity.amount}
@@ -1086,7 +1204,7 @@ export default function ActivityDesk() {
                             activity.status === 'Completed' ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400' :
                             activity.status === 'Pending' ? 'bg-amber-500/10 border border-amber-500/25 text-amber-400 animate-pulse' :
                             activity.status === 'Processing' ? 'bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 animate-pulse' :
-                            activity.status === 'Cancelled' ? 'bg-white/5 border border-white/10 text-white/30' :
+                            activity.status === 'Cancelled' ? 'bg-white/5 border border-white/10 text-neutral-200' :
                             activity.status === 'Partially Filled' ? 'bg-sky-500/10 border border-sky-500/25 text-sky-400' :
                             'bg-rose-500/10 border border-rose-500/25 text-rose-400'
                           }`}>
@@ -1095,12 +1213,12 @@ export default function ActivityDesk() {
                         </td>
 
                         {/* Reference ID */}
-                        <td className="py-3.5 px-5 text-center font-mono text-white/45 font-semibold text-[9.5px]">
+                        <td className="py-3.5 px-5 text-center font-mono text-neutral-200 font-semibold text-[9.5px]">
                           {activity.refId}
                         </td>
 
                         {/* Drawer Review Chevron CTA */}
-                        <td className="py-3.5 px-5 text-right whitespace-nowrap text-white/30 group-hover:text-white/80 transition-colors">
+                        <td className="py-3.5 px-5 text-right whitespace-nowrap text-neutral-400 group-hover:text-white transition-colors">
                           <ChevronRight className="w-4 h-4 ml-auto group-hover:translate-x-0.5 transition-transform" />
                         </td>
                       </tr>
@@ -1140,14 +1258,14 @@ export default function ActivityDesk() {
                     {/* Left: Time and Title */}
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[9.5px] text-white/40 font-mono tracking-tight font-semibold">
+                        <span className="text-[9.5px] text-neutral-200 font-mono tracking-tight font-semibold">
                           {activity.timestamp}
                         </span>
                         <span className={`px-1.5 py-0.2 rounded text-[7.5px] font-extrabold uppercase tracking-widest ${
                           activity.status === 'Completed' ? 'bg-emerald-500/5 text-emerald-400 border border-emerald-500/10' :
                           activity.status === 'Pending' ? 'bg-amber-500/5 text-amber-400 border border-amber-500/10 animate-pulse' :
                           activity.status === 'Processing' ? 'bg-indigo-500/5 text-indigo-400 border border-indigo-500/10 animate-pulse' :
-                          activity.status === 'Cancelled' ? 'bg-white/5 text-white/30' :
+                          activity.status === 'Cancelled' ? 'bg-white/5 text-neutral-400' :
                           'bg-rose-500/5 text-rose-400 border border-rose-500/10'
                         }`}>
                           {activity.status}
@@ -1156,16 +1274,16 @@ export default function ActivityDesk() {
                       <h4 className="text-xs font-black text-white group-hover:text-indigo-300 transition-colors">
                         {activity.eventName}
                       </h4>
-                      <p className="text-[10px] text-white/45">
-                        Payment system rail: <strong className="text-white/70 font-semibold">{activity.methodOrDetail}</strong> • Ref: <span className="font-mono text-indigo-300">{activity.refId}</span>
+                      <p className="text-[10px] text-neutral-200">
+                        Payment system rail: <strong className="text-white font-semibold">{activity.methodOrDetail}</strong> • Ref: <span className="font-mono text-indigo-300">{activity.refId}</span>
                       </p>
                     </div>
 
                     {/* Right: Amount or Value block */}
                     <div className="sm:text-right shrink-0 mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-white/5 sm:border-t-0 flex sm:flex-col justify-between sm:justify-center">
-                      <span className="text-[8.5px] text-white/30 uppercase tracking-widest block sm:mb-0.5">Clearing Value</span>
+                      <span className="text-[8.5px] text-neutral-200 uppercase tracking-widest block sm:mb-0.5">Clearing Value</span>
                       <span className={`text-[12px] font-black font-mono ${
-                        isNeutral ? 'text-white/40' : isOutbound ? 'text-rose-400' : 'text-emerald-400'
+                        isNeutral ? 'text-neutral-200' : isOutbound ? 'text-rose-400' : 'text-emerald-400'
                       }`}>
                         {isNeutral ? 'N/A' : isOutbound ? `-${activity.amount}` : `+${activity.amount}`}
                       </span>
@@ -1204,7 +1322,7 @@ export default function ActivityDesk() {
               </div>
               <button
                 onClick={() => setSelectedActivity(null)}
-                className="p-1.5 hover:bg-white/5 rounded-lg text-white/40 hover:text-white transition-all cursor-pointer"
+                className="p-1.5 hover:bg-white/5 rounded-lg text-neutral-200 hover:text-white transition-all cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1215,14 +1333,14 @@ export default function ActivityDesk() {
               
               {/* SECTION 1: Event Summary */}
               <div className="bg-[#040405] p-4 rounded-xl border border-white/5 text-center space-y-1.5">
-                <span className="text-[8.5px] text-white/30 uppercase tracking-widest block font-semibold">Event Description</span>
+                <span className="text-[8.5px] text-neutral-200 uppercase tracking-widest block font-semibold">Event Description</span>
                 <h4 className="text-sm font-black text-white">{selectedActivity.eventName}</h4>
                 <div className="flex justify-center gap-2 pt-1">
                   <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wide leading-none ${
                     selectedActivity.status === 'Completed' ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400' :
                     selectedActivity.status === 'Pending' ? 'bg-amber-500/10 border border-amber-500/25 text-amber-400 animate-pulse' :
                     selectedActivity.status === 'Processing' ? 'bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 animate-pulse' :
-                    selectedActivity.status === 'Cancelled' ? 'bg-white/5 border border-white/10 text-white/30' :
+                    selectedActivity.status === 'Cancelled' ? 'bg-white/5 border border-white/10 text-neutral-200' :
                     'bg-rose-500/10 border border-rose-500/25 text-rose-400'
                   }`}>
                     {selectedActivity.status}
@@ -1232,7 +1350,7 @@ export default function ActivityDesk() {
 
               {/* SECTION 2: Settlement Timeline Operations (Audit Trail) */}
               <div className="space-y-3.5">
-                <span className="text-[9.5px] text-white/40 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
+                <span className="text-[9.5px] text-neutral-200 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
                   Chronological Audit Trail
                 </span>
                 
@@ -1245,10 +1363,10 @@ export default function ActivityDesk() {
                       {/* marker dot */}
                       <div className="absolute -left-[18.5px] top-1 w-2 h-2 rounded-full bg-[#09090d] border border-indigo-400" />
                       <div className="flex justify-between items-center text-[9.5px]">
-                        <span className="font-bold text-white/80">{step.label}</span>
-                        <span className="text-white/40 font-mono">{step.timestamp}</span>
+                        <span className="font-bold text-white">{step.label}</span>
+                        <span className="text-neutral-200 font-mono">{step.timestamp}</span>
                       </div>
-                      <p className="text-[9px] text-white/45 mt-0.5 leading-normal">
+                      <p className="text-[9px] text-neutral-200 mt-0.5 leading-normal">
                         {step.description}
                       </p>
                     </div>
@@ -1258,30 +1376,30 @@ export default function ActivityDesk() {
 
               {/* SECTION 3: Transaction Details Grid */}
               <div className="space-y-3">
-                <span className="text-[9.5px] text-white/40 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
+                <span className="text-[9.5px] text-neutral-200 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
                   Asset Parameters
                 </span>
                 
                 <div className="grid grid-cols-2 gap-4 bg-[#040405] p-3.5 rounded-xl border border-white/5">
                   <div>
-                    <span className="text-white/30 text-[8px] uppercase tracking-wider block">Target Asset / Currency</span>
+                    <span className="text-neutral-200 text-[8px] uppercase tracking-wider block">Target Asset / Currency</span>
                     <span className="text-white font-bold block mt-0.5">{selectedActivity.asset}</span>
                   </div>
                   <div>
-                    <span className="text-white/30 text-[8px] uppercase tracking-wider block">Quantity / Volume</span>
+                    <span className="text-neutral-200 text-[8px] uppercase tracking-wider block">Quantity / Volume</span>
                     <span className="text-white font-bold block mt-0.5">{selectedActivity.quantity || 'N/A'}</span>
                   </div>
                   <div>
-                    <span className="text-white/30 text-[8px] uppercase tracking-wider block">Reference Spot Price</span>
+                    <span className="text-neutral-200 text-[8px] uppercase tracking-wider block">Reference Spot Price</span>
                     <span className="text-white font-bold block mt-0.5">{selectedActivity.price || 'N/A'}</span>
                   </div>
                   <div>
-                    <span className="text-white/30 text-[8px] uppercase tracking-wider block">Execution Gross Value</span>
+                    <span className="text-neutral-200 text-[8px] uppercase tracking-wider block">Execution Gross Value</span>
                     <span className={`font-black block mt-0.5 ${
                       selectedActivity.type === 'WITHDRAWAL' || selectedActivity.type === 'SELL' 
                         ? 'text-rose-400' 
                         : ['LOGIN', 'PASSWORD_CHANGE', 'VERIFICATION', 'PAYMENT_ADDED', 'DELAYED', 'MAINTENANCE', 'HALT', 'REBALANCING', 'STOCK_SPLIT', 'TICKER_CHANGE'].includes(selectedActivity.type)
-                          ? 'text-white/40' 
+                          ? 'text-neutral-200' 
                           : 'text-emerald-400'
                     }`}>
                       {selectedActivity.amount}
@@ -1292,29 +1410,29 @@ export default function ActivityDesk() {
 
               {/* SECTION 4: Metadata Parameters */}
               <div className="space-y-3.5">
-                <span className="text-[9.5px] text-white/40 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
+                <span className="text-[9.5px] text-neutral-200 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
                   Permanent Cryptographic Identifiers
                 </span>
 
                 <div className="space-y-2 bg-[#040405] p-3.5 rounded-xl border border-white/5 font-mono text-[9px]">
                   <div className="flex justify-between">
-                    <span className="text-white/30">REFERENCE IDENTIFIER:</span>
+                    <span className="text-neutral-200">REFERENCE IDENTIFIER:</span>
                     <span className="text-white font-semibold">{selectedActivity.refId}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-white/30">CUSTODIAL GATEWAY:</span>
-                    <span className="text-white/70 font-semibold">{selectedActivity.network || 'Internal Pool Core'}</span>
+                    <span className="text-neutral-200">CUSTODIAL GATEWAY:</span>
+                    <span className="text-white font-semibold">{selectedActivity.network || 'Internal Pool Core'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-white/30">SETTLEMENT CLEAR RAIL:</span>
-                    <span className="text-white/70 font-semibold">{selectedActivity.settlementRail || 'MTX Liquidity Swap'}</span>
+                    <span className="text-neutral-200">SETTLEMENT CLEAR RAIL:</span>
+                    <span className="text-white font-semibold">{selectedActivity.settlementRail || 'MTX Liquidity Swap'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-white/30">CLEARING DESK FEES:</span>
+                    <span className="text-neutral-200">CLEARING DESK FEES:</span>
                     <span className="text-indigo-400 font-bold">{selectedActivity.fees || '0.00%'}</span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-white/5 mt-1.5">
-                    <span className="text-white/30">LEDGER STATE BLOCK:</span>
+                    <span className="text-neutral-200">LEDGER STATE BLOCK:</span>
                     <span className="text-emerald-400 font-bold">CERTIFIED AMENDABLE</span>
                   </div>
                 </div>
@@ -1324,7 +1442,7 @@ export default function ActivityDesk() {
               <div className="p-3 bg-indigo-950/10 border border-indigo-500/10 rounded-lg text-[9px] text-indigo-300">
                 <div className="flex gap-2">
                   <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <p className="leading-relaxed text-white/55">
+                  <p className="leading-relaxed text-neutral-200">
                     This transaction represents an immutable ledger entry registered on the MTX clearing protocol under sovereign clearing authority.
                   </p>
                 </div>

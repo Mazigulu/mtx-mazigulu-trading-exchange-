@@ -703,7 +703,8 @@ export default function ChartContainer({
     try {
       const saved = localStorage.getItem('smart_alerts_config');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (_) {}
     return [
@@ -746,7 +747,8 @@ export default function ChartContainer({
     try {
       const saved = localStorage.getItem('apex_visual_price_alerts');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (_) {}
     return [];
@@ -757,7 +759,8 @@ export default function ChartContainer({
     try {
       const saved = localStorage.getItem('apex_price_action_trend_alerts');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (_) {}
     return [
@@ -770,7 +773,8 @@ export default function ChartContainer({
     try {
       const saved = localStorage.getItem('apex_persistent_toasts');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (_) {}
     return [];
@@ -803,7 +807,8 @@ export default function ChartContainer({
     try {
       const saved = localStorage.getItem('apex_manual_trendlines');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (_) {}
     return [];
@@ -838,7 +843,8 @@ export default function ChartContainer({
     try {
       const saved = localStorage.getItem('apex_chart_annotations');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (_) {}
     return [];
@@ -6734,7 +6740,7 @@ export default function ChartContainer({
                   <span className="font-extrabold text-white/90 font-sans">{hoveredTrade.trade.symbol}</span>
                 </div>
                 <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                  hoveredTrade.trade.status === 'OPEN' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-neutral-800 text-neutral-400 border border-transparent'
+                  hoveredTrade.trade.status === 'OPEN' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-neutral-800 text-neutral-200 border border-transparent'
                 }`}>
                   {hoveredTrade.trade.status}
                 </span>

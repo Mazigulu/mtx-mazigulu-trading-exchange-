@@ -95,7 +95,7 @@ export default function DailyBriefing() {
 
       if (isBullet) {
         return (
-          <li key={`line-${lIdx}`} className="ml-5 list-disc pl-1 text-[12px] leading-relaxed text-white/80 mb-2 font-sans">
+          <li key={`line-${lIdx}`} className="ml-5 list-disc pl-1 text-[12px] leading-relaxed text-neutral-200 mb-2 font-sans">
             {formattedParts}
           </li>
         );
@@ -131,7 +131,7 @@ export default function DailyBriefing() {
       }
 
       return (
-        <p key={`line-${lIdx}`} className="text-[12px] leading-relaxed text-white/70 font-sans mb-3 font-light">
+        <p key={`line-${lIdx}`} className="text-[12px] leading-relaxed text-neutral-200 font-sans mb-3 font-light">
           {formattedParts}
         </p>
       );
@@ -171,7 +171,7 @@ export default function DailyBriefing() {
       case 'MEDIUM':
         return 'border-orange-500/20 text-orange-400 bg-orange-500/5';
       default:
-        return 'border-zinc-800 text-zinc-400 bg-zinc-900/50';
+        return 'border-zinc-800 text-zinc-200 bg-zinc-900/50';
     }
   };
 
@@ -209,7 +209,7 @@ export default function DailyBriefing() {
                 )
               )}
             </div>
-            <p className="text-[11px] text-white/40 font-mono mt-0.5">
+            <p className="text-[11px] text-neutral-200 font-mono mt-0.5">
               Macro sentiment & structural confluence engine
             </p>
           </div>
@@ -221,7 +221,7 @@ export default function DailyBriefing() {
             id="refresh-briefing-btn"
             onClick={() => fetchBriefing(true)}
             disabled={loading || refreshing}
-            className="flex items-center space-x-1.5 bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.12] text-[10.5px] font-mono text-white/70 hover:text-white border border-white/10 px-2.5 py-1.5 rounded transition disabled:opacity-40"
+            className="flex items-center space-x-1.5 bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.12] text-[10.5px] font-mono text-neutral-200 hover:text-white border border-white/10 px-2.5 py-1.5 rounded transition disabled:opacity-40"
           >
             <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
             <span>{refreshing ? 'Refreshing...' : 'Sync Brief'}</span>
@@ -233,14 +233,14 @@ export default function DailyBriefing() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16 space-y-3">
           <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-indigo-500" />
-          <p className="text-[11px] font-mono text-white/40">Synthesizing institutional morning matrices...</p>
+          <p className="text-[11px] font-mono text-neutral-200">Synthesizing institutional morning matrices...</p>
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-10 text-center space-y-3">
           <AlertTriangle className="w-8 h-8 text-rose-500/80" />
           <div className="space-y-1">
             <p className="text-[12px] font-mono text-rose-400">Analysis Pipeline Idle</p>
-            <p className="text-[11px] text-white/40 font-sans max-w-sm">{error}</p>
+            <p className="text-[11px] text-neutral-200 font-sans max-w-sm">{error}</p>
           </div>
           <button
             onClick={() => fetchBriefing()}
@@ -257,7 +257,7 @@ export default function DailyBriefing() {
               <Zap className="w-4 h-4 text-amber-500 shrink-0 mt-0.5 animate-pulse" />
               <div>
                 <p className="font-bold tracking-tight text-amber-400">MTXQUANT HIGH-FIDELITY SIMULATION MODE</p>
-                <p className="text-white/60 font-sans mt-1 leading-relaxed text-[11px]">
+                <p className="text-neutral-200 font-sans mt-1 leading-relaxed text-[11px]">
                   The live AI service is currently resolving standard public quota constraints (20 requests per day limit). The platform has seamlessly loaded the high-fidelity SMC institutional confluence matrix so your active sessions continue without delay.
                 </p>
               </div>
@@ -291,8 +291,8 @@ export default function DailyBriefing() {
             {/* Session Alarms warnings */}
             <div className="p-4 bg-zinc-900/40 border border-white/5 rounded-md flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-[9px] uppercase tracking-wide text-white/30 font-mono">Active Session Alarms</span>
-                <p className="text-[13px] font-bold text-white/90">
+                <span className="text-[9px] uppercase tracking-wide text-neutral-200 font-mono">Active Session Alarms</span>
+                <p className="text-[13px] font-bold text-white">
                   {briefing?.economicAlarms > 0 
                     ? `${briefing.economicAlarms} Active System Alerts`
                     : 'No Active System Violations'}
@@ -308,13 +308,13 @@ export default function DailyBriefing() {
           <div className="bg-zinc-950/80 border border-white/5 rounded-md overflow-hidden">
             <div className="px-3.5 py-1.5 bg-white/[0.02] border-b border-white/5 flex items-center space-x-2">
               <Zap className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="text-[9.5px] uppercase tracking-wider font-mono text-white/50">Core Session Directives</span>
+              <span className="text-[9.5px] uppercase tracking-wider font-mono text-neutral-200">Core Session Directives</span>
             </div>
             <div className="p-3.5 space-y-2.5">
               {briefing.majorThemes.map((theme, idx) => (
                 <div key={idx} className="flex items-start space-x-2.5">
                   <div className="mt-1 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-indigo-500/60" />
-                  <p className="text-[11.5px] text-white/80 font-sans leading-relaxed">
+                  <p className="text-[11.5px] text-neutral-200 font-sans leading-relaxed">
                     {theme}
                   </p>
                 </div>
@@ -330,7 +330,7 @@ export default function DailyBriefing() {
           </div>
 
           {/* Footer stats stamp */}
-          <div className="flex items-center justify-between text-[10px] font-mono text-white/30 pt-1">
+          <div className="flex items-center justify-between text-[10px] font-mono text-neutral-200 pt-1">
             <div className="flex items-center space-x-1">
               <Clock className="w-3 h-3" />
               <span>Snapshot Sync: {(() => {

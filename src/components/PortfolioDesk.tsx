@@ -74,13 +74,12 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
   // Account cash balance state
   const [cashBalance, setCashBalance] = useState<number>(() => {
     const saved = localStorage.getItem('broker_cash');
-    return saved ? parseFloat(saved) : 50000.00;
+    return saved ? parseFloat(saved) : 58000.00;
   });
   
   // Custom interactive holdings list connected to the Market Desk root (broker_holdings)
   const [holdings, setHoldings] = useState<Holding[]>(() => {
-    const saved = localStorage.getItem('broker_holdings');
-    const holdingsMap: Record<string, number> = saved ? JSON.parse(saved) : {
+    let holdingsMap: Record<string, number> = {
       'AAPL': 50,
       'MSFT': 30,
       'NVDA': 100,
@@ -88,6 +87,17 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       'SPY': 25,
       'QQQ': 20
     };
+    try {
+      const saved = localStorage.getItem('broker_holdings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          holdingsMap = parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Error loading holdings from localStorage:', e);
+    }
     
     return Object.entries(holdingsMap).map(([symbol, qty]) => {
       const meta = TICKER_META[symbol] || { 
@@ -106,6 +116,9 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       };
     });
   });
+
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+  const [liveReturns, setLiveReturns] = useState<Record<string, number>>({});
 
   const [timeframe, setTimeframe] = useState<string>('1M');
   const [tradeModal, setTradeModal] = useState<{ isOpen: boolean; holding: Holding | null; type: 'BUY' | 'SELL' }>({
@@ -126,6 +139,22 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
     return saved ? parseFloat(saved) : 5.12;
   });
 
+  // Helper to sync updated client cash balance with server ledger
+  const syncCashWithServer = async (newBalance: number) => {
+    try {
+      const res = await fetch('/api/funding/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientBalance: newBalance })
+      });
+      if (!res.ok) {
+        console.error('Failed to sync cash balance with server ledger');
+      }
+    } catch (e) {
+      console.error('Error syncing cash balance:', e);
+    }
+  };
+
   // Sync state changes to local storage to maintain absolute unity with Market Desk root
   useEffect(() => {
     localStorage.setItem('broker_cash', cashBalance.toString());
@@ -139,6 +168,94 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
     localStorage.setItem('broker_holdings', JSON.stringify(holdingsMap));
   }, [holdings]);
 
+  // Sync cash state from SQL database funding ledger on mount and poll
+  useEffect(() => {
+    let active = true;
+    const fetchServerState = async () => {
+      try {
+        const res = await fetch('/api/funding/state');
+        if (res.ok && active) {
+          const data = await res.json();
+          if (data && data.balance !== undefined) {
+            setCashBalance(data.balance);
+            localStorage.setItem('broker_cash', data.balance.toString());
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch funding state on load:', e);
+      }
+    };
+    fetchServerState();
+    
+    // Poll every 4 seconds to grab real-time settled ledger updates (e.g., from closed terminal CFD trades)
+    const interval = setInterval(fetchServerState, 4000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Fetch live market prices and returns dynamically from Yahoo Finance proxy
+  useEffect(() => {
+    let active = true;
+
+    const fetchLiveMarketData = async () => {
+      try {
+        // Fetch top stocks for AAPL, MSFT, NVDA, TSLA
+        const stocksRes = await fetch('/api/top-stocks');
+        if (stocksRes.ok && active) {
+          const data = await stocksRes.json();
+          if (data && data.stocks) {
+            const priceMap: Record<string, number> = {};
+            const returnMap: Record<string, number> = {};
+            data.stocks.forEach((stock: any) => {
+              priceMap[stock.symbol] = stock.current;
+              returnMap[stock.symbol] = stock.changePercent;
+            });
+            setLivePrices(prev => ({ ...prev, ...priceMap }));
+            setLiveReturns(prev => ({ ...prev, ...returnMap }));
+          }
+        }
+
+        // Fetch ETF and Crypto tickers in parallel for live prices and day change percentages
+        const remainingTickers = ['SPY', 'QQQ', 'BTC-USD', 'ETH-USD', 'SOL-USD'];
+        await Promise.all(
+          remainingTickers.map(async (ticker) => {
+            try {
+              const res = await fetch(`/api/markets/historical?ticker=${ticker}&range=1d`);
+              if (res.ok && active) {
+                const data = await res.json();
+                if (data) {
+                  const price = data.regularMarketPrice || (data.bars && data.bars.length > 0 ? data.bars[data.bars.length - 1].close : null);
+                  if (price !== null) {
+                    setLivePrices(prev => ({ ...prev, [ticker]: price }));
+                  }
+                  if (data.bars && data.bars.length > 1) {
+                    const first = data.bars[0].close;
+                    const last = data.bars[data.bars.length - 1].close;
+                    const changePercent = ((last - first) / first) * 100;
+                    setLiveReturns(prev => ({ ...prev, [ticker]: parseFloat(changePercent.toFixed(2)) }));
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn(`Failed to fetch live data for ticker ${ticker}:`, err);
+            }
+          })
+        );
+      } catch (err) {
+        console.error('Error fetching live market data in PortfolioDesk:', err);
+      }
+    };
+
+    fetchLiveMarketData();
+    const interval = setInterval(fetchLiveMarketData, 10000); // refresh every 10s
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Sync state with local storage updates & periodic checks
   useEffect(() => {
     const handleStorageChange = () => {
@@ -148,16 +265,23 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       }
       const savedHoldings = localStorage.getItem('broker_holdings');
       if (savedHoldings) {
-        const holdingsMap: Record<string, number> = JSON.parse(savedHoldings);
-        setHoldings(prevHoldings => {
-          return prevHoldings.map(item => {
-            const qty = holdingsMap[item.symbol] !== undefined ? holdingsMap[item.symbol] : item.qty;
-            return {
-              ...item,
-              qty
-            };
-          });
-        });
+        try {
+          const parsed = JSON.parse(savedHoldings);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            const holdingsMap: Record<string, number> = parsed;
+            setHoldings(prevHoldings => {
+              return prevHoldings.map(item => {
+                const qty = holdingsMap[item.symbol] !== undefined ? holdingsMap[item.symbol] : item.qty;
+                return {
+                  ...item,
+                  qty
+                };
+              });
+            });
+          }
+        } catch (e) {
+          console.error(e);
+        }
       }
       const savedApy = localStorage.getItem('wealth_selected_apy');
       if (savedApy) {
@@ -172,13 +296,22 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
     };
   }, []);
 
+  // Build holdings array enriched with real-time live prices
+  const holdingsWithLivePrices = holdings.map(item => {
+    const livePrice = livePrices[item.symbol];
+    return {
+      ...item,
+      currentPrice: livePrice !== undefined ? livePrice : item.currentPrice
+    };
+  });
+
   // Calculations
-  const assetValue = holdings.reduce((sum, item) => sum + (item.qty * item.currentPrice), 0);
+  const assetValue = holdingsWithLivePrices.reduce((sum, item) => sum + (item.qty * item.currentPrice), 0);
   const totalValue = assetValue + cashBalance;
 
   // Let's compute dynamic returns based on current holdings weights!
-  const todayReturnAmount = holdings.reduce((sum, item) => {
-    const retPercent = DAILY_RETURNS[item.symbol] || 0;
+  const todayReturnAmount = holdingsWithLivePrices.reduce((sum, item) => {
+    const retPercent = liveReturns[item.symbol] !== undefined ? liveReturns[item.symbol] : (DAILY_RETURNS[item.symbol] || 0);
     return sum + (item.qty * item.currentPrice * (retPercent / 100));
   }, 0);
   
@@ -195,7 +328,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
     let etfs = 0;
     let crypto = 0;
     
-    holdings.forEach(item => {
+    holdingsWithLivePrices.forEach(item => {
       const meta = TICKER_META[item.symbol];
       const type = meta ? meta.type : 'stock';
       const val = item.qty * item.currentPrice;
@@ -327,30 +460,38 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
   const wealthAccruedProfit = wealthFinalBalance - wealthFinalPrincipal;
 
   // Insights (Daily Briefing) calculations
-  const largestPosition = holdings.length > 0 
-    ? [...holdings].sort((a, b) => (b.qty * b.currentPrice) - (a.qty * a.currentPrice))[0]?.symbol 
+  const largestPosition = holdingsWithLivePrices.length > 0 
+    ? [...holdingsWithLivePrices].sort((a, b) => (b.qty * b.currentPrice) - (a.qty * a.currentPrice))[0]?.symbol 
     : 'None';
   
-  const bestPerformer = holdings.length > 0
-    ? [...holdings].sort((a, b) => (DAILY_RETURNS[b.symbol] || 0) - (DAILY_RETURNS[a.symbol] || 0))[0]?.symbol
+  const bestPerformer = holdingsWithLivePrices.length > 0
+    ? [...holdingsWithLivePrices].sort((a, b) => {
+        const aRet = liveReturns[a.symbol] !== undefined ? liveReturns[a.symbol] : (DAILY_RETURNS[a.symbol] || 0);
+        const bRet = liveReturns[b.symbol] !== undefined ? liveReturns[b.symbol] : (DAILY_RETURNS[b.symbol] || 0);
+        return bRet - aRet;
+      })[0]?.symbol
     : 'None';
 
-  const worstPerformer = holdings.length > 0
-    ? [...holdings].sort((a, b) => (DAILY_RETURNS[a.symbol] || 0) - (DAILY_RETURNS[b.symbol] || 0))[0]?.symbol
+  const worstPerformer = holdingsWithLivePrices.length > 0
+    ? [...holdingsWithLivePrices].sort((a, b) => {
+        const aRet = liveReturns[a.symbol] !== undefined ? liveReturns[a.symbol] : (DAILY_RETURNS[a.symbol] || 0);
+        const bRet = liveReturns[b.symbol] !== undefined ? liveReturns[b.symbol] : (DAILY_RETURNS[b.symbol] || 0);
+        return aRet - bRet;
+      })[0]?.symbol
     : 'None';
 
   // Exposure Breakdown calculations
-  const techValue = holdings
+  const techValue = holdingsWithLivePrices
     .filter(item => TICKER_META[item.symbol]?.sector === 'technology')
     .reduce((sum, item) => sum + (item.qty * item.currentPrice), 0);
   const techPct = (techValue / totalValue) * 100;
 
-  const largeCapValue = holdings
+  const largeCapValue = holdingsWithLivePrices
     .filter(item => TICKER_META[item.symbol]?.sector === 'large-cap')
     .reduce((sum, item) => sum + (item.qty * item.currentPrice), 0);
   const largeCapPct = (largeCapValue / totalValue) * 100;
 
-  const dividendValue = holdings
+  const dividendValue = holdingsWithLivePrices
     .filter(item => ['AAPL', 'MSFT', 'SPY'].includes(item.symbol))
     .reduce((sum, item) => sum + (item.qty * item.currentPrice), 0);
   const dividendPct = (dividendValue / totalValue) * 100;
@@ -383,6 +524,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       const newCash = cashBalance - cost;
       setCashBalance(newCash);
       localStorage.setItem('broker_cash', newCash.toString());
+      syncCashWithServer(newCash);
 
       // Update holdings
       const updatedHoldings = holdings.map(item => {
@@ -402,6 +544,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       const newCash = cashBalance + cost;
       setCashBalance(newCash);
       localStorage.setItem('broker_cash', newCash.toString());
+      syncCashWithServer(newCash);
 
       // Update holdings
       const updatedHoldings = holdings.map(item => {
@@ -954,10 +1097,10 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 font-mono text-[11px]">
-              {holdings.map((item) => {
+              {holdingsWithLivePrices.map((item) => {
                 const mktVal = item.qty * item.currentPrice;
                 const weightPct = (mktVal / totalValue) * 100;
-                const retToday = DAILY_RETURNS[item.symbol] || 0.00;
+                const retToday = liveReturns[item.symbol] !== undefined ? liveReturns[item.symbol] : (DAILY_RETURNS[item.symbol] || 0.00);
                 const retTotal = TOTAL_RETURNS[item.symbol] || 0.00;
 
                 return (
@@ -1003,13 +1146,6 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                           title="Instant Sell Order"
                         >
                           SELL
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); viewAssetOnTerminal(item.symbol); }}
-                          className="px-1.5 py-0.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 rounded text-[9px] text-indigo-400 hover:text-indigo-300 transition-all font-black cursor-pointer"
-                          title="Load in terminal focus"
-                        >
-                          VIEW
                         </button>
                       </div>
                     </td>

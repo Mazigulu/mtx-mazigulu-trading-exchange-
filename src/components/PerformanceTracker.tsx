@@ -293,7 +293,13 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
   const [localOverrides, setLocalOverrides] = useState<Record<string, { annotation?: string; tags?: string[]; sentimentRating?: string }>>(() => {
     try {
       const saved = localStorage.getItem('apex_closed_trades_journal_overrides');
-      return saved ? JSON.parse(saved) : {};
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+      return {};
     } catch {
       return {};
     }
@@ -1706,7 +1712,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
                           {t.tags && t.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1.5 uppercase tracking-wider font-semibold text-[8px]">
                               {t.tags.map(tag => (
-                                <span key={tag} className="px-1.5 py-0.5 bg-[#0f0f12] border border-white/5 text-zinc-400 rounded flex items-center gap-0.5">
+                                <span key={tag} className="px-1.5 py-0.5 bg-[#0f0f12] border border-white/5 text-zinc-200 rounded flex items-center gap-0.5">
                                   <Tag className="w-2 h-2 text-indigo-400/80 shrink-0" />
                                   <span>{tag}</span>
                                 </span>

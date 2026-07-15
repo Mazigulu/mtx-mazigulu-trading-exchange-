@@ -37,12 +37,69 @@
         }
       },
       "required": ["id", "userId", "title", "symbol", "messages", "createdAt", "updatedAt"]
+    },
+    "funding": {
+      "title": "FundingState",
+      "description": "User specific balance and funding transaction history.",
+      "type": "object",
+      "properties": {
+        "balance": {
+          "type": "number",
+          "description": "The cash balance of the user."
+        },
+        "transactions": {
+          "type": "array",
+          "description": "List of deposit and withdrawal transactions."
+        }
+      },
+      "required": ["balance", "transactions"]
+    },
+    "breaches": {
+      "title": "BreachesLog",
+      "description": "User specific historical risk compliance breaches list.",
+      "type": "object",
+      "properties": {
+        "events": {
+          "type": "array",
+          "description": "List of recorded risk compliance breach events."
+        }
+      },
+      "required": ["events"]
+    },
+    "watchlist": {
+      "title": "Watchlist",
+      "description": "User specific watchlist containing a list of stock and crypto symbols.",
+      "type": "object",
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "description": "List of tickers or symbol strings in the user's watchlist."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last update."
+        }
+      },
+      "required": ["symbols", "updatedAt"]
     }
   },
   "firestore": {
     "/chats/{chatId}": {
       "schema": "chat",
       "description": "Collection of user chat histories."
+    },
+    "/funding/{userId}": {
+      "schema": "funding",
+      "description": "User specific balances and funding transactions."
+    },
+    "/breaches/{userId}": {
+      "schema": "breaches",
+      "description": "User specific compliance breach logs."
+    },
+    "/watchlists/{userId}": {
+      "schema": "watchlist",
+      "description": "User specific watchlist data."
     }
   }
 }

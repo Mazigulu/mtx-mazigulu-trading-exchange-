@@ -192,7 +192,7 @@ export default function StrategyPerformanceChart() {
                 Multi-Heuristic Backtests
               </span>
             </h3>
-            <p className="text-[10px] text-white/30 font-mono mt-0.5">
+            <p className="text-[10px] text-neutral-200 font-mono mt-0.5">
               Evaluate real-time algorithmic win ratios & payoff indices across live training sessions
             </p>
           </div>
@@ -200,7 +200,7 @@ export default function StrategyPerformanceChart() {
 
         {/* Dynamic Select Input */}
         <div className="flex items-center space-x-2">
-          <span className="text-[9.5px] uppercase font-mono text-white/30 font-semibold tracking-tight">Focus Context:</span>
+          <span className="text-[9.5px] uppercase font-mono text-neutral-200 font-semibold tracking-tight">Focus Context:</span>
           <select
             value={selectedStrategy}
             onChange={(e) => setSelectedStrategy(e.target.value as StrategyId)}
@@ -220,7 +220,7 @@ export default function StrategyPerformanceChart() {
         
         {/* Win Rate Panel */}
         <div className="bg-[#050506] border border-white/5 p-3 rounded flex flex-col justify-between">
-          <span className="text-white/30 text-[9px] uppercase tracking-wider block font-bold font-mono">
+          <span className="text-neutral-200 text-[9px] uppercase tracking-wider block font-bold font-mono">
             Backtested Win Rate
           </span>
           <div className="mt-2 flex items-baseline space-x-1.5">
@@ -232,14 +232,14 @@ export default function StrategyPerformanceChart() {
               +5.4%
             </span>
           </div>
-          <p className="text-[8.5px] text-white/20 font-mono mt-1">
+          <p className="text-[8.5px] text-neutral-300 font-mono mt-1">
             Expected true probability threshold
           </p>
         </div>
 
         {/* Avg Risk Reward Ratio */}
         <div className="bg-[#050506] border border-white/5 p-3 rounded flex flex-col justify-between">
-          <span className="text-white/30 text-[9px] uppercase tracking-wider block font-bold font-mono">
+          <span className="text-neutral-200 text-[9px] uppercase tracking-wider block font-bold font-mono">
             Average Payoff R:R
           </span>
           <div className="mt-2 flex items-baseline space-x-1.5">
@@ -250,30 +250,30 @@ export default function StrategyPerformanceChart() {
               Realized Gap
             </span>
           </div>
-          <p className="text-[8.5px] text-white/20 font-mono mt-1">
+          <p className="text-[8.5px] text-neutral-300 font-mono mt-1">
             Average stop length vs target depth
           </p>
         </div>
 
         {/* Total Sample Size */}
         <div className="bg-[#050506] border border-white/5 p-3 rounded flex flex-col justify-between">
-          <span className="text-white/30 text-[9px] uppercase tracking-wider block font-bold font-mono">
+          <span className="text-neutral-200 text-[9px] uppercase tracking-wider block font-bold font-mono">
             Backtest Sample Size
           </span>
           <div className="mt-2 flex items-baseline space-x-1.5">
             <span className="text-xl font-mono font-black text-indigo-400">
               {strategyInfo.totalTrades}
             </span>
-            <span className="text-[9.5px] text-white/40 font-mono">trades</span>
+            <span className="text-[9.5px] text-neutral-200 font-mono">trades</span>
           </div>
-          <p className="text-[8.5px] text-white/20 font-mono mt-1">
+          <p className="text-[8.5px] text-neutral-300 font-mono mt-1">
             Over last 12-week forward evaluation
           </p>
         </div>
 
         {/* Profit Factor */}
         <div className="bg-[#050506] border border-white/5 p-3 rounded flex flex-col justify-between">
-          <span className="text-white/30 text-[9px] uppercase tracking-wider block font-bold font-mono">
+          <span className="text-neutral-200 text-[9px] uppercase tracking-wider block font-bold font-mono">
             Profit Factor (G:L)
           </span>
           <div className="mt-2 flex items-baseline space-x-1.5">
@@ -284,7 +284,7 @@ export default function StrategyPerformanceChart() {
               OPTIMAL
             </span>
           </div>
-          <p className="text-[8.5px] text-white/20 font-mono mt-1">
+          <p className="text-[8.5px] text-neutral-300 font-mono mt-1">
             Gross gains divided by gross losses
           </p>
         </div>
@@ -297,25 +297,25 @@ export default function StrategyPerformanceChart() {
         <div className="xl:col-span-4 flex flex-col justify-between space-y-4">
           <div className="bg-[#040405] border border-white/5 p-4 rounded-md h-full flex flex-col justify-between">
             <div className="space-y-3.5">
-              <span className="text-[9.5px] text-white/20 font-mono font-semibold tracking-wider uppercase block">
+              <span className="text-[9.5px] text-neutral-300 font-mono font-semibold tracking-wider uppercase block">
                 Algorithmic Strategy Blueprint
               </span>
               <div>
                 <h4 className="text-xs font-bold text-white uppercase font-sans">
                   {strategyInfo.name}
                 </h4>
-                <div className="flex items-center space-x-3 mt-1.5 text-[9px] font-mono text-white/40">
+                <div className="flex items-center space-x-3 mt-1.5 text-[9px] font-mono text-neutral-200">
                   <span className="flex items-center"><Award className="w-3 h-3 mr-1 text-amber-500" /> By {strategyInfo.creator}</span>
                   <span className="flex items-center"><Clock className="w-3 h-3 mr-1 text-indigo-400" /> {strategyInfo.timeframe}</span>
                 </div>
               </div>
 
-              <p className="text-[10px] text-white/50 leading-relaxed font-sans border-t border-white/5 pt-3">
+              <p className="text-[10px] text-neutral-200 leading-relaxed font-sans border-t border-white/5 pt-3">
                 {strategyInfo.description}
               </p>
 
               {/* Dynamic helper advise prompt */}
-              <div className="p-3 bg-indigo-500/5 rounded border border-indigo-500/10 text-[9.5px] text-white/40 leading-normal font-sans">
+              <div className="p-3 bg-indigo-500/5 rounded border border-indigo-500/10 text-[9.5px] text-neutral-200 leading-normal font-sans">
                 <span className="text-indigo-300 font-semibold uppercase text-[8.5px] tracking-wider block mb-1 flex items-center gap-1">
                   <Lightbulb className="w-3.5 h-3.5" /> Quantitative Guidance
                 </span>
@@ -346,14 +346,14 @@ export default function StrategyPerformanceChart() {
             {/* Strategic selection controls if comparing */}
             {selectedStrategy === 'ALL' && (
               <div className="border-t border-white/5 pt-3 mt-3 flex items-center justify-between">
-                <span className="text-[9px] uppercase font-mono text-white/30 font-bold">Comparison Vector:</span>
+                <span className="text-[9px] uppercase font-mono text-neutral-200 font-bold">Comparison Vector:</span>
                 <div className="flex space-x-1.5">
                   <button
                     onClick={() => setComparisonMetric('WIN_RATE')}
                     className={`px-2 py-1 text-[8.5px] font-mono uppercase tracking-tight rounded cursor-pointer border transition-all ${
                       comparisonMetric === 'WIN_RATE'
                         ? 'bg-indigo-600 border-indigo-500 text-white font-black'
-                        : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10'
+                        : 'bg-white/5 border-white/5 text-neutral-200 hover:bg-white/10'
                     }`}
                   >
                     Win Ratios
@@ -363,7 +363,7 @@ export default function StrategyPerformanceChart() {
                     className={`px-2 py-1 text-[8.5px] font-mono uppercase tracking-tight rounded cursor-pointer border transition-all ${
                       comparisonMetric === 'RISK_REWARD'
                         ? 'bg-[#d97706]/20 border-amber-600 text-amber-300 font-black'
-                        : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10'
+                        : 'bg-white/5 border-white/5 text-neutral-200 hover:bg-white/10'
                     }`}
                   >
                     Reward Index (R:R)
@@ -377,13 +377,13 @@ export default function StrategyPerformanceChart() {
         {/* Right pane: Recharts Strategy Performance Graph */}
         <div className="xl:col-span-8 flex flex-col justify-between space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[9.5px] uppercase text-white/30 font-mono font-bold tracking-tight select-none">
+            <span className="text-[9.5px] uppercase text-neutral-200 font-mono font-bold tracking-tight select-none">
               {selectedStrategy === 'ALL' 
                 ? `C) Strategy Contrast Trace: ${comparisonMetric === 'WIN_RATE' ? 'Win Ratio (%)' : 'Average Payoff (R:R)'}` 
                 : `C) Multi-Axis Structural Analytics: Cumulative Win Rate & Payoff Ratio`
               }
             </span>
-            <div className="flex items-center gap-2 text-[8.5px] font-mono text-white/30 tracking-tight">
+            <div className="flex items-center gap-2 text-[8.5px] font-mono text-neutral-200 tracking-tight">
               <span>Syncing with Backtester engine</span>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>

@@ -113,7 +113,7 @@ const renderSectorIcon = (iconName: string) => {
     case 'Globe': return <Globe className="w-4 h-4 text-indigo-400" />;
     case 'Coins': return <Coins className="w-4 h-4 text-amber-400" />;
     case 'Gem': return <Gem className="w-4 h-4 text-emerald-400" />;
-    default: return <Briefcase className="w-4 h-4 text-slate-400" />;
+    default: return <Briefcase className="w-4 h-4 text-slate-200" />;
   }
 };
 
@@ -142,7 +142,11 @@ export default function RiskDashboard({
   const [autoLockedTradeIds, setAutoLockedTradeIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('apex_auto_locked_trade_ids');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      return [];
     } catch {
       return [];
     }
@@ -151,7 +155,11 @@ export default function RiskDashboard({
   const [autoLockLogs, setAutoLockLogs] = useState<{ id: string; symbol: string; size: number; pnl: number; time: string }[]>(() => {
     try {
       const saved = localStorage.getItem('apex_auto_lock_logs');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      return [];
     } catch {
       return [];
     }
@@ -3306,7 +3314,7 @@ export default function RiskDashboard({
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   <span>Capital Allocation Philosophy</span>
                 </h4>
-                <p className="text-[10.5px] leading-relaxed text-slate-400 mt-2">
+                <p className="text-[10.5px] leading-relaxed text-slate-200 mt-2">
                   Under the <strong>MTXquant Institutional Framework</strong>, capital is distributed mathematically prioritizing systemic insulation. 
                   Forex allocations acts as the core liquidity block due to its deep mean reverting nature, while high volatility sectors like Bitcoin 
                   and Precious metals (Gold) are micro-leveraged with stop losses restricted to a <strong>1.0% maximum aggregate drawdown limit</strong>.

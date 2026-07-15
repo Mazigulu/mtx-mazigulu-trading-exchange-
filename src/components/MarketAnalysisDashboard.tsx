@@ -951,8 +951,12 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                     onClick={() => setAssetTab(tab)}
                     className={`px-2.5 py-1 rounded border uppercase tracking-wider text-[8.5px] font-black cursor-pointer transition-all ${
                       assetTab === tab 
-                        ? 'bg-indigo-600/15 border-indigo-500/50 text-indigo-400' 
-                        : 'bg-transparent border-transparent text-white/40 hover:text-white/85'
+                        ? tab === 'FINANCIALS'
+                          ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-400'
+                          : 'bg-indigo-600/15 border-indigo-500/50 text-indigo-400' 
+                        : tab === 'FINANCIALS'
+                          ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500/60 hover:text-emerald-400 hover:bg-emerald-500/10'
+                          : 'bg-transparent border-transparent text-white/40 hover:text-white/85'
                     }`}
                   >
                     {tab}

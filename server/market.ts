@@ -219,6 +219,49 @@ export class MarketSimulator {
 
   private lastTvFetch: Record<MarketSymbol, number> = {} as any;
 
+  private ensureSymbolInitialized(symbol: MarketSymbol) {
+    if (!symbol) return;
+    if (this.candles[symbol]) return;
+
+    // Set a default base price and tick size for this symbol
+    let basePrice = 100.0;
+    let tickSize = 0.05;
+
+    // Check if it's in our supported assets list or a known pattern
+    const symStr = String(symbol).toUpperCase();
+    if (symStr === 'BTC-USD') {
+      basePrice = 65000.0;
+      tickSize = 5.0;
+    } else if (symStr === 'ETH-USD') {
+      basePrice = 3400.0;
+      tickSize = 0.5;
+    } else if (symStr === 'SOL-USD') {
+      basePrice = 140.0;
+      tickSize = 0.05;
+    } else if (symStr === 'JNJ') {
+      basePrice = 155.0;
+      tickSize = 0.05;
+    } else if (symStr === 'SPY') {
+      basePrice = 510.0;
+      tickSize = 0.1;
+    } else if (symStr === 'QQQ') {
+      basePrice = 435.0;
+      tickSize = 0.1;
+    } else if (symStr.endsWith('USD')) {
+      basePrice = 100.0;
+      tickSize = 0.1;
+    } else {
+      // Look up default price from some standard or generate a random one
+      basePrice = 100.0 + Math.random() * 200;
+      tickSize = basePrice > 1000 ? 1.0 : basePrice > 100 ? 0.1 : 0.01;
+    }
+
+    this.basePrices[symbol] = basePrice;
+    this.tickSizes[symbol] = tickSize;
+    this.candles[symbol] = this.generateHistory(symbol);
+    this.gatewayActive[symbol] = false;
+  }
+
   constructor() {
     this.initializeAll();
     // Start live updates
@@ -226,6 +269,7 @@ export class MarketSimulator {
   }
 
   public async fetchTradingViewData(symbol: MarketSymbol): Promise<boolean> {
+    this.ensureSymbolInitialized(symbol);
     const apiKey = process.env.RAPIDAPI_KEY;
     const tvSymbol = tradingViewSymbols[symbol];
 
@@ -492,16 +536,19 @@ export class MarketSimulator {
   }
 
   public getCandles(symbol: MarketSymbol): Candlestick[] {
+    this.ensureSymbolInitialized(symbol);
     // Return live H4 price streams (if active, these are fetched from the live broker gateway)
     return this.candles[symbol] || [];
   }
 
   public getMarketMetrics(symbol: MarketSymbol): MarketMetrics {
+    this.ensureSymbolInitialized(symbol);
     // Wrapper for live market validation integrated with the broker execution bridge
     return this.getMetrics(symbol);
   }
 
   public updateFromGateway(symbol: MarketSymbol, rawCandles: any[]): boolean {
+    this.ensureSymbolInitialized(symbol);
     if (!this.candles[symbol]) return false;
 
     // Map and sanitize the incoming rates from the broker terminal gateway connector
@@ -526,6 +573,7 @@ export class MarketSimulator {
   }
 
   public getFVGs(symbol: MarketSymbol): FVG[] {
+    this.ensureSymbolInitialized(symbol);
     const list = this.candles[symbol] || [];
     const fvgs: FVG[] = [];
 
@@ -564,6 +612,7 @@ export class MarketSimulator {
   }
 
   public getOrderBlocks(symbol: MarketSymbol): OrderBlock[] {
+    this.ensureSymbolInitialized(symbol);
     const list = this.candles[symbol] || [];
     const obs: OrderBlock[] = [];
 
@@ -618,6 +667,7 @@ export class MarketSimulator {
   }
 
   public getSweeps(symbol: MarketSymbol): LiquiditySweep[] {
+    this.ensureSymbolInitialized(symbol);
     const list = this.candles[symbol] || [];
     const sweeps: LiquiditySweep[] = [];
 
@@ -655,6 +705,7 @@ export class MarketSimulator {
   }
 
   public getMetrics(symbol: MarketSymbol): MarketMetrics {
+    this.ensureSymbolInitialized(symbol);
     const list = this.candles[symbol];
     const last = list[list.length - 1];
     const fvgs = this.getFVGs(symbol);
@@ -681,6 +732,7 @@ export class MarketSimulator {
   }
 
   public getOrderBook(symbol: MarketSymbol): { bids: { price: number; amount: number }[]; asks: { price: number; amount: number }[]; imbalance: number } {
+    this.ensureSymbolInitialized(symbol);
     const list = this.candles[symbol];
     const price = list[list.length - 1].close;
     const tick = this.tickSizes[symbol];

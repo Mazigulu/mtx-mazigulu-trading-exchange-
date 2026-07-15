@@ -431,13 +431,13 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
             <span className="px-2 py-0.5 rounded text-[8.5px] font-black tracking-wider bg-indigo-500/15 text-indigo-400 border border-indigo-500/25 uppercase">
               Equity Engine
             </span>
-            <span className="text-[10px] text-white/30">QUANT-SYSTEM v2.9</span>
+            <span className="text-[10px] text-neutral-200">QUANT-SYSTEM v2.9</span>
           </div>
           <h2 className="text-base font-black text-white uppercase tracking-tight mt-1 flex items-center gap-2">
             <ChartIcon className="w-4.5 h-4.5 text-indigo-400" />
             Equity Performance & Benchmarking
           </h2>
-          <p className="text-[10px] text-white/40 mt-0.5 leading-relaxed">
+          <p className="text-[10px] text-neutral-200 mt-0.5 leading-relaxed">
             Side-by-side performance matching of your custom tech holdings against broad indices (SPY, QQQ) and select sector funds (XLK, SMH).
           </p>
         </div>
@@ -451,7 +451,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               className={`px-2.5 py-1 text-[9px] font-bold rounded uppercase tracking-wider transition-all cursor-pointer ${
                 timeHorizon === h 
                   ? 'bg-indigo-650 text-indigo-100 font-black border border-indigo-500/20' 
-                  : 'text-white/40 hover:text-white/80'
+                  : 'text-neutral-450 hover:text-neutral-200'
               }`}
             >
               {h}
@@ -475,14 +475,14 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
                 <button 
                   onClick={handleLoadActualWeights} 
                   title="Pull open position weights"
-                  className="p-1 rounded bg-white/5 hover:bg-white/10 active:bg-white/15 text-white/60 hover:text-white transition-all text-[8.5px] font-bold tracking-wider uppercase cursor-pointer"
+                  className="p-1 rounded bg-white/5 hover:bg-white/10 active:bg-white/15 text-neutral-200 hover:text-white transition-all text-[8.5px] font-bold tracking-wider uppercase cursor-pointer"
                 >
                   Live
                 </button>
                 <button 
                   onClick={handleEqualWeights} 
                   title="Rebalance equally"
-                  className="p-1 rounded bg-white/5 hover:bg-white/10 active:bg-white/15 text-white/60 hover:text-white transition-all text-[8.5px] font-bold tracking-wider uppercase cursor-pointer"
+                  className="p-1 rounded bg-white/5 hover:bg-white/10 active:bg-white/15 text-neutral-200 hover:text-white transition-all text-[8.5px] font-bold tracking-wider uppercase cursor-pointer"
                 >
                   Equal
                 </button>
@@ -490,7 +490,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
             </div>
 
             {/* Weights info text */}
-            <p className="text-[9.5px] text-white/35 leading-relaxed">
+            <p className="text-[9.5px] text-neutral-200 leading-relaxed">
               Manually drag the equity weights below. Dynamic scaling guarantees a systemic 100% net allocation.
             </p>
 
@@ -504,7 +504,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
                       <div className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: sMeta.color }} />
                         <span className="font-extrabold text-white">{sym}</span>
-                        <span className="text-[8.5px] text-white/40">({sMeta.sector})</span>
+                        <span className="text-[8.5px] text-neutral-200">({sMeta.sector})</span>
                       </div>
                       <span className="font-black text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/10 font-mono">
                         {weights[sym]}%
@@ -525,7 +525,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
             </div>
 
             <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px]">
-              <span className="text-white/40">Aggregate System Weight:</span>
+              <span className="text-neutral-200 font-semibold">Aggregate System Weight:</span>
               <span className="font-black text-emerald-400 flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
                 100% Locked
@@ -540,7 +540,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               Benchmark Comparators
             </h3>
             
-            <p className="text-[9.5px] text-white/35 leading-relaxed">
+            <p className="text-[9.5px] text-neutral-200 leading-relaxed">
               Select benchmarks to overlay on the performance timeline.
             </p>
 
@@ -567,11 +567,11 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: bench.color }} />
                       <div>
                         <span className="font-extrabold text-white">{bench.ticker}</span>
-                        <span className="text-[8.5px] text-white/45 block mt-0.5">{bench.name}</span>
+                        <span className="text-[8.5px] text-neutral-200 block mt-0.5">{bench.name}</span>
                       </div>
                     </div>
                     <span className={`text-[8.5px] font-black px-1.5 py-0.5 rounded ${
-                      isSelected ? 'bg-indigo-500/10 text-indigo-400' : 'bg-white/5 text-white/30'
+                      isSelected ? 'bg-indigo-500/10 text-indigo-400' : 'bg-white/5 text-neutral-400'
                     }`}>
                       {isSelected ? 'ACTIVE' : 'MUTED'}
                     </span>
@@ -592,7 +592,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               className={`pb-2.5 px-2 uppercase tracking-wide border-b-2 transition-all cursor-pointer ${
                 activeTab === 'CHART'
                   ? 'border-indigo-500 text-white font-black'
-                  : 'border-transparent text-white/45 hover:text-white/80'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
               }`}
             >
               Return Curve Comparison
@@ -602,7 +602,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               className={`pb-2.5 px-2 uppercase tracking-wide border-b-2 transition-all cursor-pointer ${
                 activeTab === 'METRICS'
                   ? 'border-indigo-500 text-white font-black'
-                  : 'border-transparent text-white/45 hover:text-white/80'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
               }`}
             >
               Risk & Factor Analysis
@@ -612,7 +612,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               className={`pb-2.5 px-2 uppercase tracking-wide border-b-2 transition-all cursor-pointer ${
                 activeTab === 'SECTORS'
                   ? 'border-indigo-500 text-white font-black'
-                  : 'border-transparent text-white/45 hover:text-white/80'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
               }`}
             >
               Correlation & Weights
@@ -625,10 +625,10 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h4 className="text-xs font-black text-white uppercase tracking-wide">Comparative Equity Yield Timeline</h4>
-                  <p className="text-[9.5px] text-white/40 mt-0.5">Tracking percent delta returns from inception baseline of 0%.</p>
+                  <p className="text-[9.5px] text-neutral-200 mt-0.5">Tracking percent delta returns from inception baseline of 0%.</p>
                 </div>
                 <div className="flex items-center gap-1.5 bg-black/30 px-2 py-1 rounded border border-white/5 text-[9px]">
-                  <span className="text-white/30">Total Period Delta:</span>
+                  <span className="text-neutral-200">Total Period Delta:</span>
                   <span className={`font-black ${finalMetrics.portfolio.return >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                     {finalMetrics.portfolio.return >= 0 ? '+' : ''}{finalMetrics.portfolio.return.toFixed(2)}%
                   </span>
@@ -728,7 +728,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
                 {activeBenchmarkLines.map(b => (
                   <div key={b.id} className="flex items-center gap-1.5">
                     <span className="w-3 h-0.5 border-t border-dashed" style={{ borderColor: b.color }} />
-                    <span className="text-white/65">{b.ticker} Benchmark</span>
+                    <span className="text-neutral-200">{b.ticker} Benchmark</span>
                   </div>
                 ))}
               </div>
@@ -740,8 +740,8 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
             <div className="bg-[#050507] p-4 rounded-lg border border-white/5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-black text-white uppercase tracking-wide font-mono">Modern Portfolio Theory Risk-Return Grid</h4>
-                  <p className="text-[9.5px] text-white/40 mt-0.5">Annualized Sharpe Ratios, Tracking Error, Alpha, and Beta comparisons.</p>
+                  <h4 className="text-xs font-black text-white uppercase tracking-wide font-mono font-bold">Modern Portfolio Theory Risk-Return Grid</h4>
+                  <p className="text-[9.5px] text-neutral-200 mt-0.5 font-bold">Annualized Sharpe Ratios, Tracking Error, Alpha, and Beta comparisons.</p>
                 </div>
               </div>
 
@@ -749,7 +749,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               <div className="overflow-x-auto">
                 <table className="w-full text-[10px] text-left">
                   <thead>
-                    <tr className="border-b border-white/10 text-[9px] uppercase text-white/40 font-mono">
+                    <tr className="border-b border-white/10 text-[9px] uppercase text-neutral-200 font-mono">
                       <th className="pb-2">Performance Basket</th>
                       <th className="pb-2 text-right">Total Yield</th>
                       <th className="pb-2 text-right">Ann. Volatility</th>
@@ -769,10 +769,10 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
                       <td className="text-right text-white font-extrabold">
                         {finalMetrics.portfolio.return >= 0 ? '+' : ''}{finalMetrics.portfolio.return.toFixed(1)}%
                       </td>
-                      <td className="text-right text-white/70">{finalMetrics.portfolio.vol.toFixed(1)}%</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.portfolio.vol.toFixed(1)}%</td>
                       <td className="text-right font-black text-amber-400">{finalMetrics.portfolio.sharpe.toFixed(2)}</td>
                       <td className="text-right text-rose-400">{finalMetrics.portfolio.maxDd.toFixed(1)}%</td>
-                      <td className="text-right text-white/70">{finalMetrics.portfolio.beta.toFixed(2)}</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.portfolio.beta.toFixed(2)}</td>
                       <td className="text-right text-emerald-400 font-bold">
                         {finalMetrics.portfolio.alpha >= 0 ? '+' : ''}{finalMetrics.portfolio.alpha.toFixed(1)}%
                       </td>
@@ -780,54 +780,54 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
 
                     {/* Benchmarks */}
                     <tr>
-                      <td className="py-2.5 font-bold text-white/80 flex items-center gap-1.5">
+                      <td className="py-2.5 font-bold text-neutral-200 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                         SPY (S&P 500 Index)
                       </td>
-                      <td className="text-right text-white/70">{finalMetrics.spy.return >= 0 ? '+' : ''}{finalMetrics.spy.return.toFixed(1)}%</td>
-                      <td className="text-right text-white/50">{finalMetrics.spy.vol.toFixed(1)}%</td>
-                      <td className="text-right text-white/60">{finalMetrics.spy.sharpe.toFixed(2)}</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.spy.return >= 0 ? '+' : ''}{finalMetrics.spy.return.toFixed(1)}%</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.spy.vol.toFixed(1)}%</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.spy.sharpe.toFixed(2)}</td>
                       <td className="text-right text-rose-500/75">{finalMetrics.spy.maxDd.toFixed(1)}%</td>
-                      <td className="text-right text-white/40">1.00 (Base)</td>
-                      <td className="text-right text-white/40">--</td>
+                      <td className="text-right text-neutral-200">1.00 (Base)</td>
+                      <td className="text-right text-neutral-200">--</td>
                     </tr>
 
                     <tr>
-                      <td className="py-2.5 font-bold text-white/80 flex items-center gap-1.5">
+                      <td className="py-2.5 font-bold text-neutral-200 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
                         QQQ (Nasdaq 100)
                       </td>
-                      <td className="text-right text-white/70">{finalMetrics.qqq.return >= 0 ? '+' : ''}{finalMetrics.qqq.return.toFixed(1)}%</td>
-                      <td className="text-right text-white/50">{finalMetrics.qqq.vol.toFixed(1)}%</td>
-                      <td className="text-right text-white/60">{finalMetrics.qqq.sharpe.toFixed(2)}</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.qqq.return >= 0 ? '+' : ''}{finalMetrics.qqq.return.toFixed(1)}%</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.qqq.vol.toFixed(1)}%</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.qqq.sharpe.toFixed(2)}</td>
                       <td className="text-right text-rose-500/75">{finalMetrics.qqq.maxDd.toFixed(1)}%</td>
-                      <td className="text-right text-white/50">{finalMetrics.qqq.beta.toFixed(2)}</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.qqq.beta.toFixed(2)}</td>
                       <td className="text-right text-emerald-500/60">+{finalMetrics.qqq.alpha.toFixed(1)}%</td>
                     </tr>
 
                     <tr>
-                      <td className="py-2.5 font-bold text-white/80 flex items-center gap-1.5">
+                      <td className="py-2.5 font-bold text-neutral-200 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
                         XLK (Technology Sector)
                       </td>
-                      <td className="text-right text-white/70">{finalMetrics.xlk.return >= 0 ? '+' : ''}{finalMetrics.xlk.return.toFixed(1)}%</td>
-                      <td className="text-right text-white/50">{finalMetrics.xlk.vol.toFixed(1)}%</td>
-                      <td className="text-right text-white/60">{finalMetrics.xlk.sharpe.toFixed(2)}</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.xlk.return >= 0 ? '+' : ''}{finalMetrics.xlk.return.toFixed(1)}%</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.xlk.vol.toFixed(1)}%</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.xlk.sharpe.toFixed(2)}</td>
                       <td className="text-right text-rose-500/75">{finalMetrics.xlk.maxDd.toFixed(1)}%</td>
-                      <td className="text-right text-white/50">{finalMetrics.xlk.beta.toFixed(2)}</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.xlk.beta.toFixed(2)}</td>
                       <td className="text-right text-emerald-500/60">+{finalMetrics.xlk.alpha.toFixed(1)}%</td>
                     </tr>
 
                     <tr>
-                      <td className="py-2.5 font-bold text-white/80 flex items-center gap-1.5">
+                      <td className="py-2.5 font-bold text-neutral-200 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-pink-400" />
                         SMH (Semiconductor ETF)
                       </td>
-                      <td className="text-right text-white/70">{finalMetrics.smh.return >= 0 ? '+' : ''}{finalMetrics.smh.return.toFixed(1)}%</td>
-                      <td className="text-right text-white/50">{finalMetrics.smh.vol.toFixed(1)}%</td>
-                      <td className="text-right text-white/60">{finalMetrics.smh.sharpe.toFixed(2)}</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.smh.return >= 0 ? '+' : ''}{finalMetrics.smh.return.toFixed(1)}%</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.smh.vol.toFixed(1)}%</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.smh.sharpe.toFixed(2)}</td>
                       <td className="text-right text-rose-500/75">{finalMetrics.smh.maxDd.toFixed(1)}%</td>
-                      <td className="text-right text-white/50">{finalMetrics.smh.beta.toFixed(2)}</td>
+                      <td className="text-right text-neutral-200">{finalMetrics.smh.beta.toFixed(2)}</td>
                       <td className="text-right text-emerald-500/60">+{finalMetrics.smh.alpha.toFixed(1)}%</td>
                     </tr>
                   </tbody>
@@ -835,17 +835,17 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               </div>
 
               {/* Informative definitions footer */}
-              <div className="bg-black/40 p-2.5 rounded border border-white/5 text-[9px] text-white/35 space-y-1">
+              <div className="bg-black/40 p-2.5 rounded border border-white/5 text-[9px] text-neutral-200 space-y-1">
                 <div className="flex gap-2">
-                  <span className="font-bold text-white/50">Sharpe Ratio:</span> 
+                  <span className="font-bold text-neutral-200">Sharpe Ratio:</span> 
                   <span>Risk-adjusted excess return per unit of annualized volatility. Higher represents stronger structural compounding safety.</span>
                 </div>
                 <div className="flex gap-2">
-                  <span className="font-bold text-white/50">Beta Exposure:</span> 
-                  <span>Systemic correlation multiplier to SPY. Beta &gt; 1 indicates high momentum elasticity, amplifying broad index swings.</span>
+                  <span className="font-bold text-neutral-200">Beta Exposure:</span> 
+                  <span>Systemic correlation multiplier to broad index. Beta &gt; 1 indicates high momentum elasticity, amplifying broad index swings.</span>
                 </div>
                 <div className="flex gap-2">
-                  <span className="font-bold text-white/50">Active Alpha:</span> 
+                  <span className="font-bold text-neutral-200">Active Alpha:</span> 
                   <span>Outperformance or residual returns generated above and beyond systemic market beta predictions.</span>
                 </div>
               </div>
@@ -858,7 +858,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-black text-white uppercase tracking-wide">Sector ETF Tracking & Exposure Breakdown</h4>
-                  <p className="text-[9.5px] text-white/40 mt-0.5">Calculating tracking correlation offsets to technology indexes.</p>
+                  <p className="text-[9.5px] text-neutral-200 mt-0.5">Calculating tracking correlation offsets to technology indexes.</p>
                 </div>
               </div>
 
@@ -866,7 +866,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
               <div className="space-y-4">
                 <div>
                   <div className="flex justify-between text-[10px] mb-1.5">
-                    <span className="text-white/60">Core Hardware & Chips (SMH Equivalent)</span>
+                    <span className="text-neutral-200">Core Hardware & Chips (SMH Equivalent)</span>
                     <span className="font-bold text-white">{weights.NVDA}%</span>
                   </div>
                   <div className="w-full bg-[#0a0a0c] h-2 rounded-full overflow-hidden border border-white/5">
@@ -876,7 +876,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
 
                 <div>
                   <div className="flex justify-between text-[10px] mb-1.5">
-                    <span className="text-white/60">Software & Enterprise Systems (XLK Equivalent)</span>
+                    <span className="text-neutral-200">Software & Enterprise Systems (XLK Equivalent)</span>
                     <span className="font-bold text-white">{(weights.MSFT + weights.AAPL)}%</span>
                   </div>
                   <div className="w-full bg-[#0a0a0c] h-2 rounded-full overflow-hidden border border-white/5">
@@ -886,7 +886,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
 
                 <div>
                   <div className="flex justify-between text-[10px] mb-1.5">
-                    <span className="text-white/60">Automotive & Clean Tech (Discretionary)</span>
+                    <span className="text-neutral-200">Automotive & Clean Tech (Discretionary)</span>
                     <span className="font-bold text-white">{weights.TSLA}%</span>
                   </div>
                   <div className="w-full bg-[#0a0a0c] h-2 rounded-full overflow-hidden border border-white/5">
@@ -906,7 +906,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-white block">NVDA Alpha Catalyst</span>
-                        <span className="text-[8.5px] text-white/35 block">Semiconductor Tailwinds</span>
+                        <span className="text-[8.5px] text-neutral-200 block">Semiconductor Tailwinds</span>
                       </div>
                     </div>
                     <span className="text-[10px] font-extrabold text-emerald-400">+{((weights.NVDA * 0.32) / 10).toFixed(1)}% Cont.</span>
@@ -919,7 +919,7 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-white block">MSFT Heavy Anchor</span>
-                        <span className="text-[8.5px] text-white/35 block">Enterprise SaaS Stability</span>
+                        <span className="text-[8.5px] text-neutral-200 block">Enterprise SaaS Stability</span>
                       </div>
                     </div>
                     <span className="text-[10px] font-extrabold text-blue-400">+{((weights.MSFT * 0.14) / 10).toFixed(1)}% Cont.</span>
@@ -941,9 +941,9 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
                 <span className="text-[10px] font-black font-mono uppercase tracking-wider bg-white/10 px-1.5 py-0.5 rounded">
                   {performanceCommentary.category}
                 </span>
-                <span className="text-[9px] text-white/50">TRACKING SENSITIVITY ADVISORY</span>
+                <span className="text-[9px] text-neutral-200">TRACKING SENSITIVITY ADVISORY</span>
               </div>
-              <p className="text-[10px] leading-relaxed mt-1.5 text-white/80 font-mono">
+              <p className="text-[10px] leading-relaxed mt-1.5 text-neutral-200 font-mono">
                 {performanceCommentary.analysis}
               </p>
             </div>

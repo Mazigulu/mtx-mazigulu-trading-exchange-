@@ -186,7 +186,7 @@ export default function PositionDependencyView({ currentSymbol, trades }: Positi
         netDirectionalBias: 0,
         totalLots: 0,
         riskClassification: 'NO ACTIVE EXPOSURE',
-        riskColor: 'text-zinc-400 bg-zinc-950 border-white/5',
+        riskColor: 'text-zinc-200 bg-zinc-950 border-white/5',
         description: 'No active trades to map for dependency. Select sandbox mode on the right to simulate hypothetical trade co-exposures.'
       };
     }

@@ -8,6 +8,7 @@ import { jsPDF } from 'jspdf';
 import { MarketSymbol, Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, OrderBook, Trade, PriceAlert } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import LoginPage from './components/LoginPage';
+import Homepage from './components/Homepage';
 import { BureaucracyModal } from './components/BureaucracyModal';
 import { auth } from './lib/firebase.ts';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -17,6 +18,9 @@ import FundingDesk from './components/FundingDesk';
 import ActivityDesk from './components/ActivityDesk';
 import AccountControlCenter from './components/AccountControlCenter';
 import MarketAnalysisDashboard from './components/MarketAnalysisDashboard';
+import WatchlistPage from './components/WatchlistPage';
+import SupportModal from './components/SupportModal';
+import LegalModal from './components/LegalModal';
 
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
@@ -24,6 +28,7 @@ import {
   HelpCircle, 
   Calendar,
   Layers, 
+  Star,
   Radio, 
   Cpu, 
   Bell, 
@@ -120,6 +125,21 @@ const MTXquantLogo = ({ size = 40 }: { size?: number }) => {
   );
 };
 
+const slideOverVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 100 : -100,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    x: direction < 0 ? 100 : -100,
+    opacity: 0,
+  }),
+};
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
@@ -128,6 +148,8 @@ export default function App() {
       return false;
     }
   });
+  const [showLoginPanel, setShowLoginPanel] = useState<boolean>(false);
+  const [loginInitialTab, setLoginInitialTab] = useState<'signin' | 'register'>('signin');
   const [traderEmail, setTraderEmail] = useState<string>(() => {
     try {
       return localStorage.getItem('apex_trader_email') || 'maziguluj@gmail.com';
@@ -135,6 +157,26 @@ export default function App() {
       return 'maziguluj@gmail.com';
     }
   });
+
+  // Dynamically set the browser tab favicon to match the institutional MTXquant logo/image
+  useEffect(() => {
+    try {
+      const svgString = `<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#000000" /><text x="47.5" y="53" fill="#00e5ff" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="52" font-weight="900" letter-spacing="-3px" text-anchor="middle" dominant-baseline="middle" opacity="0.95">mtx</text><text x="52.5" y="53" fill="#ff0055" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="52" font-weight="900" letter-spacing="-3px" text-anchor="middle" dominant-baseline="middle" opacity="0.95">mtx</text><text x="50" y="53" fill="#ffffff" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="52" font-weight="900" letter-spacing="-3px" text-anchor="middle" dominant-baseline="middle">mtx</text></svg>`;
+      const encodedSvg = encodeURIComponent(svgString);
+      const dataUrl = `data:image/svg+xml;utf8,${encodedSvg}`;
+
+      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.type = 'image/svg+xml';
+      link.href = dataUrl;
+    } catch (e) {
+      console.warn('Failed to dynamically update favicon:', e);
+    }
+  }, []);
 
   // Install safe global fetch interceptor to dynamically inject standard Firebase Authorization token
   useEffect(() => {
@@ -358,10 +400,10 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [activeTab, setActiveTab] = useState<'MARKETS' | 'PORTFOLIO' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(() => {
+  const [activeTab, setActiveTab] = useState<'MARKETS' | 'PORTFOLIO' | 'WATCHLIST' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(() => {
     try {
       const saved = localStorage.getItem('apex_active_tab');
-      if (saved === 'MARKETS' || saved === 'PORTFOLIO' || saved === 'FUNDING' || saved === 'ACTIVITY' || saved === 'ANALYSIS') {
+      if (saved === 'MARKETS' || saved === 'PORTFOLIO' || saved === 'WATCHLIST' || saved === 'FUNDING' || saved === 'ACTIVITY' || saved === 'ANALYSIS') {
         return saved;
       }
     } catch (err) {
@@ -377,6 +419,19 @@ export default function App() {
       console.error(err);
     }
   }, [activeTab]);
+
+  const [prevTab, setPrevTab] = useState<'MARKETS' | 'PORTFOLIO' | 'WATCHLIST' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(activeTab);
+
+  useEffect(() => {
+    if (activeTab !== prevTab) {
+      setPrevTab(activeTab);
+    }
+  }, [activeTab, prevTab]);
+
+  const TABS_ORDER = ['MARKETS', 'PORTFOLIO', 'WATCHLIST', 'FUNDING', 'ACTIVITY', 'ANALYSIS'];
+  const tabIndex = TABS_ORDER.indexOf(activeTab);
+  const prevTabIndex = TABS_ORDER.indexOf(prevTab);
+  const slideDirection = tabIndex >= prevTabIndex ? 1 : -1;
 
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -531,6 +586,54 @@ export default function App() {
   const [isBureaucracyModalOpen, setIsBureaucracyModalOpen] = useState(false);
   const [bureaucracyActiveTab, setBureaucracyActiveTab] = useState<'faq' | 'cookies' | 'privacy' | 'terms' | 'risk' | 'docs' | 'compliance'>('faq');
 
+  // Support & Legal Modal States
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+
+  // Adaptive Polling States (Tab Visibility and User Activity)
+  const [isTabVisible, setIsTabVisible] = useState(true);
+  const [isUserActive, setIsUserActive] = useState(true);
+
+  // Tab visibility tracking
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsTabVisible(document.visibilityState === 'visible');
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // User activity tracking (1 minute inactivity timeout)
+  useEffect(() => {
+    let activityTimeout: any;
+
+    const resetActivityTimer = () => {
+      setIsUserActive(true);
+      clearTimeout(activityTimeout);
+      activityTimeout = setTimeout(() => {
+        setIsUserActive(false);
+      }, 60000); // 1 minute inactivity timeout
+    };
+
+    resetActivityTimer();
+
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    const handleEvent = () => resetActivityTimer();
+
+    events.forEach(event => {
+      window.addEventListener(event, handleEvent, { passive: true });
+    });
+
+    return () => {
+      clearTimeout(activityTimeout);
+      events.forEach(event => {
+        window.removeEventListener(event, handleEvent);
+      });
+    };
+  }, []);
+
   const openBureaucracyTab = (tab: 'faq' | 'cookies' | 'privacy' | 'terms' | 'risk' | 'docs' | 'compliance') => {
     setBureaucracyActiveTab(tab);
     setIsBureaucracyModalOpen(true);
@@ -538,12 +641,41 @@ export default function App() {
 
   // Institutional Dropdown Menu States
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [showProfileTooltip, setShowProfileTooltip] = useState(false);
+  const profileTooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleProfileMouseEnter = () => {
+    if (profileTooltipTimeoutRef.current) {
+      clearTimeout(profileTooltipTimeoutRef.current);
+    }
+    profileTooltipTimeoutRef.current = setTimeout(() => {
+      setShowProfileTooltip(true);
+    }, 300);
+  };
+
+  const handleProfileMouseLeave = () => {
+    if (profileTooltipTimeoutRef.current) {
+      clearTimeout(profileTooltipTimeoutRef.current);
+      profileTooltipTimeoutRef.current = null;
+    }
+    setShowProfileTooltip(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (profileTooltipTimeoutRef.current) {
+        clearTimeout(profileTooltipTimeoutRef.current);
+      }
+    };
+  }, []);
   const [soundAlertsEnabled, setSoundAlertsEnabled] = useState<boolean>(() => {
     try {
       const raw = localStorage.getItem('apex_institutional_settings');
       if (raw) {
         const parsed = JSON.parse(raw);
-        return parsed.soundAlerts !== false;
+        if (parsed && typeof parsed === 'object') {
+          return parsed.soundAlerts !== false;
+        }
       }
     } catch {}
     return true;
@@ -558,7 +690,9 @@ export default function App() {
         const raw = localStorage.getItem('apex_institutional_settings');
         if (raw) {
           const parsed = JSON.parse(raw);
-          setSoundAlertsEnabled(parsed.soundAlerts !== false);
+          if (parsed && typeof parsed === 'object') {
+            setSoundAlertsEnabled(parsed.soundAlerts !== false);
+          }
         }
       } catch {}
     };
@@ -584,11 +718,125 @@ export default function App() {
   const toggleSoundAlertsInMenu = () => {
     try {
       const raw = localStorage.getItem('apex_institutional_settings');
-      let settings = raw ? JSON.parse(raw) : {};
+      let settings: any = {};
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          settings = parsed;
+        }
+      }
       const nextVal = !soundAlertsEnabled;
       settings.soundAlerts = nextVal;
       localStorage.setItem('apex_institutional_settings', JSON.stringify(settings));
       setSoundAlertsEnabled(nextVal);
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const toggleBrokerBridge = () => {
+    const nextVal = !isBrokerBridgePaused;
+    setIsBrokerBridgePaused(nextVal);
+    try {
+      localStorage.setItem('apex_broker_bridge_paused', String(nextVal));
+      window.dispatchEvent(new CustomEvent('apex_bridge_status_changed', { detail: { paused: nextVal } }));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const toggleVolatilityAlert = () => {
+    try {
+      const saved = localStorage.getItem('apex_institutional_settings');
+      let settings: any = {};
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          settings = parsed;
+        }
+      }
+      const nextVal = !volatilityAlertEnabled;
+      settings.volatilityAlertEnabled = nextVal;
+      localStorage.setItem('apex_institutional_settings', JSON.stringify(settings));
+      setVolatilityAlertEnabled(nextVal);
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateDailyPnLGoal = (val: number) => {
+    try {
+      const saved = localStorage.getItem('apex_institutional_settings');
+      let settings: any = {};
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          settings = parsed;
+        }
+      }
+      settings.dailyPnLGoal = val;
+      localStorage.setItem('apex_institutional_settings', JSON.stringify(settings));
+      setDailyPnLGoal(val);
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const toggleDailyPnLAlert = () => {
+    try {
+      const saved = localStorage.getItem('apex_institutional_settings');
+      let settings: any = {};
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          settings = parsed;
+        }
+      }
+      const nextVal = !dailyPnLAlertEnabled;
+      settings.dailyPnLAlertEnabled = nextVal;
+      localStorage.setItem('apex_institutional_settings', JSON.stringify(settings));
+      setDailyPnLAlertEnabled(nextVal);
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateDailyPnLPositiveThreshold = (val: number) => {
+    try {
+      const saved = localStorage.getItem('apex_institutional_settings');
+      let settings: any = {};
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          settings = parsed;
+        }
+      }
+      settings.dailyPnLPositiveThreshold = val;
+      localStorage.setItem('apex_institutional_settings', JSON.stringify(settings));
+      setDailyPnLPositiveThreshold(val);
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateDailyPnLNegativeThreshold = (val: number) => {
+    try {
+      const saved = localStorage.getItem('apex_institutional_settings');
+      let settings: any = {};
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          settings = parsed;
+        }
+      }
+      settings.dailyPnLNegativeThreshold = val;
+      localStorage.setItem('apex_institutional_settings', JSON.stringify(settings));
+      setDailyPnLNegativeThreshold(val);
       window.dispatchEvent(new Event('storage'));
     } catch (err) {
       console.error(err);
@@ -673,6 +921,7 @@ export default function App() {
 
   const hasTriggeredPositiveRef = useRef(false);
   const hasTriggeredNegativeRef = useRef(false);
+  const hasLoadedOnceRef = useRef(false);
 
   useEffect(() => {
     const checkSettings = () => {
@@ -680,15 +929,23 @@ export default function App() {
         const saved = localStorage.getItem('apex_institutional_settings');
         if (saved) {
           const parsed = JSON.parse(saved);
-          setVolatilityAlertEnabled(!!parsed.volatilityAlertEnabled);
-          if (typeof parsed.dailyPnLGoal === 'number') {
-            setDailyPnLGoal(parsed.dailyPnLGoal);
+          if (parsed && typeof parsed === 'object') {
+            setVolatilityAlertEnabled(!!parsed.volatilityAlertEnabled);
+            if (typeof parsed.dailyPnLGoal === 'number') {
+              setDailyPnLGoal(parsed.dailyPnLGoal);
+            } else {
+              setDailyPnLGoal(1000);
+            }
+            setDailyPnLAlertEnabled(!!parsed.dailyPnLAlertEnabled);
+            setDailyPnLPositiveThreshold(typeof parsed.dailyPnLPositiveThreshold === 'number' ? parsed.dailyPnLPositiveThreshold : 2000);
+            setDailyPnLNegativeThreshold(typeof parsed.dailyPnLNegativeThreshold === 'number' ? parsed.dailyPnLNegativeThreshold : -1000);
           } else {
+            setVolatilityAlertEnabled(false);
             setDailyPnLGoal(1000);
+            setDailyPnLAlertEnabled(false);
+            setDailyPnLPositiveThreshold(2000);
+            setDailyPnLNegativeThreshold(-1000);
           }
-          setDailyPnLAlertEnabled(!!parsed.dailyPnLAlertEnabled);
-          setDailyPnLPositiveThreshold(typeof parsed.dailyPnLPositiveThreshold === 'number' ? parsed.dailyPnLPositiveThreshold : 2000);
-          setDailyPnLNegativeThreshold(typeof parsed.dailyPnLNegativeThreshold === 'number' ? parsed.dailyPnLNegativeThreshold : -1000);
         } else {
           setVolatilityAlertEnabled(false);
           setDailyPnLGoal(1000);
@@ -789,7 +1046,11 @@ export default function App() {
   const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>(() => {
     try {
       const stored = localStorage.getItem('priceAlerts');
-      return stored ? JSON.parse(stored) : [];
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      return [];
     } catch {
       return [];
     }
@@ -822,49 +1083,50 @@ export default function App() {
 
       try {
         const res = await fetch('/api/market-prices');
-        if (!res.ok) return;
-        const prices: Record<string, number> = await res.json();
+        if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+          const prices: Record<string, number> = await res.json();
 
-        let triggeredAny = false;
-        const updatedAlerts = priceAlerts.map(alert => {
-          if (alert.isTriggered) return alert;
-          const currentPrice = prices[alert.symbol];
-          if (currentPrice === undefined || currentPrice <= 0) return alert;
+          let triggeredAny = false;
+          const updatedAlerts = priceAlerts.map(alert => {
+            if (alert.isTriggered) return alert;
+            const currentPrice = prices[alert.symbol];
+            if (currentPrice === undefined || currentPrice <= 0) return alert;
 
-          let isTriggered = false;
-          if (alert.condition === 'ABOVE' && currentPrice >= alert.targetPrice) {
-            isTriggered = true;
-          } else if (alert.condition === 'BELOW' && currentPrice <= alert.targetPrice) {
-            isTriggered = true;
-          }
-
-          if (isTriggered) {
-            triggeredAny = true;
-            
-            // 1. Play subtle UI standard push if supported
-            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-              try {
-                new Notification(`🔔 Price Alert: ${alert.symbol}`, {
-                  body: `${alert.symbol} achieved alert condition ${alert.condition} ${alert.targetPrice}! (Current Price: ${currentPrice})`,
-                  tag: alert.id,
-                  silent: false
-                });
-              } catch (err) {
-                console.warn('Notification execution error:', err);
-              }
+            let isTriggered = false;
+            if (alert.condition === 'ABOVE' && currentPrice >= alert.targetPrice) {
+              isTriggered = true;
+            } else if (alert.condition === 'BELOW' && currentPrice <= alert.targetPrice) {
+              isTriggered = true;
             }
 
-            return {
-              ...alert,
-              isTriggered: true,
-              triggeredAt: new Date().toLocaleTimeString()
-            };
-          }
-          return alert;
-        });
+            if (isTriggered) {
+              triggeredAny = true;
+              
+              // 1. Play subtle UI standard push if supported
+              if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                try {
+                  new Notification(`🔔 Price Alert: ${alert.symbol}`, {
+                    body: `${alert.symbol} achieved alert condition ${alert.condition} ${alert.targetPrice}! (Current Price: ${currentPrice})`,
+                    tag: alert.id,
+                    silent: false
+                  });
+                } catch (err) {
+                  console.warn('Notification execution error:', err);
+                }
+              }
 
-        if (triggeredAny) {
-          setPriceAlerts(updatedAlerts);
+              return {
+                ...alert,
+                isTriggered: true,
+                triggeredAt: new Date().toLocaleTimeString()
+              };
+            }
+            return alert;
+          });
+
+          if (triggeredAny) {
+            setPriceAlerts(updatedAlerts);
+          }
         }
       } catch (err) {
         console.warn('Failed alert check pass:', err);
@@ -1420,7 +1682,7 @@ export default function App() {
       // 1. Market Data
       try {
         const rMarket = await fetch(`/api/market-data?symbol=${encodeURIComponent(symbol)}`);
-        if (rMarket.ok) {
+        if (rMarket.ok && rMarket.headers.get('content-type')?.includes('application/json')) {
           const dMarket = await rMarket.json();
           setCandles(dMarket.candles || []);
           setFvgs(dMarket.fvgs || []);
@@ -1435,7 +1697,7 @@ export default function App() {
       // 2. Order Book
       try {
         const rOrderBook = await fetch(`/api/order-book?symbol=${encodeURIComponent(symbol)}`);
-        if (rOrderBook.ok) {
+        if (rOrderBook.ok && rOrderBook.headers.get('content-type')?.includes('application/json')) {
           const dOrderBook = await rOrderBook.json();
           setOrderBook(dOrderBook);
         }
@@ -1446,7 +1708,7 @@ export default function App() {
       // 3. Trades
       try {
         const rTrades = await fetch('/api/trades');
-        if (rTrades.ok) {
+        if (rTrades.ok && rTrades.headers.get('content-type')?.includes('application/json')) {
           const dTrades = await rTrades.json();
           setTrades(dTrades || []);
         }
@@ -1463,18 +1725,31 @@ export default function App() {
     }
   };
 
+  const pollInterval = (isTabVisible && isUserActive) ? 4000 : 20000;
+
   useEffect(() => {
-    setLoading(true);
+    if (!hasLoadedOnceRef.current) {
+      setLoading(true);
+      hasLoadedOnceRef.current = true;
+    }
     fetchMarketData();
 
-    // Setup background ticking poll
+    // Setup background ticking poll (adaptive frequency)
     const interval = setInterval(() => {
       setRefreshing(true);
       fetchMarketData();
-    }, 4000);
+    }, pollInterval);
 
     return () => clearInterval(interval);
-  }, [symbol]);
+  }, [symbol, pollInterval]);
+
+  // Immediately refresh data when tab becomes active/visible again or user activity resumes
+  useEffect(() => {
+    if (isTabVisible && isUserActive) {
+      setRefreshing(true);
+      fetchMarketData();
+    }
+  }, [isTabVisible, isUserActive]);
 
   const handleManualRefresh = () => {
     setRefreshing(true);
@@ -1506,8 +1781,14 @@ export default function App() {
       if (res.ok) {
         fetchMarketData();
       } else {
-        const data = await res.json();
-        console.error('Failed to update trade parameters:', data.error);
+        let errorMsg = 'Unknown error';
+        if (res.headers.get('content-type')?.includes('application/json')) {
+          try {
+            const data = await res.json();
+            errorMsg = data.error || errorMsg;
+          } catch {}
+        }
+        console.error('Failed to update trade parameters:', errorMsg);
       }
     } catch (err) {
       console.error('Error updating trade parameters:', err);
@@ -1685,9 +1966,11 @@ export default function App() {
         const saved = localStorage.getItem('apex_institutional_settings');
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed.keybindEmergencyClose) emergencyCloseBind = parsed.keybindEmergencyClose.toUpperCase();
-          if (parsed.keybindToggleVolatility) toggleVolatilityBind = parsed.keybindToggleVolatility.toUpperCase();
-          if (parsed.keybindTabDashboard) tabDashboardBind = parsed.keybindTabDashboard.toUpperCase();
+          if (parsed && typeof parsed === 'object') {
+            if (parsed.keybindEmergencyClose) emergencyCloseBind = parsed.keybindEmergencyClose.toUpperCase();
+            if (parsed.keybindToggleVolatility) toggleVolatilityBind = parsed.keybindToggleVolatility.toUpperCase();
+            if (parsed.keybindTabDashboard) tabDashboardBind = parsed.keybindTabDashboard.toUpperCase();
+          }
         }
       } catch (err) {
         console.warn('Failed to read bindings in hotkey tracker:', err);
@@ -2102,10 +2385,26 @@ export default function App() {
   };
 
   if (!isLoggedIn) {
+    if (!showLoginPanel) {
+      return (
+        <Homepage 
+          onLaunchTerminal={(initialTab) => {
+            setLoginInitialTab(initialTab || 'signin');
+            setShowLoginPanel(true);
+          }} 
+          onSignIn={() => {
+            setLoginInitialTab('signin');
+            setShowLoginPanel(true);
+          }} 
+        />
+      );
+    }
     return (
       <LoginPage 
         onLoginSuccess={handleLoginSuccess} 
         defaultEmail={traderEmail} 
+        onBackToHomepage={() => setShowLoginPanel(false)}
+        initialTab={loginInitialTab}
       />
     );
   }
@@ -2148,7 +2447,7 @@ export default function App() {
                     </span>
                   </div>
                   <p className="text-[8.5px] text-white/40 font-serif italic font-light tracking-wide leading-none mt-1">
-                    Institutional Decision Engine
+                    Prime Brokerage
                   </p>
                 </div>
               )}
@@ -2159,7 +2458,8 @@ export default function App() {
               {[
                 { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
                 { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
-                { id: 'FUNDING', label: 'Funding', icon: Wallet },
+                { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
+                { id: 'FUNDING', label: 'Wallet', icon: Wallet },
                 { id: 'ACTIVITY', label: 'Activity', icon: History },
                 { id: 'ANALYSIS', label: 'Analysis', icon: BarChart3 }
               ].map((item) => {
@@ -2244,7 +2544,8 @@ export default function App() {
                 <span className="px-2 py-0.5 lg:px-2.5 lg:py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold uppercase tracking-wider text-[9px] lg:text-[10px]">
                   {activeTab === 'MARKETS' && 'Markets'}
                   {activeTab === 'PORTFOLIO' && 'Portfolio'}
-                  {activeTab === 'FUNDING' && 'Funding'}
+                  {activeTab === 'WATCHLIST' && 'Watchlist'}
+                  {activeTab === 'FUNDING' && 'Wallet'}
                   {activeTab === 'ACTIVITY' && 'Activity'}
                   {activeTab === 'ANALYSIS' && 'Market Analysis'}
                 </span>
@@ -2253,46 +2554,25 @@ export default function App() {
 
             {/* Active status indicator ledger */}
             <div className="flex items-center space-x-2 md:space-x-3">
-              {/* Dynamic Auto-Sync Elapsed Time Indicator */}
-              <div 
-                id="header-auto-sync-indicator"
-                className="hidden md:flex items-center space-x-1 px-1.5 lg:px-2 bg-white/5 border border-white/10 hover:border-indigo-500/20 rounded h-8 font-mono text-[9px] text-white/55 select-none shrink-0 transition-colors uppercase tracking-tight"
-                title="Auto-Sync: Seconds elapsed since last successful financial market data fetch"
-              >
-                <span className="relative flex h-1 w-1 lg:h-1.5 lg:w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1 w-1 lg:h-1.5 lg:w-1.5 bg-emerald-500"></span>
-                </span>
-                <span className="text-[8px] lg:text-[9px]"><span className="hidden xl:inline">SYNCED: </span><strong className="font-extrabold text-[#10b981] tabular-nums">{secondsSinceSync || 0}s</strong><span className="hidden lg:inline"> ago</span></span>
-              </div>
-
-              <button
-                id="manual-refresh-btn"
-                onClick={handleManualRefresh}
-                className="p-1.5 hover:bg-white/5 border border-white/10 rounded text-white/60 hover:text-white transition-colors h-8 w-8 flex items-center justify-center shrink-0 cursor-pointer"
-                title="Manual Sync Feed"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-indigo-400' : ''}`} />
-              </button>
-
-              {/* Professional visual vertical separator to group user info at the absolute right */}
-              <div className="h-6 w-[1px] bg-white/10 hidden md:block shrink-0" />
-
               {/* Institutional Profile & Terminal Control Center Dropdown */}
-              <div className="relative shrink-0" ref={profileMenuRef}>
+              <div 
+                className="relative shrink-0" 
+                ref={profileMenuRef}
+              >
                 <button
                   id="institutional-profile-dropdown-trigger"
-                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/10 hover:border-indigo-500/30 hover:bg-white/10 rounded h-8 transition-all duration-150 cursor-pointer select-none"
-                  title="Institutional Profile & Terminal Diagnostics"
+                  onClick={() => {
+                    setIsProfileMenuOpen(!isProfileMenuOpen);
+                    setShowProfileTooltip(false);
+                    if (profileTooltipTimeoutRef.current) {
+                      clearTimeout(profileTooltipTimeoutRef.current);
+                    }
+                  }}
+                  className="relative h-8 w-8 rounded-full flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.25)] hover:shadow-[0_0_16px_rgba(99,102,241,0.45)] transition-all duration-200 cursor-pointer select-none font-sans overflow-hidden group"
                 >
-                  <div className="relative flex items-center justify-center">
-                    <span className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse"></span>
-                  </div>
-                  <span className="text-[9px] lg:text-[10px] font-mono text-white/80 font-bold max-w-[70px] md:max-w-[100px] lg:max-w-[140px] truncate" title={traderEmail}>
-                    {traderEmail}
+                  <span className="text-[10px] font-black text-white tracking-tighter uppercase">
+                    {traderEmail ? (traderEmail.startsWith('maziguluj') ? 'MG' : traderEmail.substring(0, 2).toUpperCase()) : 'TR'}
                   </span>
-                  <ChevronDown className={`w-3 h-3 text-white/50 transition-transform duration-200 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 <AccountControlCenter
@@ -2308,7 +2588,23 @@ export default function App() {
                   theme={theme}
                   onToggleTheme={toggleTheme}
                   idleTimeout={idleTimeout}
-                  onIdleTimeoutChange={setIdleTimeout}
+                  onSetIdleTimeout={setIdleTimeout}
+                  volatilityAlertEnabled={volatilityAlertEnabled}
+                  onToggleVolatilityAlert={toggleVolatilityAlert}
+                  dailyPnLGoal={dailyPnLGoal}
+                  onSetDailyPnLGoal={updateDailyPnLGoal}
+                  dailyPnLAlertEnabled={dailyPnLAlertEnabled}
+                  onToggleDailyPnLAlert={toggleDailyPnLAlert}
+                  dailyPnLPositiveThreshold={dailyPnLPositiveThreshold}
+                  onSetDailyPnLPositiveThreshold={updateDailyPnLPositiveThreshold}
+                  dailyPnLNegativeThreshold={dailyPnLNegativeThreshold}
+                  onSetDailyPnLNegativeThreshold={updateDailyPnLNegativeThreshold}
+                  highlightOrderBlocks={highlightOrderBlocks}
+                  onToggleHighlightOrderBlocks={() => setHighlightOrderBlocks(!highlightOrderBlocks)}
+                  trendProjectionEnabled={trendProjectionEnabled}
+                  onToggleTrendProjection={() => setTrendProjectionEnabled(!trendProjectionEnabled)}
+                  isBrokerBridgePaused={isBrokerBridgePaused}
+                  onToggleBrokerBridge={toggleBrokerBridge}
                 />
               </div>
             </div>
@@ -2319,7 +2615,7 @@ export default function App() {
 
 
       {/* Core Dynamic Workplace Area */}
-      <main className="max-w-[1400px] mx-auto w-full px-3 md:px-6 py-2 md:py-6 flex-1">
+      <main className="max-w-[1400px] mx-auto w-full px-3 md:px-6 py-2 md:py-6 flex-1 flex flex-col overflow-hidden w-full">
         
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -2380,50 +2676,159 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'MARKETS' && (
-              <div id="markets-workspace" className="animate-fadeIn">
-                <MarketsTerminal />
-              </div>
-            )}
+            <AnimatePresence mode="wait" custom={slideDirection}>
+              {activeTab === 'MARKETS' && (
+                <motion.div
+                  key="MARKETS"
+                  custom={slideDirection}
+                  variants={slideOverVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  id="markets-workspace"
+                  className="flex-1 flex flex-col w-full"
+                >
+                  <MarketsTerminal initialTicker={symbol} />
+                </motion.div>
+              )}
 
-            {activeTab === 'PORTFOLIO' && (
-              <div id="portfolio-workspace" className="animate-fadeIn">
-                <PortfolioDesk traderEmail={traderEmail} />
-              </div>
-            )}
-            {activeTab === 'FUNDING' && (
-              <div id="funding-workspace" className="animate-fadeIn">
-                <FundingDesk />
-              </div>
-            )}
-            {activeTab === 'ACTIVITY' && (
-              <div id="activity-workspace" className="animate-fadeIn">
-                <ActivityDesk />
-              </div>
-            )}
-            {activeTab === 'ANALYSIS' && (
-              <div id="analysis-workspace" className="animate-fadeIn max-w-[1400px] mx-auto px-4 md:px-8 py-5">
-                <MarketAnalysisDashboard trades={trades} />
-              </div>
-            )}
+              {activeTab === 'PORTFOLIO' && (
+                <motion.div
+                  key="PORTFOLIO"
+                  custom={slideDirection}
+                  variants={slideOverVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  id="portfolio-workspace"
+                  className="w-full"
+                >
+                  <PortfolioDesk traderEmail={traderEmail} />
+                </motion.div>
+              )}
+              
+              {activeTab === 'WATCHLIST' && (
+                <motion.div
+                  key="WATCHLIST"
+                  custom={slideDirection}
+                  variants={slideOverVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  id="watchlist-workspace"
+                  className="w-full"
+                >
+                  <WatchlistPage onSelectSymbol={setSymbol} onSelectTab={setActiveTab} />
+                </motion.div>
+              )}
+              {activeTab === 'FUNDING' && (
+                <motion.div
+                  key="FUNDING"
+                  custom={slideDirection}
+                  variants={slideOverVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  id="funding-workspace"
+                  className="w-full"
+                >
+                  <FundingDesk />
+                </motion.div>
+              )}
+              {activeTab === 'ACTIVITY' && (
+                <motion.div
+                  key="ACTIVITY"
+                  custom={slideDirection}
+                  variants={slideOverVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  id="activity-workspace"
+                  className="w-full"
+                >
+                  <ActivityDesk />
+                </motion.div>
+              )}
+              {activeTab === 'ANALYSIS' && (
+                <motion.div
+                  key="ANALYSIS"
+                  custom={slideDirection}
+                  variants={slideOverVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  id="analysis-workspace"
+                  className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 w-full"
+                >
+                  <MarketAnalysisDashboard trades={trades} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </>
         )}
 
       </main>
 
       {/* Footer Info strip */}
-      <footer className="border-t border-white/10 bg-[#080808] py-6 mt-12 font-mono">
+      <footer className="hidden lg:block border-t border-white/10 bg-[#080808] py-6 mt-12 font-mono">
         <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-white/30">
-          <div className="flex items-center space-x-2.5">
-            <span className="text-white text-sm font-black tracking-tight lowercase">
+          <div className="flex items-center space-x-3 text-[10px]">
+            <span className="text-white text-sm font-black tracking-tight lowercase mr-1">
               mtxquant
             </span>
+            <span className="text-white/10">|</span>
+            <button
+              onClick={() => setIsSupportModalOpen(true)}
+              className="hover:text-indigo-400 text-white/40 transition-colors cursor-pointer hover:underline lowercase font-bold"
+            >
+              support
+            </button>
+            <span className="text-white/10">|</span>
+            <button
+              onClick={() => setIsLegalModalOpen(true)}
+              className="hover:text-indigo-400 text-white/40 transition-colors cursor-pointer hover:underline lowercase font-bold"
+            >
+              legal
+            </button>
           </div>
           <div className="text-center sm:text-right select-none text-[9.5px]">
-            <span>MTXquant Quantitative Terminal &copy; 2026. Aligned with Elegant Dark guidelines.</span>
+            <span>MTXquant Quantitative Terminal &copy; 2026. MTXquant is a registered trademark of MTXcapital.</span>
           </div>
         </div>
       </footer>
+
+      {/* Sleek, translucent bottom navigation bar for mobile screens */}
+      <nav id="mobile-floating-tabbar" className="fixed bottom-0 left-0 right-0 z-[290] md:hidden bg-[#08080c]/90 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 px-2 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
+        {[
+          { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
+          { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
+          { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
+          { id: 'FUNDING', label: 'Wallet', icon: Wallet }
+        ].map((item) => {
+          const active = activeTab === item.id;
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`flex flex-col items-center justify-center flex-1 h-full py-1 gap-1 cursor-pointer transition-all duration-200 bg-transparent border-none ${
+                active ? 'text-indigo-400 font-extrabold scale-105' : 'text-white/40 hover:text-white'
+              }`}
+            >
+              <Icon className={`w-4.5 h-4.5 ${active ? 'stroke-[2.5px]' : 'stroke-[1.8px]'}`} />
+              <span className="text-[8px] font-mono uppercase tracking-wider scale-90">
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
       </div>
 
       {/* Session Summary Modal */}
@@ -2749,7 +3154,8 @@ export default function App() {
                   {[
                     { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
                     { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
-                    { id: 'FUNDING', label: 'Funding', icon: Wallet },
+                    { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
+                    { id: 'FUNDING', label: 'Wallet', icon: Wallet },
                     { id: 'ACTIVITY', label: 'Activity', icon: History },
                     { id: 'ANALYSIS', label: 'Analysis', icon: BarChart3 }
                   ].map((item) => {
@@ -2796,6 +3202,18 @@ export default function App() {
         isOpen={isBureaucracyModalOpen} 
         onClose={() => setIsBureaucracyModalOpen(false)} 
         initialTab={bureaucracyActiveTab}
+      />
+
+      {/* Support & Legal Center Dialogs */}
+      <SupportModal
+        isOpen={isSupportModalOpen}
+        onClose={() => setIsSupportModalOpen(false)}
+        traderEmail={traderEmail}
+      />
+
+      <LegalModal
+        isOpen={isLegalModalOpen}
+        onClose={() => setIsLegalModalOpen(false)}
       />
 
     </div>

@@ -304,3 +304,22 @@ body.light-theme ::-webkit-scrollbar-thumb {
   animation: srGoldPulse 2.5s infinite ease-in-out;
 }
 
+/* Global Recharts outline-ring & touch-highlight overrides */
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface *,
+.recharts-container,
+.recharts-container *,
+svg,
+svg *,
+.recharts-wrapper:focus,
+.recharts-surface:focus,
+svg:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-focus-ring-color: transparent !important;
+}
+
+

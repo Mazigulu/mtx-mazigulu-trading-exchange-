@@ -181,8 +181,15 @@ export function generateScreenerDatabase(): ScreenerRecord[] {
       }
 
       // Ensure unique ticker
-      if (database.some(d => d.ticker === tickerStr)) {
-        tickerStr += symbols[i % symbols.length];
+      while (database.some(d => d.ticker === tickerStr)) {
+        tickerStr += symbols[Math.floor(pseudorand() * symbols.length)];
+        if (tickerStr.length > 6) {
+          tickerStr = '';
+          const newLength = pseudorand() > 0.4 ? 4 : 3;
+          for (let j = 0; j < newLength; j++) {
+            tickerStr += symbols[Math.floor(pseudorand() * symbols.length)];
+          }
+        }
       }
 
       const pRand = pseudorand();

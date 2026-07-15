@@ -321,7 +321,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
         className={`${isCompact ? 'p-1.5 px-2.5 gap-1.5' : 'p-3 gap-3'} flex items-center justify-between cursor-pointer hover:bg-white/[0.02] select-none`}
       >
         <div className="flex items-center space-x-1.5 md:space-x-2">
-          <span className="text-white/30 hover:text-white transition-colors">
+          <span className="text-neutral-200 hover:text-white transition-colors">
             {isExpanded ? (
               <ChevronUp className="w-3.5 h-3.5 text-indigo-400" />
             ) : (
@@ -341,7 +341,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className={`${isCompact ? 'text-[11px]' : 'text-xs'} font-bold font-mono text-white block`}>{trade.symbol}</span>
-              <span className={`${isCompact ? 'text-[6.5px] px-0.5 py-[0.5px]' : 'text-[7.5px] px-1 py-[1.5px]'} font-mono font-bold uppercase tracking-wider text-white/35 bg-white/[0.03] rounded border border-white/5`} title={statusTooltip}>
+              <span className={`${isCompact ? 'text-[6.5px] px-0.5 py-[0.5px]' : 'text-[7.5px] px-1 py-[1.5px]'} font-mono font-bold uppercase tracking-wider text-neutral-200 bg-white/[0.03] rounded border border-white/5`} title={statusTooltip}>
                 {statusText}
               </span>
 
@@ -377,7 +377,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                 </div>
               )}
             </div>
-            <span className={`${isCompact ? 'text-[8.5px]' : 'text-[9.5px]'} text-white/30 font-mono`}>Lot size: {trade.size}</span>
+            <span className={`${isCompact ? 'text-[8.5px]' : 'text-[9.5px]'} text-neutral-200 font-mono`}>Lot size: {trade.size}</span>
           </div>
         </div>
 
@@ -407,7 +407,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
             <span className={`${isCompact ? 'text-[11px]' : 'text-xs'} font-mono font-bold ${trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}
             </span>
-            {!isCompact && <span className="text-[8.5px] text-white/20 block font-mono">PnL</span>}
+            {!isCompact && <span className="text-[8.5px] text-neutral-200 block font-mono">PnL</span>}
           </div>
           <button
             onClick={() => onQuickClose(trade.id)}
@@ -421,24 +421,24 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
 
       {/* Expanded position details wrapper */}
       {isExpanded && (
-        <div className={`${isCompact ? 'px-2 pb-2 pt-1 gap-1.5 text-[9px]' : 'px-3 pb-3 pt-1.5 gap-2 text-[10px]'} border-t border-white/5 bg-white/[0.01] flex flex-col font-mono text-white/50 animate-fadeIn animate-duration-300`}>
+        <div className={`${isCompact ? 'px-2 pb-2 pt-1 gap-1.5 text-[9px]' : 'px-3 pb-3 pt-1.5 gap-2 text-[10px]'} border-t border-white/5 bg-white/[0.01] flex flex-col font-mono text-neutral-200 animate-fadeIn animate-duration-300`}>
           <div className={`${isCompact ? 'grid grid-cols-2 sm:grid-cols-4 gap-1' : 'grid grid-cols-2 sm:grid-cols-4 gap-2'}`}>
             <div className={`bg-black/30 rounded border border-white/5 ${isCompact ? 'p-1' : 'p-2'}`}>
-              <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Entry Price</span>
+              <span className="text-[8px] text-neutral-200 block uppercase tracking-wider mb-0.5">Entry Price</span>
               <span className="text-white font-bold">{trade.entryPrice.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : 5)}</span>
             </div>
             <div className={`bg-black/30 rounded border border-white/5 ${isCompact ? 'p-1' : 'p-2'}`}>
-              <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Entry Time</span>
+              <span className="text-[8px] text-neutral-200 block uppercase tracking-wider mb-0.5">Entry Time</span>
               <span className="text-white font-bold">
                 {new Date(trade.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
             </div>
             <div className={`bg-black/30 rounded border border-white/5 ${isCompact ? 'p-1' : 'p-2'}`}>
-              <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Open Duration</span>
+              <span className="text-[8px] text-neutral-200 block uppercase tracking-wider mb-0.5">Open Duration</span>
               <span className="text-white font-bold">{formatOpenDuration(trade.timestamp)}</span>
             </div>
             <div className={`bg-black/30 rounded border border-white/5 flex flex-col justify-between ${isCompact ? 'p-1' : 'p-2'}`} title="Time elapsed since the last real-time high-fidelity streaming price/PnL update.">
-              <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Last Refresh Delta</span>
+              <span className="text-[8px] text-neutral-200 block uppercase tracking-wider mb-0.5">Last Refresh Delta</span>
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                 <span className="text-emerald-400 font-bold leading-none">
@@ -447,17 +447,17 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
               </div>
             </div>
             <div className={`bg-black/30 rounded border border-white/5 ${isCompact ? 'p-1' : 'p-2'}`}>
-              <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Potential PnL at Target</span>
+              <span className="text-[8px] text-neutral-200 block uppercase tracking-wider mb-0.5">Potential PnL at Target</span>
               <span className="text-emerald-400 font-extrabold block">
                 +${pnlAtTP.toFixed(2)}
               </span>
             </div>
             <div className={`bg-black/30 rounded border border-white/5 ${isCompact ? 'p-1' : 'p-2'}`}>
-              <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Margin Usage</span>
+              <span className="text-[8px] text-neutral-200 block uppercase tracking-wider mb-0.5">Margin Usage</span>
               <span className="text-indigo-400 font-extrabold">${((trade.symbol === 'BTC/USDT' ? trade.size * trade.entryPrice : trade.size * 100000) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div className={`bg-black/30 rounded border border-white/5 flex flex-col justify-between ${isCompact ? 'p-1' : 'p-2'}`} title="Theoretical order book pressure on global liquidity pool based on standard level-2 asset depth.">
-              <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Market Impact Score</span>
+              <span className="text-[8px] text-neutral-200 block uppercase tracking-wider mb-0.5">Market Impact Score</span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className={`text-[7.5px] font-extrabold uppercase px-1 py-[0.5px] rounded border leading-none shrink-0 ${impactGradeClass}`}>
                   {impactGrade}
@@ -468,12 +468,12 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
               </div>
             </div>
             <div className={`bg-black/30 rounded border border-white/5 flex flex-col justify-between ${isCompact ? 'p-1' : 'p-2'}`} title="Expected pricing slippage from bid/ask absorbency.">
-              <span className="text-[8px] text-white/35 block uppercase tracking-wider mb-0.5">Est. Slippage Impact</span>
+              <span className="text-[8px] text-neutral-200 block uppercase tracking-wider mb-0.5">Est. Slippage Impact</span>
               <div className="flex items-center justify-between gap-1 mt-0.5">
                 <span className="text-indigo-300 font-extrabold leading-none">
                   {computedImpactBps.toFixed(2)} bps
                 </span>
-                <span className="text-[7.5px] text-white/40 font-normal leading-tight text-right line-clamp-1 block">
+                <span className="text-[7.5px] text-neutral-200 font-normal leading-tight text-right line-clamp-1 block">
                   {bookPressureStr}
                 </span>
               </div>
@@ -492,7 +492,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3.5 justify-between">
               {/* Quick Action: Set BE & Lock SL */}
               <div className="space-y-1.5 shrink-0">
-                <span className="text-[7.5px] text-white/30 block uppercase tracking-wider font-bold">1. Quick Break-Even Protection</span>
+                <span className="text-[7.5px] text-neutral-200 block uppercase tracking-wider font-bold">1. Quick Break-Even Protection</span>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
@@ -500,7 +500,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                     disabled={trade.stopLoss === trade.entryPrice}
                     className={`px-3 py-1.5 font-sans font-extrabold uppercase rounded border transition-all text-[9.5px] cursor-pointer flex items-center justify-center gap-1 leading-none ${
                       trade.stopLoss === trade.entryPrice
-                        ? 'bg-neutral-900 border-white/5 text-white/20 cursor-not-allowed'
+                        ? 'bg-neutral-900 border-white/5 text-neutral-400 cursor-not-allowed'
                         : 'bg-[#10b981]/15 hover:bg-[#10b981]/25 text-[#10b981] border-[#10b981]/25 hover:border-[#10b981]/50'
                     }`}
                   >
@@ -536,7 +536,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
               {/* Trailing Stop Loss Toggle */}
               <div className="space-y-1.5 grow md:max-w-[42%] bg-black/20 p-2 rounded border border-white/5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[7.5px] text-white/40 uppercase tracking-wider font-bold">2. Enable Trailing Stop</span>
+                  <span className="text-[7.5px] text-neutral-200 uppercase tracking-wider font-bold">2. Enable Trailing Stop</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="checkbox"
@@ -552,7 +552,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                       }}
                       className="rounded border-white/10 bg-black text-indigo-500 focus:ring-0 focus:ring-offset-0 w-3 h-3 cursor-pointer"
                     />
-                    <label htmlFor={`tsl-toggle-${trade.id}`} className="text-[8px] text-white/60 font-bold uppercase cursor-pointer">
+                    <label htmlFor={`tsl-toggle-${trade.id}`} className="text-[8px] text-neutral-200 font-bold uppercase cursor-pointer">
                       {trade.trailingStopActive ? 'Enabled' : 'Disabled'}
                     </label>
                   </div>
@@ -560,7 +560,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
 
                 {trade.trailingStopActive ? (
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-[7.5px] text-white/40 font-bold font-sans">Distance:</span>
+                    <span className="text-[7.5px] text-neutral-200 font-bold font-sans">Distance:</span>
                     <input
                       type="number"
                       step={trade.symbol === 'USD/JPY' ? '0.01' : trade.symbol === 'BTC/USDT' ? '10' : '0.0001'}
@@ -585,7 +585,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
               {/* Trailing / Self-Adjusting Take Profit Toggle */}
               <div className="space-y-1.5 grow md:max-w-[32%] bg-black/20 p-2 rounded border border-white/5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[7.5px] text-white/40 uppercase tracking-wider font-bold">3. Trailing Take Profit (TTP)</span>
+                  <span className="text-[7.5px] text-neutral-200 uppercase tracking-wider font-bold">3. Trailing Take Profit (TTP)</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="checkbox"
@@ -596,7 +596,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                       }}
                       className="rounded border-white/10 bg-black text-indigo-500 focus:ring-0 focus:ring-offset-0 w-3 h-3 cursor-pointer"
                     />
-                    <label htmlFor={`ttp-toggle-${trade.id}`} className="text-[8px] text-white/60 font-bold uppercase cursor-pointer">
+                    <label htmlFor={`ttp-toggle-${trade.id}`} className="text-[8px] text-neutral-200 font-bold uppercase cursor-pointer">
                       {trade.trailingTakeProfitActive ? 'Running' : 'Off'}
                     </label>
                   </div>
@@ -648,7 +648,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[10px] animate-fadeIn">
                   {/* Parameter 1: ATR Multiplier */}
                   <div className="bg-black/30 p-2 rounded border border-white/5 space-y-1">
-                    <div className="flex justify-between items-center text-[8.5px] text-white/40 font-bold uppercase">
+                    <div className="flex justify-between items-center text-[8.5px] text-neutral-200 font-bold uppercase">
                       <span>ATR Multiplier Buffer</span>
                       <span className="text-indigo-300 font-extrabold">{trade.lavTslAtrMultiplier?.toFixed(2) || '2.00'}x ATR</span>
                     </div>
@@ -663,16 +663,16 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                       }}
                       className="w-full accent-indigo-500 cursor-pointer h-1 rounded-lg bg-white/5"
                     />
-                    <span className="text-[7.5px] text-white/35 leading-tight block">
+                    <span className="text-[7.5px] text-neutral-200 leading-tight block">
                       Cushion distance based on True Range volatility.
                     </span>
                   </div>
 
                   {/* Parameter 2: Liquidity Zone Alignment */}
                   <div className="bg-black/30 p-2 rounded border border-white/5 space-y-1.5">
-                    <div className="flex justify-between items-center text-[8.5px] text-white/40 font-bold uppercase">
+                    <div className="flex justify-between items-center text-[8.5px] text-neutral-200 font-bold uppercase">
                       <span>Liquidity Zone Pad</span>
-                      <span className={`text-[7px] px-1 rounded font-black ${trade.lavTslLiquidityActive ? 'bg-indigo-500/15 text-indigo-300' : 'bg-white/5 text-white/30'}`}>
+                      <span className={`text-[7px] px-1 rounded font-black ${trade.lavTslLiquidityActive ? 'bg-indigo-500/15 text-indigo-300' : 'bg-white/5 text-neutral-400'}`}>
                         {trade.lavTslLiquidityActive ? 'PADDED' : 'BYPASSED'}
                       </span>
                     </div>
@@ -682,24 +682,24 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                         id={`lav-tsl-liquidity-${trade.id}`}
                         checked={!!trade.lavTslLiquidityActive}
                         onChange={(e) => {
-                          onUpdateParams(trade.id, { lavTslLiquidityActive: e.target.checked });
+                           onUpdateParams(trade.id, { lavTslLiquidityActive: e.target.checked });
                         }}
                         className="rounded border-white/10 bg-black text-indigo-500 focus:ring-0 focus:ring-offset-0 w-3 h-3 cursor-pointer"
                       />
-                      <label htmlFor={`lav-tsl-liquidity-${trade.id}`} className="text-[8px] text-white/70 font-semibold uppercase cursor-pointer">
+                      <label htmlFor={`lav-tsl-liquidity-${trade.id}`} className="text-[8px] text-neutral-200 font-semibold uppercase cursor-pointer">
                         Align behind Order Blocks
                       </label>
                     </div>
-                    <span className="text-[7.5px] text-white/35 leading-tight block">
+                    <span className="text-[7.5px] text-neutral-200 leading-tight block">
                       Pins trailing bounds behind unmitigated level-2 liquidity keys.
                     </span>
                   </div>
 
                   {/* Parameter 3: Profit Tightening Scale */}
                   <div className="bg-black/30 p-2 rounded border border-white/5 space-y-1.5">
-                    <div className="flex justify-between items-center text-[8.5px] text-white/40 font-bold uppercase">
+                    <div className="flex justify-between items-center text-[8.5px] text-neutral-200 font-bold uppercase">
                       <span>Profit Tightening</span>
-                      <span className={`text-[7px] px-1 rounded font-black ${trade.lavTslTighteningActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-white/30'}`}>
+                      <span className={`text-[7px] px-1 rounded font-black ${trade.lavTslTighteningActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-neutral-400'}`}>
                         {trade.lavTslTighteningActive ? 'DYNAMIC' : 'STATIC'}
                       </span>
                     </div>
@@ -709,15 +709,15 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                         id={`lav-tsl-tightening-${trade.id}`}
                         checked={!!trade.lavTslTighteningActive}
                         onChange={(e) => {
-                          onUpdateParams(trade.id, { lavTslTighteningActive: e.target.checked });
+                           onUpdateParams(trade.id, { lavTslTighteningActive: e.target.checked });
                         }}
                         className="rounded border-white/10 bg-black text-indigo-500 focus:ring-0 focus:ring-offset-0 w-3 h-3 cursor-pointer"
                       />
-                      <label htmlFor={`lav-tsl-tightening-${trade.id}`} className="text-[8px] text-white/70 font-semibold uppercase cursor-pointer">
+                      <label htmlFor={`lav-tsl-tightening-${trade.id}`} className="text-[8px] text-neutral-200 font-semibold uppercase cursor-pointer">
                         Scale down as profit accrues
                       </label>
                     </div>
-                    <span className="text-[7.5px] text-white/35 leading-tight block">
+                    <span className="text-[7.5px] text-neutral-200 leading-tight block">
                       Tighter risk exposure dynamically to protect paper gains.
                     </span>
                   </div>
@@ -741,13 +741,13 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                 <span className="text-amber-400 font-bold uppercase tracking-wider text-[8px] block">
                   ICT Liquidity Displacement Hunt Forecast
                 </span>
-                <p className={`${isCompact ? 'text-[9.2px]' : 'text-[9.5px]'} text-white/60 font-medium leading-relaxed mt-0.5`}>
+                <p className={`${isCompact ? 'text-[9.2px]' : 'text-[9.5px]'} text-neutral-200 font-medium leading-relaxed mt-0.5`}>
                   {huntICTConcept}. Target area expected at <span className="text-amber-400/90 font-mono font-bold">{huntType}</span> near <span className="text-white font-mono font-bold bg-white/5 px-1 py-0.5 rounded border border-white/5">{huntTargetPrice.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : trade.symbol === 'ETH/USDT' ? 2 : trade.symbol === 'SOL/USDT' ? 2 : trade.symbol === 'GOLD/USD' ? 2 : 5)}</span>.
                 </p>
               </div>
             </div>
             <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 bg-black/40 border border-white/5 sm:border-none sm:bg-transparent px-2 py-1 rounded">
-              <span className="text-white/35 uppercase text-[8px] tracking-wider leading-none">Sweep Countdown</span>
+              <span className="text-neutral-200 uppercase text-[8px] tracking-wider leading-none">Sweep Countdown</span>
               <span className="text-amber-400 text-xs font-black tracking-widest bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded animate-pulse">
                 {Math.floor(huntCountdown / 60)}m {String(huntCountdown % 60).padStart(2, '0')}s
               </span>
@@ -773,15 +773,15 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                       {riskMeta.label}
                     </span>
                   </span>
-                  <p className={`${isCompact ? 'text-[9.2px]' : 'text-[9.5px]'} text-white/60 font-medium leading-relaxed`}>
-                    {riskMeta.text} <span className="text-white/40 font-normal">Level-2 support volume has programmed depth pools of</span> <span className="text-indigo-300 font-bold font-mono">{(liquidityFactor * (1 - slProximity) / 1000).toFixed(1)}k contracts</span> <span className="text-white/40 font-normal">standing between current rate and stop level</span> <span className="text-white font-bold font-mono bg-white/5 px-1 py-0.5 rounded border border-white/5">{trade.stopLoss.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : 5)}</span>.
+                  <p className={`${isCompact ? 'text-[9.2px]' : 'text-[9.5px]'} text-neutral-200 font-medium leading-relaxed`}>
+                    {riskMeta.text} <span className="text-neutral-200 font-normal">Level-2 support volume has programmed depth pools of</span> <span className="text-indigo-300 font-bold font-mono">{(liquidityFactor * (1 - slProximity) / 1000).toFixed(1)}k contracts</span> <span className="text-neutral-200 font-normal">standing between current rate and stop level</span> <span className="text-white font-bold font-mono bg-white/5 px-1 py-0.5 rounded border border-white/5">{trade.stopLoss.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : 5)}</span>.
                   </p>
                 </div>
               </div>
               <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0 bg-black/40 border border-white/5 sm:border-none sm:bg-transparent px-2 py-1 rounded">
                 {/* Micro Probability Progress bar */}
                 <div className="hidden md:flex flex-col items-end gap-0.5 w-16">
-                  <span className="text-[7.5px] text-white/35 uppercase">Confidence</span>
+                  <span className="text-[7.5px] text-neutral-200 uppercase">Confidence</span>
                   <div className="w-full bg-white/5 rounded-full h-1 overflow-hidden">
                     <div 
                       className={`h-full rounded-full ${
@@ -792,7 +792,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                   </div>
                 </div>
                 <div className="flex flex-col items-end shrink-0">
-                  <span className="text-white/35 uppercase text-[8px] tracking-wider leading-none">Breach Prob.</span>
+                  <span className="text-neutral-200 uppercase text-[8px] tracking-wider leading-none">Breach Prob.</span>
                   <span className={`text-xs font-black tracking-wider px-2 py-0.5 mt-0.5 rounded border font-mono ${riskMeta.color} ${riskMeta.bg} ${riskMeta.border}`}>
                     {breachProbability}%
                   </span>
@@ -800,8 +800,8 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
               </div>
             </div>
           ) : (
-            <div className={`${isCompact ? 'p-1.5' : 'p-2'} bg-white/[0.01] border border-white/5 rounded flex items-center justify-between text-white/40 text-[9.5px] font-mono select-none`}>
-              <span className="text-[8.5px] text-white/30 uppercase font-bold">⚠️ No protective stop established</span>
+            <div className={`${isCompact ? 'p-1.5' : 'p-2'} bg-white/[0.01] border border-white/5 rounded flex items-center justify-between text-neutral-200 text-[9.5px] font-mono select-none`}>
+              <span className="text-[8.5px] text-neutral-200 uppercase font-bold">⚠️ No protective stop established</span>
               <span className="text-indigo-400 font-extrabold uppercase text-[8.5px] tracking-wider">Breach Risk: 0% (SL inactive)</span>
             </div>
           )}

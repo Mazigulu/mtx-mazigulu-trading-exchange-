@@ -339,7 +339,7 @@ export default function SystemStatus() {
                 {reliabilityScore === 100 ? 'SECURED' : reliabilityScore > 85 ? 'DEGRADED WARNING' : 'CRITICAL WARNING'}
               </span>
             </div>
-            <p className="text-[10.5px] text-white/40 mt-1 max-w-md">
+            <p className="text-[10.5px] text-neutral-200 mt-1 max-w-md">
               Synchronizing heartbeat packages across Lmax Gateway and direct API connector nodes. Real-time diagnostic verification active.
             </p>
           </div>
@@ -348,7 +348,7 @@ export default function SystemStatus() {
         {/* Real-time System Reliability Score */}
         <div className="flex flex-wrap items-center justify-around gap-6 text-right font-mono text-xs w-full xl:w-auto xl:justify-end border-t xl:border-t-0 border-white/[0.05] pt-4 xl:pt-0">
           <div className="px-4">
-            <span className="text-white/30 text-[9px] uppercase tracking-wider block font-bold">Reliability Score</span>
+            <span className="text-neutral-200 text-[9px] uppercase tracking-wider block font-bold">Reliability Score</span>
             <span className={`text-2xl font-black tracking-tight ${
               reliabilityScore === 100 
                 ? 'text-emerald-400' 
@@ -361,14 +361,14 @@ export default function SystemStatus() {
           </div>
 
           <div className="border-l border-white/5 pl-6 pr-4">
-            <span className="text-white/30 text-[9px] uppercase tracking-wider block font-bold">Latency Standard Dev</span>
+            <span className="text-neutral-200 text-[9px] uppercase tracking-wider block font-bold">Latency Standard Dev</span>
             <span className="text-white/80 font-bold block mt-1">
               ±{reliabilityScore === 100 ? '1.4ms' : reliabilityScore > 85 ? '18.2ms' : '124.9ms'}
             </span>
           </div>
 
           <div className="border-l border-white/5 pl-6 pr-4">
-            <span className="text-white/30 text-[9px] uppercase tracking-wider block font-bold">Heartbeat state</span>
+            <span className="text-neutral-200 text-[9px] uppercase tracking-wider block font-bold">Heartbeat state</span>
             <span className="text-indigo-400 font-bold block mt-1 uppercase flex items-center gap-1 justify-end">
               <Activity className="w-3.5 h-3.5 animate-pulse text-indigo-400" />
               Pulse Active
@@ -414,7 +414,7 @@ export default function SystemStatus() {
                   </div>
                   <div>
                     <h4 className="text-[11.5px] font-bold uppercase tracking-wider text-white font-mono">{sys.name}</h4>
-                    <p className="text-[9px] text-white/40 leading-relaxed mt-0.5 max-w-[180px]">{sys.desc}</p>
+                    <p className="text-[9px] text-neutral-200 leading-relaxed mt-0.5 max-w-[180px]">{sys.desc}</p>
                   </div>
                 </div>
                 
@@ -431,14 +431,14 @@ export default function SystemStatus() {
               {/* Live telemetry row inside card */}
               <div className="space-y-1 my-2">
                 <div className="flex items-center justify-between font-mono text-[9.5px]">
-                  <span className="text-white/30">ROUND-TRIP DELAY</span>
+                  <span className="text-neutral-200">ROUND-TRIP DELAY</span>
                   <span className={`font-semibold ${isDown ? 'text-rose-400' : isDegraded ? 'text-amber-400' : 'text-white/80'}`}>
                     {isDown ? '---' : `${sys.latency}ms`}
                   </span>
                 </div>
                 <div className="flex items-center justify-between font-mono text-[9.5px]">
-                  <span className="text-white/30">PACKET REJECTIONS</span>
-                  <span className={`font-semibold ${isDown || sys.packetLoss > 0 ? 'text-rose-400' : 'text-white/40'}`}>
+                  <span className="text-neutral-200">PACKET REJECTIONS</span>
+                  <span className={`font-semibold ${isDown || sys.packetLoss > 0 ? 'text-rose-400' : 'text-neutral-200'}`}>
                     {sys.packetLoss}%
                   </span>
                 </div>
@@ -458,8 +458,8 @@ export default function SystemStatus() {
                   }`} />
                   {sys.status}
                 </span>
-                <span className="text-white/20">
-                  Pulses: <strong className="text-white/55 font-normal">{sys.heartbeats}</strong>
+                <span className="text-neutral-200">
+                  Pulses: <strong className="text-neutral-200 font-normal">{sys.heartbeats}</strong>
                 </span>
               </div>
             </div>
@@ -485,7 +485,7 @@ export default function SystemStatus() {
           </button>
         </div>
 
-        <p className="text-[10.5px] text-white/40 mb-4 max-w-3xl">
+        <p className="text-[10.5px] text-neutral-200 mb-4 max-w-3xl">
           Conduct failover simulation tests using the levers below. Simulating an outage or degrading latency triggers instant reliability recalculations and logs warning payloads to verify automatic defense mechanisms.
         </p>
 
@@ -493,7 +493,7 @@ export default function SystemStatus() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 pt-1">
           {services.map((sys) => (
             <div key={sys.id} className="border border-white/5 bg-[#050505]/40 p-3 rounded-md space-y-2.5">
-              <span className="text-[10.5px] font-bold text-white/80 font-mono block truncate uppercase">{sys.name}</span>
+              <span className="text-[10.5px] font-bold text-neutral-200 font-mono block truncate uppercase">{sys.name}</span>
               
               <div className="flex flex-col gap-1.5">
                 <button
@@ -501,7 +501,7 @@ export default function SystemStatus() {
                   className={`text-[9px] py-1 font-mono uppercase tracking-tight rounded border transition-all text-center cursor-pointer ${
                     sys.status === 'OPERATIONAL'
                       ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-bold'
-                      : 'bg-transparent text-white/25 border-transparent hover:text-white/50'
+                      : 'bg-transparent text-neutral-400 border-transparent hover:text-neutral-200'
                   }`}
                 >
                   Nominal
@@ -511,7 +511,7 @@ export default function SystemStatus() {
                   className={`text-[9px] py-1 font-mono uppercase tracking-tight rounded border transition-all text-center cursor-pointer ${
                     sys.status === 'DEGRADED'
                       ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold'
-                      : 'bg-transparent text-white/25 border-transparent hover:text-white/50'
+                      : 'bg-transparent text-neutral-400 border-transparent hover:text-neutral-200'
                   }`}
                 >
                   Degrade
@@ -521,7 +521,7 @@ export default function SystemStatus() {
                   className={`text-[9px] py-1 font-mono uppercase tracking-tight rounded border transition-all text-center cursor-pointer ${
                     sys.status === 'DOWN'
                       ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 font-bold'
-                      : 'bg-transparent text-white/25 border-transparent hover:text-white/50'
+                      : 'bg-transparent text-neutral-400 border-transparent hover:text-neutral-200'
                   }`}
                 >
                   Offline
@@ -539,7 +539,7 @@ export default function SystemStatus() {
             <Terminal className="w-4 h-4 text-indigo-400" />
             <h3 className="text-xs font-semibold uppercase tracking-wider text-white font-mono">Live Operations Console Logs</h3>
           </div>
-          <div className="text-[10px] text-white/30 font-mono flex items-center gap-1.5">
+          <div className="text-[10px] text-neutral-200 font-mono flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" />
             <span>UTC Heartbeat Stream log: Active</span>
           </div>
@@ -556,7 +556,7 @@ export default function SystemStatus() {
               
             return (
               <div key={idx} className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2.5 hover:bg-white/[0.02] py-0.5 px-1 rounded transition-colors duration-150">
-                <span className="text-white/30 text-[9.5px] shrink-0">{log.time}</span>
+                <span className="text-neutral-200 text-[9.5px] shrink-0">{log.time}</span>
                 
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className={`text-[8.5px] font-black tracking-tight px-1 rounded bg-[#0c0c0d] border border-white/5 ${levelColor}`}>
@@ -575,7 +575,7 @@ export default function SystemStatus() {
       </div>
 
       {/* Safeguard SLA description footer banner */}
-      <div className="bg-[#0a0a0b] border border-white/5 p-4 rounded-lg select-none flex items-center space-x-3.5 text-white/45 text-[10.5px]">
+      <div className="bg-[#0a0a0b] border border-white/5 p-4 rounded-lg select-none flex items-center space-x-3.5 text-neutral-200 text-[10.5px]">
         <AlertCircle className="w-5 h-5 text-indigo-400 shrink-0" />
         <p>
           MTXquant algorithmic systems leverage real-time stateful node routing. If a critical gateway's reliability index falls below <strong>95%</strong>, order execution algorithms trigger safe-mode validation routing over backup local virtual bridges instantly, safely preserving active lot exposures.

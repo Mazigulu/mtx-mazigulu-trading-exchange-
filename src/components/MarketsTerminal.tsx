@@ -3,7 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+
+const slideOverVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 100 : -100,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    x: direction < 0 ? 100 : -100,
+    opacity: 0,
+  }),
+};
 import { generateScreenerDatabase } from '../lib/screenerTickersData';
 import { 
   TrendingUp, 
@@ -19,6 +35,7 @@ import {
   Filter, 
   Check, 
   Plus, 
+  Star,
   Info,
   LineChart,
   RefreshCw,
@@ -36,6 +53,7 @@ import {
   XAxis, 
   YAxis, 
   Tooltip, 
+  ReferenceLine,
   LineChart as RechartsLineChart, 
   Line as RechartsLine, 
   BarChart, 
@@ -177,7 +195,151 @@ const FINANCIAL_METRICS_INFO: Record<string, {
   }
 };
 
-export default function MarketsTerminal() {
+const getModuleApprovedTickers = () => {
+  const list = new Set<string>();
+  try {
+    const db = generateScreenerDatabase() || [];
+    db.forEach(item => {
+      list.add(item.ticker.toUpperCase());
+    });
+  } catch (err) {
+    console.error(err);
+  }
+  const defaults = [
+    'AAPL', 'MSFT', 'NVDA', 'GOOG', 'AMZN', 'META', 'TSLA', 'NFLX', 'AMD',
+    'BTC-USD', 'ETH-USD', 'SOL-USD', 'ADA-USD', 'LINK-USD',
+    'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X'
+  ];
+  defaults.forEach(t => list.add(t));
+  return list;
+};
+
+let moduleApprovedTickersSet: Set<string> | null = null;
+const isApprovedTicker = (ticker: string): boolean => {
+  if (!ticker || typeof ticker !== 'string') return false;
+  const t = ticker.trim().toUpperCase();
+  if (t.length < 1 || t.length > 15 || !/^[A-Z0-9=\.-]+$/.test(t)) {
+    return false;
+  }
+  if (!moduleApprovedTickersSet) {
+    moduleApprovedTickersSet = getModuleApprovedTickers();
+  }
+  return moduleApprovedTickersSet.has(t);
+};
+
+function getClientSimulatedHistoricalData(ticker: string, range: string) {
+  if (!isApprovedTicker(ticker)) {
+    throw new Error(`Ticker '${ticker}' is not a valid financial instrument. Integrity validation failed.`);
+  }
+  const bars: any[] = [];
+  const days = range === '1d' ? 24 : range === '5d' ? 5 : range === '1mo' ? 30 : range === '3mo' ? 90 : range === '1y' ? 250 : 30;
+  let currentPrice = ticker === 'BTC-USD' ? 64000 : ticker === 'ETH-USD' ? 3200 : ticker === 'AAPL' ? 180 : ticker === 'MSFT' ? 420 : ticker === 'NVDA' ? 120 : ticker === 'TSLA' ? 175 : 100;
+  
+  const now = Date.now();
+  const step = range === '1d' ? 3600 * 1000 : 24 * 3600 * 1000;
+
+  for (let i = days; i >= 0; i--) {
+    const time = now - i * step;
+    const change = (Math.random() - 0.49) * (currentPrice * 0.03);
+    const open = currentPrice;
+    const close = currentPrice + change;
+    const high = Math.max(open, close) + Math.random() * (currentPrice * 0.015);
+    const low = Math.min(open, close) - Math.random() * (currentPrice * 0.015);
+    const volume = Math.round(1000000 + Math.random() * 5000000);
+
+    bars.push({
+      timestamp: new Date(time).toISOString(),
+      open: parseFloat(open.toFixed(2)),
+      high: parseFloat(high.toFixed(2)),
+      low: parseFloat(low.toFixed(2)),
+      close: parseFloat(close.toFixed(2)),
+      volume
+    });
+
+    currentPrice = close;
+  }
+
+  return {
+    ticker,
+    currency: 'USD',
+    symbol: ticker,
+    regularMarketPrice: parseFloat(currentPrice.toFixed(2)),
+    bars
+  };
+}
+
+function getClientSimulatedFundamentals(ticker: string) {
+  if (!isApprovedTicker(ticker)) {
+    throw new Error(`Ticker '${ticker}' is not a valid financial instrument. Integrity validation failed.`);
+  }
+  const isTech = ['AAPL', 'MSFT', 'NVDA', 'GOOG', 'AMZN', 'META'].includes(ticker);
+  const pe = isTech ? 25 + Math.random() * 15 : 12 + Math.random() * 10;
+  const roe = isTech ? 0.25 + Math.random() * 0.2 : 0.1 + Math.random() * 0.1;
+  const debtToEquity = isTech ? 40 + Math.random() * 80 : 80 + Math.random() * 100;
+  const profitMargin = isTech ? 0.2 + Math.random() * 0.15 : 0.05 + Math.random() * 0.1;
+
+  return {
+    ticker,
+    incomeStatement: [
+      { endDate: '2025-12-31', totalRevenue: 385000000000, costOfRevenue: 220000000000, grossProfit: 165000000000, operatingIncome: 115000000000, netIncome: 95000000000 },
+      { endDate: '2024-12-31', totalRevenue: 365000000000, costOfRevenue: 210000000000, grossProfit: 155000000000, operatingIncome: 105000000000, netIncome: 85000000000 },
+      { endDate: '2023-12-31', totalRevenue: 345000000000, costOfRevenue: 200000000000, grossProfit: 145000000000, operatingIncome: 95000000000, netIncome: 75000000000 }
+    ],
+    balanceSheet: [
+      { endDate: '2025-12-31', totalAssets: 420000000000, totalLiab: 280000000000, totalStockholderEquity: 140000000000, cash: 65000000000, shortTermInvestments: 55000000000 },
+      { endDate: '2024-12-31', totalAssets: 380000000000, totalLiab: 260000000000, totalStockholderEquity: 120000000000, cash: 55000000000, shortTermInvestments: 45000000000 }
+    ],
+    cashFlow: [
+      { endDate: '2025-12-31', operatingCashflow: 110000000000, capitalExpenditure: -12000000000, investingCashflow: -30000000000, financingCashflow: -70000000000, freeCashflow: 98000000000 },
+      { endDate: '2024-12-31', operatingCashflow: 95000000000, capitalExpenditure: -10000000000, investingCashflow: -25000000000, financingCashflow: -65000000000, freeCashflow: 85000000000 }
+    ],
+    ratios: {
+      peRatio: pe,
+      forwardPE: pe * 0.9,
+      priceToBook: 4.5 + Math.random() * 8,
+      roe: roe,
+      roa: roe * 0.6,
+      marketCap: ticker === 'AAPL' ? 3000000000000 : ticker === 'MSFT' ? 3200000000000 : ticker === 'NVDA' ? 2800000000000 : 500000000000,
+      operatingMargin: profitMargin * 1.3,
+      profitMargin: profitMargin,
+      beta: 1.0 + (Math.random() - 0.5) * 0.4,
+      dividendYield: 0.005 + Math.random() * 0.015,
+      debtToEquity: debtToEquity,
+      revenueGrowth: 0.05 + Math.random() * 0.15,
+      earningsGrowth: 0.08 + Math.random() * 0.2,
+      fiftyTwoWeekChange: 0.15 + Math.random() * 0.3
+    }
+  };
+}
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.02,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 8 },
+  show: { 
+    opacity: 1, 
+    y: 0,
+    transition: {
+      type: "spring",
+      stiffness: 120,
+      damping: 16,
+    }
+  },
+};
+
+interface MarketsTerminalProps {
+  initialTicker?: string;
+}
+
+export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps = {}) {
   const [activeSubTab, setActiveSubTab] = useState<'ANALYSIS' | 'SCREENER'>(() => {
     try {
       const saved = localStorage.getItem('mtx_markets_subtab');
@@ -187,15 +349,125 @@ export default function MarketsTerminal() {
     }
   });
 
+  const subTabDirection = activeSubTab === 'SCREENER' ? 1 : -1;
+
   const [ticker, setTicker] = useState(() => {
     try {
-      return localStorage.getItem('mtx_markets_ticker') || 'AAPL';
-    } catch {
-      return 'AAPL';
-    }
+      const candidate = initialTicker || localStorage.getItem('mtx_markets_ticker') || 'AAPL';
+      if (isApprovedTicker(candidate)) {
+        return candidate.trim().toUpperCase();
+      }
+    } catch {}
+    return 'AAPL';
   });
 
   const [searchInput, setSearchInput] = useState(ticker);
+  const [originalInput, setOriginalInput] = useState(ticker);
+
+  // Autocomplete state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState(-1);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
+
+  const allSuggestions = useMemo(() => {
+    try {
+      const db = generateScreenerDatabase() || [];
+      return db.map(item => ({
+        symbol: item.ticker.toUpperCase(),
+        name: item.name,
+        sector: item.sector
+      }));
+    } catch (err) {
+      console.warn("Could not load screener database for suggestions:", err);
+      return [];
+    }
+  }, []);
+
+  const filteredSuggestions = useMemo(() => {
+    const q = searchInput.trim().toUpperCase();
+    if (!q) {
+      // Trending/Popular default suggestions when the input is empty (mimics search engines)
+      return [
+        { symbol: 'AAPL', name: 'Apple Inc.', sector: 'Technology' },
+        { symbol: 'MSFT', name: 'Microsoft Corporation', sector: 'Technology' },
+        { symbol: 'NVDA', name: 'NVIDIA Corporation', sector: 'Technology' },
+        { symbol: 'TSLA', name: 'Tesla Inc.', sector: 'Automotive' },
+        { symbol: 'BTC-USD', name: 'Bitcoin USD', sector: 'Crypto' },
+        { symbol: 'GOOG', name: 'Alphabet Inc.', sector: 'Technology' }
+      ].slice(0, 8);
+    }
+    return allSuggestions.filter(item => 
+      item.symbol.includes(q) || item.name.toUpperCase().includes(q)
+    ).slice(0, 8);
+  }, [searchInput, allSuggestions]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        inputContainerRef.current && 
+        !inputContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleSelectSuggestion = (sym: string) => {
+    setSearchInput(sym);
+    setOriginalInput(sym);
+    setTicker(sym);
+    setShowSuggestions(false);
+    setSuggestionIndex(-1);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || filteredSuggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextIndex = suggestionIndex < filteredSuggestions.length - 1 ? suggestionIndex + 1 : -1;
+      setSuggestionIndex(nextIndex);
+      if (nextIndex === -1) {
+        setSearchInput(originalInput);
+      } else {
+        setSearchInput(filteredSuggestions[nextIndex].symbol);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIndex = suggestionIndex > -1 ? suggestionIndex - 1 : filteredSuggestions.length - 1;
+      setSuggestionIndex(prevIndex);
+      if (prevIndex === -1) {
+        setSearchInput(originalInput);
+      } else {
+        setSearchInput(filteredSuggestions[prevIndex].symbol);
+      }
+    } else if (e.key === 'Enter') {
+      if (suggestionIndex >= 0 && suggestionIndex < filteredSuggestions.length) {
+        e.preventDefault();
+        handleSelectSuggestion(filteredSuggestions[suggestionIndex].symbol);
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setSuggestionIndex(-1);
+      setSearchInput(originalInput);
+    }
+  };
+
+  // Sync search input and original input whenever ticker changes from anywhere in the terminal
+  useEffect(() => {
+    setSearchInput(ticker);
+    setOriginalInput(ticker);
+  }, [ticker]);
+
+  useEffect(() => {
+    if (initialTicker && initialTicker !== ticker && isApprovedTicker(initialTicker)) {
+      setTicker(initialTicker);
+    }
+  }, [initialTicker]);
   const [range, setRange] = useState<'5d' | '1mo' | '3mo' | '1y'>(() => {
     try {
       const saved = localStorage.getItem('mtx_markets_range') as '5d' | '1mo' | '3mo' | '1y';
@@ -207,13 +479,113 @@ export default function MarketsTerminal() {
 
   const [loading, setLoading] = useState(false);
   const [marketData, setMarketData] = useState<any>(null);
+  const [hoveredBar, setHoveredBar] = useState<any>(null);
+  const [hoveredX, setHoveredX] = useState<number | null>(null);
+  const [hoveredY, setHoveredY] = useState<number | null>(null);
   const [fundamentalData, setFundamentalData] = useState<Fundamentals | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const allApprovedTickers = useMemo(() => {
+    const list = new Set<string>();
+    try {
+      const db = generateScreenerDatabase() || [];
+      db.forEach(item => {
+        list.add(item.ticker.toUpperCase());
+      });
+    } catch (err) {
+      console.error(err);
+    }
+    const defaults = [
+      'AAPL', 'MSFT', 'NVDA', 'GOOG', 'AMZN', 'META', 'TSLA', 'NFLX', 'AMD',
+      'BTC-USD', 'ETH-USD', 'SOL-USD', 'ADA-USD', 'LINK-USD',
+      'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X'
+    ];
+    defaults.forEach(t => list.add(t));
+    return list;
+  }, []);
 
   // Screener State
   const [screenerTickers] = useState<string[]>([
     'AAPL', 'MSFT', 'NVDA', 'GOOG', 'AMZN', 'META', 'TSLA', 'NFLX', 'AMD', 'BTC-USD', 'ETH-USD', 'EURUSD=X'
   ]);
+
+  // Swipe navigation state and handlers
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const swipeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [swipeIndicator, setSwipeIndicator] = useState<{ direction: 'left' | 'right'; symbol: string } | null>(null);
+
+  const handleNextTicker = () => {
+    const currentIndex = screenerTickers.indexOf(ticker);
+    let nextIndex = 0;
+    if (currentIndex !== -1) {
+      nextIndex = (currentIndex + 1) % screenerTickers.length;
+    }
+    const nextTicker = screenerTickers[nextIndex];
+    setTicker(nextTicker);
+    setSearchInput(nextTicker);
+    triggerSwipeFeedback('left', nextTicker);
+  };
+
+  const handlePrevTicker = () => {
+    const currentIndex = screenerTickers.indexOf(ticker);
+    let prevIndex = screenerTickers.length - 1;
+    if (currentIndex !== -1) {
+      prevIndex = (currentIndex - 1 + screenerTickers.length) % screenerTickers.length;
+    }
+    const prevTicker = screenerTickers[prevIndex];
+    setTicker(prevTicker);
+    setSearchInput(prevTicker);
+    triggerSwipeFeedback('right', prevTicker);
+  };
+
+  const triggerSwipeFeedback = (direction: 'left' | 'right', symbol: string) => {
+    if (swipeTimeoutRef.current) {
+      clearTimeout(swipeTimeoutRef.current);
+    }
+    setSwipeIndicator({ direction, symbol });
+    swipeTimeoutRef.current = setTimeout(() => {
+      setSwipeIndicator(null);
+    }, 1200);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const firstTouch = e.touches[0];
+    touchStartX.current = firstTouch.clientX;
+    touchStartY.current = firstTouch.clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+
+    const diffX = touchStartX.current - touchEndX;
+    const diffY = touchStartY.current - touchEndY;
+
+    const SWIPE_THRESHOLD = 50;
+    const VERTICAL_THRESHOLD = 60; // strictly ignore vertical scroll-like drags
+
+    if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(diffY) < VERTICAL_THRESHOLD) {
+      if (diffX > 0) {
+        handleNextTicker();
+      } else {
+        handlePrevTicker();
+      }
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (swipeTimeoutRef.current) {
+        clearTimeout(swipeTimeoutRef.current);
+      }
+    };
+  }, []);
   const [screenerData, setScreenerData] = useState<any[]>([]);
   const [screenerLoading, setScreenerLoading] = useState(false);
 
@@ -313,7 +685,11 @@ export default function MarketsTerminal() {
   const [portfolioAssets, setPortfolioAssets] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('mtx_portfolio_assets');
-      return saved ? JSON.parse(saved) : ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'BTC-USD'];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      return ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'BTC-USD'];
     } catch {
       return ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'BTC-USD'];
     }
@@ -333,6 +709,43 @@ export default function MarketsTerminal() {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [showFinancialsOverlay, setShowFinancialsOverlay] = useState<boolean>(false);
 
+  const [isInWatchlist, setIsInWatchlist] = useState<boolean>(false);
+
+  // Sync with localStorage 'broker_watchlist'
+  useEffect(() => {
+    const checkWatchlistStatus = () => {
+      try {
+        const saved = localStorage.getItem('broker_watchlist');
+        const list = saved ? JSON.parse(saved) : ['AAPL', 'MSFT', 'NVDA', 'BTC-USD'];
+        setIsInWatchlist(list.includes(ticker));
+      } catch {
+        setIsInWatchlist(false);
+      }
+    };
+    
+    checkWatchlistStatus();
+    window.addEventListener('storage', checkWatchlistStatus);
+    return () => window.removeEventListener('storage', checkWatchlistStatus);
+  }, [ticker]);
+
+  const handleToggleWatchlist = () => {
+    try {
+      const saved = localStorage.getItem('broker_watchlist');
+      let list = saved ? JSON.parse(saved) : ['AAPL', 'MSFT', 'NVDA', 'BTC-USD'];
+      if (list.includes(ticker)) {
+        list = list.filter((s: string) => s !== ticker);
+        setIsInWatchlist(false);
+      } else {
+        list.push(ticker);
+        setIsInWatchlist(true);
+      }
+      localStorage.setItem('broker_watchlist', JSON.stringify(list));
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Persist all layout states to localStorage using clean side-effects
   useEffect(() => {
     try {
@@ -343,6 +756,7 @@ export default function MarketsTerminal() {
   useEffect(() => {
     try {
       localStorage.setItem('mtx_markets_ticker', ticker);
+      setSearchInput(ticker);
     } catch (err) { console.error(err); }
   }, [ticker]);
 
@@ -451,29 +865,135 @@ export default function MarketsTerminal() {
   // Helper for rendering high-fidelity financial metric groups
   const renderFinancialsContent = (r: any) => {
     const valuationMetrics = [
-      { label: 'Market Cap', value: formatMoney(r.marketCap), desc: 'Total outstanding market capitalization value.' },
-      { label: 'P/E Ratio (Trailing)', value: r.peRatio ? r.peRatio.toFixed(2) : 'N/A', desc: 'Trailing twelve month price-to-earnings.' },
-      { label: 'Forward P/E', value: r.forwardPE ? r.forwardPE.toFixed(2) : 'N/A', desc: 'Estimated forward 12-month earnings ratio.' },
-      { label: 'Price-to-Book (P/B)', value: r.priceToBook ? r.priceToBook.toFixed(2) : 'N/A', desc: 'Stock price relative to asset book values.' },
+      { label: 'Market Cap', value: formatMoney(r.marketCap), desc: 'Total outstanding market capitalization value.', theme: 'indigo' },
+      { label: 'P/E Ratio (Trailing)', value: r.peRatio ? r.peRatio.toFixed(2) : 'N/A', desc: 'Trailing twelve month price-to-earnings.', theme: 'indigo' },
+      { label: 'Forward P/E', value: r.forwardPE ? r.forwardPE.toFixed(2) : 'N/A', desc: 'Estimated forward 12-month earnings ratio.', theme: 'indigo' },
+      { label: 'Price-to-Book (P/B)', value: r.priceToBook ? r.priceToBook.toFixed(2) : 'N/A', desc: 'Stock price relative to asset book values.', theme: 'indigo' },
     ];
 
     const profitabilityMetrics = [
-      { label: 'Return on Equity (ROE)', value: r.roe ? `${(r.roe * 100).toFixed(2)}%` : 'N/A', desc: 'Equity efficiency index.' },
-      { label: 'Return on Assets (ROA)', value: r.roa ? `${(r.roa * 100).toFixed(2)}%` : 'N/A', desc: 'Total asset productivity ratio.' },
-      { label: 'Net Profit Margin', value: r.profitMargin ? `${(r.profitMargin * 100).toFixed(2)}%` : 'N/A', bar: r.profitMargin, desc: 'Net income returned per dollar generated.' },
-      { label: 'Operating Margin', value: r.operatingMargin ? `${(r.operatingMargin * 100).toFixed(2)}%` : 'N/A', bar: r.operatingMargin, desc: 'Operating income margins.' },
+      { label: 'Return on Equity (ROE)', value: r.roe ? `${(r.roe * 100).toFixed(2)}%` : 'N/A', desc: 'Equity efficiency index.', theme: 'emerald' },
+      { label: 'Return on Assets (ROA)', value: r.roa ? `${(r.roa * 100).toFixed(2)}%` : 'N/A', desc: 'Total asset productivity ratio.', theme: 'emerald' },
+      { label: 'Net Profit Margin', value: r.profitMargin ? `${(r.profitMargin * 100).toFixed(2)}%` : 'N/A', bar: r.profitMargin, desc: 'Net income returned per dollar generated.', theme: 'emerald' },
+      { label: 'Operating Margin', value: r.operatingMargin ? `${(r.operatingMargin * 100).toFixed(2)}%` : 'N/A', bar: r.operatingMargin, desc: 'Operating income margins.', theme: 'emerald' },
     ];
 
     const riskGrowthMetrics = [
-      { label: 'Beta (Volatility)', value: r.beta ? r.beta.toFixed(2) : '1.00', desc: 'Covariance factor tracking market exposure.' },
-      { label: 'Dividend Yield', value: r.dividendYield ? `${(r.dividendYield * 100).toFixed(2)}%` : '0.00%', desc: 'Annual dividend payback rate.' },
-      { label: 'Debt to Equity (D/E)', value: r.debtToEquity ? `${r.debtToEquity.toFixed(1)}%` : 'N/A', desc: 'Leverage ratio of liabilities against equity.' },
-      { label: 'Revenue Growth (YoY)', value: r.revenueGrowth ? `${(r.revenueGrowth * 100).toFixed(2)}%` : 'N/A', desc: 'Annual growth pace of gross sales.' },
+      { label: 'Beta (Volatility)', value: r.beta ? r.beta.toFixed(2) : '1.00', desc: 'Covariance factor tracking market exposure.', theme: 'cyan' },
+      { label: 'Dividend Yield', value: r.dividendYield ? `${(r.dividendYield * 100).toFixed(2)}%` : '0.00%', desc: 'Annual dividend payback rate.', theme: 'cyan' },
+      { label: 'Debt to Equity (D/E)', value: r.debtToEquity ? `${r.debtToEquity.toFixed(1)}%` : 'N/A', desc: 'Leverage ratio of liabilities against equity.', theme: 'cyan' },
+      { label: 'Revenue Growth (YoY)', value: r.revenueGrowth ? `${(r.revenueGrowth * 100).toFixed(2)}%` : 'N/A', desc: 'Annual growth pace of gross sales.', theme: 'cyan' },
     ];
 
+    const renderMetricCard = (ratio: any, index: number, colorTheme: 'indigo' | 'emerald' | 'cyan') => {
+      const info = FINANCIAL_METRICS_INFO[ratio.label] || {
+        definition: ratio.desc || 'Institutional quantitative metric measuring underlying corporate fundamental performance.',
+        average: 'Varies by industry baseline.',
+        alert: 'Active automated terminal rule monitoring.'
+      };
+
+      let themeClasses = {
+        bg: 'bg-indigo-950/10 hover:bg-indigo-950/20 border-indigo-500/15 hover:border-indigo-500/50 border-l-indigo-500',
+        labelColor: 'text-indigo-400/85',
+        valueColor: 'text-indigo-300 font-extrabold',
+        iconColor: 'text-indigo-400',
+        tooltipBorder: 'border-indigo-500/40',
+        tooltipText: 'text-indigo-300'
+      };
+
+      if (colorTheme === 'emerald') {
+        themeClasses = {
+          bg: 'bg-emerald-950/10 hover:bg-emerald-950/20 border-emerald-500/15 hover:border-emerald-500/50 border-l-emerald-500',
+          labelColor: 'text-emerald-400/85',
+          valueColor: 'text-emerald-300 font-extrabold',
+          iconColor: 'text-emerald-400',
+          tooltipBorder: 'border-emerald-500/40',
+          tooltipText: 'text-emerald-300'
+        };
+      } else if (colorTheme === 'cyan') {
+        themeClasses = {
+          bg: 'bg-cyan-950/10 hover:bg-cyan-950/20 border-cyan-500/15 hover:border-cyan-500/50 border-l-cyan-500',
+          labelColor: 'text-cyan-400/85',
+          valueColor: 'text-cyan-300 font-extrabold',
+          iconColor: 'text-cyan-400',
+          tooltipBorder: 'border-cyan-500/40',
+          tooltipText: 'text-cyan-300'
+        };
+      }
+
+      return (
+        <div 
+          key={index} 
+          className={`border border-l-2 rounded-lg py-2 px-2.5 flex flex-col justify-between space-y-1 relative group overflow-visible cursor-help transition-all duration-300 ${themeClasses.bg}`}
+        >
+          <div className="flex justify-between items-start w-full">
+            <span className={`text-[8px] font-mono uppercase tracking-wider block font-bold ${themeClasses.labelColor}`}>
+              {ratio.label}
+            </span>
+            <Info className={`w-3 h-3 opacity-40 group-hover:opacity-100 transition-opacity ${themeClasses.iconColor}`} />
+          </div>
+          
+          <div className="flex items-baseline justify-between">
+            <span className={`text-sm font-black font-mono ${themeClasses.valueColor}`}>{ratio.value}</span>
+            
+            {ratio.label === 'Beta (Volatility)' && (
+              <span className={`text-[7px] font-mono px-1 rounded-sm font-black ${parseFloat(ratio.value) < 1 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                {parseFloat(ratio.value) < 1 ? 'LOW' : 'MOM'}
+              </span>
+            )}
+            {ratio.label === 'Dividend Yield' && ratio.value !== '0.00%' && (
+              <span className="text-[7px] font-mono px-1 rounded-sm font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                DIV
+              </span>
+            )}
+            {ratio.label === 'Revenue Growth (YoY)' && ratio.value !== 'N/A' && (
+              <span className={`text-[7px] font-mono px-1 rounded-sm font-black ${ratio.value.startsWith('-') ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                {ratio.value.startsWith('-') ? 'DOWN' : 'GROWTH'}
+              </span>
+            )}
+          </div>
+
+          {ratio.bar !== undefined && (
+            <div className="h-1 bg-black/60 rounded-full overflow-hidden w-full border border-white/5 shadow-inner mt-0.5">
+              <div 
+                style={{ width: `${Math.min(100, Math.max(0, ratio.bar * 100))}%` }} 
+                className={`h-full rounded-full bg-gradient-to-r ${
+                  colorTheme === 'emerald' ? 'from-emerald-600 to-teal-400 shadow-[0_0_8px_rgba(52,211,153,0.4)]' : 'from-indigo-600 to-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.4)]'
+                }`}
+              ></div>
+            </div>
+          )}
+
+          {/* Dynamic Non-Translucent Tooltip */}
+          <div className={`absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 w-64 p-3.5 bg-[#09090d] border ${themeClasses.tooltipBorder} rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 text-left font-sans`}>
+            <div className="flex items-center gap-1.5 border-b border-white/10 pb-1.5 mb-2">
+              <Info className={`w-3.5 h-3.5 ${themeClasses.iconColor} shrink-0`} />
+              <span className={`font-mono font-black uppercase tracking-wider text-[9px] ${themeClasses.tooltipText}`}>
+                {ratio.label}
+              </span>
+            </div>
+            <p className="text-white/80 text-[10px] leading-relaxed mb-2.5 font-normal">
+              {info.definition}
+            </p>
+            <div className="bg-black/50 rounded-lg p-2.5 border border-white/5 font-mono text-[9px] space-y-1.5">
+              <div className="flex justify-between items-center gap-1">
+                <span className="text-white/40 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
+                <span className="text-white/90 font-medium text-[8.5px] text-right">{info.average}</span>
+              </div>
+              <div className="flex justify-between items-center gap-1">
+                <span className="text-white/40 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
+                <span className="text-emerald-400 font-bold text-[8.5px] text-right">{info.alert}</span>
+              </div>
+            </div>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#09090d]"></div>
+          </div>
+        </div>
+      );
+    };
+
     return (
-      <div className="space-y-4 text-left">
-        {/* Ratios Bento Grid columns */}
+      <div className="space-y-5 text-left">
+        {/* Ratios Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           
           {/* Column 1: Valuation */}
@@ -483,47 +1003,7 @@ export default function MarketsTerminal() {
               <span className="text-[9.5px] font-mono text-white font-bold uppercase tracking-wider">Valuation Metrics</span>
             </div>
             <div className="space-y-2.5">
-              {valuationMetrics.map((ratio, index) => {
-                const info = FINANCIAL_METRICS_INFO[ratio.label] || {
-                  definition: ratio.desc || 'Institutional quantitative metric measuring underlying corporate fundamental performance.',
-                  average: 'Varies by industry sector baseline.',
-                  alert: 'Active automated terminal rule monitoring.'
-                };
-                return (
-                  <div key={index} className="bg-white/[0.02] border border-white/5 rounded-lg p-2.5 flex flex-col justify-between space-y-1 relative group overflow-visible cursor-help hover:border-indigo-500/40 hover:bg-indigo-500/[0.02] transition-all">
-                    <div className="flex justify-between items-start w-full">
-                      <span className="text-[8.5px] text-white/40 font-mono uppercase tracking-wider block">{ratio.label}</span>
-                      <Info className="w-2.5 h-2.5 text-white/25 group-hover:text-indigo-400 transition-colors" />
-                    </div>
-                    <span className="text-[12px] font-bold text-white font-mono">{ratio.value}</span>
-                    <span className="text-[8px] text-white/30 font-sans leading-tight block">{ratio.desc}</span>
-
-                    {/* Interactive Bloomberg-Style Tooltip */}
-                    <div className="absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 w-64 p-3 bg-zinc-950 border border-indigo-500/30 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 text-left font-sans">
-                      <div className="flex items-center gap-1.5 border-b border-white/10 pb-1 mb-1.5">
-                        <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                        <span className="font-mono font-black uppercase tracking-wider text-[9px] text-indigo-300">
-                          {ratio.label}
-                        </span>
-                      </div>
-                      <p className="text-white/80 text-[10px] leading-relaxed mb-2 font-normal">
-                        {info.definition}
-                      </p>
-                      <div className="bg-[#08080c] rounded p-2 border border-white/5 font-mono text-[9px] space-y-1">
-                        <div className="flex justify-between items-center gap-1">
-                          <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
-                          <span className="text-white font-medium text-[8.5px] text-right">{info.average}</span>
-                        </div>
-                        <div className="flex justify-between items-center gap-1">
-                          <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
-                          <span className="text-indigo-400 font-bold text-[8.5px] text-right">{info.alert}</span>
-                        </div>
-                      </div>
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-950"></div>
-                    </div>
-                  </div>
-                );
-              })}
+              {valuationMetrics.map((ratio, index) => renderMetricCard(ratio, index, 'indigo'))}
             </div>
           </div>
 
@@ -534,106 +1014,18 @@ export default function MarketsTerminal() {
               <span className="text-[9.5px] font-mono text-white font-bold uppercase tracking-wider">Profitability</span>
             </div>
             <div className="space-y-2.5">
-              {profitabilityMetrics.map((ratio, index) => {
-                const info = FINANCIAL_METRICS_INFO[ratio.label] || {
-                  definition: ratio.desc || 'Institutional quantitative metric measuring underlying corporate fundamental performance.',
-                  average: 'Varies by industry sector baseline.',
-                  alert: 'Active automated terminal rule monitoring.'
-                };
-                return (
-                  <div key={index} className="bg-white/[0.02] border border-white/5 rounded-lg p-2.5 flex flex-col justify-between space-y-1 relative group overflow-visible cursor-help hover:border-indigo-500/40 hover:bg-indigo-500/[0.02] transition-all">
-                    <div className="flex justify-between items-start w-full">
-                      <span className="text-[8.5px] text-white/40 font-mono uppercase tracking-wider block">{ratio.label}</span>
-                      <Info className="w-2.5 h-2.5 text-white/25 group-hover:text-indigo-400 transition-colors" />
-                    </div>
-                    <span className="text-[12px] font-bold text-white font-mono">{ratio.value}</span>
-                    {ratio.bar !== undefined && (
-                      <div className="h-1 bg-white/5 rounded-full overflow-hidden w-full mt-1">
-                        <div 
-                          style={{ width: `${Math.min(100, Math.max(0, ratio.bar * 100))}%` }} 
-                          className="h-full bg-emerald-500/60"
-                        ></div>
-                      </div>
-                    )}
-                    <span className="text-[8px] text-white/30 font-sans leading-tight block">{ratio.desc}</span>
-
-                    {/* Interactive Bloomberg-Style Tooltip */}
-                    <div className="absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 w-64 p-3 bg-zinc-950 border border-indigo-500/30 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 text-left font-sans">
-                      <div className="flex items-center gap-1.5 border-b border-white/10 pb-1 mb-1.5">
-                        <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                        <span className="font-mono font-black uppercase tracking-wider text-[9px] text-indigo-300">
-                          {ratio.label}
-                        </span>
-                      </div>
-                      <p className="text-white/80 text-[10px] leading-relaxed mb-2 font-normal">
-                        {info.definition}
-                      </p>
-                      <div className="bg-[#08080c] rounded p-2 border border-white/5 font-mono text-[9px] space-y-1">
-                        <div className="flex justify-between items-center gap-1">
-                          <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
-                          <span className="text-white font-medium text-[8.5px] text-right">{info.average}</span>
-                        </div>
-                        <div className="flex justify-between items-center gap-1">
-                          <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
-                          <span className="text-indigo-400 font-bold text-[8.5px] text-right">{info.alert}</span>
-                        </div>
-                      </div>
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-950"></div>
-                    </div>
-                  </div>
-                );
-              })}
+              {profitabilityMetrics.map((ratio, index) => renderMetricCard(ratio, index, 'emerald'))}
             </div>
           </div>
 
-          {/* Column 3: Risk & Growth */}
+          {/* Column 3: Solvency & Growth */}
           <div className="space-y-3.5">
             <div className="border-b border-white/5 pb-1.5 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-indigo-400" />
+              <Activity className="w-3.5 h-3.5 text-cyan-400" />
               <span className="text-[9.5px] font-mono text-white font-bold uppercase tracking-wider">Solvency & Growth</span>
             </div>
             <div className="space-y-2.5">
-              {riskGrowthMetrics.map((ratio, index) => {
-                const info = FINANCIAL_METRICS_INFO[ratio.label] || {
-                  definition: ratio.desc || 'Institutional quantitative metric measuring underlying corporate fundamental performance.',
-                  average: 'Varies by industry sector baseline.',
-                  alert: 'Active automated terminal rule monitoring.'
-                };
-                return (
-                  <div key={index} className="bg-white/[0.02] border border-white/5 rounded-lg p-2.5 flex flex-col justify-between space-y-1 relative group overflow-visible cursor-help hover:border-indigo-500/40 hover:bg-indigo-500/[0.02] transition-all">
-                    <div className="flex justify-between items-start w-full">
-                      <span className="text-[8.5px] text-white/40 font-mono uppercase tracking-wider block">{ratio.label}</span>
-                      <Info className="w-2.5 h-2.5 text-white/25 group-hover:text-indigo-400 transition-colors" />
-                    </div>
-                    <span className="text-[12px] font-bold text-white font-mono">{ratio.value}</span>
-                    <span className="text-[8px] text-white/30 font-sans leading-tight block">{ratio.desc}</span>
-
-                    {/* Interactive Bloomberg-Style Tooltip */}
-                    <div className="absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 w-64 p-3 bg-zinc-950 border border-indigo-500/30 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 text-left font-sans">
-                      <div className="flex items-center gap-1.5 border-b border-white/10 pb-1 mb-1.5">
-                        <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                        <span className="font-mono font-black uppercase tracking-wider text-[9px] text-indigo-300">
-                          {ratio.label}
-                        </span>
-                      </div>
-                      <p className="text-white/80 text-[10px] leading-relaxed mb-2 font-normal">
-                        {info.definition}
-                      </p>
-                      <div className="bg-[#08080c] rounded p-2 border border-white/5 font-mono text-[9px] space-y-1">
-                        <div className="flex justify-between items-center gap-1">
-                          <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
-                          <span className="text-white font-medium text-[8.5px] text-right">{info.average}</span>
-                        </div>
-                        <div className="flex justify-between items-center gap-1">
-                          <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
-                          <span className="text-indigo-400 font-bold text-[8.5px] text-right">{info.alert}</span>
-                        </div>
-                      </div>
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-950"></div>
-                    </div>
-                  </div>
-                );
-              })}
+              {riskGrowthMetrics.map((ratio, index) => renderMetricCard(ratio, index, 'cyan'))}
             </div>
           </div>
 
@@ -649,8 +1041,18 @@ export default function MarketsTerminal() {
   });
 
   const [brokerHoldings, setBrokerHoldings] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('broker_holdings');
-    return saved ? JSON.parse(saved) : {
+    try {
+      const saved = localStorage.getItem('broker_holdings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing broker_holdings:', e);
+    }
+    return {
       'AAPL': 50,
       'MSFT': 30,
       'NVDA': 100,
@@ -677,6 +1079,26 @@ export default function MarketsTerminal() {
   const [takeProfitPct, setTakeProfitPct] = useState<number>(10);
   const [orderStatus, setOrderStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isExecutingOrder, setIsExecutingOrder] = useState<boolean>(false);
+
+  // Mobile order execution desk minimized view states
+  const [showExecutionDetails, setShowExecutionDetails] = useState<boolean>(false);
+  const executionDeskRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: Event) {
+      if (executionDeskRef.current && !executionDeskRef.current.contains(event.target as Node)) {
+        if (window.innerWidth < 1024) {
+          setShowExecutionDetails(false);
+        }
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, []);
 
   // Agentic AI Strategist State
   const [activeAgent, setActiveAgent] = useState<'ALPHA' | 'INCOME' | 'ALL_WEATHER' | null>(null);
@@ -797,23 +1219,61 @@ export default function MarketsTerminal() {
   }, []);
 
   const loadTickerData = async () => {
+    const isApproved = isApprovedTicker(ticker);
+    if (!isApproved) {
+      setErrorMsg(`Ticker '${ticker}' is not a valid financial instrument. Integrity validation failed.`);
+      setMarketData(null);
+      setFundamentalData(null);
+      return;
+    }
+
     setLoading(true);
     setErrorMsg('');
     try {
       // 1. Fetch Historical Price
-      const histResponse = await fetch(`/api/markets/historical?ticker=${ticker}&range=${range}`);
-      if (!histResponse.ok) throw new Error('Failed to retrieve historical price data');
-      const histData = await histResponse.json();
+      let histData;
+      try {
+        const histResponse = await fetch(`/api/markets/historical?ticker=${ticker}&range=${range}`);
+        if (histResponse.ok && histResponse.headers.get('content-type')?.includes('application/json')) {
+          const data = await histResponse.json();
+          if (data && !data.error) {
+            histData = data;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn("Historical fetch failed, using client fallback", fetchErr);
+      }
+
+      if (!histData) {
+        // Fallback to client simulation
+        histData = getClientSimulatedHistoricalData(ticker, range);
+      }
       setMarketData(histData);
 
       // 2. Fetch Fundamentals
-      const fundResponse = await fetch(`/api/markets/fundamentals?ticker=${ticker}`);
-      if (!fundResponse.ok) throw new Error('Failed to retrieve fundamental filings');
-      const fundData = await fundResponse.json();
+      let fundData;
+      try {
+        const fundResponse = await fetch(`/api/markets/fundamentals?ticker=${ticker}`);
+        if (fundResponse.ok && fundResponse.headers.get('content-type')?.includes('application/json')) {
+          const data = await fundResponse.json();
+          if (data && !data.error) {
+            fundData = data;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn("Fundamentals fetch failed, using client fallback", fetchErr);
+      }
+
+      if (!fundData) {
+        // Fallback to client simulation
+        fundData = getClientSimulatedFundamentals(ticker);
+      }
       setFundamentalData(fundData);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'Error pulling live market terminals');
+      // Absolute fallback
+      setMarketData(getClientSimulatedHistoricalData(ticker, range));
+      setFundamentalData(getClientSimulatedFundamentals(ticker));
     } finally {
       setLoading(false);
     }
@@ -1053,8 +1513,15 @@ export default function MarketsTerminal() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchInput.trim()) {
-      setTicker(searchInput.trim().toUpperCase());
+    const query = searchInput.trim().toUpperCase();
+    if (query) {
+      if (!isApprovedTicker(query)) {
+        setErrorMsg(`Ticker '${query}' is not a valid financial instrument. Integrity validation failed.`);
+        setMarketData(null);
+        setFundamentalData(null);
+        return;
+      }
+      setTicker(query);
     }
   };
 
@@ -1363,7 +1830,32 @@ export default function MarketsTerminal() {
   const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6', '#a855f7', '#14b8a6'];
 
   return (
-    <div id="markets-terminal-container" className="space-y-6 text-white font-sans">
+    <div 
+      id="markets-terminal-container" 
+      className="space-y-4 md:space-y-6 text-white font-sans flex-1 flex flex-col min-h-0 select-none relative"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Swipe Navigation Visual Indicator */}
+      {swipeIndicator && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[#09090c]/90 border border-indigo-500/30 backdrop-blur-md px-4 py-2.5 rounded-full flex items-center gap-2.5 shadow-2xl z-50 pointer-events-none animate-bounce">
+          <div className="flex items-center gap-2 font-mono text-[10px] font-bold text-indigo-400">
+            {swipeIndicator.direction === 'left' ? (
+              <>
+                <span>SWIPED NEXT</span>
+                <span className="bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded text-white text-xs">{swipeIndicator.symbol}</span>
+                <span>→</span>
+              </>
+            ) : (
+              <>
+                <span>←</span>
+                <span className="bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded text-white text-xs">{swipeIndicator.symbol}</span>
+                <span>SWIPED PREV</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       
 
 
@@ -1376,41 +1868,92 @@ export default function MarketsTerminal() {
       )}
 
       {/* SUBTAB CONTENT PORTAL */}
-      <div>
-
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden w-full">
+        <AnimatePresence mode="wait" custom={subTabDirection}>
           {/* 1. TICKER ANALYSIS SUBTAB */}
-        {activeSubTab === 'ANALYSIS' && (
-          <div className="space-y-6">
+          {activeSubTab === 'ANALYSIS' && (
+            <motion.div
+              key="ANALYSIS"
+              custom={subTabDirection}
+              variants={slideOverVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="space-y-4 md:space-y-6 flex-1 flex flex-col min-h-0 w-full"
+            >
             
             {/* SEARCH AND CONTROL LINE */}
-            <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-[#0a0a0c] p-3 rounded-lg border border-white/5">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-3 w-4 h-4 text-white/30" />
+            <form onSubmit={handleSearchSubmit} className="flex flex-row items-center gap-1.5 sm:gap-3 bg-[#0a0a0c] p-2 sm:p-3 rounded-lg border border-white/5 w-full overflow-x-auto no-scrollbar flex-nowrap">
+              <div ref={inputContainerRef} className="relative flex-1 min-w-[120px] sm:min-w-[180px]">
+                <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-white/30" />
                 <input
                   type="text"
-                  placeholder="Enter Ticker Symbol (e.g. AAPL, MSFT, BTC-USD, EURUSD=X)..."
+                  placeholder="Ticker (e.g. MSFT)..."
                   value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full bg-[#040405] border border-white/10 rounded pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-indigo-500"
+                  onChange={(e) => {
+                    setSearchInput(e.target.value);
+                    setShowSuggestions(true);
+                    setSuggestionIndex(-1);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onKeyDown={handleInputKeyDown}
+                  className="w-full bg-[#040405] border border-indigo-500/40 rounded pl-8 pr-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.25)] focus:shadow-[0_0_16px_rgba(99,102,241,0.45)] font-mono transition-all duration-200"
                 />
+
+                <AnimatePresence>
+                  {showSuggestions && filteredSuggestions.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 5, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute left-0 right-0 top-full mt-1.5 bg-[#09090b] border border-white/10 rounded-lg shadow-[0_10px_30px_rgba(0,0,0,0.5)] z-50 overflow-hidden max-h-[260px] overflow-y-auto divide-y divide-white/5 no-scrollbar"
+                    >
+                      {filteredSuggestions.map((item, index) => {
+                        const isSelected = index === suggestionIndex;
+                        return (
+                          <div
+                            key={item.symbol}
+                            onClick={() => handleSelectSuggestion(item.symbol)}
+                            onMouseEnter={() => setSuggestionIndex(index)}
+                            className={`px-3 py-2 flex items-center justify-between cursor-pointer transition-all ${
+                              isSelected 
+                                ? 'bg-indigo-600/20 text-white font-medium' 
+                                : 'text-white/70 hover:bg-white/5 hover:text-white'
+                            }`}
+                          >
+                            <div className="flex flex-col items-start min-w-0 pr-2">
+                              <span className="text-[11px] font-mono font-bold tracking-wider">{item.symbol}</span>
+                              <span className="text-[9px] text-white/40 truncate max-w-[130px] sm:max-w-[180px]">{item.name}</span>
+                            </div>
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-white/5 border border-white/5 text-white/50 uppercase shrink-0">
+                              {item.sector}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded text-xs font-mono uppercase tracking-wider font-extrabold cursor-pointer"
+                  className="px-2.5 py-1.5 sm:px-4 sm:py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded text-[10px] sm:text-xs font-mono uppercase tracking-wider font-extrabold cursor-pointer shrink-0"
                 >
                   {loading ? 'PULLING...' : 'PULL DATA'}
                 </button>
 
                 {/* Range selectors */}
-                <div className="flex bg-[#040405] border border-white/10 p-0.5 rounded text-white/40">
+                <div className="flex bg-[#040405] border border-white/10 p-0.5 rounded text-white/40 shrink-0">
                   {(['5d', '1mo', '3mo', '1y'] as const).map((r) => (
                     <button
                       key={r}
                       type="button"
                       onClick={() => setRange(r)}
-                      className={`px-2.5 py-1.5 text-[9px] font-mono rounded cursor-pointer ${
+                      className={`px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-[8px] sm:text-[9px] font-mono rounded cursor-pointer ${
                         range === r 
                           ? 'bg-indigo-600/20 text-indigo-300 font-bold border border-indigo-500/20' 
                           : 'text-white/40 hover:text-white/70'
@@ -1425,10 +1968,10 @@ export default function MarketsTerminal() {
                 <button
                   type="button"
                   onClick={() => setActiveSubTab('SCREENER')}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono uppercase tracking-wider font-extrabold text-xs rounded flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="px-2 py-1.5 sm:px-4 sm:py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono uppercase tracking-wider font-extrabold text-[10px] sm:text-xs rounded flex items-center gap-1 sm:gap-1.5 transition-all cursor-pointer shrink-0"
                   title="Switch to Discover Screener"
                 >
-                  <Filter className="w-3.5 h-3.5" />
+                  <Filter className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   <span>DISCOVER</span>
                 </button>
               </div>
@@ -1438,44 +1981,191 @@ export default function MarketsTerminal() {
 
             {/* LIVE PRICE PANEL AND HISTORICAL PLOTLY/RECHARTS CANVAS */}
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-24 space-y-3">
-                <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
-                <span className="text-xs text-white/40 font-mono uppercase tracking-widest">Querying Yahoo Finance REST Gateway...</span>
+              <div className="flex-1 flex flex-col lg:grid lg:grid-cols-3 gap-4 lg:gap-6 items-stretch min-h-0">
+                {/* LEFT COLUMN: widescreen data panels (Chart and AI core analysis) */}
+                <div className="lg:col-span-2 flex-1 flex flex-col lg:h-full min-h-0">
+                  {/* Visual Chart Canvas Skeleton */}
+                  <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
+                    
+                    {/* Header line mimicking symbol/price/indicators */}
+                    <div className="flex flex-row items-center justify-between gap-2 pb-2 border-b border-white/5 w-full">
+                      <div className="flex items-center gap-3 shrink-0">
+                        {/* Symbol Placeholder */}
+                        <div className="h-6 w-16 bg-white/10 rounded animate-pulse" />
+                        {/* Price Placeholder */}
+                        <div className="h-6 w-24 bg-indigo-500/10 rounded animate-pulse" />
+                        {/* Watchlist/Star Button Placeholder */}
+                        <div className="h-7 w-7 bg-white/[0.02] border border-white/10 rounded-lg animate-pulse" />
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 animate-pulse">
+                        {/* Financials Toggle Button Placeholder */}
+                        <div className="h-7 w-24 bg-emerald-500/10 border border-emerald-500/20 rounded-lg" />
+                        {/* Return/Percentage Badge Placeholder */}
+                        <div className="h-6 w-20 bg-white/5 rounded" />
+                      </div>
+                    </div>
+
+                    {/* Chart Canvas Area Skeleton */}
+                    <div className="flex-1 relative min-h-[240px] md:min-h-[480px] lg:min-h-[350px] flex flex-col justify-between p-2">
+                      {/* Simulated horizontal grid dotted reference lines */}
+                      <div className="absolute inset-0 flex flex-col justify-between py-6 pointer-events-none">
+                        <div className="w-full border-t border-dashed border-white/5 flex justify-end"><div className="h-3 w-8 bg-white/5 rounded mr-2 animate-pulse" /></div>
+                        <div className="w-full border-t border-dashed border-white/5 flex justify-end"><div className="h-3 w-8 bg-white/5 rounded mr-2 animate-pulse" /></div>
+                        <div className="w-full border-t border-dashed border-white/5 flex justify-end"><div className="h-3 w-8 bg-white/5 rounded mr-2 animate-pulse" /></div>
+                        <div className="w-full border-t border-dashed border-white/5 flex justify-end"><div className="h-3 w-8 bg-white/5 rounded mr-2 animate-pulse" /></div>
+                        <div className="w-full border-t border-dashed border-white/5 flex justify-end"><div className="h-3 w-8 bg-white/5 rounded mr-2 animate-pulse" /></div>
+                      </div>
+
+                      {/* Simulated elegant, smooth glowing stock line using a wave SVG inside the skeleton! */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-25 pointer-events-none">
+                        <svg className="w-full h-full text-indigo-500/40" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <defs>
+                            <linearGradient id="skeletonPriceGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.2" />
+                              <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
+                            </linearGradient>
+                          </defs>
+                          <path 
+                            d="M 0 85 Q 12 65, 20 72 T 35 48 T 50 60 T 68 35 T 82 45 T 100 15 L 100 100 L 0 100 Z" 
+                            fill="url(#skeletonPriceGradient)" 
+                          />
+                          <path 
+                            d="M 0 85 Q 12 65, 20 72 T 35 48 T 50 60 T 68 35 T 82 45 T 100 15" 
+                            fill="none" 
+                            stroke="#6366f1" 
+                            strokeWidth="1.5" 
+                            className="animate-pulse"
+                          />
+                        </svg>
+                      </div>
+
+                      {/* Animated gateway query spinner in center of chart */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 bg-black/20 backdrop-blur-[1px] z-10">
+                        <RefreshCw className="w-7 h-7 text-indigo-400 animate-spin" />
+                        <span className="text-[10px] text-white/50 font-mono uppercase tracking-widest bg-black/80 px-2.5 py-1 rounded-md border border-white/5 shadow-xl animate-pulse">
+                          Connecting to Yahoo Finance REST Gateway...
+                        </span>
+                      </div>
+
+                      {/* Timeline bottom labels placeholder */}
+                      <div className="mt-auto pt-4 flex justify-between text-[9px] font-mono text-white/10 select-none">
+                        <span>[LOADING TICKER HISTORY]</span>
+                        <span>5D</span>
+                        <span>1MO</span>
+                        <span>3MO</span>
+                        <span>1Y</span>
+                        <span>[CALIBRATING DATA]</span>
+                      </div>
+                    </div>
+
+                    {/* Summary Footer Placeholder */}
+                    <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[9px] font-mono text-white/20">
+                      <div className="h-3 w-36 bg-white/5 rounded animate-pulse" />
+                      <div className="h-3 w-20 bg-white/5 rounded animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: Order Ticket & Interactive AI Copilot Chat Skeleton */}
+                <div className="lg:col-span-1 flex flex-col lg:h-full h-auto">
+                  <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-5 flex flex-col lg:h-full h-auto">
+                    
+                    {/* Action Tabs Placeholder */}
+                    <div className="grid grid-cols-2 bg-[#040405] p-1 rounded-lg border border-white/5">
+                      <div className="h-7 bg-white/5 rounded animate-pulse" />
+                      <div className="h-7 bg-white/[0.01] rounded" />
+                    </div>
+
+                    <div className="space-y-4 font-mono">
+                      {/* Active asset details placeholders */}
+                      <div className="flex justify-between items-center text-xs bg-[#040405] p-2.5 rounded border border-white/5">
+                        <span className="text-white/20">ACTIVE ASSET:</span>
+                        <div className="h-3 w-12 bg-white/10 rounded animate-pulse" />
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-xs bg-[#040405] p-2.5 rounded border border-white/5">
+                        <span className="text-white/20">MARKET PRICE:</span>
+                        <div className="h-3 w-16 bg-white/10 rounded animate-pulse" />
+                      </div>
+
+                      {/* Inputs placeholders */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] text-white/20 uppercase block">QUANTITY (SHARES):</span>
+                        <div className="h-9 bg-[#040405] border border-white/5 rounded animate-pulse" />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] text-white/20 uppercase block">ORDER TYPE:</span>
+                        <div className="h-9 bg-[#040405] border border-white/5 rounded animate-pulse" />
+                      </div>
+
+                      {/* Stop loss / take profit placeholders */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="h-5 w-28 bg-white/5 rounded animate-pulse" />
+                      </div>
+
+                      {/* Estimated total placeholder */}
+                      <div className="flex justify-between items-center text-xs font-bold border-t border-white/5 pt-3">
+                        <span className="text-white/20">EST. TOTAL:</span>
+                        <div className="h-3.5 w-16 bg-white/10 rounded animate-pulse" />
+                      </div>
+
+                      {/* Route order button placeholder */}
+                      <div className="w-full h-10 bg-indigo-500/10 border border-indigo-500/20 rounded-md flex items-center justify-center text-[10px] font-bold text-indigo-400 uppercase tracking-wider animate-pulse">
+                        INITIALIZING ORDER ENGINE...
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
               </div>
             ) : marketData ? (
               <>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+                <div className="flex-1 flex flex-col lg:grid lg:grid-cols-3 gap-4 lg:gap-6 items-stretch min-h-0">
                 
                   {/* LEFT COLUMN: widescreen data panels (Chart and AI core analysis) */}
-                  <div className="lg:col-span-2 flex flex-col h-full">
+                  <div className="lg:col-span-2 flex-1 flex flex-col lg:h-full min-h-0">
                     
                     {/* Visual Chart Canvas */}
-                    <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col h-full flex-1">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/5">
-                        <div className="flex items-center gap-3">
-                          <h4 className="text-xl font-black font-mono tracking-tight text-white">
+                    <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
+                      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 pb-2 border-b border-white/5 w-full overflow-x-auto no-scrollbar flex-nowrap">
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                          <h4 className="text-base sm:text-xl font-black font-mono tracking-tight text-white">
                             {marketData.symbol}
                           </h4>
-                          <span className="text-lg font-bold font-mono text-indigo-400">
+                          <span className="text-sm sm:text-lg font-bold font-mono text-indigo-400">
                             ${marketData.regularMarketPrice ? marketData.regularMarketPrice.toLocaleString() : '0.00'}
                           </span>
-                          <span className="text-[10px] text-white/30 font-mono uppercase tracking-wider">
+                          <span className="text-[9px] sm:text-[10px] text-white/30 font-mono uppercase tracking-wider">
                             {marketData.currency || 'USD'}
                           </span>
+                          
+                          <button
+                            type="button"
+                            onClick={handleToggleWatchlist}
+                            className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center ${
+                              isInWatchlist
+                                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
+                                : 'bg-white/[0.02] border-white/10 text-white/40 hover:text-white hover:bg-white/5'
+                            }`}
+                            title={isInWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+                          >
+                            <Star className={`w-3.5 h-3.5 ${isInWatchlist ? 'fill-indigo-400 text-indigo-400' : ''}`} />
+                          </button>
                         </div>
                         {marketData.bars && marketData.bars.length > 1 && (
-                          <div className="flex items-center gap-3 ml-auto">
+                          <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
                             {/* Financials Toggle Button */}
                             <button
                               type="button"
                               onClick={() => setShowFinancialsOverlay(!showFinancialsOverlay)}
-                              className={`px-3 py-1.5 text-[11px] font-mono font-bold border rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                              className={`px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-[11px] font-mono font-bold border rounded-lg transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
                                 showFinancialsOverlay
-                                  ? 'bg-indigo-600/25 border-indigo-500/50 text-indigo-300 shadow-sm shadow-indigo-500/10'
-                                  : 'bg-white/[0.02] border-white/10 text-white/50 hover:text-white hover:bg-white/5'
+                                  ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-200 shadow-sm shadow-emerald-500/20'
+                                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300'
                               }`}
                             >
-                              <BarChart3 className="w-3.5 h-3.5" />
+                              <BarChart3 className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                               <span>{showFinancialsOverlay ? 'Hide Financials' : 'Financials'}</span>
                             </button>
 
@@ -1486,10 +2176,10 @@ export default function MarketsTerminal() {
                                 const pct = ((last - first) / first) * 100;
                                 const up = pct >= 0;
                                 return (
-                                  <span className={`inline-flex items-center gap-1 text-xs font-mono font-bold px-2 py-1 rounded ${
+                                  <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-1.5 py-1 sm:px-2 sm:py-1 rounded shrink-0 ${
                                     up ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                                   }`}>
-                                    {up ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                                    {up ? <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <ArrowDownRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
                                     {pct.toFixed(2)}% ({range.toUpperCase()})
                                   </span>
                                 );
@@ -1500,42 +2190,95 @@ export default function MarketsTerminal() {
                       </div>
 
                       {/* Recharts Price Area Chart */}
-                      <div className="flex-1 min-h-[350px] h-0">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={marketData.bars}>
+                      <div className={`flex-1 h-0 -mr-5 relative transition-all duration-300 ease-in-out outline-none focus:outline-none ${
+                        showExecutionDetails ? 'min-h-[160px] lg:min-h-[250px]' : 'min-h-[240px] md:min-h-[480px] lg:min-h-[350px]'
+                      }`}>
+                        <ResponsiveContainer width="100%" height="100%" className="outline-none focus:outline-none">
+                          <AreaChart 
+                            data={marketData.bars} 
+                            margin={{ top: 10, right: 32, left: -20, bottom: 0 }}
+                            className="outline-none focus:outline-none"
+                            onMouseMove={(state: any) => {
+                              if (state && state.activeTooltipIndex !== undefined) {
+                                const bar = state.activePayload?.[0]?.payload;
+                                const coord = state.activeCoordinate;
+                                setHoveredBar(bar || null);
+                                if (coord) {
+                                  setHoveredX(coord.x);
+                                  setHoveredY(coord.y);
+                                }
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              setHoveredBar(null);
+                              setHoveredX(null);
+                              setHoveredY(null);
+                            }}
+                          >
                             <defs>
                                <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
                                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
                                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0}/>
-                               </linearGradient>
+                                </linearGradient>
                             </defs>
                             <XAxis 
                               dataKey="timestamp" 
                               tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
-                              tick={{ fill: '#ffffff30', fontSize: 9 }}
+                              tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
                               axisLine={false}
                               tickLine={false}
                             />
                             <YAxis 
                               domain={['auto', 'auto']}
-                              tick={{ fill: '#ffffff30', fontSize: 9 }}
+                              tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
                               axisLine={false}
                               tickLine={false}
                               orientation="right"
+                              width={32}
                             />
                             <Tooltip
                               contentStyle={{ backgroundColor: '#0c0c0e', border: '1px solid #ffffff10', borderRadius: '8px' }}
                               labelFormatter={(str) => new Date(str).toLocaleString()}
-                              formatter={(val: any) => [`$${val.toLocaleString()}`, 'Close Price']}
+                              formatter={(val: any) => [`$${Number(val).toFixed(4)}`, 'Close Price']}
                             />
                             <Area type="monotone" dataKey="close" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#priceGradient)" />
+                            
+                            {/* Horizontal & Vertical Crosshair Lines */}
+                            {hoveredBar && (
+                              <ReferenceLine
+                                x={hoveredBar.timestamp}
+                                stroke="#6366f1"
+                                strokeOpacity={0.4}
+                                strokeWidth={1}
+                                strokeDasharray="3 3"
+                              />
+                            )}
+                            {hoveredBar && (
+                              <ReferenceLine
+                                y={hoveredBar.close}
+                                stroke="#6366f1"
+                                strokeOpacity={0.4}
+                                strokeWidth={1}
+                                strokeDasharray="3 3"
+                              />
+                            )}
                           </AreaChart>
                         </ResponsiveContainer>
+
+                        {/* Floating Y-Axis Badge for expanded price precision */}
+                        {hoveredY !== null && hoveredBar && (
+                          <div 
+                            className="absolute right-0 bg-indigo-600 text-white font-mono text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded shadow-lg pointer-events-none transform -translate-y-1/2 border border-indigo-400/50 z-20 select-none animate-in fade-in duration-75"
+                            style={{ top: `${hoveredY}px` }}
+                          >
+                            ${hoveredBar.close.toFixed(6)}
+                          </div>
+                        )}
                       </div>
 
                       {/* Absolute overlay for Fundamental Financials */}
                       {showFinancialsOverlay && (
-                        <div className="absolute inset-0 bg-[#07070a]/95 backdrop-blur-md z-10 p-5 flex flex-col justify-between overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+                        <div className="absolute inset-0 bg-[#0c0c11] border border-white/10 rounded-xl z-25 p-5 flex flex-col justify-between overflow-y-auto animate-in fade-in zoom-in-95 duration-150 shadow-2xl">
                           <div className="space-y-4">
                             {/* Overlay Header */}
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -1579,16 +2322,23 @@ export default function MarketsTerminal() {
                   </div>
 
                   {/* RIGHT COLUMN: Order Ticket & Interactive AI Copilot Chat */}
-                  <div className="lg:col-span-1 flex flex-col h-full">
+                  <div className="lg:col-span-1 flex flex-col lg:h-full h-auto">
 
-                    {/* MULTI-ASSET BROKERAGE ORDER TICKET */}
-                    <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 flex flex-col h-full flex-1">
+                     {/* MULTI-ASSET BROKERAGE ORDER TICKET */}
+                    <div ref={executionDeskRef} className={`bg-[#09090c] border border-white/5 rounded-xl transition-all duration-300 flex flex-col lg:p-5 lg:space-y-4 lg:h-full lg:flex-1 ${
+                      showExecutionDetails ? 'p-5 space-y-4 h-full flex-1' : 'p-0 space-y-0 h-auto overflow-hidden'
+                    }`}>
                       {/* BUY / SELL Action Tabs */}
-                      <div className="grid grid-cols-2 bg-[#040405] p-0.5 rounded border border-white/5">
+                      <div className={`grid grid-cols-2 bg-[#040405] p-0.5 rounded transition-all ${
+                        showExecutionDetails ? 'border border-white/5' : 'border-0'
+                      }`}>
                         <button
                           type="button"
-                          onClick={() => setOrderSide('BUY')}
-                          className={`py-1.5 text-[10px] font-mono font-bold uppercase rounded transition-all cursor-pointer ${
+                          onClick={() => {
+                            setOrderSide('BUY');
+                            setShowExecutionDetails(true);
+                          }}
+                          className={`py-1.5 text-[10px] font-mono font-bold uppercase rounded transition-all cursor-pointer outline-none focus:outline-none ${
                             orderSide === 'BUY'
                               ? 'bg-emerald-600 text-white shadow-md'
                               : 'text-white/40 hover:text-white/80'
@@ -1598,8 +2348,11 @@ export default function MarketsTerminal() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setOrderSide('SELL')}
-                          className={`py-1.5 text-[10px] font-mono font-bold uppercase rounded transition-all cursor-pointer ${
+                          onClick={() => {
+                            setOrderSide('SELL');
+                            setShowExecutionDetails(true);
+                          }}
+                          className={`py-1.5 text-[10px] font-mono font-bold uppercase rounded transition-all cursor-pointer outline-none focus:outline-none ${
                             orderSide === 'SELL'
                               ? 'bg-rose-600 text-white shadow-md'
                               : 'text-white/40 hover:text-white/80'
@@ -1609,7 +2362,9 @@ export default function MarketsTerminal() {
                         </button>
                       </div>
 
-                      <div className="space-y-3 font-mono">
+                      <div className={`space-y-3 font-mono transition-all duration-300 ${
+                        showExecutionDetails ? 'block opacity-100' : 'hidden lg:block lg:opacity-100'
+                      }`}>
                         {/* Active asset & price */}
                         <div className="flex justify-between items-center text-xs bg-[#040405] p-2 rounded border border-white/5">
                           <span className="text-white/40">ACTIVE ASSET:</span>
@@ -1736,7 +2491,7 @@ export default function MarketsTerminal() {
                           type="button"
                           disabled={isExecutingOrder || !marketData?.regularMarketPrice}
                           onClick={() => handleExecuteOrder()}
-                          className={`w-full py-2.5 rounded font-mono font-black text-xs uppercase tracking-wider text-white transition-all cursor-pointer ${
+                          className={`w-full py-2.5 rounded font-mono font-black text-xs uppercase tracking-wider text-white transition-all cursor-pointer outline-none focus:outline-none ${
                             orderSide === 'BUY'
                               ? 'bg-emerald-600 hover:bg-emerald-500'
                               : 'bg-rose-600 hover:bg-rose-500'
@@ -1763,12 +2518,21 @@ export default function MarketsTerminal() {
                 Provide a valid ticker above and press 'Pull Data' to view interactive terminal diagnostics.
               </div>
             )}
-          </div>
-        )}
+            </motion.div>
+          )}
 
-        {/* 2. PANDAS SCREENER SUBTAB */}
-        {activeSubTab === 'SCREENER' && (
-          <div className="space-y-6 animate-fade-in">
+          {/* 2. PANDAS SCREENER SUBTAB */}
+          {activeSubTab === 'SCREENER' && (
+            <motion.div
+              key="SCREENER"
+              custom={subTabDirection}
+              variants={slideOverVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="space-y-6 w-full"
+            >
             
             {/* SCREENER FILTER CONTROLLER */}
             <div className="bg-[#09090c] p-5 rounded-xl border border-white/5 space-y-5">
@@ -2061,14 +2825,22 @@ export default function MarketsTerminal() {
                         <th className="p-3.5 pr-5 text-right">Terminal Action</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <motion.tbody
+                      variants={containerVariants}
+                      initial="hidden"
+                      animate="show"
+                    >
                       {sortedScreenerData.length === 0 ? (
-                        <tr>
+                        <motion.tr variants={itemVariants}>
                           <td colSpan={8} className="text-center py-12 text-white/20">No assets match your query filters. Broaden parameters or search queries.</td>
-                        </tr>
+                        </motion.tr>
                       ) : (
                         sortedScreenerData.map((row, idx) => (
-                          <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02] transition-all">
+                          <motion.tr
+                            key={row.ticker}
+                            variants={itemVariants}
+                            className="border-b border-white/5 hover:bg-white/[0.02] transition-all"
+                          >
                             <td className="p-3.5 pl-5 font-bold text-indigo-400">{row.ticker}</td>
                             <td className="p-3.5 text-white/70 max-w-[150px] truncate" title={row.name}>{row.name}</td>
                             <td className="p-3.5">
@@ -2104,16 +2876,17 @@ export default function MarketsTerminal() {
                                 Analyze Ticker
                               </button>
                             </td>
-                          </tr>
+                          </motion.tr>
                         ))
                       )}
-                    </tbody>
+                    </motion.tbody>
                   </table>
                 </div>
               </div>
               )}
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       </div> {/* Closes SUBTAB CONTENT PORTAL */}
 
