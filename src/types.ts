@@ -16,33 +16,10 @@ export interface Candlestick {
   atr?: number;
 }
 
-export interface FVG {
-  id: string;
-  index: number;
-  type: 'BULLISH' | 'BEARISH';
-  gapStart: number;
-  gapEnd: number;
-  isMitigated: boolean;
-  timestamp: string;
-}
-
-export interface OrderBlock {
-  id: string;
-  index: number;
-  type: 'BULLISH' | 'BEARISH';
-  high: number;
-  low: number;
-  isBroken: boolean;
-  timestamp: string;
-}
-
-export interface LiquiditySweep {
-  id: string;
-  index: number;
-  type: 'BUY_SIDE' | 'SELL_SIDE';
-  level: number;
-  timestamp: string;
-}
+// Deprecated ICT Strategy Types (Retained as generic placeholders for compile compatibility during brokerage transition)
+export type FVG = any;
+export type OrderBlock = any;
+export type LiquiditySweep = any;
 
 export type MarketSymbol = 
   | 'US30' 

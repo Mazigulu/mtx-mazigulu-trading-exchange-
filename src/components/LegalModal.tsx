@@ -205,14 +205,14 @@ export default function LegalModal({ isOpen, onClose }: LegalModalProps) {
                   <div className="space-y-3">
                     <h3 className="text-white font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-1.5">
                       <FileText className="w-4 h-4 text-indigo-400" />
-                      INSTITUTIONAL WORKSPACE LEASE TERMS
+                      SECURITIES TRADING & PORTFOLIO TERMS
                     </h3>
                     <p className="text-indigo-300 font-bold uppercase text-[9px] leading-snug">
-                      Apex Quant Software Lease & Licensing Contract Agreement
+                      Securities Trading Customer Agreement
                     </p>
                     <div className="space-y-2 text-white/60">
                       <p>
-                        1. <strong>Licensing Bounds:</strong> MTXquant grants a non-assignable, fully restricted license to active institutional traders to utilize financial calculation tools, live order books, and synthetic backtesting frameworks.
+                        1. <strong>Licensing Bounds:</strong> MTX Securities grants a non-assignable, fully restricted license to active traders to utilize financial calculation tools, live stock order books, and portfolio simulators.
                       </p>
                       <p>
                         2. <strong>Reverse Engineering Restriction:</strong> You are strictly forbidden from inspecting, reverse-compiling, or extracting the core execution pipeline scripts, AI logic parameters, or broker authentication tokens.

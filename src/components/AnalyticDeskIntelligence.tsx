@@ -37,7 +37,7 @@ export default function AnalyticDeskIntelligence({
 }: AnalyticDeskIntelligenceProps) {
   // Global States
   const [timeframeBiasFilter, setTimeframeBiasFilter] = useState<'COMBINED' | 'H4' | 'DAILY'>('COMBINED');
-  const [strategyPreset, setStrategyPreset] = useState<'ICT_2022' | 'POWER_OF_3'>('ICT_2022');
+  const [strategyPreset, setStrategyPreset] = useState<'TREND_FOLLOWING' | 'MEAN_REVERSION'>('TREND_FOLLOWING');
   const [selectedIntegrationWeight, setSelectedIntegrationWeight] = useState<number>(1.25); // default safety weight
   const [showHeuristicsInfo, setShowHeuristicsInfo] = useState<boolean>(false);
 
@@ -219,7 +219,7 @@ export default function AnalyticDeskIntelligence({
                 LIVE HEURISTICS
               </span>
             </div>
-            <p className="text-[10px] text-white/35 mt-0.5">Four-tiered institutional analytic engine. Aligned to the MTXQUANT skeleton blueprint.</p>
+            <p className="text-[10px] text-white/35 mt-0.5">Four-tiered securities analytical engine. Aligned to the MTX Securities blueprint.</p>
           </div>
         </div>
 
@@ -230,13 +230,13 @@ export default function AnalyticDeskIntelligence({
             <span className="text-white/30 uppercase tracking-wider text-[8.5px]">Preset Model:</span>
             <select
               value={strategyPreset}
-              onChange={(e) => setStrategyPreset(e.target.value as 'ICT_2022' | 'POWER_OF_3')}
+              onChange={(e) => setStrategyPreset(e.target.value as 'TREND_FOLLOWING' | 'MEAN_REVERSION')}
               className="bg-transparent text-[10px] font-bold text-indigo-400 border-none outline-none focus:ring-0 p-0 pr-4 cursor-pointer"
               style={{ colorScheme: 'dark' }}
               title="Select mathematical preset for model calculations"
             >
-              <option value="ICT_2022" className="bg-[#0b0b0d] text-white">ICT 2022 Model</option>
-              <option value="POWER_OF_3" className="bg-[#0b0b0d] text-white">Power of 3 (AMD)</option>
+              <option value="TREND_FOLLOWING" className="bg-[#0b0b0d] text-white">Trend Following Model</option>
+              <option value="MEAN_REVERSION" className="bg-[#0b0b0d] text-white">Mean Reversion Model</option>
             </select>
           </div>
 
@@ -277,13 +277,13 @@ export default function AnalyticDeskIntelligence({
         <div className="mb-5 p-4 bg-indigo-950/20 border border-indigo-500/20 rounded-md font-mono text-[10.5px] text-indigo-200 leading-relaxed select-none animate-fadeIn">
           <div className="flex items-center space-x-2 text-indigo-300 font-bold uppercase text-[11px] mb-2">
             <Sparkles className="w-4 h-4 animate-pulse" />
-            <span>MTXQUANT SKETCH RULE BLUEPRINT: INTERNAL HEURISTICS</span>
+            <span>MTX SECURITIES RULE BLUEPRINT: INTERNAL HEURISTICS</span>
           </div>
           <p className="mb-2">
-            The Desk Intelligence tracks four core mathematical layers to locate institutional bias:
+            The Desk Intelligence tracks four core mathematical layers to locate market trends and safety parameters:
           </p>
           <ul className="list-decimal list-inside space-y-1.5 pl-1.5 text-white/70">
-            <li><strong className="text-indigo-300">Pillar I (Stops Liquidities):</strong> Computes unmitigated order blocks and session liquidity levels.</li>
+            <li><strong className="text-indigo-300">Pillar I (Trend & Supports):</strong> Computes historical support levels and moving average ranges.</li>
             <li><strong className="text-indigo-300">Pillar II (Regime Shock):</strong> Measures live ATR against order book depth parameters.</li>
             <li><strong className="text-indigo-300">Pillar III (Macro Synergy):</strong> Evaluates directional momentum against macro indicators.</li>
             <li><strong className="text-indigo-300">Pillar IV (Invalidation Bounds):</strong> Imposes Stop Loss and safety bounds cushions dynamically.</li>
@@ -294,27 +294,27 @@ export default function AnalyticDeskIntelligence({
       {/* Grid of the Four Pillars */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono select-none">
         
-        {/* Pillar I - Liquidity Stops */}
+        {/* Pillar I - Trend & Supports */}
         <div className="bg-[#050507] border border-white/5 rounded p-4 space-y-3">
           <div className="flex justify-between items-center border-b border-white/5 pb-2">
             <div className="flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-sky-400" />
-              <span className="text-[10px] font-bold uppercase text-white">Pillar I: Stops Liquidities</span>
+              <span className="text-[10px] font-bold uppercase text-white">Pillar I: Trend & Supports</span>
             </div>
             <span className="text-[8px] text-sky-400 uppercase font-black bg-sky-500/10 px-1.5 py-0.5 rounded">
               STRUCTURE CONFIRMED
             </span>
           </div>
           <p className="text-[9.5px] text-white/55 leading-relaxed">
-            Identifies sweeps of historical price ranges to locate unmitigated order blocks. Current setup focuses on the {strategyPreset === 'ICT_2022' ? 'Silver Bullet' : 'AMD Accumulation'} structural bounds.
+            Identifies core support and resistance channels using mathematical price models. Current setup focuses on the {strategyPreset === 'TREND_FOLLOWING' ? 'EMA Trend Follow' : 'Mean Reversion bounds'} structural bounds.
           </p>
           <div className="grid grid-cols-2 gap-2 text-[9px] pt-1 text-white/50">
             <div className="bg-black/30 p-2 rounded">
-              <span className="text-white/25 block text-[8px]">ESTIMATED PDH SWEEP</span>
+              <span className="text-white/25 block text-[8px]">ESTIMATED HIGH TARGET</span>
               <strong className="text-white">{(price + atr * 1.5).toFixed(decimalPlaces)}</strong>
             </div>
             <div className="bg-black/30 p-2 rounded">
-              <span className="text-white/25 block text-[8px]">ESTIMATED PDL SWEEP</span>
+              <span className="text-white/25 block text-[8px]">ESTIMATED LOW TARGET</span>
               <strong className="text-white">{(price - atr * 1.5).toFixed(decimalPlaces)}</strong>
             </div>
           </div>

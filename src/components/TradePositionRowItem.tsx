@@ -99,9 +99,9 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
   const [lastTickTime, setLastTickTime] = useState<number>(Date.now());
   const [secondsAgo, setSecondsAgo] = useState<number>(0);
 
-  // States for tracking ICT Liquidity Hunt Estimation
+  // States for tracking Price Target Projections
   const [huntCountdown, setHuntCountdown] = useState<number>(0);
-  const [huntType, setHuntType] = useState<string>('BSL Shift');
+  const [huntType, setHuntType] = useState<string>('Resistance Target');
   const [huntTargetPrice, setHuntTargetPrice] = useState<number>(0);
   const [huntICTConcept, setHuntICTConcept] = useState<string>('');
 
@@ -112,7 +112,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
     setHuntCountdown(initialDuration);
 
     const isBuy = trade.side === 'BUY';
-    const targetType = isBuy ? 'BSL (Buy-Side Liquidity)' : 'SSL (Sell-Side Liquidity)';
+    const targetType = isBuy ? 'Intraday Resistance Target' : 'Intraday Support Target';
     setHuntType(targetType);
 
     // Calculate a plausible target price based on take profit or stop loss or entry
@@ -137,15 +137,15 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
     }
     setHuntTargetPrice(targetPx);
 
-    // ICT displacement / market state terms
+    // standard brokerage trading terms
     const concepts = [
-      'MSS (Market Structure Shift) confirmed on M1; rapid displacement expansion',
-      'Silver Bullet Session volume spike; driving towards swing liquidity',
-      'Fair Value Gap (FVG) rebalancing vector following high-displacement impulse',
-      'OTE (Optimal Trade Entry) response triggering ICT breaker mitigation',
-      'Equal Highs (EQH) retail stop pool sweep acceleration',
-      'Equal Lows (EQL) sell-stop harvest acceleration under support',
-      'London session Judas Swing displacement targeting range extremity'
+      'EMA crossover dynamic indicator response target',
+      'Moving average convergence/divergence momentum target',
+      'Volume-weighted average price (VWAP) anchor test target',
+      'Relative Strength Index (RSI) mean reversion target',
+      'Fibonacci retracement level support verification',
+      'Pivot point standard resistance target breach',
+      'Consolidation breakout target following volume impulse'
     ];
     setHuntICTConcept(concepts[hash % concepts.length]);
   }, [trade.id, trade.side, trade.entryPrice, trade.symbol]);
@@ -345,16 +345,16 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                 {statusText}
               </span>
 
-              {/* Liquidity Hunt Badge & Tooltip */}
+              {/* Price Target Badge & Tooltip */}
               <div 
                 className={`flex items-center gap-1 font-mono font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 hover:bg-amber-500/15 rounded border border-amber-500/20 cursor-help transition-all duration-300 select-none shrink-0 ${isCompact ? 'text-[6.5px] px-0.5 py-[0.5px]' : 'text-[7.5px] px-1 py-[1.5px]'}`}
-                title={`[ICT Displacement Forecast] Next liquidity hunt (${huntType}) target: ${huntTargetPrice.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : trade.symbol === 'ETH/USDT' ? 2 : trade.symbol === 'SOL/USDT' ? 2 : trade.symbol === 'GOLD/USD' ? 2 : 5)}. Catalyst: ${huntICTConcept}`}
+                title={`[Price Target Projection] Next trend target (${huntType}) price: ${huntTargetPrice.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : trade.symbol === 'ETH/USDT' ? 2 : trade.symbol === 'SOL/USDT' ? 2 : trade.symbol === 'GOLD/USD' ? 2 : 5)}. Catalyst: ${huntICTConcept}`}
               >
                 <span className="relative flex h-1 w-1 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-1 w-1 bg-amber-500"></span>
                 </span>
-                <span className="text-amber-400/70">Hunt:</span>
+                <span className="text-amber-400/70">Target:</span>
                 <span className="font-extrabold animate-pulse">{Math.floor(huntCountdown / 60)}m {String(huntCountdown % 60).padStart(2, '0')}s</span>
               </div>
 
@@ -687,11 +687,11 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
                         className="rounded border-white/10 bg-black text-indigo-500 focus:ring-0 focus:ring-offset-0 w-3 h-3 cursor-pointer"
                       />
                       <label htmlFor={`lav-tsl-liquidity-${trade.id}`} className="text-[8px] text-neutral-200 font-semibold uppercase cursor-pointer">
-                        Align behind Order Blocks
+                        Align with Support Levels
                       </label>
                     </div>
                     <span className="text-[7.5px] text-neutral-200 leading-tight block">
-                      Pins trailing bounds behind unmitigated level-2 liquidity keys.
+                      Pins trailing bounds behind confirmed support or resistance ranges.
                     </span>
                   </div>
 
@@ -730,7 +730,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
             </div>
           </div>
 
-          {/* Premium ICT Liquidity Hunt Sub-section details */}
+          {/* Premium Price Target Projection Sub-section details */}
           <div className={`${isCompact ? 'p-1.5 gap-1.5' : 'p-2 gap-2'} bg-gradient-to-r from-amber-500/[0.03] to-amber-600/[0.01] border border-amber-500/10 hover:border-amber-500/20 rounded flex flex-col sm:flex-row sm:items-center sm:justify-between transition-colors select-none`}>
             <div className="flex items-start gap-1.5">
               <span className="relative flex h-1.5 w-1.5 mt-1 shrink-0">
@@ -739,7 +739,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
               </span>
               <div>
                 <span className="text-amber-400 font-bold uppercase tracking-wider text-[8px] block">
-                  ICT Liquidity Displacement Hunt Forecast
+                  Securities Price Target Projection
                 </span>
                 <p className={`${isCompact ? 'text-[9.2px]' : 'text-[9.5px]'} text-neutral-200 font-medium leading-relaxed mt-0.5`}>
                   {huntICTConcept}. Target area expected at <span className="text-amber-400/90 font-mono font-bold">{huntType}</span> near <span className="text-white font-mono font-bold bg-white/5 px-1 py-0.5 rounded border border-white/5">{huntTargetPrice.toFixed(trade.symbol === 'USD/JPY' ? 3 : trade.symbol === 'BTC/USDT' ? 1 : trade.symbol === 'ETH/USDT' ? 2 : trade.symbol === 'SOL/USDT' ? 2 : trade.symbol === 'GOLD/USD' ? 2 : 5)}</span>.
@@ -747,7 +747,7 @@ export const TradePositionRowItem: React.FC<TradePositionRowItemProps> = ({
               </div>
             </div>
             <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 bg-black/40 border border-white/5 sm:border-none sm:bg-transparent px-2 py-1 rounded">
-              <span className="text-neutral-200 uppercase text-[8px] tracking-wider leading-none">Sweep Countdown</span>
+              <span className="text-neutral-200 uppercase text-[8px] tracking-wider leading-none">Target Verification</span>
               <span className="text-amber-400 text-xs font-black tracking-widest bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded animate-pulse">
                 {Math.floor(huntCountdown / 60)}m {String(huntCountdown % 60).padStart(2, '0')}s
               </span>

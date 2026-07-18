@@ -1071,7 +1071,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
 
   // Order ticket inputs
   const [orderSide, setOrderSide] = useState<'BUY' | 'SELL'>('BUY');
-  const [orderShares, setOrderShares] = useState<number>(10);
+  const [orderShares, setOrderShares] = useState<string>('100');
   const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT'>('MARKET');
   const [orderLimitPrice, setOrderLimitPrice] = useState<number>(0);
   const [useBracketProtection, setUseBracketProtection] = useState<boolean>(false);
@@ -1301,32 +1301,42 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
     
     const currentPrice = marketData.regularMarketPrice;
     const executionPrice = orderType === 'LIMIT' ? orderLimitPrice || currentPrice : currentPrice;
-    const totalCost = executionPrice * orderShares;
+    const dollarAmount = parseFloat(orderShares) || 0;
+    const calculatedQty = dollarAmount / executionPrice;
     
     setTimeout(async () => {
       try {
         if (orderSide === 'BUY') {
-          if (brokerCash < totalCost) {
+          if (dollarAmount < 50) {
             setOrderStatus({
               type: 'error',
-              message: `Insufficient funds. Order requires $${totalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}, but you have $${brokerCash.toLocaleString(undefined, {minimumFractionDigits: 2})}.`
+              message: 'Minimum purchase amount is $50.00 for fractional shares.'
+            });
+            setIsExecutingOrder(false);
+            return;
+          }
+
+          if (brokerCash < dollarAmount) {
+            setOrderStatus({
+              type: 'error',
+              message: `Insufficient funds. Order requires $${dollarAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}, but you have $${brokerCash.toLocaleString(undefined, {minimumFractionDigits: 2})}.`
             });
             setIsExecutingOrder(false);
             return;
           }
           
-          setBrokerCash(prev => parseFloat((prev - totalCost).toFixed(2)));
+          setBrokerCash(prev => parseFloat((prev - dollarAmount).toFixed(2)));
           setBrokerHoldings(prev => {
             const current = prev[ticker] || 0;
             return {
               ...prev,
-              [ticker]: parseFloat((current + orderShares).toFixed(6))
+              [ticker]: parseFloat((current + calculatedQty).toFixed(6))
             };
           });
           
           setOrderStatus({
             type: 'success',
-            message: `Order Filled! Bought ${orderShares} shares of ${ticker} at $${executionPrice.toFixed(2)}.`
+            message: `Order Filled! Bought ${calculatedQty.toFixed(6)} shares of ${ticker} at $${executionPrice.toFixed(2)}.`
           });
           
           const slPrice = useBracketProtection ? executionPrice * (1 - stopLossPct / 100) : executionPrice * 0.95;
@@ -1341,8 +1351,8 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
               entryPrice: executionPrice,
               stopLoss: slPrice,
               takeProfit: tpPrice,
-              size: orderShares,
-              reason: `Multi-Asset Stock Broker: Bought ${orderShares} shares of ${ticker}.`,
+              size: calculatedQty,
+              reason: `Multi-Asset Stock Broker: Bought $${dollarAmount.toFixed(2)} (${calculatedQty.toFixed(6)} shares) of ${ticker}.`,
               confidence: 90,
               confluences: ['Standard Broker Entry', 'Equity Account Integration']
             })
@@ -1350,19 +1360,18 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
           
         } else { // SELL
           const currentShares = brokerHoldings[ticker] || 0;
-          if (currentShares < orderShares) {
+          if (currentShares < calculatedQty) {
             setOrderStatus({
               type: 'error',
-              message: `Insufficient shares. You tried to sell ${orderShares} shares of ${ticker}, but only hold ${currentShares.toFixed(2)} shares.`
+              message: `Insufficient shares. You tried to sell $${dollarAmount.toLocaleString(undefined, {minimumFractionDigits: 2})} of ${ticker} (requires ${calculatedQty.toFixed(6)} shares), but only hold ${currentShares.toFixed(6)} shares.`
             });
             setIsExecutingOrder(false);
             return;
           }
           
-          const proceeds = executionPrice * orderShares;
-          setBrokerCash(prev => parseFloat((prev + proceeds).toFixed(2)));
+          setBrokerCash(prev => parseFloat((prev + dollarAmount).toFixed(2)));
           setBrokerHoldings(prev => {
-            const nextShares = parseFloat((currentShares - orderShares).toFixed(6));
+            const nextShares = parseFloat((currentShares - calculatedQty).toFixed(6));
             const next = { ...prev };
             if (nextShares <= 0.0001) {
               delete next[ticker];
@@ -1374,7 +1383,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
           
           setOrderStatus({
             type: 'success',
-            message: `Order Filled! Sold ${orderShares} shares of ${ticker} for $${proceeds.toLocaleString(undefined, {minimumFractionDigits: 2})}.`
+            message: `Order Filled! Sold ${calculatedQty.toFixed(6)} shares of ${ticker} for $${dollarAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}.`
           });
           
           const slPrice = executionPrice * 1.05;
@@ -1388,8 +1397,8 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
               entryPrice: executionPrice,
               stopLoss: slPrice,
               takeProfit: tpPrice,
-              size: orderShares,
-              reason: `Multi-Asset Stock Broker: Sold ${orderShares} shares of ${ticker}.`,
+              size: calculatedQty,
+              reason: `Multi-Asset Stock Broker: Sold $${dollarAmount.toFixed(2)} (${calculatedQty.toFixed(6)} shares) of ${ticker}.`,
               confidence: 85,
               confluences: ['Standard Broker Exit', 'Portfolio Liquidation']
             })
@@ -2134,7 +2143,13 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                             {marketData.symbol}
                           </h4>
                           <span className="text-sm sm:text-lg font-bold font-mono text-indigo-400">
-                            ${marketData.regularMarketPrice ? marketData.regularMarketPrice.toLocaleString() : '0.00'}
+                            ${(() => {
+                              if (!marketData.regularMarketPrice) return '0.00';
+                              const isForex = marketData.symbol?.endsWith('=X') || marketData.symbol?.includes('USD=') || marketData.symbol?.includes('JPY=');
+                              const isJpy = marketData.symbol?.includes('JPY');
+                              const decimals = isForex ? (isJpy ? 3 : 4) : 2;
+                              return marketData.regularMarketPrice.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+                            })()}
                           </span>
                           <span className="text-[9px] sm:text-[10px] text-white/30 font-mono uppercase tracking-wider">
                             {marketData.currency || 'USD'}
@@ -2344,7 +2359,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                               : 'text-white/40 hover:text-white/80'
                           }`}
                         >
-                          Buy Shares
+                          Buy USD ($)
                         </button>
                         <button
                           type="button"
@@ -2358,7 +2373,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                               : 'text-white/40 hover:text-white/80'
                           }`}
                         >
-                          Sell Shares
+                          Sell USD ($)
                         </button>
                       </div>
 
@@ -2374,25 +2389,47 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                         <div className="flex justify-between items-center text-xs bg-[#040405] p-2 rounded border border-white/5">
                           <span className="text-white/40">MARKET PRICE:</span>
                           <span className="font-bold text-indigo-300">
-                            ${marketData?.regularMarketPrice ? marketData.regularMarketPrice.toLocaleString() : '0.00'}
+                            ${(() => {
+                              if (!marketData?.regularMarketPrice) return '0.00';
+                              const sym = marketData.symbol || ticker || '';
+                              const isForex = sym.endsWith('=X') || sym.includes('USD=') || sym.includes('JPY=');
+                              const isJpy = sym.includes('JPY');
+                              const decimals = isForex ? (isJpy ? 3 : 4) : 2;
+                              return marketData.regularMarketPrice.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+                            })()}
                           </span>
                         </div>
 
-                        {/* Shares / Unit Input */}
+                        {/* Dollar Entry Input */}
                         <div className="space-y-1.5">
                           <div className="flex justify-between text-[10px] text-white/40 uppercase">
-                            <span>QUANTITY (SHARES):</span>
-                            <span>Holding: {(brokerHoldings[ticker] || 0).toFixed(2)} shares</span>
+                            <span>{orderSide === 'BUY' ? 'Amount to Buy ($)' : 'Amount to Sell ($)'}:</span>
+                            <span>Holding: {(brokerHoldings[ticker] || 0).toFixed(6)} shares</span>
                           </div>
-                          <input
-                            type="number"
-                            min="1"
-                            max="100000"
-                            step="1"
-                            value={orderShares}
-                            onChange={(e) => setOrderShares(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-full bg-[#040405] border border-white/10 rounded px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 text-white font-bold"
-                          />
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 font-bold">$</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={orderShares}
+                              onChange={(e) => {
+                                let cleaned = e.target.value;
+                                if (/^0\d+/.test(cleaned)) {
+                                  cleaned = cleaned.replace(/^0+/, '');
+                                }
+                                setOrderShares(cleaned);
+                              }}
+                              className="w-full bg-[#040405] border border-white/10 rounded pl-7 pr-3 py-2 text-xs focus:outline-none focus:border-indigo-500 text-white font-bold font-mono"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          {orderSide === 'BUY' && (
+                            <div className="flex justify-between text-[8px] text-indigo-400 font-bold uppercase">
+                              <span>Minimum purchase:</span>
+                              <span>$50.00</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Order Type */}
@@ -2471,9 +2508,20 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                         <div className="flex justify-between items-center text-xs font-bold border-t border-white/5 pt-3 pb-1">
                           <span className="text-white/40">EST. TOTAL:</span>
                           <span className="text-white">
-                            ${((orderType === 'LIMIT' ? orderLimitPrice : marketData?.regularMarketPrice || 0) * orderShares).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            ${(parseFloat(orderShares) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                           </span>
                         </div>
+                        <div className="flex justify-between items-center text-[10px] text-indigo-400 font-mono">
+                          <span>Est. Shares:</span>
+                          <span className="font-bold">
+                            {((parseFloat(orderShares) || 0) / (orderType === 'LIMIT' ? orderLimitPrice : marketData?.regularMarketPrice || 1)).toFixed(6)} shares
+                          </span>
+                        </div>
+                        {orderSide === 'BUY' && (parseFloat(orderShares) || 0) < 50 && (
+                          <div className="text-rose-400 text-[9px] font-bold text-center mt-1 uppercase tracking-wide">
+                            ⚠️ Minimum purchase is $50.00
+                          </div>
+                        )}
 
                         {/* Feedback Message */}
                         {orderStatus && (
@@ -2489,7 +2537,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                         {/* Order Trigger Button */}
                         <button
                           type="button"
-                          disabled={isExecutingOrder || !marketData?.regularMarketPrice}
+                          disabled={isExecutingOrder || !marketData?.regularMarketPrice || (orderSide === 'BUY' && (parseFloat(orderShares) || 0) < 50)}
                           onClick={() => handleExecuteOrder()}
                           className={`w-full py-2.5 rounded font-mono font-black text-xs uppercase tracking-wider text-white transition-all cursor-pointer outline-none focus:outline-none ${
                             orderSide === 'BUY'
@@ -2503,7 +2551,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                               <span>Routing Order...</span>
                             </>
                           ) : (
-                            <span>ROUTE SIMULATED {orderSide} ORDER</span>
+                            <span>ROUTE SIMULATED {orderSide === 'BUY' ? 'BUY' : 'SELL'} ($)</span>
                           )}
                         </button>
                       </div>

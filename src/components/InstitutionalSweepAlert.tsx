@@ -40,14 +40,14 @@ const SYMBOLS: MarketSymbol[] = [
 ];
 
 const SWEEP_ZONES = [
-  'Previous Day High Rest-Pool',
-  'Previous Day Low Stop-Pool',
-  '4H Fair Value Gap Void',
-  'Weekly Liquidity Equilibrium',
-  'Asia Session Swing High',
-  'London Swing Low Sweep',
-  'Retail Double Top Trigger',
-  'Retail Double Bottom Hunt',
+  'Previous Day High Resistance',
+  'Previous Day Low Support',
+  '4H Moving Average Pivot Zone',
+  'Weekly Volume Equilibrium Point',
+  'Intraday Swing Resistance Threshold',
+  'Intraday Support Floor Test',
+  'Double Top Breakout Trigger',
+  'Double Bottom Breakout Test',
   'High Timeframe Daily Range Limit',
   'Orderbook Level-8 Dense Liquidity'
 ];
@@ -240,13 +240,13 @@ export default function InstitutionalSweepAlert() {
           </div>
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-white font-mono flex items-center gap-2">
-              Institutional Sweep Alert (BSL/SSL)
+              Institutional Block Trade Alert
               <span className="text-[8px] font-mono font-extrabold bg-rose-500/15 border border-rose-500/20 text-rose-400 px-1.5 py-0.5 rounded leading-none">
                 L2 DEPTH SPIKES
               </span>
             </h3>
             <p className="text-[9.5px] text-white/40 font-sans mt-0.5">
-              Tracks real-time institutional liquidity raid triggers where filled limit queues exceed predefined size thresholds.
+              Tracks real-time institutional block trade order executions where filled transaction sizes exceed predefined volume thresholds.
             </p>
           </div>
         </div>
@@ -310,11 +310,11 @@ export default function InstitutionalSweepAlert() {
           <Activity className="w-4 h-4 text-indigo-400/50" />
         </div>
 
-        {/* BSL Capture counts */}
+        {/* Ask Block Capture counts */}
         <div className="bg-[#050507] border border-white/5 rounded-lg p-3 flex flex-col justify-between font-mono text-[9px]">
           <div className="flex justify-between items-center">
             <span className="text-emerald-400/80 block uppercase font-black tracking-tight flex items-center gap-1">
-              • Buy-Side Sweeps (BSL)
+              • Ask-Side Block Orders
             </span>
             <span className="text-white font-bold">{bslCount} events</span>
           </div>
@@ -323,11 +323,11 @@ export default function InstitutionalSweepAlert() {
           </div>
         </div>
 
-        {/* SSL Capture counts */}
+        {/* Bid Block Capture counts */}
         <div className="bg-[#050507] border border-white/5 rounded-lg p-3 flex flex-col justify-between font-mono text-[9px]">
           <div className="flex justify-between items-center">
             <span className="text-rose-400/80 block uppercase font-black tracking-tight flex items-center gap-1">
-              • Sell-Side Sweeps (SSL)
+              • Bid-Side Block Orders
             </span>
             <span className="text-white font-bold">{sslCount} events</span>
           </div>
@@ -415,7 +415,7 @@ export default function InstitutionalSweepAlert() {
         {filteredAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 text-center text-white/30">
             <Info className="w-5 h-5 text-indigo-500/40 mb-2" />
-            <span className="text-[10px] font-mono uppercase tracking-wider block">No sweeps logged exceeding threshold in session.</span>
+            <span className="text-[10px] font-mono uppercase tracking-wider block">No block trades logged exceeding threshold in session.</span>
             <p className="text-[9px] font-sans text-white/20 mt-1 max-w-xs">
               Decline minimum slider to capture smaller block sizes or toggle Active Feed to begin streaming live.
             </p>
@@ -443,14 +443,14 @@ export default function InstitutionalSweepAlert() {
                       <span>{alert.timestamp}</span>
                     </div>
 
-                    {/* BSL/SSL Badge */}
+                    {/* Ask/Bid Block Trade Badge */}
                     <span className={`px-2 py-1.5 rounded font-black text-[9px] tracking-wide shrink-0 border text-center font-mono leading-none flex items-center gap-1.5 ${
                       isBSL
                         ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                         : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
                     }`}>
                       {isBSL ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : <TrendingDown className="w-3 h-3 text-rose-400" />}
-                      {isBSL ? 'BSL ACCUM' : 'SSL DISTRIB'}
+                      {isBSL ? 'ASK BLOCK' : 'BID BLOCK'}
                     </span>
 
                     {/* Target Symbol */}
@@ -459,7 +459,7 @@ export default function InstitutionalSweepAlert() {
 
                   {/* Mid Section: Target zone info */}
                   <div className="flex-1 min-w-0">
-                    <span className="text-white/35 font-sans block text-[8px] uppercase tracking-wide">Liquidity Zone Target:</span>
+                    <span className="text-white/35 font-sans block text-[8px] uppercase tracking-wide">Market Level Target:</span>
                     <span className="text-white/70 block text-[10.5px] truncate font-sans font-medium">{alert.zone}</span>
                   </div>
 
@@ -469,13 +469,13 @@ export default function InstitutionalSweepAlert() {
                     {/* Size and Pricing stats */}
                     <div className="text-right flex items-center space-x-3">
                       <div>
-                        <span className="text-white/35 block text-[8px] uppercase tracking-tight">Swiped Size</span>
+                        <span className="text-white/35 block text-[8px] uppercase tracking-tight">Executed Size</span>
                         <span className={`font-black text-[11px] ${isBSL ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {alert.lots.toLocaleString()} Lots
                         </span>
                       </div>
                       <div className="border-l border-white/5 pl-3">
-                        <span className="text-white/35 block text-[8px] uppercase tracking-tight">Raid Price</span>
+                        <span className="text-white/35 block text-[8px] uppercase tracking-tight">Execution Price</span>
                         <span className="text-white font-bold">{alert.price}</span>
                       </div>
                     </div>

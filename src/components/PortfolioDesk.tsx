@@ -506,22 +506,27 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
   // Execute Trade Order
   const executeTrade = () => {
     if (!tradeModal.holding) return;
-    const qty = parseFloat(tradeQuantity);
-    if (isNaN(qty) || qty <= 0) {
-      setTradeStatusMsg('ERROR: Enter a valid positive quantity.');
+    const dollarAmt = parseFloat(tradeQuantity);
+    if (isNaN(dollarAmt) || dollarAmt <= 0) {
+      setTradeStatusMsg('ERROR: Enter a valid positive dollar amount.');
+      return;
+    }
+
+    if (tradeModal.type === 'BUY' && dollarAmt < 50) {
+      setTradeStatusMsg('ERROR: Minimum purchase amount is $50.00 for fractional shares.');
       return;
     }
 
     const price = tradeModal.holding.currentPrice;
-    const cost = qty * price;
+    const calculatedShares = dollarAmt / price;
 
     if (tradeModal.type === 'BUY') {
-      if (cost > cashBalance) {
+      if (dollarAmt > cashBalance) {
         setTradeStatusMsg('ERROR: Insufficient buying power cash available.');
         return;
       }
       // Update cash
-      const newCash = cashBalance - cost;
+      const newCash = cashBalance - dollarAmt;
       setCashBalance(newCash);
       localStorage.setItem('broker_cash', newCash.toString());
       syncCashWithServer(newCash);
@@ -529,19 +534,19 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       // Update holdings
       const updatedHoldings = holdings.map(item => {
         if (item.symbol === tradeModal.holding?.symbol) {
-          return { ...item, qty: item.qty + qty };
+          return { ...item, qty: item.qty + calculatedShares };
         }
         return item;
       });
       setHoldings(updatedHoldings);
-      setTradeStatusMsg('SUCCESS: Purchase executed successfully.');
+      setTradeStatusMsg(`SUCCESS: Purchase executed. Acquired ${calculatedShares.toFixed(4)} fractional shares.`);
     } else {
-      if (qty > tradeModal.holding.qty) {
-        setTradeStatusMsg('ERROR: Exceeds current available position quantity.');
+      if (calculatedShares > tradeModal.holding.qty) {
+        setTradeStatusMsg('ERROR: Exceeds current available position quantity/value.');
         return;
       }
       // Update cash
-      const newCash = cashBalance + cost;
+      const newCash = cashBalance + dollarAmt;
       setCashBalance(newCash);
       localStorage.setItem('broker_cash', newCash.toString());
       syncCashWithServer(newCash);
@@ -549,17 +554,17 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       // Update holdings
       const updatedHoldings = holdings.map(item => {
         if (item.symbol === tradeModal.holding?.symbol) {
-          return { ...item, qty: item.qty - qty };
+          return { ...item, qty: item.qty - calculatedShares };
         }
         return item;
-      }).filter(item => item.qty > 0);
+      }).filter(item => item.qty > 0.0001); // Filter out tiny dust positions
       setHoldings(updatedHoldings);
-      setTradeStatusMsg('SUCCESS: Sale executed successfully.');
+      setTradeStatusMsg(`SUCCESS: Sale executed. Disposed ${calculatedShares.toFixed(4)} fractional shares.`);
     }
 
     setTimeout(() => {
       setTradeModal({ isOpen: false, holding: null, type: 'BUY' });
-    }, 1200);
+    }, 1500);
   };
 
   // Quick Action Switch to Markets
@@ -1213,25 +1218,37 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
 
             {/* Input Form */}
             <div className="space-y-2">
-              <label className="text-[9px] text-white/40 uppercase tracking-wider block">Quantity to execute</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  step="any"
-                  value={tradeQuantity}
-                  onChange={(e) => setTradeQuantity(e.target.value)}
-                  placeholder="0.00"
-                  className="flex-1 bg-[#040405] border border-white/10 hover:border-white/20 focus:border-indigo-500 focus:outline-none rounded px-3 py-2 text-white font-bold text-sm text-center"
-                />
+              <label className="text-[9px] text-white/40 uppercase tracking-wider block">
+                {tradeModal.type === 'BUY' ? 'Dollar Amount to Buy ($)' : 'Dollar Amount to Sell ($)'} {tradeModal.type === 'BUY' && <span className="text-emerald-400 font-bold">(MIN $50)</span>}
+              </label>
+              <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 font-bold font-mono">$</span>
+                  <input
+                    type="number"
+                    step="any"
+                    value={tradeQuantity}
+                    onChange={(e) => {
+                      let cleaned = e.target.value;
+                      if (/^0\d+/.test(cleaned)) {
+                        cleaned = cleaned.replace(/^0+/, '');
+                      }
+                      setTradeQuantity(cleaned);
+                    }}
+                    placeholder="0.00"
+                    className="w-full bg-[#040405] border border-white/10 hover:border-white/20 focus:border-indigo-500 focus:outline-none rounded pl-7 pr-3 py-2 text-white font-bold text-sm text-left font-mono"
+                  />
+                </div>
                 
                 {/* Max Quick Selector */}
                 <button
+                  type="button"
                   onClick={() => {
                     if (tradeModal.type === 'BUY') {
-                      const maxBuy = cashBalance / (tradeModal.holding?.currentPrice || 1);
-                      setTradeQuantity(maxBuy.toFixed(4));
+                      setTradeQuantity(cashBalance.toFixed(2));
                     } else {
-                      setTradeQuantity((tradeModal.holding?.qty || 0).toString());
+                      const maxSellVal = (tradeModal.holding?.qty || 0) * (tradeModal.holding?.currentPrice || 0);
+                      setTradeQuantity(maxSellVal.toFixed(2));
                     }
                   }}
                   className="px-3 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/30 rounded text-[10px] text-indigo-300 hover:text-white transition-all font-black"
@@ -1243,11 +1260,17 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
 
             {/* Total Transaction Calculation */}
             {parseFloat(tradeQuantity) > 0 && (
-              <div className="p-2 bg-indigo-500/5 rounded border border-indigo-500/10 text-[10px] flex justify-between items-center text-indigo-300">
-                <span>Estimated Value:</span>
-                <span className="font-black text-xs">
-                  ${(parseFloat(tradeQuantity) * (tradeModal.holding?.currentPrice || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
+              <div className="p-2.5 bg-indigo-500/5 rounded border border-indigo-500/10 text-[10px] space-y-1 text-indigo-300">
+                <div className="flex justify-between items-center">
+                  <span>Calculated Shares:</span>
+                  <span className="font-mono text-white font-bold">
+                    {(parseFloat(tradeQuantity) / (tradeModal.holding?.currentPrice || 1)).toFixed(6)} shares
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-[9px] text-white/40">
+                  <span>Fractional Settlement:</span>
+                  <span className="uppercase text-emerald-400 font-bold">Guaranteed Match</span>
+                </div>
               </div>
             )}
 

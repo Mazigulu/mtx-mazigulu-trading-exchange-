@@ -140,6 +140,21 @@ const slideOverVariants = {
   }),
 };
 
+const marketsWorkspaceVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 15 : -15,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    x: direction < 0 ? 15 : -15,
+    opacity: 0,
+  }),
+};
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
@@ -152,9 +167,9 @@ export default function App() {
   const [loginInitialTab, setLoginInitialTab] = useState<'signin' | 'register'>('signin');
   const [traderEmail, setTraderEmail] = useState<string>(() => {
     try {
-      return localStorage.getItem('apex_trader_email') || 'maziguluj@gmail.com';
+      return localStorage.getItem('apex_trader_email') || 'demo@gmail.com';
     } catch {
-      return 'maziguluj@gmail.com';
+      return 'demo@gmail.com';
     }
   });
 
@@ -275,7 +290,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setIsLoggedIn(true);
-        setTraderEmail(user.email || 'maziguluj@gmail.com');
+        setTraderEmail(user.email || 'demo@gmail.com');
         setIsProfileMenuOpen(false);
         try {
           localStorage.setItem('apex_is_logged_in', 'true');
@@ -313,14 +328,25 @@ export default function App() {
     setIsProfileMenuOpen(false);
   };
 
-  // Auto-Logout idle timer setting (in minutes)
+  // Auto-Logout idle timer setting (in minutes) - defaults to 15 minutes (banking standard)
   const [idleTimeout, setIdleTimeout] = useState<string>(() => {
     try {
-      return localStorage.getItem('apex_idle_timeout') || 'off';
+      return localStorage.getItem('apex_idle_timeout') || '15';
     } catch {
-      return 'off';
+      return '15';
     }
   });
+
+  const [isIdleWarningOpen, setIsIdleWarningOpen] = useState(false);
+  const [idleCountdown, setIdleCountdown] = useState(60);
+  const [idleCountdownMax, setIdleCountdownMax] = useState(60);
+  const lastActiveRef = useRef<number>(Date.now());
+  const isWarningOpenRef = useRef<boolean>(false);
+
+  // Keep ref synchronized to prevent closure capture bugs in global listeners
+  useEffect(() => {
+    isWarningOpenRef.current = isIdleWarningOpen;
+  }, [isIdleWarningOpen]);
 
   useEffect(() => {
     try {
@@ -330,24 +356,51 @@ export default function App() {
     }
   }, [idleTimeout]);
 
-  // Track global user activity for idle timeout
+  // Track global user activity for idle timeout (bank-grade, with warning countdown)
   useEffect(() => {
-    if (!isLoggedIn || idleTimeout === 'off') return;
+    if (!isLoggedIn || idleTimeout === 'off') {
+      setIsIdleWarningOpen(false);
+      return;
+    }
 
-    const timeoutMs = parseInt(idleTimeout, 10) * 60 * 1000;
-    let timer: NodeJS.Timeout;
+    const timeoutMinutes = parseInt(idleTimeout, 10);
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+    // Show warning 60 seconds before expiration. For a 1-minute test timeout, warn 30 seconds before.
+    const warningBufferMs = timeoutMinutes === 1 ? 30000 : 60000;
+    const warningThresholdMs = Math.max(timeoutMs - warningBufferMs, 10000);
 
-    const performAutoLogout = () => {
-      console.log('User activity idle limit exceeded. Terminating session.');
-      handleLogout();
+    // Initialize last active timestamp on login or timeout adjustment
+    lastActiveRef.current = Date.now();
+    setIsIdleWarningOpen(false);
+
+    const checkInterval = setInterval(() => {
+      const elapsed = Date.now() - lastActiveRef.current;
+
+      if (elapsed >= timeoutMs) {
+        setIsIdleWarningOpen(false);
+        console.log('Bank-grade security: User inactivity limit reached. Initiating secure session teardown.');
+        handleLogout();
+      } else if (elapsed >= warningThresholdMs) {
+        const remainingMs = timeoutMs - elapsed;
+        const secondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
+        const maxSeconds = Math.round(warningBufferMs / 1000);
+        setIdleCountdown(secondsLeft);
+        setIdleCountdownMax(maxSeconds);
+        setIsIdleWarningOpen(true);
+      } else {
+        setIsIdleWarningOpen(false);
+      }
+    }, 1000);
+
+    const handleUserActivity = () => {
+      // Security measure: Do not auto-reset when inactivity modal warning is showing.
+      // This forces explicit confirmation via the modal "Extend Session" action,
+      // preventing accidental mouse movements or trackpad jitter from maintaining a vacant session.
+      if (!isWarningOpenRef.current) {
+        lastActiveRef.current = Date.now();
+      }
     };
 
-    const resetTimer = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(performAutoLogout, timeoutMs);
-    };
-
-    // Events that register user activity
     const activityEvents = [
       'mousedown',
       'mousemove',
@@ -357,21 +410,22 @@ export default function App() {
       'click'
     ];
 
-    // Add global event listeners
     activityEvents.forEach((evt) => {
-      window.addEventListener(evt, resetTimer, { passive: true });
+      window.addEventListener(evt, handleUserActivity, { passive: true });
     });
 
-    // Initialize timer
-    resetTimer();
-
     return () => {
-      if (timer) clearTimeout(timer);
+      clearInterval(checkInterval);
       activityEvents.forEach((evt) => {
-        window.removeEventListener(evt, resetTimer);
+        window.removeEventListener(evt, handleUserActivity);
       });
     };
   }, [isLoggedIn, idleTimeout]);
+
+  const handleExtendSession = () => {
+    lastActiveRef.current = Date.now();
+    setIsIdleWarningOpen(false);
+  };
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {
@@ -2091,18 +2145,19 @@ export default function App() {
   // Summary Stats computation for Dashboard Top Overview Decker
   const systemDashboardSummary = useMemo(() => {
     const closedTrades = trades.filter((t) => t.status === 'CLOSED');
-    const seedTradesPnL = 16194.0; // sum of AUDITED_HISTORIC_TRADES PnLs
+    const isDemo = traderEmail.toLowerCase() === 'demo@gmail.com';
+    const seedTradesPnL = isDemo ? 16194.0 : 0.0; // sum of AUDITED_HISTORIC_TRADES PnLs
     const userClosedPnL = closedTrades.reduce((acc, t) => acc + t.pnl, 0);
     const activePnL = trades.filter((t) => t.status === 'OPEN').reduce((acc, t) => acc + t.pnl, 0);
     
-    const accountEquity = 10000 + seedTradesPnL + userClosedPnL + activePnL;
+    const accountEquity = (isDemo ? 10000 : 0) + seedTradesPnL + userClosedPnL + activePnL;
     
     // Daily Profit or loss
     const dailyPnL = activePnL + (closedTrades.filter(t => {
       const dt = new Date(t.timestamp);
       const diff = Date.now() - dt.getTime();
       return diff < 86400000;
-    }).reduce((acc, t) => acc + t.pnl, 0) || 542.80); 
+    }).reduce((acc, t) => acc + t.pnl, 0) || (isDemo ? 542.80 : 0.00)); 
 
     // Compute average hourly volatility
     let avgHourlyVol = 0.0015; // default 0.15% hourly volatility
@@ -2156,9 +2211,9 @@ export default function App() {
         const dt = new Date(t.timestamp);
         const diff = Date.now() - dt.getTime();
         return diff < 86400000;
-      }).reduce((acc, t) => acc + t.pnl, 0) || 542.80)
+      }).reduce((acc, t) => acc + t.pnl, 0) || (isDemo ? 542.80 : 0.00))
     };
-  }, [trades, candles]);
+  }, [trades, candles, traderEmail]);
 
   // Dynamic Trend Strength & ICT Displacement Intensity tracker
   const dynamicTrendMeter = useMemo(() => {
@@ -2571,7 +2626,7 @@ export default function App() {
                   className="relative h-8 w-8 rounded-full flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.25)] hover:shadow-[0_0_16px_rgba(99,102,241,0.45)] transition-all duration-200 cursor-pointer select-none font-sans overflow-hidden group"
                 >
                   <span className="text-[10px] font-black text-white tracking-tighter uppercase">
-                    {traderEmail ? (traderEmail.startsWith('maziguluj') ? 'MG' : traderEmail.substring(0, 2).toUpperCase()) : 'TR'}
+                    {traderEmail ? (traderEmail.startsWith('demo') ? 'DM' : traderEmail.substring(0, 2).toUpperCase()) : 'TR'}
                   </span>
                 </button>
 
@@ -2681,7 +2736,7 @@ export default function App() {
                 <motion.div
                   key="MARKETS"
                   custom={slideDirection}
-                  variants={slideOverVariants}
+                  variants={marketsWorkspaceVariants}
                   initial="enter"
                   animate="center"
                   exit="exit"
@@ -3215,6 +3270,102 @@ export default function App() {
         isOpen={isLegalModalOpen}
         onClose={() => setIsLegalModalOpen(false)}
       />
+
+      {/* Bank-Grade Inactivity Warning Modal */}
+      <AnimatePresence>
+        {isIdleWarningOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            {/* Backdrop blur with high-density dark fade */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-[#020204]/95 backdrop-blur-md"
+            />
+
+            {/* Modal Container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-md bg-[#09090d] border border-red-500/20 rounded-xl overflow-hidden shadow-[0_0_40px_rgba(239,68,68,0.07)] p-6 text-center z-10"
+            >
+              {/* Top Warning Glow Header */}
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-red-500/30 via-amber-500/30 to-red-500/30 animate-pulse" />
+
+              {/* Icon Container with Warning Ping */}
+              <div className="mx-auto w-14 h-14 bg-red-500/5 border border-red-500/10 rounded-full flex items-center justify-center mb-5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500/10 opacity-70"></span>
+                <ShieldAlert className="w-6 h-6 text-red-500 relative z-10" />
+              </div>
+
+              {/* Header Title */}
+              <span className="text-[10px] font-black tracking-widest uppercase text-red-400 block font-mono mb-1">
+                Security Protocol SEC-04
+              </span>
+              <h3 className="text-lg font-serif font-medium text-white tracking-tight mb-2">
+                Inactivity Logout Pending
+              </h3>
+
+              {/* Explanatory Context */}
+              <p className="text-xs text-[#e5e5e5]/60 leading-relaxed px-2 mb-6">
+                To protect your account and systematic assets from unauthorized local access, your session will be automatically terminated due to inactivity.
+              </p>
+
+              {/* Dynamic Countdown Section */}
+              <div className="bg-[#0c0c14] border border-white/5 rounded-lg p-4 mb-6 font-mono">
+                <div className="text-[9px] text-[#e5e5e5]/40 uppercase tracking-widest mb-1.5 font-bold">
+                  Session Terminating In
+                </div>
+                <div className="text-3xl font-black text-red-500 tracking-wider">
+                  00:{idleCountdown.toString().padStart(2, '0')}
+                </div>
+                <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden mt-3.5">
+                  <motion.div 
+                    initial={{ width: '100%' }}
+                    animate={{ width: `${(idleCountdown / idleCountdownMax) * 100}%` }}
+                    transition={{ duration: 1, ease: 'linear' }}
+                    className="h-full bg-gradient-to-r from-red-500 to-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Audit Details */}
+              <div className="grid grid-cols-2 gap-2 mb-6 text-left text-[9px] font-mono border-t border-white/5 pt-4">
+                <div className="p-2 bg-[#050508] border border-white/5 rounded">
+                  <span className="text-white/40 block uppercase tracking-wider mb-0.5">Encryption Status</span>
+                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    TLS 1.3 Active
+                  </span>
+                </div>
+                <div className="p-2 bg-[#050508] border border-white/5 rounded">
+                  <span className="text-white/40 block uppercase tracking-wider mb-0.5">Session Action</span>
+                  <span className="text-[#e5e5e5]/70 font-bold uppercase tracking-wider">
+                    {idleTimeout === 'off' ? 'Disabled' : idleTimeout === '1' ? '1 Min Test' : `${idleTimeout} Min Rule`}
+                  </span>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <button
+                  onClick={handleLogout}
+                  className="w-full py-2.5 px-4 rounded-lg text-xs font-mono font-bold uppercase text-[#e5e5e5]/60 hover:text-white border border-white/5 hover:bg-white/[0.02] cursor-pointer transition-all"
+                >
+                  Logout Now
+                </button>
+                <button
+                  onClick={handleExtendSession}
+                  className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold uppercase rounded-lg shadow-lg shadow-indigo-600/10 cursor-pointer border border-indigo-500/50 hover:scale-[1.01] transition-all"
+                >
+                  Extend Session
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

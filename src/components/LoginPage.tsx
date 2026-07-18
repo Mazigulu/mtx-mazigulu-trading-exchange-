@@ -18,7 +18,6 @@ import {
   Briefcase,
   BookOpen,
   Scale,
-  AlertTriangle,
   Apple,
   Play
 } from 'lucide-react';
@@ -35,7 +34,7 @@ interface LoginPageProps {
 
 export default function LoginPage({ 
   onLoginSuccess, 
-  defaultEmail = "maziguluj@gmail.com", 
+  defaultEmail = "demo@gmail.com", 
   onBackToHomepage,
   initialTab = 'signin'
 }: LoginPageProps) {
@@ -176,7 +175,7 @@ export default function LoginPage({
         }, 450);
       } else {
         timer = setTimeout(() => {
-          onLoginSuccess(email || regEmail || 'maziguluj@gmail.com');
+          onLoginSuccess(email || regEmail || 'demo@gmail.com');
         }, 500);
       }
     }
@@ -230,7 +229,7 @@ export default function LoginPage({
       }
       
       // Elegant Fallback: If it's the default demo user and doesn't exist, auto-create it!
-      if (email === 'maziguluj@gmail.com' && (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential')) {
+      if (email === 'demo@gmail.com' && (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential')) {
         try {
           console.log('Demo account not found in database. Auto-provisioning demo user credentials...');
           const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -256,7 +255,7 @@ export default function LoginPage({
       }
 
       // Safe Sandbox/Demo Failsafe: Bypasses secure login if there are Firebase configuration/network constraints (or if Email/Password provider is disabled/operation-not-allowed)
-      if (email === 'maziguluj@gmail.com' || email.includes('demo') || email.startsWith('0x') || err.code === 'auth/operation-not-allowed') {
+      if (email === 'demo@gmail.com' || email.includes('demo') || email.startsWith('0x') || err.code === 'auth/operation-not-allowed') {
         console.warn('Bypassing secure gateway for development/sandbox session. (Reason: email is demo or Email/Password auth provider is not enabled in Firebase Console).');
         setIsConnecting(true);
         setConnectionStep(0);
@@ -388,7 +387,7 @@ export default function LoginPage({
   };
 
   const fillDemoParameters = () => {
-    setEmail('maziguluj@gmail.com');
+    setEmail('demo@gmail.com');
     setPassword('ICT_InnerCircle_2026!');
     setAccessKey('MTX-QUANT-2026');
     setServerNode('MTX-NY-1');
@@ -659,7 +658,7 @@ export default function LoginPage({
                         </>
                       ) : (
                         <>
-                          <span>Establish Connection</span>
+                          <span>Login</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </>
                       )}
@@ -758,7 +757,7 @@ export default function LoginPage({
                       type="email"
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="e.g. maziguluj@gmail.com"
+                      placeholder="e.g. demo@gmail.com"
                       className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30"
                       required
                     />

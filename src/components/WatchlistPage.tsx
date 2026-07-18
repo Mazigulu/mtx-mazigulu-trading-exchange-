@@ -704,19 +704,24 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
   };
 
   const handleExecuteBuy = async () => {
-    const qty = parseFloat(buyQty);
-    if (isNaN(qty) || qty <= 0) {
-      alert('Please enter a valid buy quantity.');
+    const dollarAmt = parseFloat(buyQty);
+    if (isNaN(dollarAmt) || dollarAmt <= 0) {
+      alert('Please enter a valid dollar amount.');
+      return;
+    }
+
+    if (dollarAmt < 50) {
+      alert('Minimum purchase amount is $50.00 for fractional shares.');
       return;
     }
 
     if (!buySymbol) return;
 
     const currentPrice = getAssetPrice(buySymbol);
-    const totalCost = currentPrice * qty;
+    const calculatedQty = dollarAmt / currentPrice;
 
-    if (totalCost > brokerCash) {
-      alert(`Insufficient funds. Total transaction cost is $${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })} but your balance is only $${brokerCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}.`);
+    if (dollarAmt > brokerCash) {
+      alert(`Insufficient funds. Total transaction cost is $${dollarAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })} but your balance is only $${brokerCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}.`);
       return;
     }
 
@@ -727,7 +732,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
       await new Promise(resolve => setTimeout(resolve, 1200));
 
       // 1. Update cash balance
-      const newCash = parseFloat((brokerCash - totalCost).toFixed(2));
+      const newCash = parseFloat((brokerCash - dollarAmt).toFixed(2));
       localStorage.setItem('broker_cash', newCash.toString());
       setBrokerCash(newCash);
 
@@ -737,7 +742,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
       if (savedHoldings) {
         holdingsMap = JSON.parse(savedHoldings);
       }
-      holdingsMap[buySymbol] = parseFloat(((holdingsMap[buySymbol] || 0) + qty).toFixed(4));
+      holdingsMap[buySymbol] = parseFloat(((holdingsMap[buySymbol] || 0) + calculatedQty).toFixed(6));
       localStorage.setItem('broker_holdings', JSON.stringify(holdingsMap));
 
       // 3. Dispatch storage event for system-wide synchronicity
@@ -1077,9 +1082,9 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                   {/* 52-Week Range Slider slider */}
                   <div className="mt-3.5">
                     <div className="flex items-center justify-between text-[8px] font-mono text-white/30 uppercase tracking-widest mb-1">
-                      <span>52W Low: ${min.toLocaleString()}</span>
+                      <span>52W Low: ${min.toLocaleString(undefined, { minimumFractionDigits: asset.symbol?.endsWith('=X') || asset.symbol?.includes('USD=') ? 4 : 2, maximumFractionDigits: asset.symbol?.endsWith('=X') || asset.symbol?.includes('USD=') ? 4 : 2 })}</span>
                       <span className="font-bold text-white/45">Price relative to 52W Range</span>
-                      <span>52W High: ${max.toLocaleString()}</span>
+                      <span>52W High: ${max.toLocaleString(undefined, { minimumFractionDigits: asset.symbol?.endsWith('=X') || asset.symbol?.includes('USD=') ? 4 : 2, maximumFractionDigits: asset.symbol?.endsWith('=X') || asset.symbol?.includes('USD=') ? 4 : 2 })}</span>
                     </div>
                     <div className="relative h-1 bg-black/40 border border-white/5 rounded-full">
                       <div 
@@ -1556,8 +1561,12 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                     <span className="text-white font-bold">{buySymbol}</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-white/5">
+                    <span className="text-white/40">Purchase Amount:</span>
+                    <span className="text-white font-bold">${parseFloat(buyQty).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-white/5">
                     <span className="text-white/40">Acquired Units:</span>
-                    <span className="text-white">{buyQty} shares</span>
+                    <span className="text-emerald-400 font-bold">{(parseFloat(buyQty) / getAssetPrice(buySymbol!)).toFixed(6)} shares</span>
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="text-white/40">Remaining Cash Balance:</span>
@@ -1592,7 +1601,13 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                   </div>
                   <div className="flex justify-between py-1.5 border-b border-white/5">
                     <span className="text-white/40">Price per unit:</span>
-                    <span className="text-white">${getAssetPrice(buySymbol!).toLocaleString()}</span>
+                    <span className="text-white">${(() => {
+                      const price = getAssetPrice(buySymbol!);
+                      const isForex = buySymbol?.endsWith('=X') || buySymbol?.includes('USD=') || buySymbol?.includes('JPY=');
+                      const isJpy = buySymbol?.includes('JPY');
+                      const decimals = isForex ? (isJpy ? 3 : 4) : 2;
+                      return price.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+                    })()}</span>
                   </div>
                   <div className="flex justify-between py-1.5 border-b border-white/5">
                     <span className="text-white/40">Ledger Cash Available:</span>
@@ -1601,27 +1616,44 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                 </div>
 
                 <div>
-                  <label className="text-[9.5px] font-mono text-white/40 uppercase tracking-widest block mb-1.5">Acquisition Quantity</label>
+                  <label className="text-[9.5px] font-mono text-white/40 uppercase tracking-widest block mb-1.5">
+                    Acquisition Amount <span className="text-indigo-400 font-bold">(MIN $50.00)</span>
+                  </label>
                   <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-white/30 font-bold">$</span>
                     <input
                       type="number"
                       value={buyQty}
-                      onChange={(e) => setBuyQty(e.target.value)}
-                      className="w-full bg-black/45 border border-white/10 focus:border-indigo-500/40 rounded-lg p-2.5 text-xs text-white focus:outline-none transition-all font-mono"
-                      placeholder="e.g. 10"
-                      min="0.001"
+                      onChange={(e) => {
+                        let cleaned = e.target.value;
+                        if (/^0\d+/.test(cleaned)) {
+                          cleaned = cleaned.replace(/^0+/, '');
+                        }
+                        setBuyQty(cleaned);
+                      }}
+                      className="w-full bg-black/45 border border-white/10 focus:border-indigo-500/40 rounded-lg pl-7 pr-3 py-2.5 text-xs text-white focus:outline-none transition-all font-mono"
+                      placeholder="e.g. 150"
+                      min="50"
                       step="any"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-white/30 font-bold">SHARES</span>
                   </div>
                 </div>
 
                 {buyQty && parseFloat(buyQty) > 0 && (
-                  <div className="bg-black/30 border border-white/5 rounded-lg p-3 font-mono text-[11px] flex justify-between items-center animate-fadeIn">
-                    <span className="text-white/40">Estimated Transaction Cost:</span>
-                    <span className="text-white font-black">
-                      ${(getAssetPrice(buySymbol!) * parseFloat(buyQty)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
+                  <div className="bg-black/30 border border-white/5 rounded-lg p-3 font-mono text-[11px] flex flex-col gap-1.5 animate-fadeIn">
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/40">Estimated Transaction Cost:</span>
+                      <span className="text-white font-black">${parseFloat(buyQty).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-indigo-300">
+                      <span>Calculated Fractional Shares:</span>
+                      <span className="font-bold">{(parseFloat(buyQty) / getAssetPrice(buySymbol!)).toFixed(6)} SHARES</span>
+                    </div>
+                    {parseFloat(buyQty) < 50 && (
+                      <div className="text-rose-400 text-[10px] font-bold text-center mt-1">
+                        ⚠️ Minimum purchase amount is $50.00
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1634,7 +1666,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                   </button>
                   <button
                     onClick={handleExecuteBuy}
-                    disabled={buyLoading || !buyQty || parseFloat(buyQty) <= 0}
+                    disabled={buyLoading || !buyQty || parseFloat(buyQty) < 50}
                     className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded text-xs font-mono uppercase font-bold cursor-pointer transition-all flex items-center gap-1.5"
                   >
                     {buyLoading ? (

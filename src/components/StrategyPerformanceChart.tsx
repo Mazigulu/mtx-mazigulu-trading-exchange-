@@ -52,9 +52,9 @@ interface StrategyDetail {
 const STRATEGIES: Record<StrategyId, StrategyDetail> = {
   ALL: {
     id: 'ALL',
-    name: 'All Integrated Strategies',
-    description: 'Aggregated view comparing FVG Mitigation, Order Block, Liquidity Hunt and Combo algorithm metrics.',
-    creator: 'MTXquant Core',
+    name: 'All Integrated Systems',
+    description: 'Aggregated view comparing Mean Reversion, Trend Following, Breakout Momentum and Combo algorithm metrics.',
+    creator: 'MTX Securities Core',
     timeframe: 'Multi-Timeframe',
     winRate: 61.2,
     avgRR: 1.95,
@@ -63,9 +63,9 @@ const STRATEGIES: Record<StrategyId, StrategyDetail> = {
   },
   APEX_COMBO: {
     id: 'APEX_COMBO',
-    name: 'MTXquant Confluence Multi-Heuristic',
-    description: 'Ensemble algorithm combining multiple structural confirmation signals to trade under high confidence flags.',
-    creator: 'MTXquant Labs',
+    name: 'MTX Securities Confluence Multi-Heuristic',
+    description: 'Ensemble algorithm combining multiple structural confirmation signals to trade under high confidence conditions.',
+    creator: 'MTX Securities Labs',
     timeframe: 'H1 / H4',
     winRate: 68.5,
     avgRR: 2.30,
@@ -74,9 +74,9 @@ const STRATEGIES: Record<StrategyId, StrategyDetail> = {
   },
   FVG: {
     id: 'FVG',
-    name: 'ICT Fair Value Gap Mitigation',
-    description: 'Algorithm identifying unbalanced price spikes and buying/selling on zone mitigation retests.',
-    creator: 'SMC Engine',
+    name: 'Intraday Mean Reversion Model',
+    description: 'Algorithm identifying temporary price deviations and executing mean reversion trades on trend stabilization.',
+    creator: 'Alpha Quantitative Engine',
     timeframe: 'M15',
     winRate: 58.0,
     avgRR: 1.85,
@@ -85,9 +85,9 @@ const STRATEGIES: Record<StrategyId, StrategyDetail> = {
   },
   OB: {
     id: 'OB',
-    name: 'ICT Order Block Zone Retests',
-    description: 'Detects heavy institutional accumulation zones and places limit orders on re-evaluation touches.',
-    creator: 'Volume Profile AI',
+    name: 'Institutional Trend Following System',
+    description: 'Detects high-volume trend accumulation zones and executes trend-continuation orders.',
+    creator: 'Volume & Momentum AI',
     timeframe: 'H1',
     winRate: 60.5,
     avgRR: 2.10,
@@ -96,9 +96,9 @@ const STRATEGIES: Record<StrategyId, StrategyDetail> = {
   },
   SWEEP: {
     id: 'SWEEP',
-    name: 'Liquidity Hunter Sweep Extractor',
-    description: 'Hunts for false breakout traps above daily session highs/lows and trades the immediate reversal.',
-    creator: 'Session Wick Hunt',
+    name: 'Breakout Momentum & Volatility Index',
+    description: 'Identifies strong breakout pulses above key trading price ranges and trades the immediate momentum expansion.',
+    creator: 'Intraday Range Momentum Engine',
     timeframe: 'M5 / M15',
     winRate: 54.2,
     avgRR: 2.45,
@@ -153,14 +153,14 @@ export default function StrategyPerformanceChart() {
       
       return {
         name: stepLabel,
-        'Fair Value Gap': d.FVG_win,
-        'Order Block': d.OB_win,
-        'Liquidity Sweep': d.SWEEP_win,
-        'MTXquant Combo': d.APEX_win,
-        'Fair Value Gap R:R': d.FVG_rr,
-        'Order Block R:R': d.OB_rr,
-        'Liquidity Sweep R:R': d.SWEEP_rr,
-        'MTXquant Combo R:R': d.APEX_rr,
+        'Mean Reversion': d.FVG_win,
+        'Trend Following': d.OB_win,
+        'Breakout Momentum': d.SWEEP_win,
+        'MTX Securities Combo': d.APEX_win,
+        'Mean Reversion R:R': d.FVG_rr,
+        'Trend Following R:R': d.OB_rr,
+        'Breakout Momentum R:R': d.SWEEP_rr,
+        'MTX Securities Combo R:R': d.APEX_rr,
       };
     });
   }, [selectedStrategy]);
@@ -207,10 +207,10 @@ export default function StrategyPerformanceChart() {
             className="bg-[#121214] border border-white/10 text-xs text-white/90 px-2.5 py-1.5 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
           >
             <option value="ALL">Compare All Strategies</option>
-            <option value="APEX_COMBO">MTXquant Confluence (68.5%)</option>
-            <option value="FVG">ICT Fair Value Gap (58.0%)</option>
-            <option value="OB">ICT Order Block Zone (60.5%)</option>
-            <option value="SWEEP">Liquidity Hunter (54.2%)</option>
+            <option value="APEX_COMBO">MTX Securities Confluence (68.5%)</option>
+            <option value="FVG">Intraday Mean Reversion (58.0%)</option>
+            <option value="OB">Institutional Trend Following (60.5%)</option>
+            <option value="SWEEP">Breakout Momentum Index (54.2%)</option>
           </select>
         </div>
       </div>
@@ -321,15 +321,15 @@ export default function StrategyPerformanceChart() {
                 </span>
                 {selectedStrategy === 'ALL' ? (
                   <span>
-                    Comparative mode displays epochs E1 to E15 showing performance iterations. The ensemble <strong>MTXquant Multi-Heuristic</strong> algorithm outperforms individual modules by combining spatial confirmations with strict trend filtering.
+                    Comparative mode displays epochs E1 to E15 showing performance iterations. The ensemble <strong>MTX Securities Multi-Heuristic</strong> algorithm outperforms individual modules by combining trend indicators with volatility filtering.
                   </span>
                 ) : selectedStrategy === 'APEX_COMBO' ? (
                   <span>
-                    Highest win-to-loss validation. Combines liquidity sweeps with re-allocating order block zones to yield robust returns under medium/long duration volatile conditions.
+                    Highest win-to-loss validation. Combines breakout momentum with re-allocating support zones to yield robust returns under medium/long duration volatile conditions.
                   </span>
                 ) : selectedStrategy === 'FVG' ? (
                   <span>
-                    Aggressive execution cycle. Places multiple micro stop distances under momentum. Prone to minor drawdowns in tight session trends but rewards heavily on clean expansion runs.
+                    Aggressive execution cycle. Places multiple micro stop distances under momentum. Prone to minor drawdowns in tight range consolidations but rewards heavily on clean trend runs.
                   </span>
                 ) : selectedStrategy === 'OB' ? (
                   <span>
@@ -337,7 +337,7 @@ export default function StrategyPerformanceChart() {
                   </span>
                 ) : (
                   <span>
-                    High risk-reward threshold strategy (2.45:1). Extracts high-yield alpha at structural edges. Triggers moderate drawdowns if the session breakout develops into an institutional run.
+                    High risk-reward threshold strategy (2.45:1). Extracts high-yield alpha at structural edges. Triggers moderate drawdowns if the session breakout develops into an extended trend run.
                   </span>
                 )}
               </div>
@@ -428,17 +428,17 @@ export default function StrategyPerformanceChart() {
                   
                   {comparisonMetric === 'WIN_RATE' ? (
                     <>
-                      <Line type="monotone" dataKey="Fair Value Gap" stroke={getStrategyColor('FVG')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="Order Block" stroke={getStrategyColor('OB')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="Liquidity Sweep" stroke={getStrategyColor('SWEEP')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="MTXquant Combo" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="Mean Reversion" stroke={getStrategyColor('FVG')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="Trend Following" stroke={getStrategyColor('OB')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="Breakout Momentum" stroke={getStrategyColor('SWEEP')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="MTX Securities Combo" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
                     </>
                   ) : (
                     <>
-                      <Line type="monotone" dataKey="Fair Value Gap R:R" name="Fair Value Gap R:R" stroke={getStrategyColor('FVG')} strokeWidth={1.5} dot={{ r: 1.5 }} />
-                      <Line type="monotone" dataKey="Order Block R:R" name="Order Block R:R" stroke={getStrategyColor('OB')} strokeWidth={1.5} dot={{ r: 1.5 }} />
-                      <Line type="monotone" dataKey="Liquidity Sweep R:R" name="Liquidity Sweep R:R" stroke={getStrategyColor('SWEEP')} strokeWidth={1.5} dot={{ r: 1.5 }} />
-                      <Line type="monotone" dataKey="MTXquant Combo R:R" name="MTXquant Combo R:R" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} />
+                      <Line type="monotone" dataKey="Mean Reversion R:R" name="Mean Reversion R:R" stroke={getStrategyColor('FVG')} strokeWidth={1.5} dot={{ r: 1.5 }} />
+                      <Line type="monotone" dataKey="Trend Following R:R" name="Trend Following R:R" stroke={getStrategyColor('OB')} strokeWidth={1.5} dot={{ r: 1.5 }} />
+                      <Line type="monotone" dataKey="Breakout Momentum R:R" name="Breakout Momentum R:R" stroke={getStrategyColor('SWEEP')} strokeWidth={1.5} dot={{ r: 1.5 }} />
+                      <Line type="monotone" dataKey="MTX Securities Combo R:R" name="MTX Securities Combo R:R" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} />
                     </>
                   )}
                 </LineChart>

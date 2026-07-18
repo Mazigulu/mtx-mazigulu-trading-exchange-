@@ -300,7 +300,7 @@ export default function TradeTerminal({
     id: string;
     timestamp: string;
     symbol: string;
-    type: 'SWEEP_BSL' | 'SWEEP_SSL' | 'DISCRETIONARY_EMA' | 'DISCRETIONARY_FVG' | 'DISCRETIONARY_RSI';
+    type: 'ASK_BLOCK' | 'BID_BLOCK' | 'DISCRETIONARY_EMA' | 'DISCRETIONARY_REVERSION' | 'DISCRETIONARY_RSI';
     label: string;
     details: string;
     volume?: string;
@@ -319,9 +319,9 @@ export default function TradeTerminal({
       id: 'sig-2',
       timestamp: new Date(Date.now() - 95000).toLocaleTimeString(),
       symbol: symbol,
-      type: 'SWEEP_SSL',
-      label: 'Institutional Sweep (SSL Captured)',
-      details: 'High-dispersion raid completed on sell-side stops.',
+      type: 'BID_BLOCK',
+      label: 'Institutional Bid Block (Bid Captured)',
+      details: 'High-dispersion order execution completed on bid limits.',
       volume: '1,540 Lots',
       severity: 'CRITICAL'
     },
@@ -329,18 +329,18 @@ export default function TradeTerminal({
       id: 'sig-3',
       timestamp: new Date(Date.now() - 180000).toLocaleTimeString(),
       symbol: symbol,
-      type: 'DISCRETIONARY_FVG',
-      label: 'Discretionary 5m FVG Invalidation',
-      details: 'Price broke below order book density threshold.',
+      type: 'DISCRETIONARY_REVERSION',
+      label: 'Discretionary 5m Mean Reversion Pivot',
+      details: 'Price stabilized at standard order book depth support.',
       severity: 'LOW'
     },
     {
       id: 'sig-4',
       timestamp: new Date(Date.now() - 300000).toLocaleTimeString(),
       symbol: symbol,
-      type: 'SWEEP_BSL',
-      label: 'Institutional Sweep (BSL Captured)',
-      details: 'Clean systemic grab of retail buy stops.',
+      type: 'ASK_BLOCK',
+      label: 'Institutional Ask Block (Ask Captured)',
+      details: 'Clean execution of institutional limit orders at resistance.',
       volume: '2,180 Lots',
       severity: 'CRITICAL'
     }
@@ -348,8 +348,8 @@ export default function TradeTerminal({
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const types: Array<'SWEEP_BSL' | 'SWEEP_SSL' | 'DISCRETIONARY_EMA' | 'DISCRETIONARY_FVG' | 'DISCRETIONARY_RSI'> = [
-        'SWEEP_BSL', 'SWEEP_SSL', 'DISCRETIONARY_EMA', 'DISCRETIONARY_FVG', 'DISCRETIONARY_RSI'
+      const types: Array<'ASK_BLOCK' | 'BID_BLOCK' | 'DISCRETIONARY_EMA' | 'DISCRETIONARY_REVERSION' | 'DISCRETIONARY_RSI'> = [
+        'ASK_BLOCK', 'BID_BLOCK', 'DISCRETIONARY_EMA', 'DISCRETIONARY_REVERSION', 'DISCRETIONARY_RSI'
       ];
       const randomType = types[Math.floor(Math.random() * types.length)];
       
@@ -358,23 +358,23 @@ export default function TradeTerminal({
       let severity: 'CRITICAL' | 'LOW' | 'MEDIUM' = 'LOW';
       let volume: string | undefined = undefined;
 
-      if (randomType === 'SWEEP_BSL') {
-        label = 'Institutional Sweep (BSL Captured)';
-        details = 'Premium liquidity pool breached and absorbed.';
+      if (randomType === 'ASK_BLOCK') {
+        label = 'Institutional Ask Block (Ask Captured)';
+        details = 'Premium volume zone reached and absorbed.';
         volume = `${Math.floor(Math.random() * 1200) + 800} Lots`;
         severity = 'CRITICAL';
-      } else if (randomType === 'SWEEP_SSL') {
-        label = 'Institutional Sweep (SSL Captured)';
-        details = 'Discount liquidity pool captured with aggressive matching orders.';
+      } else if (randomType === 'BID_BLOCK') {
+        label = 'Institutional Bid Block (Bid Captured)';
+        details = 'Discount volume zone captured with aggressive buying orders.';
         volume = `${Math.floor(Math.random() * 1500) + 1000} Lots`;
         severity = 'CRITICAL';
       } else if (randomType === 'DISCRETIONARY_EMA') {
         label = 'Discretionary EMA Rebound';
         details = 'Tested and rejected the short-term trend boundary.';
         severity = 'LOW';
-      } else if (randomType === 'DISCRETIONARY_FVG') {
-        label = 'Discretionary FVG Void Mitigation';
-        details = 'Inefficiency filled at standard liquidity balance.';
+      } else if (randomType === 'DISCRETIONARY_REVERSION') {
+        label = 'Discretionary Mean Reversion Pivot';
+        details = 'Trend deviation stabilized at standard support level.';
         severity = 'MEDIUM';
       } else {
         label = 'Discretionary RSI Exhaustion';
@@ -518,7 +518,7 @@ export default function TradeTerminal({
   const [entryPrice, setEntryPrice] = useState(metrics.currentPrice);
   const [stopLoss, setStopLoss] = useState(metrics.currentPrice * 0.99);
   const [takeProfit, setTakeProfit] = useState(metrics.currentPrice * 1.03);
-  const [reason, setReason] = useState('4H Order Block validation + ICT FVG open convergence matching Higher Timeframe Daily Bias');
+  const [reason, setReason] = useState('4H Volume Consolidation Support + Mean Reversion open convergence matching Daily Trend Bias');
   const [marketNote, setMarketNote] = useState(() => {
     try {
       return localStorage.getItem('apex_predefined_market_note') || 'Bullish divergence conforming to larger HTF expansion framework.';
@@ -727,14 +727,14 @@ export default function TradeTerminal({
   const [selectedConfluences, setSelectedConfluences] = useState<string[]>([]);
 
   const CONFLUENCE_OPTIONS = useMemo(() => [
-    'Fair Value Gap (FVG) Mitigation',
-    'Break of Structure (BOS) Confirmed',
+    'Intraday Mean Reversion Confirmation',
+    'Trend Pivot Alignment (Confirmed)',
     'EMA Alignment (50/200 Trend)',
     'Volatility Limit Bounds',
     'Portfolio Risk & Leverage Cap',
     'High Timeframe Daily Bias Match',
-    'Order Block (OB) Validation',
-    'Liquidity Sweep Capture'
+    'Volume Consolidation Support',
+    'Momentum Range Breakout'
   ], []);
 
   // Sync inputs, confidence, and confluences with current price/bias when symbol or side changes
@@ -751,14 +751,14 @@ export default function TradeTerminal({
     const insights = getSignalInsights(symbol, metrics.dailyBias);
     setConfidence(insights.confidence);
 
-    const activeConfs = ['Fair Value Gap (FVG) Mitigation', 'Break of Structure (BOS) Confirmed'];
+    const activeConfs = ['Intraday Mean Reversion Confirmation', 'Trend Pivot Alignment (Confirmed)'];
     if (insights.ema) activeConfs.push('EMA Alignment (50/200 Trend)');
     if (insights.volatility) activeConfs.push('Volatility Limit Bounds');
     if (insights.risk) activeConfs.push('Portfolio Risk & Leverage Cap');
     if ((side === 'BUY' && metrics.dailyBias === 'BULLISH') || (side === 'SELL' && metrics.dailyBias === 'BEARISH')) {
       activeConfs.push('High Timeframe Daily Bias Match');
     }
-    activeConfs.push('Order Block (OB) Validation');
+    activeConfs.push('Volume Consolidation Support');
 
     setSelectedConfluences(activeConfs);
   }, [symbol, side]);

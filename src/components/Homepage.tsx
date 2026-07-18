@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import SistineFinancialCeiling from './SistineFinancialCeiling';
 import { 
@@ -120,6 +120,238 @@ const workspacesData: WorkspaceSpec[] = [
   }
 ];
 
+interface InstrumentSpec {
+  name: string;
+  badge?: string;
+  badgeType?: 'yield' | 'apy' | 'match' | 'neutral';
+  category: string;
+  desc: string;
+  specs: { label: string; value: string }[];
+}
+
+const INSTRUMENT_SPECS: Record<string, InstrumentSpec> = {
+  "Stocks": {
+    name: "Stocks",
+    category: "Equities Routing Core",
+    desc: "Direct market routing to primary US and global exchanges. Fully compatible with real-time portfolio margin systems and capital sweep architectures.",
+    specs: [
+      { label: "Execution Latency", value: "< 1.2ms" },
+      { label: "Shorting Availability", value: "94% easy-to-borrow" },
+      { label: "Prime Leverage", value: "Up to 6.5x" }
+    ]
+  },
+  "Bonds": {
+    name: "Bonds",
+    category: "Fixed Income Ledger",
+    desc: "Direct institutional clearing for corporate debt, high-yield primary issuances, and secondary market liquidity pools.",
+    specs: [
+      { label: "Clearing Venue", value: "Euroclear / DTCC" },
+      { label: "Settlement Protocol", value: "T+1 DvP" },
+      { label: "Minimum Parcel Size", value: "$5,000" }
+    ]
+  },
+  "Treasuries": {
+    name: "Treasuries",
+    category: "Sovereign Debt Cleared",
+    desc: "Direct purchase and custody of short-term US Treasury Bills, Notes, and Bonds. Integrated into automated collateral margin pools.",
+    specs: [
+      { label: "Maturity Spans", value: "4-Week to 30-Year" },
+      { label: "Secondary Liquidity", value: "Instantaneous" },
+      { label: "Collateral Value Rate", value: "99.0% Haircut" }
+    ]
+  },
+  "Options": {
+    name: "Options",
+    category: "Derivatives Pipeline",
+    desc: "Multi-leg option contract routing with automated risk parameter checks and millisecond level delta-neutral clearing pipelines.",
+    specs: [
+      { label: "Contract Cleared", value: "OCC Regulated" },
+      { label: "Margin Ruleset", value: "TIMS Model (VaR)" },
+      { label: "Routing Latency", value: "< 850μs" }
+    ]
+  },
+  "Crypto": {
+    name: "Crypto",
+    category: "Digital Assets Vault",
+    desc: "Physical spot and futures crypto clearing featuring off-exchange settlement security, deep aggregated books, and tight bid-ask spreads.",
+    specs: [
+      { label: "Supported Networks", value: "BTC, ETH, SOL, EVM" },
+      { label: "Custodial Structure", value: "Sovereign Trust" },
+      { label: "Execution Sourcing", value: "18+ LP Aggregators" }
+    ]
+  },
+  "ETFs": {
+    name: "ETFs",
+    category: "Equities Aggregates",
+    desc: "Exchange Traded Funds across all primary indices, commodities, and sectors with fractional share allocations and zero commission drag.",
+    specs: [
+      { label: "Basket Availability", value: "1,200+ Registered" },
+      { label: "Liquidity Provider", value: "Jane Street / Citadel" },
+      { label: "Clearing Speed", value: "Instantaneous Credit" }
+    ]
+  },
+  "Bond Account": {
+    name: "Bond Account",
+    category: "Securitized Portfolios",
+    desc: "Yield-optimized active bond portfolio managed programmatically to capture maximum interest rate premiums with robust defensive hedging.",
+    specs: [
+      { label: "Target Yield", value: "Optimized Yield*" },
+      { label: "Risk Coefficient", value: "AA- Rated Sovereign" },
+      { label: "Rebalancing Rate", value: "Weekly Algorithmic" }
+    ]
+  },
+  "High-Yield Cash Account": {
+    name: "High-Yield Cash Account",
+    category: "Cash Sweep Network",
+    desc: "High-yield cash management sweep program routing cash blocks to multiple Tier-1 partner banks for expanded FDIC coverage limits.",
+    specs: [
+      { label: "Yield (APY)", value: "Compounded APY*" },
+      { label: "Withdrawal Delay", value: "Instant (Real-Time)" },
+      { label: "FDIC Coverage", value: "Up to $5M Structured" }
+    ]
+  },
+  "Treasury Account": {
+    name: "Treasury Account",
+    category: "Sovereign Debt Cleared",
+    desc: "A pure treasury routing vehicle designed for short-term yield maximization, offering high protection from inflation and low credit risk.",
+    specs: [
+      { label: "Yield Basis", value: "US Fed Funds Rate Proxy" },
+      { label: "Custody Bank", value: "BNY Mellon" },
+      { label: "Tax Exemption", value: "State & Local Exempt" }
+    ]
+  },
+  "Direct Indexing": {
+    name: "Direct Indexing",
+    category: "Portfolio Optimization",
+    desc: "Bypass standard ETF expense ratios by owning individual benchmark stocks directly. Empowers precision tax-loss harvesting models.",
+    specs: [
+      { label: "Benchmark Mimics", value: "S&P 500, Nasdaq-100" },
+      { label: "Tax Optimization", value: "Automated Loss Harvesting" },
+      { label: "Tracking Error", value: "< 0.05%" }
+    ]
+  },
+  "Generated Assets": {
+    name: "Generated Assets",
+    category: "Synthetics Synthesizer",
+    desc: "Synthesized multi-asset index combinations customized to precise risk-hedging targets or specific regional market vectors.",
+    specs: [
+      { label: "Asset Synthesizer", value: "Risk-Parametric Engine" },
+      { label: "Rebalancing Cadence", value: "Daily Volatility Adjust" },
+      { label: "Leverage Factor", value: "1.0x - 3.0x Custom" }
+    ]
+  },
+  "Investment Plans": {
+    name: "Investment Plans",
+    category: "Wealth Accumulation",
+    desc: "Pre-configured, automated recurring allocation paths tailored for compounding wealth with customizable periodic triggers.",
+    specs: [
+      { label: "Frequencies", value: "Daily, Weekly, Monthly" },
+      { label: "Asset Weighting", value: "Smart Weight Re-allocator" },
+      { label: "Auto-Rebalancing", value: "Configurable Deviations" }
+    ]
+  },
+  "IRAs": {
+    name: "IRAs",
+    badge: "1% MATCH",
+    badgeType: "match",
+    category: "Retirement Planning",
+    desc: "Traditional and Roth tax-advantaged IRAs offering a complimentary 1% match to accelerate your long-term compounding velocity.",
+    specs: [
+      { label: "Contribution Match", value: "1% Capital Boost*" },
+      { label: "Account Types", value: "Traditional & Roth IRA" },
+      { label: "Asset Constraints", value: "Zero (Unrestricted Multi-Asset)" }
+    ]
+  },
+  "Crypto IRA": {
+    name: "Crypto IRA",
+    category: "Retirement Planning",
+    desc: "Hold direct physical, institutional-custody cryptocurrencies within a legally compliant, tax-sheltered retirement account structure.",
+    specs: [
+      { label: "Available Crypto", value: "BTC, ETH, SOL, AVAX" },
+      { label: "Cold Custody Partner", value: "Coinbase Custody" },
+      { label: "Tax Implications", value: "Deferred or Tax-Free Gains" }
+    ]
+  },
+  "Agents": {
+    name: "Agents",
+    category: "Quantitative Tech Core",
+    desc: "Deploy autonomous AI trading and risk management agents running continuous portfolio optimization and stop-loss monitoring.",
+    specs: [
+      { label: "Execution Model", value: "Gemini-Powered Volatility Guard" },
+      { label: "Continuous Audit", value: "24/7/365 Non-stop" },
+      { label: "Response SLA", value: "< 250ms Active Adjust" }
+    ]
+  },
+  "API": {
+    name: "API",
+    category: "Quantitative Tech Core",
+    desc: "Ultra-low latency REST and WebSocket direct market access (DMA) feeds built for proprietary algorithmic execution corridors.",
+    specs: [
+      { label: "Connection Protocols", value: "FIX 4.4, JSON REST, WebSockets" },
+      { label: "Tick-to-Trade speed", value: "< 450μs" },
+      { label: "Rate Limits", value: "Unlimited with Dedicated Nodes" }
+    ]
+  }
+};
+
+const instrumentRows = [
+  [
+    { name: "Stocks", hasBadge: false },
+    { name: "Bonds", hasBadge: false },
+    { name: "Treasuries", hasBadge: false },
+    { name: "Options", hasBadge: false },
+    { name: "Crypto", hasBadge: false },
+    { name: "ETFs", hasBadge: false }
+  ],
+  [
+    { name: "Bond Account", hasBadge: false },
+    { name: "High-Yield Cash Account", hasBadge: false }
+  ],
+  [
+    { name: "Treasury Account", hasBadge: false },
+    { name: "Direct Indexing", hasBadge: false },
+    { name: "Generated Assets", hasBadge: false }
+  ],
+  [
+    { name: "Investment Plans", hasBadge: false },
+    { name: "IRAs", hasBadge: true, badge: "1% MATCH", badgeType: "match" },
+    { name: "Crypto IRA", hasBadge: false },
+    { name: "Agents", hasBadge: false },
+    { name: "API", hasBadge: false }
+  ]
+];
+
+function generateMockBars(ticker: string, range: string, basePrice: number): { timestamp: string; close: number }[] {
+  const barsCount = range === '5D' ? 40 : range === '1MO' ? 30 : range === '3MO' ? 60 : 120;
+  const bars: { timestamp: string; close: number }[] = [];
+  const now = new Date();
+  
+  let currentPrice = basePrice;
+  const isPositive = ticker === 'AAPL' || ticker === 'NVDA';
+  const overallTrend = isPositive ? 0.08 : -0.05;
+  
+  const pricesReversed: number[] = [basePrice];
+  for (let i = 1; i < barsCount; i++) {
+    const trendEffect = overallTrend * basePrice * (1 / barsCount);
+    const wave = Math.sin(i * 0.4) * (basePrice * 0.015);
+    const noise = Math.cos(i * 0.95) * (basePrice * 0.006);
+    currentPrice = currentPrice - trendEffect + wave + noise;
+    pricesReversed.push(currentPrice);
+  }
+  
+  const prices = pricesReversed.reverse();
+  
+  for (let i = 0; i < barsCount; i++) {
+    const d = new Date(now.getTime() - (barsCount - 1 - i) * 24 * 60 * 60 * 1000);
+    bars.push({
+      timestamp: d.toISOString(),
+      close: parseFloat(prices[i].toFixed(2))
+    });
+  }
+  
+  return bars;
+}
+
 interface WorkspaceVisualSimulatorProps {
   activeWorkspace: string;
   onLaunchTerminal: () => void;
@@ -129,7 +361,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
   // --- Markets view states ---
   const [selectedSymbol, setSelectedSymbol] = useState<'AAPL' | 'TSLA' | 'NVDA' | 'BTC'>('AAPL');
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('sell');
-  const [quantity, setQuantity] = useState<number>(10);
+  const [quantity, setQuantity] = useState<string>('100');
   const [activeTimeframe, setActiveTimeframe] = useState<'5D' | '1MO' | '3MO' | '1Y'>('5D');
   const [bracketProtection, setBracketProtection] = useState<boolean>(false);
   const [isOrderRouting, setIsOrderRouting] = useState<boolean>(false);
@@ -138,6 +370,35 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
   // Mobile order execution desk minimized view states
   const [showExecutionDetails, setShowExecutionDetails] = useState<boolean>(false);
   const executionDeskRef = useRef<HTMLDivElement>(null);
+
+  // Automation & simulation refs and states
+  const containerRef = useRef<HTMLDivElement>(null);
+  const symbolSelectorRef = useRef<HTMLButtonElement>(null);
+  const amountInputRef = useRef<HTMLInputElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+
+  const [cursor, setCursor] = useState<{ x: number | string; y: number | string; visible: boolean; clicking: boolean }>({
+    x: '50%',
+    y: '50%',
+    visible: false,
+    clicking: false
+  });
+
+  const [isIntersecting, setIsIntersecting] = useState<boolean>(false);
+
+  // Track if we are on a mobile device to disable auto-simulations
+  const [isMobile, setIsMobile] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Keep track of the last user interaction time
+  const lastInteractionTimeRef = useRef<number>(0);
 
   // Custom symbol selection states & real market data
   const [isSymbolDropdownOpen, setIsSymbolDropdownOpen] = useState<boolean>(false);
@@ -149,8 +410,10 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
     path: string;
     pulseY: number;
     prices: number[];
+    bars?: any[];
   } | null>(null);
   const [loadingRealData, setLoadingRealData] = useState<boolean>(false);
+  const [hoveredBar, setHoveredBar] = useState<{ timestamp: string; close: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -197,7 +460,8 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
             isPositive,
             path,
             pulseY,
-            prices: [maxPrice, price, minPrice]
+            prices: [maxPrice, price, minPrice],
+            bars
           });
 
           // Generate date labels dynamically
@@ -255,6 +519,8 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
     };
   }, []);
 
+
+
   // --- Portfolio view states ---
   const [varLimit, setVarLimit] = useState<number>(1.24);
   const [portfolioYears, setPortfolioYears] = useState<number>(5);
@@ -276,14 +542,294 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
 
   // Handle simulated routing button click
   const handleSimulatedOrder = () => {
+    const numericQty = parseFloat(quantity) || 0;
+    if (numericQty < 50) {
+      alert("Minimum purchase amount is $50.00 for fractional shares.");
+      return;
+    }
     setIsOrderRouting(true);
     setRoutingSuccess(null);
     setTimeout(() => {
       setIsOrderRouting(false);
-      setRoutingSuccess(`SIMULATED ORDER DEPLOYED: Successfully routed ${quantity} shares of ${selectedSymbol} in sandbox mode.`);
+      const calculatedShares = numericQty / currentDetails.price;
+      setRoutingSuccess(`SIMULATED ORDER DEPLOYED: Successfully routed $${numericQty.toFixed(2)} (${calculatedShares.toFixed(6)} shares) of ${selectedSymbol} in sandbox mode.`);
       setTimeout(() => setRoutingSuccess(null), 5000);
     }, 1200);
   };
+
+  const handleSimulatedOrderRef = useRef(handleSimulatedOrder);
+  useEffect(() => {
+    handleSimulatedOrderRef.current = handleSimulatedOrder;
+  }, [handleSimulatedOrder]);
+
+  useEffect(() => {
+    if (activeWorkspace !== 'markets') {
+      setIsIntersecting(false);
+      return;
+    }
+    
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsIntersecting(entry.isIntersecting);
+      },
+      { threshold: 0.15 }
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeWorkspace]);
+
+  useEffect(() => {
+    if (isMobile || !isIntersecting || activeWorkspace !== 'markets') {
+      setCursor(prev => ({ ...prev, visible: false }));
+      return;
+    }
+
+    let active = true;
+
+    // Track user interactions globally
+    const handleUserInteraction = () => {
+      lastInteractionTimeRef.current = Date.now();
+    };
+
+    window.addEventListener('mousemove', handleUserInteraction, { passive: true });
+    window.addEventListener('mousedown', handleUserInteraction, { passive: true });
+    window.addEventListener('keydown', handleUserInteraction, { passive: true });
+    window.addEventListener('touchstart', handleUserInteraction, { passive: true });
+    window.addEventListener('pointerdown', handleUserInteraction, { passive: true });
+    window.addEventListener('wheel', handleUserInteraction, { passive: true });
+
+    const pauseIfInteracting = async () => {
+      while (active && isIntersecting) {
+        const timeSinceInteraction = Date.now() - lastInteractionTimeRef.current;
+        if (timeSinceInteraction < 8000) {
+          // Hide custom cursor immediately during user interaction
+          setCursor(prev => (prev.visible ? { ...prev, visible: false } : prev));
+          await new Promise(r => setTimeout(r, 200));
+        } else {
+          break;
+        }
+      }
+    };
+
+    const delay = (ms: number) => new Promise<void>(async (resolve) => {
+      let accumulated = 0;
+      const step = 100;
+      while (accumulated < ms && active && isIntersecting) {
+        await pauseIfInteracting();
+        if (!active || !isIntersecting) break;
+        await new Promise(r => setTimeout(r, step));
+        accumulated += step;
+      }
+      resolve();
+    });
+
+    const getRelativePos = (element: HTMLElement | null) => {
+      if (!element || !containerRef.current) return { x: '50%', y: '50%' };
+      const parentRect = containerRef.current.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      return {
+        x: rect.left - parentRect.left + rect.width / 2,
+        y: rect.top - parentRect.top + rect.height / 2
+      };
+    };
+
+    const tickers: Array<'AAPL' | 'TSLA' | 'NVDA' | 'BTC'> = ['AAPL', 'TSLA', 'NVDA', 'BTC'];
+    let currentTickerIdx = 0;
+
+    const runLoop = async () => {
+      // Small initial delay before starting simulation
+      await delay(1500);
+
+      while (active && isIntersecting) {
+        await pauseIfInteracting();
+        if (!active || !isIntersecting) break;
+
+        // Force execution details to be open
+        setShowExecutionDetails(true);
+
+        const targetTicker = tickers[currentTickerIdx];
+        currentTickerIdx = (currentTickerIdx + 1) % tickers.length;
+
+        // Step 1: Hover over Symbol Selector
+        await pauseIfInteracting();
+        if (!active) break;
+        const selectorEl = symbolSelectorRef.current || document.getElementById('homepage-symbol-selector');
+        if (selectorEl) {
+          const pos = getRelativePos(selectorEl as HTMLElement);
+          setCursor({ x: pos.x, y: pos.y, visible: true, clicking: false });
+          await delay(1200);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          // Click it
+          setCursor(prev => ({ ...prev, clicking: true, visible: true }));
+          setIsSymbolDropdownOpen(true);
+          await delay(250);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: false, visible: true }));
+          await delay(800);
+        }
+
+        // Step 2: Select the specific ticker option from dropdown
+        await pauseIfInteracting();
+        if (!active) break;
+        const optEl = document.getElementById(`homepage-dropdown-opt-${targetTicker}`);
+        if (optEl) {
+          const pos = getRelativePos(optEl);
+          setCursor({ x: pos.x, y: pos.y, visible: true, clicking: false });
+          await delay(1200);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          // Click it
+          setCursor(prev => ({ ...prev, clicking: true, visible: true }));
+          setSelectedSymbol(targetTicker);
+          setIsSymbolDropdownOpen(false);
+          await delay(250);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: false, visible: true }));
+          await delay(1000);
+        } else {
+          // Fallback if dropdown opt not in DOM
+          setSelectedSymbol(targetTicker);
+          setIsSymbolDropdownOpen(false);
+          await delay(1000);
+        }
+
+        // Step 3: Select random timeframe
+        await pauseIfInteracting();
+        if (!active) break;
+        const timeframes: Array<'5D' | '1MO' | '3MO' | '1Y'> = ['5D', '1MO', '3MO', '1Y'];
+        const randomTf = timeframes[Math.floor(Math.random() * timeframes.length)];
+        const tfEl = document.getElementById(`homepage-tf-btn-${randomTf}`);
+        if (tfEl) {
+          const pos = getRelativePos(tfEl);
+          setCursor({ x: pos.x, y: pos.y, visible: true, clicking: false });
+          await delay(1200);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: true, visible: true }));
+          setActiveTimeframe(randomTf);
+          await delay(250);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: false, visible: true }));
+          await delay(1000);
+        }
+
+        // Step 3.5: Select random side (BUY or SELL)
+        await pauseIfInteracting();
+        if (!active) break;
+        const randomSide = Math.random() > 0.5 ? 'buy' : 'sell';
+        const sideEl = document.getElementById(randomSide === 'buy' ? 'homepage-buy-btn' : 'homepage-sell-btn');
+        if (sideEl) {
+          const pos = getRelativePos(sideEl);
+          setCursor({ x: pos.x, y: pos.y, visible: true, clicking: false });
+          await delay(1200);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: true, visible: true }));
+          setTradeType(randomSide);
+          await delay(250);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: false, visible: true }));
+          await delay(1000);
+        } else {
+          setTradeType(randomSide);
+          await delay(1000);
+        }
+
+        // Step 4: Hover over Quantity input & simulate typing
+        await pauseIfInteracting();
+        if (!active) break;
+        const qtyEl = amountInputRef.current || document.getElementById('homepage-qty-input');
+        if (qtyEl) {
+          const pos = getRelativePos(qtyEl as HTMLElement);
+          setCursor({ x: pos.x, y: pos.y, visible: true, clicking: false });
+          await delay(1000);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: true, visible: true }));
+          await delay(200);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: false, visible: true }));
+
+          // Select a random amount from 100 to thousands
+          const possibleAmounts = [150, 250, 500, 750, 1000, 1500, 2000, 2500, 3500, 5000];
+          const randomAmount = possibleAmounts[Math.floor(Math.random() * possibleAmounts.length)];
+          const amountStr = String(randomAmount);
+
+          // Simulate typing digit-by-digit
+          for (let i = 1; i <= amountStr.length; i++) {
+            await pauseIfInteracting();
+            if (!active) break;
+            setQuantity(amountStr.substring(0, i));
+            await delay(250);
+          }
+          await delay(1000);
+        }
+
+        // Step 5: Hover over Route Simulated Order Button
+        await pauseIfInteracting();
+        if (!active) break;
+        const submitEl = submitButtonRef.current || document.getElementById('homepage-submit-btn');
+        if (submitEl) {
+          const pos = getRelativePos(submitEl as HTMLElement);
+          setCursor({ x: pos.x, y: pos.y, visible: true, clicking: false });
+          await delay(1200);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: true, visible: true }));
+          if (handleSimulatedOrderRef.current) {
+            handleSimulatedOrderRef.current();
+          }
+          await delay(300);
+
+          await pauseIfInteracting();
+          if (!active) break;
+          setCursor(prev => ({ ...prev, clicking: false, visible: true }));
+
+          // Wait for order success and notification display
+          await delay(5000);
+        }
+
+        // Small break before starting with the next ticker
+        await delay(1500);
+      }
+    };
+
+    runLoop();
+
+    return () => {
+      active = false;
+      setCursor(prev => ({ ...prev, visible: false }));
+      window.removeEventListener('mousemove', handleUserInteraction);
+      window.removeEventListener('mousedown', handleUserInteraction);
+      window.removeEventListener('keydown', handleUserInteraction);
+      window.removeEventListener('touchstart', handleUserInteraction);
+      window.removeEventListener('pointerdown', handleUserInteraction);
+      window.removeEventListener('wheel', handleUserInteraction);
+    };
+  }, [isIntersecting, activeWorkspace, isMobile]);
 
   // Helper values for symbols
   const symbolDetails = {
@@ -322,33 +868,52 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
   };
 
   const fallbackDetails = symbolDetails[selectedSymbol];
+  const fallbackBars = useMemo(() => {
+    return generateMockBars(selectedSymbol, activeTimeframe, fallbackDetails.price);
+  }, [selectedSymbol, activeTimeframe, fallbackDetails.price]);
+
   const currentDetails = realData ? {
     price: realData.price,
     change: realData.change,
     isPositive: realData.isPositive,
     path: realData.path,
     pulseY: realData.pulseY,
-    prices: realData.prices
-  } : {
-    price: fallbackDetails.price,
-    change: fallbackDetails.change,
-    isPositive: fallbackDetails.isPositive,
-    path: fallbackDetails.paths[activeTimeframe],
-    pulseY: activeTimeframe === '5D' ? (selectedSymbol === 'TSLA' ? 90 : selectedSymbol === 'NVDA' ? 5 : selectedSymbol === 'BTC' ? 55 : 15) : (activeTimeframe === '1MO' ? 25 : activeTimeframe === '3MO' ? 45 : 15),
-    prices: [fallbackDetails.price * 1.05, fallbackDetails.price, fallbackDetails.price * 0.95]
-  };
+    prices: realData.prices,
+    bars: realData.bars || []
+  } : (() => {
+    const prices = fallbackBars.map(b => b.close);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const priceRange = maxPrice - minPrice || 1;
+    const path = fallbackBars.map((bar, index) => {
+      const x = 10 + (index / (fallbackBars.length - 1)) * 420;
+      const y = 85 - ((bar.close - minPrice) / priceRange) * 70;
+      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const pulseY = 85 - ((prices[prices.length - 1] - minPrice) / priceRange) * 70;
+    return {
+      price: fallbackDetails.price,
+      change: fallbackDetails.change,
+      isPositive: fallbackDetails.isPositive,
+      path,
+      pulseY,
+      prices: [maxPrice, fallbackDetails.price, minPrice],
+      bars: fallbackBars
+    };
+  })();
 
-  const estTotal = (currentDetails.price * quantity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const estTotal = (parseFloat(quantity) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <div className="w-full flex-1 flex flex-col justify-between space-y-4">
       {/* 1. MARKETS VIEW SIMULATOR */}
       {activeWorkspace === 'markets' && (
         <motion.div
+          ref={containerRef}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="space-y-4 text-xs font-mono text-neutral-300"
+          className="space-y-4 text-xs font-mono text-neutral-300 relative"
         >
           
           {/* Simulated search & filters */}
@@ -357,6 +922,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
               <button 
                 type="button"
                 id="homepage-symbol-selector"
+                ref={symbolSelectorRef}
                 onClick={() => setIsSymbolDropdownOpen(!isSymbolDropdownOpen)}
                 className="w-full bg-neutral-900 border border-neutral-800 rounded pl-7 pr-8 py-1.5 text-white font-mono text-[10px] focus:outline-none focus:border-amber-500/50 flex items-center justify-between cursor-pointer"
               >
@@ -369,7 +935,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                 </span>
                 <ChevronDown className="w-3 h-3 text-neutral-400" />
               </button>
-
+ 
               {isSymbolDropdownOpen && (
                 <>
                   <div 
@@ -386,6 +952,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                       <button
                         key={opt.val}
                         type="button"
+                        id={`homepage-dropdown-opt-${opt.val}`}
                         onClick={() => {
                           setSelectedSymbol(opt.val as any);
                           setIsSymbolDropdownOpen(false);
@@ -407,6 +974,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
               {(['5D', '1MO', '3MO', '1Y'] as const).map(tf => (
                 <button
                   key={tf}
+                  id={`homepage-tf-btn-${tf}`}
                   onClick={() => setActiveTimeframe(tf)}
                   className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${
                     activeTimeframe === tf 
@@ -431,32 +999,101 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
           {/* Core trading workspace dual columns */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
             {/* Chart Area */}
-            <div className={`md:col-span-7 bg-transparent border border-neutral-800/50 rounded p-3 flex flex-col justify-between relative hover:bg-neutral-900/10 transition-all duration-300 ease-in-out ${
-              showExecutionDetails ? 'min-h-[190px]' : 'min-h-[295px] md:min-h-[190px]'
+            <div className={`${isMobile ? 'col-span-1 md:col-span-12' : 'md:col-span-7'} bg-transparent border border-neutral-800/50 rounded p-3 flex flex-col justify-between relative hover:bg-neutral-900/10 transition-all duration-300 ease-in-out ${
+              showExecutionDetails && !isMobile ? 'min-h-[190px]' : 'min-h-[295px] md:min-h-[190px]'
             }`}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between select-none">
                 <div className="flex items-center space-x-2">
                   <span className="text-white font-bold text-sm tracking-tight">{selectedSymbol}</span>
-                  <span className="text-neutral-300 text-xs">${currentDetails.price.toLocaleString()}</span>
-                  <span className="text-[10px] text-neutral-300 font-normal">USD</span>
+                  {hoveredBar ? (
+                    <span className="text-amber-400 text-xs font-bold font-mono transition-colors duration-150">
+                      ${hoveredBar.close.toLocaleString(undefined, { minimumFractionDigits: selectedSymbol === 'BTC' ? 0 : 2, maximumFractionDigits: selectedSymbol === 'BTC' ? 0 : 2 })}
+                    </span>
+                  ) : (
+                    <span className="text-neutral-300 text-xs">
+                      ${currentDetails.price.toLocaleString(undefined, { minimumFractionDigits: selectedSymbol === 'BTC' ? 0 : 2, maximumFractionDigits: selectedSymbol === 'BTC' ? 0 : 2 })}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-neutral-400 font-normal font-mono">USD</span>
                   <button className="text-neutral-300 hover:text-amber-500 transition-colors">
                     <Star className="w-3 h-3 fill-current" />
                   </button>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <span className="text-[10px] border border-neutral-850 px-1.5 py-0.5 rounded text-neutral-300">Financials</span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                    currentDetails.isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                  }`}>
-                    {currentDetails.change}
-                  </span>
+                  {hoveredBar ? (
+                    <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 transition-colors duration-150">
+                      {new Date(hoveredBar.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-[10px] border border-neutral-850 px-1.5 py-0.5 rounded text-neutral-300">Financials</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        currentDetails.isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                      }`}>
+                        {currentDetails.change}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
                {/* Responsive SVG Chart */}
-              <div className={`relative w-full pr-12 my-3 transition-all duration-300 ease-in-out ${
-                showExecutionDetails ? 'h-24' : 'h-48 md:h-24'
-              }`}>
+              <div 
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const chartWidth = rect.width - 48; // Adjust for pr-12 padding-right
+                  if (chartWidth <= 0) return;
+                  const clientX = e.clientX - rect.left;
+                  const xRatio = Math.max(0, Math.min(1, clientX / chartWidth));
+                  const bars = currentDetails.bars;
+                  if (!bars || bars.length === 0) return;
+                  const index = Math.round(xRatio * (bars.length - 1));
+                  const bar = bars[index];
+                  if (!bar) return;
+                  const svgX = 10 + (index / (bars.length - 1)) * 420;
+                  const prices = bars.map((b: any) => b.close);
+                  const minPrice = Math.min(...prices);
+                  const maxPrice = Math.max(...prices);
+                  const priceRange = maxPrice - minPrice || 1;
+                  const svgY = 85 - ((bar.close - minPrice) / priceRange) * 70;
+                  setHoveredBar({
+                    timestamp: bar.timestamp,
+                    close: bar.close,
+                    x: svgX,
+                    y: svgY
+                  });
+                }}
+                onMouseLeave={() => setHoveredBar(null)}
+                onTouchMove={(e) => {
+                  if (e.touches.length === 0) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const chartWidth = rect.width - 48;
+                  if (chartWidth <= 0) return;
+                  const clientX = e.touches[0].clientX - rect.left;
+                  const xRatio = Math.max(0, Math.min(1, clientX / chartWidth));
+                  const bars = currentDetails.bars;
+                  if (!bars || bars.length === 0) return;
+                  const index = Math.round(xRatio * (bars.length - 1));
+                  const bar = bars[index];
+                  if (!bar) return;
+                  const svgX = 10 + (index / (bars.length - 1)) * 420;
+                  const prices = bars.map((b: any) => b.close);
+                  const minPrice = Math.min(...prices);
+                  const maxPrice = Math.max(...prices);
+                  const priceRange = maxPrice - minPrice || 1;
+                  const svgY = 85 - ((bar.close - minPrice) / priceRange) * 70;
+                  setHoveredBar({
+                    timestamp: bar.timestamp,
+                    close: bar.close,
+                    x: svgX,
+                    y: svgY
+                  });
+                }}
+                onTouchEnd={() => setHoveredBar(null)}
+                className={`relative w-full pr-12 my-3 transition-all duration-300 ease-in-out cursor-crosshair select-none ${
+                  showExecutionDetails ? 'h-24' : 'h-48 md:h-24'
+                }`}
+              >
                 {loadingRealData && (
                   <div className="absolute inset-0 bg-neutral-950/20 backdrop-blur-[0.5px] flex items-center justify-center z-10 rounded">
                     <RefreshCw className="w-3.5 h-3.5 text-amber-500 animate-spin" />
@@ -494,6 +1131,79 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                   
                   {/* Pulsing endpoint dot */}
                   <circle cx="430" cy={currentDetails.pulseY} r="3" fill={currentDetails.isPositive ? '#10b981' : '#ef4444'} className="animate-pulse" />
+
+                  {/* Hover HUD Indicators */}
+                  {hoveredBar && (
+                    <>
+                      {/* Vertical Guideline */}
+                      <line
+                        x1={hoveredBar.x}
+                        y1="10"
+                        x2={hoveredBar.x}
+                        y2="90"
+                        stroke="#f59e0b"
+                        strokeWidth="1"
+                        strokeDasharray="2,2"
+                        opacity="0.85"
+                      />
+
+                      {/* Horizontal Guideline */}
+                      <line
+                        x1="10"
+                        y1={hoveredBar.y}
+                        x2="430"
+                        y2={hoveredBar.y}
+                        stroke="#f59e0b"
+                        strokeWidth="0.5"
+                        strokeDasharray="3,3"
+                        opacity="0.5"
+                      />
+
+                      {/* Floating Ripple glow circle */}
+                      <circle
+                        cx={hoveredBar.x}
+                        cy={hoveredBar.y}
+                        r="6"
+                        fill="#f59e0b"
+                        opacity="0.3"
+                        className="animate-ping"
+                      />
+
+                      {/* Active point marker */}
+                      <circle
+                        cx={hoveredBar.x}
+                        cy={hoveredBar.y}
+                        r="3"
+                        fill="#ffffff"
+                        stroke="#f59e0b"
+                        strokeWidth="1.5"
+                      />
+
+                      {/* Floating dynamic HUD price tooltip */}
+                      <g transform={`translate(${hoveredBar.x > 320 ? hoveredBar.x - 72 : hoveredBar.x + 8}, ${hoveredBar.y > 50 ? hoveredBar.y - 24 : hoveredBar.y + 6})`}>
+                        <rect
+                          width="64"
+                          height="18"
+                          rx="3"
+                          fill="#0f0f13"
+                          stroke="#f59e0b"
+                          strokeWidth="0.75"
+                          opacity="0.95"
+                        />
+                        <text
+                          x="32"
+                          y="12"
+                          textAnchor="middle"
+                          fill="#f59e0b"
+                          fontSize="8"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                        >
+                          ${hoveredBar.close.toLocaleString(undefined, { minimumFractionDigits: selectedSymbol === 'BTC' ? 0 : 2, maximumFractionDigits: selectedSymbol === 'BTC' ? 0 : 2 })}
+                        </text>
+                      </g>
+                    </>
+                  )}
                 </svg>
                 
                 {/* Side Price Scale */}
@@ -513,14 +1223,16 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
             </div>
 
             {/* Order Ticket Panel */}
-            <div ref={executionDeskRef} className={`md:col-span-5 bg-transparent border rounded transition-all duration-300 flex flex-col justify-between text-[11px] hover:bg-neutral-900/10 ${
-              showExecutionDetails ? 'border-neutral-800/50 p-3 min-h-[190px]' : 'border-neutral-800/50 p-0 min-h-0 h-auto overflow-hidden'
-            }`}>
+            {!isMobile && (
+              <div ref={executionDeskRef} className={`md:col-span-5 bg-transparent border rounded transition-all duration-300 flex flex-col justify-between text-[11px] hover:bg-neutral-900/10 ${
+                showExecutionDetails ? 'border-neutral-800/50 p-3 min-h-[190px]' : 'border-neutral-800/50 p-0 min-h-0 h-auto overflow-hidden'
+              }`}>
               {/* Order direction switches */}
               <div className={`grid grid-cols-2 gap-1 bg-neutral-900/10 p-0.5 rounded transition-all ${
                 showExecutionDetails ? 'border border-neutral-800/40 mb-2' : 'border-0 mb-0'
               }`}>
                 <button
+                  id="homepage-buy-btn"
                   onClick={() => {
                     setTradeType('buy');
                     setShowExecutionDetails(true);
@@ -531,9 +1243,10 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                       : 'text-neutral-300 hover:text-white'
                   }`}
                 >
-                  Buy Shares
+                  Buy USD ($)
                 </button>
                 <button
+                  id="homepage-sell-btn"
                   onClick={() => {
                     setTradeType('sell');
                     setShowExecutionDetails(true);
@@ -544,7 +1257,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                       : 'text-neutral-300 hover:text-white'
                   }`}
                 >
-                  Sell Shares
+                  Sell USD ($)
                 </button>
               </div>
 
@@ -559,29 +1272,39 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                   </div>
                   <div className="flex justify-between border-b border-neutral-900/50 pb-1">
                     <span className="text-neutral-300">Market Price:</span>
-                    <span className="text-neutral-300 font-semibold">${currentDetails.price.toLocaleString()}</span>
+                    <span className="text-neutral-300 font-semibold">${currentDetails.price.toLocaleString(undefined, { minimumFractionDigits: selectedSymbol === 'BTC' ? 0 : 2, maximumFractionDigits: selectedSymbol === 'BTC' ? 0 : 2 })}</span>
                   </div>
                   
                   <div className="space-y-1">
                     <div className="flex justify-between text-[8px] text-neutral-300 uppercase">
-                      <span>Quantity (Shares):</span>
-                      <span>Holding: 50.00 Shares</span>
+                      <span>Dollar Amount ($):</span>
+                      <span className="text-indigo-400 font-bold">MIN: $50.00</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <button 
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                        type="button"
+                        onClick={() => setQuantity(String(Math.max(0, (parseFloat(quantity) || 0) - 10)))}
                         className="w-8 h-8 sm:w-6 sm:h-6 bg-neutral-900/10 hover:bg-neutral-900/30 border border-neutral-800/40 rounded flex items-center justify-center text-white text-xs cursor-pointer active:scale-95 transition-all"
                       >
                         <Minus className="w-2.5 h-2.5" />
                       </button>
                       <input
                         type="number"
+                        id="homepage-qty-input"
+                        ref={amountInputRef}
                         value={quantity}
-                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="flex-1 bg-neutral-900/10 border border-neutral-800/40 rounded text-center py-1.5 sm:py-0.5 text-white focus:outline-none focus:border-amber-500/40 text-[10px]"
+                        onChange={(e) => {
+                          let cleaned = e.target.value;
+                          if (/^0\d+/.test(cleaned)) {
+                            cleaned = cleaned.replace(/^0+/, '');
+                          }
+                          setQuantity(cleaned);
+                        }}
+                        className="flex-1 bg-neutral-900/10 border border-neutral-800/40 rounded text-center py-1.5 sm:py-0.5 text-white focus:outline-none focus:border-amber-500/40 text-[10px] font-mono"
                       />
                       <button 
-                        onClick={() => setQuantity(quantity + 1)}
+                        type="button"
+                        onClick={() => setQuantity(String((parseFloat(quantity) || 0) + 10))}
                         className="w-8 h-8 sm:w-6 sm:h-6 bg-neutral-900/10 hover:bg-neutral-900/30 border border-neutral-800/40 rounded flex items-center justify-center text-white text-xs cursor-pointer active:scale-95 transition-all"
                       >
                         <Plus className="w-2.5 h-2.5" />
@@ -603,13 +1326,24 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                   </div>
 
                   <div className="flex justify-between border-t border-neutral-900 pt-1.5 mt-1">
-                    <span className="text-neutral-300 font-bold uppercase text-[9px]">Est. Total:</span>
+                    <span className="text-neutral-300 font-bold uppercase text-[9px]">Est. Cost ($):</span>
                     <span className="text-white font-bold text-xs">${estTotal}</span>
                   </div>
-                </div>
+                  <div className="flex justify-between text-[9px] text-indigo-400 mt-1">
+                    <span>Est. Shares:</span>
+                    <span className="font-bold">{((parseFloat(quantity) || 0) / currentDetails.price).toFixed(6)} shares</span>
+                  </div>
+                  {parseFloat(quantity) < 50 && (
+                    <div className="text-rose-400 text-[8px] font-bold text-center mt-1 uppercase tracking-wide">
+                      ⚠️ Minimum purchase is $50.00
+                    </div>
+                  )}
+                  </div>
 
                 {/* Order Submission Button */}
                 <button
+                  id="homepage-submit-btn"
+                  ref={submitButtonRef}
                   onClick={handleSimulatedOrder}
                   disabled={isOrderRouting}
                   className={`w-full py-2 font-bold uppercase text-[9px] tracking-widest rounded transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -625,12 +1359,13 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                     </>
                   ) : (
                     <>
-                      {tradeType === 'buy' ? 'Route Simulated Buy Order' : 'Route Simulated Sell Order'}
+                      {tradeType === 'buy' ? 'Route Simulated Buy ($)' : 'Route Simulated Sell ($)'}
                     </>
                   )}
                 </button>
               </div>
             </div>
+            )}
           </div>
 
           {/* Success / Warning log message overlay */}
@@ -650,6 +1385,47 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Animated Cursor Overlay */}
+          {cursor.visible && (
+            <motion.div
+              style={{
+                position: 'absolute',
+                pointerEvents: 'none',
+                zIndex: 1000,
+              }}
+              animate={{
+                left: cursor.x,
+                top: cursor.y,
+                scale: cursor.clicking ? 0.8 : 1,
+              }}
+              transition={{
+                left: { type: 'spring', stiffness: 80, damping: 18 },
+                top: { type: 'spring', stiffness: 80, damping: 18 },
+                scale: { duration: 0.15 }
+              }}
+              className="flex flex-col items-start"
+            >
+              <svg 
+                className="w-5.5 h-5.5 text-amber-500 filter drop-shadow-[0_2px_5px_rgba(0,0,0,0.65)]" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path 
+                  d="M5.5 3.5V18.5L9.34 14.66L11.47 19.78L14.23 18.63L12.11 13.51L17.2 13.38L5.5 3.5Z" 
+                  fill="#ffffff" 
+                  stroke="#f59e0b" 
+                  strokeWidth="1.5" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                />
+              </svg>
+              {cursor.clicking && (
+                <span className="absolute left-1.5 top-1.5 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 border-amber-500/80 animate-ping pointer-events-none" />
+              )}
+            </motion.div>
+          )}
         </motion.div>
       )}
 
@@ -1120,21 +1896,21 @@ function useMetaTagManager(activeWorkspaceId: string) {
     const workspace = workspacesData.find(w => w.id === activeWorkspaceId);
     if (!workspace) return;
 
-    const baseTitle = "mtx - Institutional Quant Platform";
-    const title = `${workspace.name} | ${baseTitle}`;
-    const description = `Access the MTXquant ${workspace.name}: ${workspace.desc} Optimized for institutional quant desks, proprietary trading, and real-time execution.`;
+    const baseTitle = "mtx Securities | Engineered for Systematic Capital";
+    const title = `${workspace.seoTitle || workspace.name} | ${baseTitle}`;
+    const description = `Access the MTX Securities ${workspace.name} (${workspace.seoTitle}) engineered for systematic capital. ${workspace.roleExplanation || workspace.desc} Optimize stock, bond, treasury & option trading with real-time portfolio margin and high-yield cash sweeps.`;
     
     // Dynamic workspace-based keywords to prevent stale index headers
     const workspaceKeywords: Record<string, string> = {
-      markets: "ATR position sizing, live order book analysis, candlestick charts, algorithmic trading platform, real-time stock tickers, market depth",
-      portfolio: "Value-at-Risk calculations, margin leverage gates, portfolio asset distribution, compound interest estimator, brokerage balance desk",
-      watchlist: "custom stock watchlist, asset tracker, rapid symbol switching, continuous volatility filters, market saliency score",
+      markets: "fractional shares buying, live order book analysis, candlestick charts, stock trading platform, real-time stock tickers, market depth",
+      portfolio: "Value-at-Risk calculations, portfolio asset distribution, compound interest estimator, brokerage balance desk",
+      watchlist: "custom stock watchlist, asset tracker, rapid symbol switching, continuous volatility filters, market level score",
       funding: "bank wire deposit ledger, capital custody solution, institutional clearance, credit line application, balance logs, wallet",
-      activity: "audited execution logs, trading ledger history, regulatory compliance reporting, quantitative certified receipt",
+      activity: "audited execution logs, trading ledger history, regulatory compliance reporting, brokerage receipt",
       analysis: "pearson correlation heatmap, trend indices, systematic benchmarking, statistical co-movement matrix, asset analysis"
     };
 
-    const keywords = `Institutional Quant Platform, Real-time Trading Analytics, buy shares, sell shares, stock trading, quant platform, quantitative finance, algorithmic trading, real-time analytics, share market, ${workspaceKeywords[activeWorkspaceId] || ""}`;
+    const keywords = `Securities Brokerage, Stock Trading Platform, buy shares, sell shares, stock trading, investment platform, share market, real-time analytics, stocks, bonds, treasury, option trading, high yield cash account, 1% match IRA, tax loss harvesting, direct indexing, quantitative trade agents, ${workspaceKeywords[activeWorkspaceId] || ""}`;
 
     const prevTitle = document.title;
     document.title = title;
@@ -1230,7 +2006,7 @@ function useMetaTagManager(activeWorkspaceId: string) {
           "name": "mtxquant",
           "url": window.location.origin,
           "logo": `${window.location.origin}/assets/logo.png`,
-          "description": "mtxquant is an institutional prime brokerage and quantitative execution platform designed for high-performance capital custody, real-time risk analytics, and systematic trading.",
+          "description": "mtxquant is an institutional prime brokerage engineered for systematic capital. We support high-performance capital custody, real-time risk analytics, and multi-asset routing for stocks, bonds, and treasuries.",
           "category": "Investment Brokerage",
           "feesAndCommissionsSpecification": `${window.location.origin}/#portal`,
           "knowsAbout": [
@@ -1239,7 +2015,10 @@ function useMetaTagManager(activeWorkspaceId: string) {
             "Risk Management",
             "Prime Brokerage Services",
             "Value-at-Risk Analysis",
-            "Order Book Execution"
+            "Order Book Execution",
+            "Multi-Asset Clearing",
+            "Sovereign Treasuries",
+            "Tax-Loss Harvesting"
           ]
         },
         {
@@ -1257,6 +2036,61 @@ function useMetaTagManager(activeWorkspaceId: string) {
           },
           "featureList": workspace.features,
           "screenshot": `${window.location.origin}/assets/hero-screenshot.png`
+        },
+        {
+          "@type": "FinancialProduct",
+          "@id": `${window.location.origin}/#product-cash`,
+          "name": "High-Yield Cash Account",
+          "description": "Premium interest-bearing cash management sweep program routing capital to partner banks for FDIC coverage and high yield APY.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0.00",
+            "priceCurrency": "USD"
+          },
+          "provider": {
+            "@type": "Organization",
+            "name": "mtxquant"
+          }
+        },
+        {
+          "@type": "FinancialProduct",
+          "@id": `${window.location.origin}/#product-bonds`,
+          "name": "Bond Account",
+          "description": "Yield-optimized active fixed income bond portfolio programmatically balanced to capture high interest rate premiums.",
+          "provider": {
+            "@type": "Organization",
+            "name": "mtxquant"
+          }
+        },
+        {
+          "@type": "FinancialProduct",
+          "@id": `${window.location.origin}/#product-ira`,
+          "name": "Retirement IRA Match",
+          "description": "Traditional and Roth IRAs with an accelerator match program providing a complementary 1% capital boost.",
+          "provider": {
+            "@type": "Organization",
+            "name": "mtxquant"
+          }
+        },
+        {
+          "@type": "FinancialProduct",
+          "@id": `${window.location.origin}/#product-indexing`,
+          "name": "Direct Indexing",
+          "description": "Tax-optimized benchmark replication with fractional share allocations, supporting automated loss-harvesting.",
+          "provider": {
+            "@type": "Organization",
+            "name": "mtxquant"
+          }
+        },
+        {
+          "@type": "FinancialProduct",
+          "@id": `${window.location.origin}/#product-agents`,
+          "name": "Autonomous AI Trade Agents",
+          "description": "Quantitative trading algorithms running continuous volatility-based position resizing and automated risk management.",
+          "provider": {
+            "@type": "Organization",
+            "name": "mtxquant"
+          }
         }
       ]
     };
@@ -1306,6 +2140,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
   // Terminal telemetry indicators
   const [activeWorkspace, setActiveWorkspace] = useState<string>('markets');
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState<boolean>(true);
+  const [selectedInstrument, setSelectedInstrument] = useState<string>('');
 
   useEffect(() => {
     setIsWorkspaceLoading(true);
@@ -1473,6 +2308,10 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
   }, []);
 
   const faqs = [
+    {
+      q: "Does MTXquant support multi-asset clearing and unified collateral sweeps?",
+      a: "Yes. Our clearing framework aggregates multi-venue liquidity to provide tight execution margins and unified collateral sweeping across standard, synthetically formulated, and tax-advantaged instruments."
+    },
     {
       q: "What clearing models does MTXquant support?",
       a: "MTXquant operates under a fully segregated custody model. We offer both standard Regulation T clearing and advanced Portfolio Margining based on real-time Value-at-Risk (VaR) analysis. This optimizes capital efficiency for multi-legged options strategies and highly correlated equity books."
@@ -1644,6 +2483,74 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
           </div>
         </section>
 
+        {/* Section: Universal Instrument Spectrum (WITHOUT TITLE AND SUBTITLE AS REQUESTED) */}
+        <section id="instruments" className="py-1 sm:py-4 px-1 sm:px-0">
+          <div className="w-full py-2 sm:py-4 flex flex-col justify-center items-center text-center relative overflow-hidden">
+            {/* Subtle background glow effect */}
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.02),transparent_65%)] pointer-events-none"></div>
+            
+            <div 
+              className="w-full flex flex-col gap-3 sm:gap-10 z-10 select-none"
+              onMouseLeave={() => setSelectedInstrument('')}
+            >
+              {instrumentRows.map((row, rIndex) => (
+                <div key={rIndex} className="flex flex-wrap items-center justify-center gap-x-2.5 sm:gap-x-6 gap-y-2.5 sm:gap-y-4 text-center leading-normal">
+                  {row.map((item, iIndex) => {
+                    const isAnyHovered = selectedInstrument !== '';
+                    const isHovered = selectedInstrument === item.name;
+                    const hasBadge = item.hasBadge;
+                    
+                    return (
+                      <React.Fragment key={item.name}>
+                        <div
+                          onMouseEnter={() => setSelectedInstrument(item.name)}
+                          className="group relative text-center py-0.5 sm:py-1 flex items-center gap-1.5 sm:gap-2 transition-all duration-300"
+                        >
+                          <span 
+                            className={`font-serif text-lg sm:text-3xl md:text-4xl lg:text-5xl tracking-normal leading-none transition-all duration-500 ${
+                              isHovered 
+                                ? 'text-white scale-[1.04] filter drop-shadow-[0_0_15px_rgba(255,255,255,0.25)] font-normal opacity-100' 
+                                : isAnyHovered 
+                                  ? 'text-neutral-200/10 opacity-30' 
+                                  : 'text-neutral-200 group-hover:text-white'
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+
+                          {hasBadge && (
+                            <span 
+                              className={`text-[7px] sm:text-[9px] font-mono font-bold tracking-widest uppercase px-1.5 py-0.5 rounded transition-all duration-500 border ${
+                                isHovered 
+                                  ? 'bg-white/10 border-white/40 text-white scale-105' 
+                                  : isAnyHovered 
+                                    ? 'bg-transparent border-neutral-800/10 text-neutral-600/20'
+                                    : 'bg-[#09090b] border-neutral-800 text-neutral-400 group-hover:border-neutral-700 group-hover:text-neutral-300'
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {iIndex < row.length - 1 && (
+                          <span 
+                            className={`text-neutral-800/65 font-sans text-xs sm:text-base md:text-lg select-none pointer-events-none transition-all duration-500 ${
+                              isAnyHovered ? 'text-neutral-900/20' : 'text-neutral-800/65'
+                            }`}
+                          >
+                            ·
+                          </span>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Section Divider */}
         <hr className="border-neutral-800" />
 
@@ -1655,10 +2562,10 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
           </div>
           <div className="lg:col-span-8 space-y-6 text-neutral-200 font-light leading-relaxed text-sm">
             <p>
-              Traditional prime brokerages rely on outdated clearing processes and opaque capital distribution structures. At MTXquant, we build software first. We focus on modern clearing architectures, real-time collateral pricing, and transparent transaction fees.
+              Traditional prime brokerages rely on outdated clearing processes and opaque capital distribution structures. At MTX Securities, we build software first. We focus on modern clearing architectures, real-time collateral pricing, and transparent transaction fees.
             </p>
             <p>
-              By utilizing premium Tier-1 institutional custody relationships, we provide quantitative execution desks with structural isolation, ensuring that client collateral remains strictly segregated.
+              By utilizing premium Tier-1 institutional custody relationships, we provide retail and professional traders with structural isolation, ensuring that client collateral remains strictly segregated.
             </p>
           </div>
         </section>
@@ -1712,8 +2619,6 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
                       <span className="text-[10px] font-mono uppercase tracking-widest text-amber-500 font-black flex items-center gap-1.5">
                         {ws.icon} {ws.badge}
                       </span>
-                      <span className="text-[10px] font-mono text-neutral-700">|</span>
-                      <span className="text-[8.5px] font-mono text-neutral-300 uppercase font-bold">Source: {ws.files}</span>
                     </div>
                     <h3 className="text-base sm:text-lg font-bold text-white tracking-tight leading-snug font-sans">
                       {ws.seoTitle}
@@ -1770,6 +2675,9 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
             })}
           </div>
         </section>
+
+        {/* Section Divider */}
+        <hr className="border-neutral-800/60" />
 
         {/* Section: Structured FAQ Section (Excellent for SEO) */}
         <section id="onboarding" className="space-y-12 max-w-3xl">
@@ -1904,14 +2812,14 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
           <div className="space-y-3">
             <span className="font-mono text-[9px] uppercase font-bold tracking-widest text-neutral-200 block">Regulatory Compliance</span>
             <p className="text-[9px] text-neutral-300 leading-relaxed font-light">
-              Disclaimer: MTXquant is a registered trademark. Quantitative trading, options leveraging, and margin allocations carry significant capital risk. segment accounts strictly segregated under SEC and FINRA protocols.
+              Disclaimer: MTX Securities is a registered trademark. Stock investing, options leveraging, and margin allocations carry significant capital risk. Customer accounts are strictly segregated under SEC and FINRA protocols.
             </p>
           </div>
 
         </div>
 
         <div className="max-w-6xl mx-auto border-t border-neutral-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-300 text-[10px] font-mono uppercase tracking-wider">
-          <span>MTXquant Quantitative Terminal &copy; 2026. MTXquant is a registered trademark of MTXcapital.</span>
+          <span>MTX Securities Brokerage Terminal &copy; 2026. MTX Securities is a registered trademark of MTXcapital.</span>
           <div className="flex space-x-6">
             <span className="hover:text-white transition-colors cursor-help">Terms of service</span>
             <span className="hover:text-white transition-colors cursor-help">Privacy policy</span>

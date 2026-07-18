@@ -48,7 +48,7 @@ interface BacktestTrade {
   index: number;
   time: string;
   side: 'BUY' | 'SELL';
-  strategy: 'FVG_MITIGATION' | 'ORDER_BLOCK_BOUNCE' | 'LIQUIDITY_SWEEP';
+  strategy: 'MEAN_REVERSION' | 'TREND_FOLLOWING' | 'BREAKOUT_MOMENTUM';
   reason: string;
   entryPrice: number;
   stopLoss: number;
@@ -405,7 +405,7 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
         index: number;
         time: string;
         side: 'BUY' | 'SELL';
-        strategy: 'FVG_MITIGATION' | 'ORDER_BLOCK_BOUNCE' | 'LIQUIDITY_SWEEP';
+        strategy: 'MEAN_REVERSION' | 'TREND_FOLLOWING' | 'BREAKOUT_MOMENTUM';
         reason: string;
         entryPrice: number;
         stopLoss: number;
@@ -504,8 +504,8 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
                 index: i,
                 time: curr.timestamp,
                 side: 'BUY',
-                strategy: 'FVG_MITIGATION',
-                reason: `4H Displacement Gap mitigated at ${entry.toFixed(config.decimals)}. SL below swing low.`,
+                strategy: 'MEAN_REVERSION',
+                reason: `4H Trend Pivot touch-entry executed at ${entry.toFixed(config.decimals)}. SL below swing low.`,
                 entryPrice: parseFloat(entry.toFixed(config.decimals)),
                 stopLoss: parseFloat(stop.toFixed(config.decimals)),
                 takeProfit: parseFloat(profitTarget.toFixed(config.decimals)),
@@ -531,8 +531,8 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
                 index: i,
                 time: curr.timestamp,
                 side: 'SELL',
-                strategy: 'FVG_MITIGATION',
-                reason: `Bearish Imbalance entry trigger on FVG fill. Target 1:${targetRR} R:R.`,
+                strategy: 'MEAN_REVERSION',
+                reason: `Bearish Pivot entry trigger on consolidation boundary. Target 1:${targetRR} R:R.`,
                 entryPrice: parseFloat(entry.toFixed(config.decimals)),
                 stopLoss: parseFloat(stop.toFixed(config.decimals)),
                 takeProfit: parseFloat(profitTarget.toFixed(config.decimals)),
@@ -568,8 +568,8 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
                   index: i,
                   time: curr.timestamp,
                   side: 'BUY',
-                  strategy: 'ORDER_BLOCK_BOUNCE',
-                  reason: `Retest of Bullish Order Block (4H zone). Strong institutional presence`,
+                  strategy: 'TREND_FOLLOWING',
+                  reason: `Retest of Bullish Volume Support (4H zone). High buyer accumulation.`,
                   entryPrice: parseFloat(entry.toFixed(config.decimals)),
                   stopLoss: parseFloat(stop.toFixed(config.decimals)),
                   takeProfit: parseFloat(profitTarget.toFixed(config.decimals)),
@@ -600,8 +600,8 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
                   index: i,
                   time: curr.timestamp,
                   side: 'SELL',
-                  strategy: 'ORDER_BLOCK_BOUNCE',
-                  reason: `Bearish Order Block retest. Premium liquidity block validated.`,
+                  strategy: 'TREND_FOLLOWING',
+                  reason: `Bearish Volume Resistance retest. Premium supply level validated.`,
                   entryPrice: parseFloat(entry.toFixed(config.decimals)),
                   stopLoss: parseFloat(stop.toFixed(config.decimals)),
                   takeProfit: parseFloat(profitTarget.toFixed(config.decimals)),
@@ -638,8 +638,8 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
                   index: i,
                   time: curr.timestamp,
                   side: 'SELL',
-                  strategy: 'LIQUIDITY_SWEEP',
-                  reason: `Buy-side Liquidity Sweep of previous daily high. Displacement trigger.`,
+                  strategy: 'BREAKOUT_MOMENTUM',
+                  reason: `Breakout Momentum pulse of previous daily high. High range trigger.`,
                   entryPrice: parseFloat(entry.toFixed(config.decimals)),
                   stopLoss: parseFloat(stop.toFixed(config.decimals)),
                   takeProfit: parseFloat(profitTarget.toFixed(config.decimals)),
@@ -665,8 +665,8 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
                   index: i,
                   time: curr.timestamp,
                   side: 'BUY',
-                  strategy: 'LIQUIDITY_SWEEP',
-                  reason: `Sell-side Liquidity Sweep of previous daily minimum. Liquidity hunt filled.`,
+                  strategy: 'BREAKOUT_MOMENTUM',
+                  reason: `Breakout Momentum pulse of previous daily minimum. Trend expansion filled.`,
                   entryPrice: parseFloat(entry.toFixed(config.decimals)),
                   stopLoss: parseFloat(stop.toFixed(config.decimals)),
                   takeProfit: parseFloat(profitTarget.toFixed(config.decimals)),
@@ -1039,10 +1039,10 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
                 onChange={(e) => setStrategyType(e.target.value)}
                 className="w-full bg-[#050505] border border-white/10 text-white px-3 py-2 rounded text-xs focus:outline-none focus:border-indigo-500 font-bold"
               >
-                <option value="COMBO">MTXquant Confluence Strategy (All Heuristics)</option>
-                <option value="FVG">ICT Fair Value Gap (FVG Touch Entries)</option>
-                <option value="OB">ICT Order Block Bounce (Zone Retests)</option>
-                <option value="SWEEP">Liquidity Hunts (Daily Session Highs/Lows)</option>
+                <option value="COMBO">MTX Securities Confluence Strategy (All Heuristics)</option>
+                <option value="FVG">Intraday Mean Reversion (Trend Stabilization Touch)</option>
+                <option value="OB">Institutional Trend Following (Consolidation Zone Retests)</option>
+                <option value="SWEEP">Breakout Momentum Range (Highs/Lows Excursions)</option>
               </select>
             </div>
 

@@ -17,7 +17,7 @@ export const requireAuth = async (
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     console.warn('Missing Bearer token on requireAuth, falling back to default test user of dev/sandbox environment.');
     const mockUid = 'dev-user-uid-123';
-    const mockEmail = 'maziguluj@gmail.com';
+    const mockEmail = 'demo@gmail.com';
     req.user = { uid: mockUid, email: mockEmail };
     try {
       req.dbUser = await getOrCreateUser(mockUid, mockEmail);
@@ -43,7 +43,7 @@ export const requireAuth = async (
       req.dbUser = {
         id: 1,
         uid: decodedToken.uid || 'dev-user-uid-123',
-        email: decodedToken.email || 'maziguluj@gmail.com',
+        email: decodedToken.email || 'demo@gmail.com',
         createdAt: new Date()
       };
     }
@@ -53,7 +53,7 @@ export const requireAuth = async (
     console.error('Error verifying Firebase ID token. Falling back:', error);
     // Be highly resilient on sandbox/development previews when tokens expire or configuration is in transitions
     const mockUid = 'dev-user-uid-123';
-    const mockEmail = 'maziguluj@gmail.com';
+    const mockEmail = 'demo@gmail.com';
     req.user = { uid: mockUid, email: mockEmail };
     try {
       req.dbUser = await getOrCreateUser(mockUid, mockEmail);

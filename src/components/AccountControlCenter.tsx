@@ -571,17 +571,7 @@ export default function AccountControlCenter({
                 className="w-full h-full bg-[#07070a] flex flex-col font-mono text-white text-[10px]"
               >
               {/* Workspace Header Bar */}
-              <div className="px-4 sm:px-5 py-4 bg-gradient-to-r from-[#0d0d16] via-[#07070a] to-[#07070a] border-b border-white/10 flex items-center justify-between">
-                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white border border-indigo-500/30 shrink-0">
-                    <Cpu className="w-4 h-4 animate-pulse" />
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-[10px] xs:text-[11px] sm:text-[12px] font-black text-white tracking-wider block uppercase truncate max-w-[150px] xs:max-w-[220px] sm:max-w-none">MTX BROKERAGE ACCOUNTS & SYSTEM CORE</span>
-                    <span className="text-[7.5px] sm:text-[8px] text-white/40 block mt-0.5 truncate">Clearing Gateway Node: <span className="text-emerald-400 font-bold">SECURE_ACTIVE_DESK</span></span>
-                  </div>
-                </div>
-                
+              <div className="px-4 sm:px-5 py-3 bg-[#07070a] border-b border-white/10 flex items-center justify-end">
                 <button
                   type="button"
                   onClick={() => setIsWorkspaceOpen(false)}
@@ -1496,6 +1486,31 @@ export default function AccountControlCenter({
                               <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                             </select>
                           </div>
+                        </div>
+
+                        {/* Security Access Alignment */}
+                        <div className="p-3 bg-[#0d0c13]/50 border border-indigo-500/10 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
+                          <div className="flex items-start gap-2.5">
+                            <Shield className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-bold text-white block text-xs sm:text-sm">Inactivity Auto-Logout</span>
+                              <span className="text-[8px] sm:text-[9px] text-white/50 block leading-relaxed max-w-md">
+                                Mitigate terminal takeover risk. The application will automatically clear credentials and terminate active socket sessions after a designated window of inactivity.
+                              </span>
+                            </div>
+                          </div>
+                          <select
+                            value={idleTimeout}
+                            onChange={(e) => onSetIdleTimeout(e.target.value)}
+                            className="bg-black/60 text-white text-[10px] font-bold border border-white/10 px-2.5 py-1.5 rounded outline-none cursor-pointer hover:border-emerald-500/50 hover:text-emerald-300 transition-all focus:border-emerald-500 font-mono shrink-0 w-full sm:w-auto"
+                          >
+                            <option value="1">1 Minute (Testing / Audit)</option>
+                            <option value="5">5 Minutes (Aggressive)</option>
+                            <option value="15">15 Minutes (Recommended)</option>
+                            <option value="30">30 Minutes (Standard)</option>
+                            <option value="60">60 Minutes (Extended)</option>
+                            <option value="off">Disabled (Insecure / Public)</option>
+                          </select>
                         </div>
 
                         {/* Trading Preferences */}

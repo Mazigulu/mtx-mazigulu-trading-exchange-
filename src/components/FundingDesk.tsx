@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { PaymentModals } from './PaymentModals';
 import { 
   Wallet, 
   ArrowLeftRight, 
@@ -21,7 +22,12 @@ import {
   ExternalLink,
   ShieldCheck,
   Globe,
-  Coins
+  Coins,
+  Send,
+  Smartphone,
+  Lock,
+  Building,
+  QrCode
 } from 'lucide-react';
 
 interface FundingTx {
@@ -97,6 +103,34 @@ export default function FundingDesk() {
   const [regionalMethod, setRegionalMethod] = useState<'M-Pesa' | 'Airtel Money' | 'PIX' | 'UPI' | 'PayNow'>('M-Pesa');
   const [withdrawalStep, setWithdrawalStep] = useState<number>(1);
   const [destWalletAddress, setDestWalletAddress] = useState<string>('');
+
+  // Production Payment Rails States
+  const [activePaymentModal, setActivePaymentModal] = useState<null | 'stripe' | 'plaid' | 'coinbase' | 'mpesa' | 'wire'>(null);
+  const [stripeSecret, setStripeSecret] = useState<string>('');
+  const [stripeIntentId, setStripeIntentId] = useState<string>('');
+  const [stripeCardNum, setStripeCardNum] = useState<string>('4242 •••• •••• 4242');
+  const [stripeCardExpiry, setStripeCardExpiry] = useState<string>('12 / 29');
+  const [stripeCardCvc, setStripeCardCvc] = useState<string>('482');
+  const [plaidToken, setPlaidToken] = useState<string>('');
+  const [plaidLinked, setPlaidLinked] = useState<boolean>(false);
+  const [plaidBankSelected, setPlaidBankSelected] = useState<string>('');
+  const [coinbaseChargeData, setCoinbaseChargeData] = useState<any>(null);
+  const [mpesaCheckoutId, setMpesaCheckoutId] = useState<string>('');
+  const [mpesaStatus, setMpesaStatus] = useState<'idle' | 'sending' | 'pending' | 'success' | 'failed'>('idle');
+  const [wireInstructions, setWireInstructions] = useState<any>(null);
+
+  // Interactive wizard logs & steps
+  const [stripePaying, setStripePaying] = useState<boolean>(false);
+  const [stripeProgress, setStripeProgress] = useState<string[]>([]);
+  const [stripePaid, setStripePaid] = useState<boolean>(false);
+  const [plaidInnerStep, setPlaidInnerStep] = useState<'select' | 'credentials' | 'exchanging' | 'success'>('select');
+  const [plaidUsername, setPlaidUsername] = useState<string>('');
+  const [plaidPassword, setPlaidPassword] = useState<string>('');
+  const [coinbaseInnerStep, setCoinbaseInnerStep] = useState<'awaiting' | 'verifying' | 'success'>('awaiting');
+  const [coinbaseProgress, setCoinbaseProgress] = useState<string[]>([]);
+  const [mpesaPhone, setMpesaPhone] = useState<string>('0712345678');
+  const [mpesaInnerStep, setMpesaInnerStep] = useState<'input' | 'push_sent' | 'pin_prompt' | 'processing' | 'success'>('input');
+  const [mpesaPin, setMpesaPin] = useState<string>('');
 
   // Interactive Web3 wallet popup simulation and broadcast flow
   const [web3Stage, setWeb3Stage] = useState<'idle' | 'estimating' | 'prompting' | 'broadcasting' | 'confirming' | 'completed'>('idle');
@@ -261,6 +295,114 @@ export default function FundingDesk() {
 
   const executeTransferCall = async () => {
     const amount = parseFloat(transferAmount);
+    
+    // Check if we are doing a DEPOSIT on a custom payment rail
+    if (activeTab === 'deposit') {
+      if (transferMethod === 'CARD') {
+        try {
+          setLoading(true);
+          const res = await fetch('/api/payments/stripe/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount, currency: selectedAsset })
+          });
+          if (!res.ok) {
+            const errData = await res.json();
+            alert(errData.error || 'Stripe initialization failed.');
+            return;
+          }
+          const data = await res.json();
+          setStripeSecret(data.clientSecret);
+          setStripeIntentId(data.paymentIntentId);
+          setActivePaymentModal('stripe');
+        } catch (err) {
+          console.error('Stripe initialization exception:', err);
+          alert('Failed to connect to Stripe API rails.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (transferMethod === 'ACH' && !plaidLinked) {
+        try {
+          setLoading(true);
+          const res = await fetch('/api/payments/plaid/create-link-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (!res.ok) {
+            const errData = await res.json();
+            alert(errData.error || 'Plaid Link token generation failed.');
+            return;
+          }
+          const data = await res.json();
+          setPlaidToken(data.link_token);
+          setActivePaymentModal('plaid');
+        } catch (err) {
+          console.error('Plaid token exception:', err);
+          alert('Failed to initialize Plaid verification system.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (transferMethod === 'STABLECOIN') {
+        try {
+          setLoading(true);
+          const res = await fetch('/api/payments/coinbase/create-charge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount, currency: selectedAsset })
+          });
+          if (!res.ok) {
+            const errData = await res.json();
+            alert(errData.error || 'Coinbase Commerce initialization failed.');
+            return;
+          }
+          const data = await res.json();
+          setCoinbaseChargeData(data);
+          setActivePaymentModal('coinbase');
+        } catch (err) {
+          console.error('Coinbase Commerce connection exception:', err);
+          alert('Failed to initialize stablecoin custody payment gateway.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (transferMethod === 'REGIONAL' && selectedAsset === 'KES') {
+        // Show M-Pesa STK widget immediately to allow phone number input
+        setActivePaymentModal('mpesa');
+        setMpesaStatus('idle');
+        return;
+      }
+
+      if (transferMethod === 'WIRE') {
+        try {
+          setLoading(true);
+          const res = await fetch('/api/payments/wire/instructions');
+          if (!res.ok) {
+            const errData = await res.json();
+            alert(errData.error || 'Failed to retrieve Fedwire instructions.');
+            return;
+          }
+          const data = await res.json();
+          setWireInstructions(data);
+          setActivePaymentModal('wire');
+        } catch (err) {
+          console.error('Wire instructions exception:', err);
+          alert('Failed to contact Bank clearing API.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+    }
+
+    // Default or fallback (such as Withdrawals or already-authenticated ACH)
     try {
       setLoading(true);
       const res = await fetch('/api/funding/transfer', {
@@ -1102,6 +1244,22 @@ export default function FundingDesk() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* CUSTOM PRODUCTION PAYMENT RAILS MODALS */}
+      <PaymentModals
+        activePaymentModal={activePaymentModal}
+        setActivePaymentModal={setActivePaymentModal}
+        transferAmount={transferAmount}
+        setTransferAmount={setTransferAmount}
+        selectedAsset={selectedAsset}
+        fetchFundingState={fetchFundingState}
+        executeTransferCall={executeTransferCall}
+        plaidLinked={plaidLinked}
+        setPlaidLinked={setPlaidLinked}
+        setNotification={setNotification}
+        setCashBalance={setCashBalance}
+        setBalances={setBalances}
+      />
 
       {/* Global Connections Manager Modal */}
       <AnimatePresence>

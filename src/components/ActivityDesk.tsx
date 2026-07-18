@@ -325,7 +325,7 @@ const INITIAL_ACTIVITIES: ActivityEvent[] = [
     settlementRail: 'Firebase Authentication Auth-Service',
     fees: 'N/A',
     timeline: [
-      { label: 'Reset Email Requested', timestamp: '17:29:12', description: 'Verification link sent to user email: maziguluj@gmail.com' },
+      { label: 'Reset Email Requested', timestamp: '17:29:12', description: 'Verification link sent to user email: demo@gmail.com' },
       { label: 'One-Time Secret Validated', timestamp: '17:32:00', description: 'User clicked cryptographic token and verified identity' },
       { label: 'Security Password Committed', timestamp: '17:33:04', description: 'Salts updated in database. Current user active sessions retained' }
     ]
@@ -464,7 +464,7 @@ const INITIAL_ACTIVITIES: ActivityEvent[] = [
     fees: '$0.00 (Inbound institutional wire fees waived)',
     timeline: [
       { label: 'SWIFT Message Processed', timestamp: '08:15:00', description: 'Fedwire incoming block received' },
-      { label: 'Treasury Matching Succeeded', timestamp: '09:05:10', description: 'Matched sub-account code to maziguluj@gmail.com' },
+      { label: 'Treasury Matching Succeeded', timestamp: '09:05:10', description: 'Matched sub-account code to demo@gmail.com' },
       { label: 'Ledger Capital Certified', timestamp: '09:15:30', description: 'USD Balance increased to support active positions' }
     ]
   },

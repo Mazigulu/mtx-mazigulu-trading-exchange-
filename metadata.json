@@ -1,6 +1,6 @@
 {
   "name": "mtx",
-  "description": "Advanced institutional quantitative swing trading agent based on Inner Circle Trader concepts with real-time news filters and order flow indicators.",
+  "description": "Apex MTX is an institutional multi-asset securities brokerage and trading platform featuring zero-latency order routing, fractional shares, portfolio margin accounting, real-time risk protections, and dynamic market visualizations.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

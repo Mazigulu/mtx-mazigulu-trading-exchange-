@@ -320,15 +320,19 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
   const [heatmapMetric, setHeatmapMetric] = useState<'PNL' | 'DRAWDOWN' | 'COUNT'>('PNL');
   const [selectedHeatmapHour, setSelectedHeatmapHour] = useState<number | null>(null);
 
-  const INITIAL_BALANCE = 10000;
+  const traderEmail = localStorage.getItem('apex_trader_email') || 'demo@gmail.com';
+  const isDemo = traderEmail.toLowerCase() === 'demo@gmail.com';
+  const INITIAL_BALANCE = isDemo ? 10000 : 0;
 
   // Complete historical timeline of closed trades, combining backend DB and audited history
   const allClosedTradesSorted = useMemo(() => {
     // Only aggregate closed trades
     const userClosedTrades = trades.filter((t) => t.status === 'CLOSED');
     
+    const seedTrades = isDemo ? AUDITED_HISTORIC_TRADES : [];
+
     // De-duplicate so we don't double count and merge overrides
-    const combined = AUDITED_HISTORIC_TRADES.map(t => {
+    const combined = seedTrades.map(t => {
       const override = localOverrides[t.id];
       if (override) {
         return { ...t, ...override };
@@ -346,7 +350,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
 
     // Sort chronologically
     return combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  }, [trades, localOverrides]);
+  }, [trades, localOverrides, isDemo]);
 
   // Session PnL Heatmap calculations to identify time-based performance, peak and trough drawdowns
   const sessionHeatmapData = useMemo(() => {
