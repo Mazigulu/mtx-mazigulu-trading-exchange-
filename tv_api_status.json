@@ -3,11 +3,11 @@
   "apiKeyLength": 50,
   "apiKeyPlaceholder": false,
   "lastTvStatus": {
-    "NVDA": {
+    "NAS100": {
       "status": "RATE_LIMITED",
-      "timestamp": "2026-07-15T18:21:41.809Z",
+      "timestamp": "2026-07-29T21:58:13.536Z",
       "error": "Rate limiting (429) encountered. Backing off gracefully to prevent excessive traffic.",
-      "symbolUsed": "NASDAQ:NVDA",
+      "symbolUsed": "NASDAQ:NDX",
       "apiKeyLength": 50,
       "responseStatus": 429
     }

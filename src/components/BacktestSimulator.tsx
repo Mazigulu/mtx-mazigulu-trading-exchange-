@@ -160,6 +160,105 @@ const SYMBOL_CONFIGS: Partial<Record<MarketSymbol, {
     flagF1: '🇺🇸',
     flagF2: '⚡',
     newsEvents: []
+  },
+  'AMZN': {
+    name: 'Amazon.com Inc.',
+    basePrice: 186.40,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 3.2,
+    driftFactor: 6.0,
+    flagF1: '🇺🇸',
+    flagF2: '📦',
+    newsEvents: []
+  },
+  'META': {
+    name: 'Meta Platforms Inc.',
+    basePrice: 492.10,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 8.5,
+    driftFactor: 14.0,
+    flagF1: '🇺🇸',
+    flagF2: '♾️',
+    newsEvents: []
+  },
+  'GOOGL': {
+    name: 'Alphabet Inc.',
+    basePrice: 176.80,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 2.8,
+    driftFactor: 5.2,
+    flagF1: '🇺🇸',
+    flagF2: '🔍',
+    newsEvents: []
+  },
+  'NFLX': {
+    name: 'Netflix Inc.',
+    basePrice: 624.50,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 12.0,
+    driftFactor: 20.0,
+    flagF1: '🇺🇸',
+    flagF2: '🍿',
+    newsEvents: []
+  },
+  'AMD': {
+    name: 'Advanced Micro Devices',
+    basePrice: 162.30,
+    pipSize: 0.01,
+    decimals: 2,
+    averageRange: 4.2,
+    driftFactor: 7.5,
+    flagF1: '🇺🇸',
+    flagF2: '⚡',
+    newsEvents: []
+  },
+  'BTC/USDT': {
+    name: 'Bitcoin / Tether',
+    basePrice: 65200.0,
+    pipSize: 1.0,
+    decimals: 1,
+    averageRange: 1200.0,
+    driftFactor: 2200.0,
+    flagF1: '₿',
+    flagF2: '🌐',
+    newsEvents: []
+  },
+  'ETH/USDT': {
+    name: 'Ethereum / Tether',
+    basePrice: 3420.0,
+    pipSize: 0.1,
+    decimals: 2,
+    averageRange: 85.0,
+    driftFactor: 150.0,
+    flagF1: 'Ξ',
+    flagF2: '🌐',
+    newsEvents: []
+  },
+  'EUR/USD': {
+    name: 'Euro / US Dollar',
+    basePrice: 1.0865,
+    pipSize: 0.0001,
+    decimals: 4,
+    averageRange: 0.0060,
+    driftFactor: 0.0120,
+    flagF1: '🇪🇺',
+    flagF2: '🇺🇸',
+    newsEvents: []
+  },
+  'GOLD/USD': {
+    name: 'Gold Spot / Dollar',
+    basePrice: 2362.0,
+    pipSize: 0.1,
+    decimals: 2,
+    averageRange: 25.0,
+    driftFactor: 45.0,
+    flagF1: '🥇',
+    flagF2: '🇺🇸',
+    newsEvents: []
   }
 };
 
@@ -949,6 +1048,15 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
               <option value="MSFT">💻 MSFT (Microsoft)</option>
               <option value="NVDA">🟩 NVDA (NVIDIA)</option>
               <option value="TSLA">🚗 TSLA (Tesla)</option>
+              <option value="AMZN">📦 AMZN (Amazon)</option>
+              <option value="META">♾️ META (Meta Platforms)</option>
+              <option value="GOOGL">🔍 GOOGL (Alphabet / Google)</option>
+              <option value="NFLX">🍿 NFLX (Netflix)</option>
+              <option value="AMD">⚡ AMD (Advanced Micro Devices)</option>
+              <option value="BTC/USDT">₿ BTC/USDT (Bitcoin)</option>
+              <option value="ETH/USDT">Ξ ETH/USDT (Ethereum)</option>
+              <option value="EUR/USD">🇪🇺 EUR/USD (Euro / US Dollar)</option>
+              <option value="GOLD/USD">🥇 GOLD/USD (Gold Spot)</option>
             </select>
           </div>
 
@@ -1155,11 +1263,12 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                  <XAxis dataKey="label" stroke="#737373" fontSize={10} fontFamily="monospace" />
+                  <XAxis dataKey="label" stroke="#ffffff" fontSize={10} fontFamily="monospace" tick={{ fill: '#ffffff' }} />
                   <YAxis
-                    stroke="#737373"
+                    stroke="#ffffff"
                     fontSize={10}
                     fontFamily="monospace"
+                    tick={{ fill: '#ffffff' }}
                     domain={['dataMin - 100', 'dataMax + 100']}
                     tickFormatter={(val) => `$${val}`}
                   />

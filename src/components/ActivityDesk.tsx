@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
   Filter, 
@@ -892,68 +893,18 @@ export default function ActivityDesk() {
   return (
     <div className="space-y-6 text-white font-mono">
       
-      {/* Page Title & Operational Info Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/30 rounded text-[9px] font-black tracking-widest text-indigo-400">
-              LEDGER CORE
-            </span>
-            <span className="text-[10px] text-neutral-200 uppercase tracking-widest">Permanent Registry</span>
-          </div>
-          <h2 className="text-xl font-black text-white tracking-tight mt-1.5 flex items-center gap-2">
-            <History className="w-5 h-5 text-indigo-400 stroke-[2.5px]" />
-            Activity Workspace
-          </h2>
-        </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex rounded-lg bg-black/40 border border-white/5 p-1">
-            <button
-              onClick={() => setViewMode('TABLE')}
-              className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-                viewMode === 'TABLE' 
-                  ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30' 
-                  : 'text-neutral-200 hover:text-white'
-              }`}
-              title="Table Grid Blotter View"
-            >
-              <List className="w-3.5 h-3.5" />
-              <span>Table View</span>
-            </button>
-            <button
-              onClick={() => setViewMode('TIMELINE')}
-              className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-                viewMode === 'TIMELINE' 
-                  ? 'bg-indigo-600/15 text-indigo-300 border border-indigo-500/30' 
-                  : 'text-neutral-200 hover:text-white'
-              }`}
-              title="Chronological Timeline View"
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Timeline View</span>
-            </button>
-          </div>
-
-          <button
-            onClick={handleDownloadCSV}
-            className="px-3.5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-black uppercase tracking-wider text-white transition-all cursor-pointer flex items-center gap-2"
-            title="Download CSV Statement Audit Blotter"
-          >
-            <Download className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Export statement CSV</span>
-          </button>
-        </div>
-      </div>
 
       {/* ──────────────────── TOP SUMMARY CARDS (FOUR-CARD LAYOUT) ──────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Card 1: Today's Activity */}
-        <div className="bg-[#08080c] border border-white/10 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-500/[0.02] rounded-full blur-2xl group-hover:bg-indigo-500/[0.05] transition-all" />
-          <span className="text-neutral-200 text-[8.5px] font-black uppercase tracking-widest block">Today's Activity</span>
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          className="bg-[#080808] border border-white/5 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group transition-colors duration-200"
+        >
+          <span className="text-white/70 text-[8.5px] font-black uppercase tracking-widest block font-bold">Today's Activity</span>
           <span className="text-2xl font-black text-white block mt-1.5">
             {operationsMetrics.todaysEventsCount} Events
           </span>
@@ -961,16 +912,19 @@ export default function ActivityDesk() {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
             +3 Since Yesterday
           </span>
-        </div>
+        </motion.div>
 
         {/* Card 2: Pending Actions */}
-        <div className="bg-[#08080c] border border-white/10 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-amber-500/[0.02] rounded-full blur-2xl group-hover:bg-amber-500/[0.05] transition-all" />
-          <span className="text-neutral-200 text-[8.5px] font-black uppercase tracking-widest block">Pending Actions</span>
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          className="bg-[#080808] border border-white/5 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group transition-colors duration-200"
+        >
+          <span className="text-white/70 text-[8.5px] font-black uppercase tracking-widest block font-bold">Pending Actions</span>
           <span className="text-2xl font-black text-amber-400 block mt-1.5">
             {operationsMetrics.pendingCount} Pending
           </span>
-          <div className="text-[9.5px] text-neutral-200 block mt-2 leading-relaxed space-y-0.5">
+          <div className="text-[9.5px] text-white/70 block mt-2 leading-relaxed space-y-0.5 font-bold">
             <div className="flex justify-between">
               <span>Withdrawal Limit Queue:</span>
               <span className="font-bold text-white">{operationsMetrics.pendingWithdrawals} Outbound</span>
@@ -980,12 +934,15 @@ export default function ActivityDesk() {
               <span className="font-bold text-white">{operationsMetrics.pendingInvestments} Order</span>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 3: Settled Transactions */}
-        <div className="bg-[#08080c] border border-white/10 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-500/[0.02] rounded-full blur-2xl group-hover:bg-emerald-500/[0.05] transition-all" />
-          <span className="text-neutral-200 text-[8.5px] font-black uppercase tracking-widest block">Settled Transactions</span>
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          className="bg-[#080808] border border-white/5 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group transition-colors duration-200"
+        >
+          <span className="text-white/70 text-[8.5px] font-black uppercase tracking-widest block font-bold">Settled Transactions</span>
           <span className="text-2xl font-black text-white block mt-1.5">
             {operationsMetrics.completedCount} Completed
           </span>
@@ -993,31 +950,34 @@ export default function ActivityDesk() {
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             {operationsMetrics.successRate}% Success Rate
           </span>
-        </div>
+        </motion.div>
 
         {/* Card 4: Total Transaction Volume */}
-        <div className="bg-[#08080c] border border-white/10 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/[0.02] rounded-full blur-2xl group-hover:bg-purple-500/[0.05] transition-all" />
-          <span className="text-neutral-200 text-[8.5px] font-black uppercase tracking-widest block">Total Transaction Volume</span>
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          className="bg-[#080808] border border-white/5 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group transition-colors duration-200"
+        >
+          <span className="text-white/70 text-[8.5px] font-black uppercase tracking-widest block font-bold">Total Transaction Volume</span>
           <span className="text-2xl font-black text-indigo-300 block mt-1.5">
             ${operationsMetrics.totalVolumeUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </span>
-          <span className="text-[10px] text-neutral-200 font-semibold block mt-2">
+          <span className="text-[10px] text-white/70 font-bold block mt-2">
             Cumulative Since Account Creation
           </span>
-        </div>
+        </motion.div>
 
       </div>
 
       {/* ──────────────────── SEARCH & FILTERS SECTION ──────────────────── */}
-      <div className="bg-[#08080d] border border-white/10 rounded-xl p-5 space-y-4 shadow-lg text-left">
+      <div className="bg-[#080808] border border-white/5 rounded-xl p-5 space-y-4 shadow-lg text-left">
         
         {/* Core Inputs Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           
           {/* Search Box */}
           <div className="lg:col-span-5 relative">
-            <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-neutral-200">
+            <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-white/60">
               <Search className="w-4 h-4" />
             </span>
             <input
@@ -1025,7 +985,7 @@ export default function ActivityDesk() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by asset, ref ID, amount, payment method..."
-              className="w-full bg-[#040406] border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-[11px] placeholder-neutral-200 text-white focus:outline-none focus:border-indigo-500/40 transition-colors"
+              className="w-full bg-[#0d0d12] border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-[11px] placeholder-white/50 text-white focus:outline-none focus:border-indigo-500/40 transition-colors font-medium"
             />
           </div>
 
@@ -1034,7 +994,7 @@ export default function ActivityDesk() {
             <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value as any)}
-              className="w-full bg-[#040406] border border-white/10 rounded-lg py-2.5 px-3 text-[11px] text-white/80 focus:outline-none focus:border-indigo-500/40 transition-colors cursor-pointer"
+              className="w-full bg-[#0d0d12] border border-white/10 rounded-lg py-2.5 px-3 text-[11px] text-white font-bold focus:outline-none focus:border-indigo-500/40 transition-colors cursor-pointer"
             >
               <option value="ALL">All Recorded Dates</option>
               <option value="TODAY">Today (2026-07-03)</option>
@@ -1049,21 +1009,21 @@ export default function ActivityDesk() {
           {dateFilter === 'CUSTOM' && (
             <div className="lg:col-span-4 grid grid-cols-2 gap-2 animate-fadeIn">
               <div className="relative">
-                <span className="absolute top-2.5 left-2.5 text-[8px] text-neutral-200 uppercase tracking-widest font-black">From</span>
+                <span className="absolute top-2.5 left-2.5 text-[8px] text-white/80 uppercase tracking-widest font-black">From</span>
                 <input
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="w-full bg-[#040406] border border-white/10 rounded-lg pt-4 pb-1 px-2.5 text-[10px] text-white focus:outline-none focus:border-indigo-500/40 transition-colors"
+                  className="w-full bg-[#040406] border border-white/10 rounded-lg pt-4 pb-1 px-2.5 text-[10px] text-white font-bold focus:outline-none focus:border-indigo-500/40 transition-colors"
                 />
               </div>
               <div className="relative">
-                <span className="absolute top-2.5 left-2.5 text-[8px] text-neutral-200 uppercase tracking-widest font-black">To</span>
+                <span className="absolute top-2.5 left-2.5 text-[8px] text-white/80 uppercase tracking-widest font-black">To</span>
                 <input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="w-full bg-[#040406] border border-white/10 rounded-lg pt-4 pb-1 px-2.5 text-[10px] text-white focus:outline-none focus:border-indigo-500/40 transition-colors"
+                  className="w-full bg-[#040406] border border-white/10 rounded-lg pt-4 pb-1 px-2.5 text-[10px] text-white font-bold focus:outline-none focus:border-indigo-500/40 transition-colors"
                 />
               </div>
             </div>
@@ -1093,7 +1053,7 @@ export default function ActivityDesk() {
         {/* Filter Chips Horizontal Slider Row */}
         <div className="border-t border-white/5 pt-3.5">
           <div className="flex items-center gap-2 overflow-x-auto pb-1.5 no-scrollbar scroll-smooth">
-            <span className="text-[9px] text-neutral-200 font-bold uppercase tracking-wider shrink-0 flex items-center gap-1 select-none">
+            <span className="text-[9px] text-white/80 font-bold uppercase tracking-wider shrink-0 flex items-center gap-1 select-none">
               <Filter className="w-3 h-3 text-indigo-400" />
               Event Filters:
             </span>
@@ -1104,7 +1064,7 @@ export default function ActivityDesk() {
                 className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wide transition-all shrink-0 cursor-pointer ${
                   activeCategoryFilter === chip.value 
                     ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40 shadow-sm' 
-                    : 'bg-black/35 text-neutral-200 border border-white/5 hover:text-white hover:bg-white/[0.02]'
+                    : 'bg-black/35 text-white/80 font-bold border border-white/5 hover:text-white hover:bg-white/[0.02]'
                 }`}
               >
                 {chip.label}
@@ -1117,13 +1077,13 @@ export default function ActivityDesk() {
 
       {/* ──────────────────── MAIN RESULTS BLOTTER LIST ──────────────────── */}
       {filteredActivities.length === 0 ? (
-        <div className="border border-dashed border-white/10 bg-[#08080c] rounded-2xl p-16 text-center space-y-4">
-          <div className="p-3 bg-white/5 rounded-full w-12 h-12 flex items-center justify-center mx-auto text-neutral-200">
+        <div className="border border-dashed border-white/10 bg-[#080808] rounded-2xl p-16 text-center space-y-4">
+          <div className="p-3 bg-white/5 rounded-full w-12 h-12 flex items-center justify-center mx-auto text-white/80">
             <History className="w-6 h-6 animate-pulse" />
           </div>
           <div className="space-y-1.5">
             <h4 className="text-xs font-black uppercase text-white tracking-widest">No matched transaction entries</h4>
-            <p className="text-[10px] text-neutral-200 max-w-md mx-auto leading-relaxed">
+            <p className="text-[10px] text-white/80 max-w-md mx-auto leading-relaxed font-medium">
               No permanently committed ledger records correspond to your criteria. Try loosening search terms or switching categories.
             </p>
           </div>
@@ -1132,11 +1092,11 @@ export default function ActivityDesk() {
         viewMode === 'TABLE' ? (
           
           /* TABLE VIEW: Institutional Trade Blotter */
-          <div className="bg-[#08080c] border border-white/10 rounded-xl overflow-hidden shadow-2xl">
+          <div className="bg-[#080808] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-white/[0.02] border-b border-white/10 text-[9px] font-bold uppercase tracking-wider text-neutral-200">
+                  <tr className="bg-white/[0.02] border-b border-white/10 text-[9px] font-bold uppercase tracking-wider text-white/80">
                     <th className="py-4 px-5">Timestamp</th>
                     <th className="py-4 px-5">Event</th>
                     <th className="py-4 px-5">Asset / Method</th>
@@ -1159,7 +1119,7 @@ export default function ActivityDesk() {
                         title="Click row to open permanent audit ledger details"
                       >
                         {/* Timestamp */}
-                        <td className="py-3.5 px-5 text-neutral-200 font-mono whitespace-nowrap">
+                        <td className="py-3.5 px-5 text-white/90 font-medium font-mono whitespace-nowrap">
                           {activity.timestamp}
                         </td>
 
@@ -1178,11 +1138,11 @@ export default function ActivityDesk() {
                         </td>
 
                         {/* Asset / Method */}
-                        <td className="py-3.5 px-5 text-neutral-200 whitespace-nowrap">
-                          <span className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded font-semibold text-white/80">
+                        <td className="py-3.5 px-5 text-white/90 font-medium whitespace-nowrap">
+                          <span className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded font-bold text-white">
                             {activity.asset}
                           </span>
-                          <span className="text-[9px] text-neutral-200 ml-2 font-normal">
+                          <span className="text-[9px] text-white/70 ml-2 font-medium">
                             ({activity.methodOrDetail})
                           </span>
                         </td>
@@ -1190,7 +1150,7 @@ export default function ActivityDesk() {
                         {/* Amount */}
                         <td className="py-3.5 px-5 text-right font-black whitespace-nowrap font-mono">
                           {isNeutral ? (
-                            <span className="text-neutral-200">N/A</span>
+                            <span className="text-white/70 font-bold">N/A</span>
                           ) : (
                             <span className={isOutbound ? 'text-rose-400' : 'text-emerald-400'}>
                               {isOutbound ? '-' : '+'}{activity.amount}
@@ -1200,11 +1160,10 @@ export default function ActivityDesk() {
 
                         {/* Status Badges */}
                         <td className="py-3.5 px-5 text-center whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wide leading-none ${
-                            activity.status === 'Completed' ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400' :
-                            activity.status === 'Pending' ? 'bg-amber-500/10 border border-amber-500/25 text-amber-400 animate-pulse' :
-                            activity.status === 'Processing' ? 'bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 animate-pulse' :
-                            activity.status === 'Cancelled' ? 'bg-white/5 border border-white/10 text-neutral-200' :
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wide leading-none transition-all duration-500 ease-in-out ${
+                            activity.status === 'Completed' || activity.status === 'Filled' ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400' :
+                            activity.status === 'Pending' || activity.status === 'Processing' ? 'bg-amber-500/10 border border-amber-500/25 text-amber-400 animate-pulse' :
+                            activity.status === 'Cancelled' || activity.status === 'Failed' ? 'bg-rose-500/10 border border-rose-500/25 text-rose-400' :
                             activity.status === 'Partially Filled' ? 'bg-sky-500/10 border border-sky-500/25 text-sky-400' :
                             'bg-rose-500/10 border border-rose-500/25 text-rose-400'
                           }`}>
@@ -1213,12 +1172,12 @@ export default function ActivityDesk() {
                         </td>
 
                         {/* Reference ID */}
-                        <td className="py-3.5 px-5 text-center font-mono text-neutral-200 font-semibold text-[9.5px]">
+                        <td className="py-3.5 px-5 text-center font-mono text-white font-bold text-[9.5px]">
                           {activity.refId}
                         </td>
 
                         {/* Drawer Review Chevron CTA */}
-                        <td className="py-3.5 px-5 text-right whitespace-nowrap text-neutral-400 group-hover:text-white transition-colors">
+                        <td className="py-3.5 px-5 text-right whitespace-nowrap text-white/70 group-hover:text-white transition-colors">
                           <ChevronRight className="w-4 h-4 ml-auto group-hover:translate-x-0.5 transition-transform" />
                         </td>
                       </tr>
@@ -1243,7 +1202,7 @@ export default function ActivityDesk() {
                 <div 
                   key={activity.id}
                   onClick={() => setSelectedActivity(activity)}
-                  className="relative group cursor-pointer bg-[#08080c] border border-white/10 hover:border-indigo-500/30 rounded-xl p-4 shadow-md transition-all active:scale-[0.99] max-w-3xl"
+                  className="relative group cursor-pointer bg-[#080808] border border-white/5 hover:border-indigo-500/30 rounded-xl p-4 shadow-md transition-all active:scale-[0.99] max-w-3xl"
                 >
                   {/* Outer circle marker on timeline */}
                   <div className="absolute -left-[27px] md:-left-[35px] top-4.5 w-3.5 h-3.5 rounded-full bg-[#050505] border border-white/20 flex items-center justify-center group-hover:border-indigo-400 transition-colors">
@@ -1258,15 +1217,14 @@ export default function ActivityDesk() {
                     {/* Left: Time and Title */}
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[9.5px] text-neutral-200 font-mono tracking-tight font-semibold">
+                        <span className="text-[9.5px] text-white/90 font-mono tracking-tight font-bold">
                           {activity.timestamp}
                         </span>
                         <span className={`px-1.5 py-0.2 rounded text-[7.5px] font-extrabold uppercase tracking-widest ${
-                          activity.status === 'Completed' ? 'bg-emerald-500/5 text-emerald-400 border border-emerald-500/10' :
-                          activity.status === 'Pending' ? 'bg-amber-500/5 text-amber-400 border border-amber-500/10 animate-pulse' :
-                          activity.status === 'Processing' ? 'bg-indigo-500/5 text-indigo-400 border border-indigo-500/10 animate-pulse' :
-                          activity.status === 'Cancelled' ? 'bg-white/5 text-neutral-400' :
-                          'bg-rose-500/5 text-rose-400 border border-rose-500/10'
+                          activity.status === 'Completed' || activity.status === 'Filled' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' :
+                          activity.status === 'Pending' || activity.status === 'Processing' ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400 animate-pulse' :
+                          activity.status === 'Cancelled' || activity.status === 'Failed' ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400' :
+                          'bg-sky-500/10 border border-sky-500/20 text-sky-400'
                         }`}>
                           {activity.status}
                         </span>
@@ -1274,16 +1232,16 @@ export default function ActivityDesk() {
                       <h4 className="text-xs font-black text-white group-hover:text-indigo-300 transition-colors">
                         {activity.eventName}
                       </h4>
-                      <p className="text-[10px] text-neutral-200">
-                        Payment system rail: <strong className="text-white font-semibold">{activity.methodOrDetail}</strong> • Ref: <span className="font-mono text-indigo-300">{activity.refId}</span>
+                      <p className="text-[10px] text-white/80 font-medium">
+                        Payment system rail: <strong className="text-white font-bold">{activity.methodOrDetail}</strong> • Ref: <span className="font-mono text-indigo-300 font-bold">{activity.refId}</span>
                       </p>
                     </div>
 
                     {/* Right: Amount or Value block */}
                     <div className="sm:text-right shrink-0 mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-white/5 sm:border-t-0 flex sm:flex-col justify-between sm:justify-center">
-                      <span className="text-[8.5px] text-neutral-200 uppercase tracking-widest block sm:mb-0.5">Clearing Value</span>
+                      <span className="text-[8.5px] text-white/70 uppercase tracking-widest block sm:mb-0.5 font-bold">Clearing Value</span>
                       <span className={`text-[12px] font-black font-mono ${
-                        isNeutral ? 'text-neutral-200' : isOutbound ? 'text-rose-400' : 'text-emerald-400'
+                        isNeutral ? 'text-white/80 font-bold' : isOutbound ? 'text-rose-400' : 'text-emerald-400'
                       }`}>
                         {isNeutral ? 'N/A' : isOutbound ? `-${activity.amount}` : `+${activity.amount}`}
                       </span>
@@ -1322,7 +1280,7 @@ export default function ActivityDesk() {
               </div>
               <button
                 onClick={() => setSelectedActivity(null)}
-                className="p-1.5 hover:bg-white/5 rounded-lg text-neutral-200 hover:text-white transition-all cursor-pointer"
+                className="p-1.5 hover:bg-white/5 rounded-lg text-white/80 hover:text-white transition-all cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1333,15 +1291,14 @@ export default function ActivityDesk() {
               
               {/* SECTION 1: Event Summary */}
               <div className="bg-[#040405] p-4 rounded-xl border border-white/5 text-center space-y-1.5">
-                <span className="text-[8.5px] text-neutral-200 uppercase tracking-widest block font-semibold">Event Description</span>
+                <span className="text-[8.5px] text-white/70 uppercase tracking-widest block font-bold">Event Description</span>
                 <h4 className="text-sm font-black text-white">{selectedActivity.eventName}</h4>
                 <div className="flex justify-center gap-2 pt-1">
                   <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wide leading-none ${
-                    selectedActivity.status === 'Completed' ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400' :
-                    selectedActivity.status === 'Pending' ? 'bg-amber-500/10 border border-amber-500/25 text-amber-400 animate-pulse' :
-                    selectedActivity.status === 'Processing' ? 'bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 animate-pulse' :
-                    selectedActivity.status === 'Cancelled' ? 'bg-white/5 border border-white/10 text-neutral-200' :
-                    'bg-rose-500/10 border border-rose-500/25 text-rose-400'
+                    selectedActivity.status === 'Completed' || selectedActivity.status === 'Filled' ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400' :
+                    selectedActivity.status === 'Pending' || selectedActivity.status === 'Processing' ? 'bg-amber-500/10 border border-amber-500/25 text-amber-400 animate-pulse' :
+                    selectedActivity.status === 'Cancelled' || selectedActivity.status === 'Failed' ? 'bg-rose-500/10 border border-rose-500/25 text-rose-400' :
+                    'bg-sky-500/10 border border-sky-500/25 text-sky-400'
                   }`}>
                     {selectedActivity.status}
                   </span>
@@ -1350,7 +1307,7 @@ export default function ActivityDesk() {
 
               {/* SECTION 2: Settlement Timeline Operations (Audit Trail) */}
               <div className="space-y-3.5">
-                <span className="text-[9.5px] text-neutral-200 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
+                <span className="text-[9.5px] text-white/80 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
                   Chronological Audit Trail
                 </span>
                 
@@ -1364,9 +1321,9 @@ export default function ActivityDesk() {
                       <div className="absolute -left-[18.5px] top-1 w-2 h-2 rounded-full bg-[#09090d] border border-indigo-400" />
                       <div className="flex justify-between items-center text-[9.5px]">
                         <span className="font-bold text-white">{step.label}</span>
-                        <span className="text-neutral-200 font-mono">{step.timestamp}</span>
+                        <span className="text-white/80 font-mono font-bold">{step.timestamp}</span>
                       </div>
-                      <p className="text-[9px] text-neutral-200 mt-0.5 leading-normal">
+                      <p className="text-[9px] text-white/80 mt-0.5 leading-normal font-medium">
                         {step.description}
                       </p>
                     </div>
@@ -1376,30 +1333,30 @@ export default function ActivityDesk() {
 
               {/* SECTION 3: Transaction Details Grid */}
               <div className="space-y-3">
-                <span className="text-[9.5px] text-neutral-200 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
+                <span className="text-[9.5px] text-white/80 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
                   Asset Parameters
                 </span>
                 
                 <div className="grid grid-cols-2 gap-4 bg-[#040405] p-3.5 rounded-xl border border-white/5">
                   <div>
-                    <span className="text-neutral-200 text-[8px] uppercase tracking-wider block">Target Asset / Currency</span>
+                    <span className="text-white/70 text-[8px] uppercase tracking-wider block font-bold">Target Asset / Currency</span>
                     <span className="text-white font-bold block mt-0.5">{selectedActivity.asset}</span>
                   </div>
                   <div>
-                    <span className="text-neutral-200 text-[8px] uppercase tracking-wider block">Quantity / Volume</span>
+                    <span className="text-white/70 text-[8px] uppercase tracking-wider block font-bold">Quantity / Volume</span>
                     <span className="text-white font-bold block mt-0.5">{selectedActivity.quantity || 'N/A'}</span>
                   </div>
                   <div>
-                    <span className="text-neutral-200 text-[8px] uppercase tracking-wider block">Reference Spot Price</span>
+                    <span className="text-white/70 text-[8px] uppercase tracking-wider block font-bold">Reference Spot Price</span>
                     <span className="text-white font-bold block mt-0.5">{selectedActivity.price || 'N/A'}</span>
                   </div>
                   <div>
-                    <span className="text-neutral-200 text-[8px] uppercase tracking-wider block">Execution Gross Value</span>
+                    <span className="text-white/70 text-[8px] uppercase tracking-wider block font-bold">Execution Gross Value</span>
                     <span className={`font-black block mt-0.5 ${
                       selectedActivity.type === 'WITHDRAWAL' || selectedActivity.type === 'SELL' 
                         ? 'text-rose-400' 
                         : ['LOGIN', 'PASSWORD_CHANGE', 'VERIFICATION', 'PAYMENT_ADDED', 'DELAYED', 'MAINTENANCE', 'HALT', 'REBALANCING', 'STOCK_SPLIT', 'TICKER_CHANGE'].includes(selectedActivity.type)
-                          ? 'text-neutral-200' 
+                          ? 'text-white/80 font-bold' 
                           : 'text-emerald-400'
                     }`}>
                       {selectedActivity.amount}
@@ -1410,39 +1367,39 @@ export default function ActivityDesk() {
 
               {/* SECTION 4: Metadata Parameters */}
               <div className="space-y-3.5">
-                <span className="text-[9.5px] text-neutral-200 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
+                <span className="text-[9.5px] text-white/80 uppercase tracking-widest font-black block border-b border-white/5 pb-2">
                   Permanent Cryptographic Identifiers
                 </span>
 
                 <div className="space-y-2 bg-[#040405] p-3.5 rounded-xl border border-white/5 font-mono text-[9px]">
                   <div className="flex justify-between">
-                    <span className="text-neutral-200">REFERENCE IDENTIFIER:</span>
-                    <span className="text-white font-semibold">{selectedActivity.refId}</span>
+                    <span className="text-white/70 font-bold">REFERENCE IDENTIFIER:</span>
+                    <span className="text-white font-bold">{selectedActivity.refId}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-neutral-200">CUSTODIAL GATEWAY:</span>
-                    <span className="text-white font-semibold">{selectedActivity.network || 'Internal Pool Core'}</span>
+                    <span className="text-white/70 font-bold">CUSTODIAL GATEWAY:</span>
+                    <span className="text-white font-bold">{selectedActivity.network || 'Internal Pool Core'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-neutral-200">SETTLEMENT CLEAR RAIL:</span>
-                    <span className="text-white font-semibold">{selectedActivity.settlementRail || 'MTX Liquidity Swap'}</span>
+                    <span className="text-white/70 font-bold">SETTLEMENT CLEAR RAIL:</span>
+                    <span className="text-white font-bold">{selectedActivity.settlementRail || 'MTX Liquidity Swap'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-neutral-200">CLEARING DESK FEES:</span>
+                    <span className="text-white/70 font-bold">CLEARING DESK FEES:</span>
                     <span className="text-indigo-400 font-bold">{selectedActivity.fees || '0.00%'}</span>
                   </div>
                   <div className="flex justify-between pt-1 border-t border-white/5 mt-1.5">
-                    <span className="text-neutral-200">LEDGER STATE BLOCK:</span>
+                    <span className="text-white/70 font-bold">LEDGER STATE BLOCK:</span>
                     <span className="text-emerald-400 font-bold">CERTIFIED AMENDABLE</span>
                   </div>
                 </div>
               </div>
 
               {/* Help & Safeguard Banner */}
-              <div className="p-3 bg-indigo-950/10 border border-indigo-500/10 rounded-lg text-[9px] text-indigo-300">
+              <div className="p-3 bg-indigo-950/20 border border-indigo-500/20 rounded-lg text-[9px] text-indigo-300">
                 <div className="flex gap-2">
                   <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <p className="leading-relaxed text-neutral-200">
+                  <p className="leading-relaxed text-white/90 font-medium">
                     This transaction represents an immutable ledger entry registered on the MTX clearing protocol under sovereign clearing authority.
                   </p>
                 </div>

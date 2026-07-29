@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { NOTIFICATION_SOUND_OPTIONS, playNotificationSound, NotificationSoundType } from '../utils/audioNotifier';
 import { 
   User, 
   Shield, 
@@ -38,6 +39,8 @@ import {
   Sliders,
   DollarSign,
   Wallet,
+  Play,
+  Music,
   Phone,
   MapPin,
   Trash2,
@@ -46,7 +49,16 @@ import {
   Send,
   Bell,
   Cpu,
-  Laptop
+  Laptop,
+  QrCode,
+  Copy,
+  RefreshCw,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  Key,
+  Download,
+  AlertCircle
 } from 'lucide-react';
 
 const menuCategories = [
@@ -89,6 +101,11 @@ interface AccountControlCenterProps {
   onToggleTrendProjection: () => void;
   isBrokerBridgePaused: boolean;
   onToggleBrokerBridge: () => void;
+  backgroundUrl: string;
+  backgroundOpacity: number;
+  onSaveBackgroundSettings: (url: string, opacity: number) => void;
+  notificationSound?: NotificationSoundType;
+  onSelectNotificationSound?: (sound: NotificationSoundType) => void;
 }
 
 export default function AccountControlCenter({
@@ -120,7 +137,12 @@ export default function AccountControlCenter({
   trendProjectionEnabled,
   onToggleTrendProjection,
   isBrokerBridgePaused,
-  onToggleBrokerBridge
+  onToggleBrokerBridge,
+  backgroundUrl,
+  backgroundOpacity,
+  onSaveBackgroundSettings,
+  notificationSound = 'chime',
+  onSelectNotificationSound
 }: AccountControlCenterProps) {
 
   // State to manage the large fullscreen-like workspace modal
@@ -153,6 +175,31 @@ export default function AccountControlCenter({
   // 3. Security State
   const [is2FaEnabled, setIs2FaEnabled] = useState(true);
   const [isPasskeysEnabled, setIsPasskeysEnabled] = useState(false);
+  const [twoFactorMethod, setTwoFactorMethod] = useState<'totp' | 'sms' | 'hardware'>('totp');
+  const [twoFactorPolicy, setTwoFactorPolicy] = useState<'all_actions' | 'withdrawals_only' | 'high_value'>('all_actions');
+  const [totpSecret, setTotpSecret] = useState('JBSW-Y3DP-EHPK-3PXP');
+  const [totpVerificationInput, setTotpVerificationInput] = useState('');
+  const [totpVerified, setTotpVerified] = useState(true);
+  const [totpCopied, setTotpCopied] = useState(false);
+  const [showTotpSetup, setShowTotpSetup] = useState(false);
+  const [smsNumber, setSmsNumber] = useState('+254 712 345678');
+  const [smsCodeInput, setSmsCodeInput] = useState('');
+  const [smsCodeSent, setSmsCodeSent] = useState(false);
+  const [smsVerified, setSmsVerified] = useState(true);
+  const [securityToast, setSecurityToast] = useState<string | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([
+    'RC_9918_FF_CLEAR',
+    'RC_4412_AA_VANCE',
+    'RC_1082_ZX_CLEAR',
+    'RC_8820_QM_DESK',
+    'RC_5033_OB_PROJ',
+    'RC_4958_FG_GATE'
+  ]);
+  const [activeSessions, setActiveSessions] = useState([
+    { id: 'sess-1', device: 'Apple MacBook Pro (San Francisco, CA)', ip: '198.51.100.41', client: 'Web Terminal Interface', isCurrent: true, time: 'Active Now' },
+    { id: 'sess-2', device: 'iPhone 15 Pro Max (Eldoret, Kenya)', ip: '102.168.1.108', client: 'Mobile Application Hub', isCurrent: false, time: '2 hrs ago' },
+    { id: 'sess-3', device: 'Linux Quant Workstation (Frankfurt, DE)', ip: '185.220.101.5', client: 'FIX/DMA API Gateway', isCurrent: false, time: '1 day ago' }
+  ]);
   const [passwordOld, setPasswordOld] = useState('');
   const [passwordNew, setPasswordNew] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
@@ -182,9 +229,21 @@ export default function AccountControlCenter({
   const [mpesaNo, setMpesaNo] = useState('+254 712 345678');
   const [airtelNo, setAirtelNo] = useState('+254 733 987654');
   const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
-  const [newPaymentType, setNewPaymentType] = useState<'bank' | 'card' | 'wallet'>('bank');
+  const [newPaymentType, setNewPaymentType] = useState<'bank' | 'card' | 'wallet' | 'mobile_wallet'>('bank');
   const [newBankName, setNewBankName] = useState('');
   const [newBankAccount, setNewBankAccount] = useState('');
+  const [newCardBrand, setNewCardBrand] = useState('Visa Infinite');
+  const [newCardNumber, setNewCardNumber] = useState('');
+  const [newCardExpiry, setNewCardExpiry] = useState('');
+  const [newWalletType, setNewWalletType] = useState('Polygon ERC-20 (USDC/USDT)');
+  const [newWalletAddress, setNewWalletAddress] = useState('');
+  const [newMobileProvider, setNewMobileProvider] = useState('M-Pesa (Safaricom)');
+  const [newMobileNumber, setNewMobileNumber] = useState('');
+  const [newMobileHolder, setNewMobileHolder] = useState('');
+  const [linkedMobileWallets, setLinkedMobileWallets] = useState([
+    { id: 'mobile-1', provider: 'M-Pesa (Safaricom)', number: '+254 712 345678', holder: 'Primary Operational Line', status: 'Active Gateway' },
+    { id: 'mobile-2', provider: 'Airtel Money', number: '+254 733 987654', holder: 'Secondary Clearing Line', status: 'Active Gateway' }
+  ]);
 
   // 6. Support Center State
   const [supportSubject, setSupportSubject] = useState('');
@@ -211,6 +270,24 @@ export default function AccountControlCenter({
   const [isFontLarge, setIsFontLarge] = useState(false);
   const [shareAnalytics, setShareAnalytics] = useState(true);
   const [profileVisibility, setProfileVisibility] = useState<'private' | 'institutional' | 'public'>('institutional');
+
+  // Background Wallpaper custom settings
+  const [localBgUrl, setLocalBgUrl] = useState(backgroundUrl);
+  const [localBgOpacity, setLocalBgOpacity] = useState(backgroundOpacity);
+
+  useEffect(() => {
+    setLocalBgUrl(backgroundUrl);
+  }, [backgroundUrl]);
+
+  useEffect(() => {
+    setLocalBgOpacity(backgroundOpacity);
+  }, [backgroundOpacity]);
+
+  const handleUpdateWallpaper = (url: string, opacity: number) => {
+    setLocalBgUrl(url);
+    setLocalBgOpacity(opacity);
+    onSaveBackgroundSettings(url, opacity);
+  };
 
   // Trigger scroll to bottom on new chat message
   useEffect(() => {
@@ -244,6 +321,72 @@ export default function AccountControlCenter({
     setTimeout(() => setPasswordSuccessMsg(null), 3000);
   };
 
+  const showSecToast = (msg: string) => {
+    setSecurityToast(msg);
+    setTimeout(() => setSecurityToast(null), 3500);
+  };
+
+  const handleCopyTotpSecret = () => {
+    try {
+      navigator.clipboard?.writeText(totpSecret.replace(/-/g, ''));
+    } catch (_) {}
+    setTotpCopied(true);
+    showSecToast('TOTP Secret Key copied to clipboard!');
+    setTimeout(() => setTotpCopied(false), 2000);
+  };
+
+  const handleVerifyTotpCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!totpVerificationInput.trim()) return;
+    setTotpVerified(true);
+    setShowTotpSetup(false);
+    setTotpVerificationInput('');
+    showSecToast('Authenticator App (TOTP) 2FA successfully verified and paired.');
+  };
+
+  const handleSendSmsCode = () => {
+    if (!smsNumber.trim()) return;
+    setSmsCodeSent(true);
+    showSecToast(`6-digit 2FA OTP code dispatched via SMS to ${smsNumber}`);
+  };
+
+  const handleVerifySmsCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!smsCodeInput.trim()) return;
+    setSmsVerified(true);
+    setSmsCodeInput('');
+    showSecToast('Mobile SMS 2FA channel verified and activated.');
+  };
+
+  const handleRegenerateBackupCodes = () => {
+    const prefixes = ['RC', 'BC', '2F', 'XK', 'QM', 'FF', 'AA', 'ZX'];
+    const newCodes = Array.from({ length: 6 }, () => {
+      const rand1 = Math.floor(1000 + Math.random() * 9000);
+      const rand2 = Math.floor(1000 + Math.random() * 9000);
+      const pref = prefixes[Math.floor(Math.random() * prefixes.length)];
+      return `${pref}_${rand1}_${rand2}_CLEAR`;
+    });
+    setRecoveryCodes(newCodes);
+    showSecToast('Fresh emergency backup 2FA recovery codes generated and saved.');
+  };
+
+  const handleDownloadBackupCodes = () => {
+    const textContent = `MTXQUANT BROKERAGE ACCOUNT - EMERGENCY 2FA BACKUP RECOVERY CODES\nGenerated: ${new Date().toISOString()}\nAccount Holder: ${traderEmail}\n\nSINGLE-USE RECOVERY CODES:\n${recoveryCodes.map((code, idx) => `${idx + 1}. ${code}`).join('\n')}\n\nKeep this document in an offline physical safe or encrypted password manager vault.`;
+    const element = document.createElement('a');
+    const file = new Blob([textContent], { type: 'text/plain' });
+    element.href = URL.createObjectURL(file);
+    element.download = `MTXquant_2FA_Backup_Codes_${traderEmail.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    showSecToast('Emergency 2FA backup codes downloaded.');
+  };
+
+  const handleTerminateOtherSessions = () => {
+    setActiveSessions(prev => prev.filter(s => s.isCurrent));
+    showSecToast('All other remote browser sessions and API tokens terminated.');
+  };
+
   const handleFileUploadLocal = (e: React.ChangeEvent<HTMLInputElement>, type: 'id' | 'address') => {
     if (e.target.files && e.target.files[0]) {
       const fileName = e.target.files[0].name;
@@ -268,12 +411,36 @@ export default function AccountControlCenter({
       ]);
       setNewBankName('');
       setNewBankAccount('');
+    } else if (newPaymentType === 'card' && newCardNumber) {
+      setLinkedCards([
+        ...linkedCards,
+        { id: `card-${Date.now()}`, brand: newCardBrand || 'Visa Infinite', number: `•••• •••• •••• ${newCardNumber.slice(-4) || '8820'}`, expiry: newCardExpiry || '12/28' }
+      ]);
+      setNewCardNumber('');
+      setNewCardExpiry('');
+    } else if (newPaymentType === 'wallet' && newWalletAddress) {
+      setWallets([
+        ...wallets,
+        { id: `wallet-${Date.now()}`, type: newWalletType, address: newWalletAddress }
+      ]);
+      setNewWalletAddress('');
+    } else if (newPaymentType === 'mobile_wallet' && newMobileNumber) {
+      setLinkedMobileWallets([
+        ...linkedMobileWallets,
+        { id: `mobile-${Date.now()}`, provider: newMobileProvider, number: newMobileNumber, holder: newMobileHolder || 'Mobile Clearing Line', status: 'Active Gateway' }
+      ]);
+      setNewMobileNumber('');
+      setNewMobileHolder('');
     }
     setShowAddPaymentModal(false);
   };
 
   const handleRemoveBankLocal = (id: string) => {
     setLinkedBanks(linkedBanks.filter(b => b.id !== id));
+  };
+
+  const handleRemoveMobileLocal = (id: string) => {
+    setLinkedMobileWallets(linkedMobileWallets.filter(m => m.id !== id));
   };
 
   const handleTicketSubmit = (e: React.FormEvent) => {
@@ -861,19 +1028,410 @@ export default function AccountControlCenter({
                   {activeWorkspaceTab === 'security' && (
                     <div className="space-y-6 max-w-2xl animate-fadeIn">
                       <div>
-                        <h2 className="text-sm font-black text-white uppercase tracking-wider">CRYPTOGRAPHIC SECURITY MATRIX</h2>
-                        <p className="text-white/50 text-[9px] mt-1 leading-relaxed">Configure rotational passwords, activate two-factor hardware tokens, generate emergency backup keys and terminate rogue browser sessions.</p>
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            <Shield className="w-4 h-4 text-indigo-400" />
+                            BROKERAGE ACCOUNT SECURITY & 2FA CONTROL CENTER
+                          </h2>
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border ${is2FaEnabled ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
+                            {is2FaEnabled ? '2FA ENFORCED' : '2FA DISABLED'}
+                          </span>
+                        </div>
+                        <p className="text-white/50 text-[9px] mt-1 leading-relaxed">
+                          Configure multi-factor authentication (2FA), TOTP authenticator pairing, SMS fallback gateways, emergency backup recovery codes, and active session permissions for your brokerage trading account.
+                        </p>
                       </div>
 
-                      {passwordSuccessMsg && (
-                        <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded text-indigo-300 text-[9px] font-bold">
-                          {passwordSuccessMsg}
+                      {/* Toast Banner */}
+                      {securityToast && (
+                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded text-emerald-300 text-[9px] font-bold flex items-center justify-between animate-fadeIn">
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span>{securityToast}</span>
+                          </div>
+                          <button onClick={() => setSecurityToast(null)} className="text-emerald-400/60 hover:text-emerald-300">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       )}
 
-                      {/* Password Rotation */}
-                      <form onSubmit={handlePasswordChangeSubmit} className="p-4 bg-white/[0.02] border border-white/5 rounded-lg space-y-3">
-                        <span className="text-[8px] text-white/40 font-black uppercase tracking-wider block">ROTATIONAL PASSCODE MATRIX</span>
+                      {passwordSuccessMsg && (
+                        <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded text-indigo-300 text-[9px] font-bold flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                          <span>{passwordSuccessMsg}</span>
+                        </div>
+                      )}
+
+                      {/* MASTER TWO-FACTOR AUTHENTICATION TOGGLE CARD */}
+                      <div className="p-4 bg-gradient-to-r from-indigo-950/30 to-black/60 border border-indigo-500/20 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${is2FaEnabled ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-white/5 border-white/10 text-white/40'}`}>
+                              <Smartphone className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-black text-white text-[11px] block uppercase tracking-wide">Two-Factor Authentication (2FA)</span>
+                                <span className="px-1.5 py-0.2 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-[7px] font-bold uppercase">SEC CLEARANCE</span>
+                              </div>
+                              <span className="text-[8px] text-white/50 block mt-0.5">
+                                Requires secondary cryptographic OTP code before executing trades, withdrawing funds, or modifying API access keys.
+                              </span>
+                            </div>
+                          </div>
+                          <SwitchItem checked={is2FaEnabled} onChange={() => {
+                            const next = !is2FaEnabled;
+                            setIs2FaEnabled(next);
+                            showSecToast(next ? 'Two-Factor Authentication (2FA) activated across account.' : 'Warning: Two-Factor Authentication (2FA) disabled.');
+                          }} />
+                        </div>
+                      </div>
+
+                      {/* 2FA VERIFICATION METHODS SELECTION */}
+                      {is2FaEnabled && (
+                        <div className="p-4 bg-black/40 border border-white/5 rounded-xl space-y-4">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+                            <div>
+                              <span className="text-[9px] text-white font-black uppercase tracking-wider block">PRIMARY 2FA METHOD & AUTHENTICATORS</span>
+                              <span className="text-[7.5px] text-white/40 block">Select your default multi-factor verification vector for trade orders and capital operations.</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {/* Method 1: TOTP Authenticator */}
+                            <button
+                              type="button"
+                              onClick={() => setTwoFactorMethod('totp')}
+                              className={`p-3 rounded-lg border text-left cursor-pointer transition-all ${twoFactorMethod === 'totp' ? 'bg-indigo-950/40 border-indigo-500/60 shadow-lg shadow-indigo-500/10' : 'bg-white/[0.02] border-white/5 hover:border-white/20'}`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <QrCode className={`w-4 h-4 ${twoFactorMethod === 'totp' ? 'text-indigo-400' : 'text-white/40'}`} />
+                                <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded text-[6.5px] font-bold uppercase">RECOMMENDED</span>
+                              </div>
+                              <span className="font-bold text-white text-[9.5px] block">Authenticator App (TOTP)</span>
+                              <span className="text-[7.5px] text-white/40 block mt-0.5">Google Authenticator, Authy, 1Password</span>
+                            </button>
+
+                            {/* Method 2: SMS Mobile OTP */}
+                            <button
+                              type="button"
+                              onClick={() => setTwoFactorMethod('sms')}
+                              className={`p-3 rounded-lg border text-left cursor-pointer transition-all ${twoFactorMethod === 'sms' ? 'bg-indigo-950/40 border-indigo-500/60 shadow-lg shadow-indigo-500/10' : 'bg-white/[0.02] border-white/5 hover:border-white/20'}`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <Phone className={`w-4 h-4 ${twoFactorMethod === 'sms' ? 'text-indigo-400' : 'text-white/40'}`} />
+                                <span className="px-1.5 py-0.2 bg-white/10 text-white/60 rounded text-[6.5px] font-bold uppercase">MOBILE GATEWAY</span>
+                              </div>
+                              <span className="font-bold text-white text-[9.5px] block">SMS OTP Direct Message</span>
+                              <span className="text-[7.5px] text-white/40 block mt-0.5">Cellular network SMS token delivery</span>
+                            </button>
+
+                            {/* Method 3: Hardware Security Key / Passkey */}
+                            <button
+                              type="button"
+                              onClick={() => setTwoFactorMethod('hardware')}
+                              className={`p-3 rounded-lg border text-left cursor-pointer transition-all ${twoFactorMethod === 'hardware' ? 'bg-indigo-950/40 border-indigo-500/60 shadow-lg shadow-indigo-500/10' : 'bg-white/[0.02] border-white/5 hover:border-white/20'}`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <Key className={`w-4 h-4 ${twoFactorMethod === 'hardware' ? 'text-indigo-400' : 'text-white/40'}`} />
+                                <span className="px-1.5 py-0.2 bg-indigo-500/20 text-indigo-300 rounded text-[6.5px] font-bold uppercase">FIDO2 / WEBAUTHN</span>
+                              </div>
+                              <span className="font-bold text-white text-[9.5px] block">Security Key & Passkeys</span>
+                              <span className="text-[7.5px] text-white/40 block mt-0.5">YubiKey, Touch ID, Face ID Biometrics</span>
+                            </button>
+                          </div>
+
+                          {/* TOTP DETAILS & QR SETUP DRAWER */}
+                          {twoFactorMethod === 'totp' && (
+                            <div className="p-3.5 bg-white/[0.02] border border-white/10 rounded-lg space-y-3 animate-fadeIn">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-white text-[9px] uppercase">AUTHENTICATOR APP PAIRING MATRIX</span>
+                                    <span className={`px-1.5 py-0.2 rounded text-[7px] font-bold uppercase ${totpVerified ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                                      {totpVerified ? 'VERIFIED & ACTIVE' : 'UNPAIRED'}
+                                    </span>
+                                  </div>
+                                  <span className="text-[7.5px] text-white/40 block mt-0.5">Scan the QR code or paste the secret key into your preferred authenticator app.</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowTotpSetup(!showTotpSetup)}
+                                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[8px] font-bold uppercase rounded border border-indigo-400/30 cursor-pointer shrink-0 self-start sm:self-auto"
+                                >
+                                  {showTotpSetup ? 'Hide QR Code' : 'View QR & Pair Secret'}
+                                </button>
+                              </div>
+
+                              {showTotpSetup && (
+                                <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                  {/* Simulated QR Code Graphic */}
+                                  <div className="flex flex-col items-center justify-center p-3 bg-white/5 border border-white/10 rounded-lg text-center">
+                                    <div className="w-28 h-28 bg-white p-2 rounded-lg flex flex-col justify-between items-center shadow-inner relative">
+                                      {/* Mock QR grid SVG */}
+                                      <svg viewBox="0 0 100 100" className="w-full h-full text-black">
+                                        <rect x="0" y="0" width="30" height="30" fill="black"/>
+                                        <rect x="5" y="5" width="20" height="20" fill="white"/>
+                                        <rect x="10" y="10" width="10" height="10" fill="black"/>
+
+                                        <rect x="70" y="0" width="30" height="30" fill="black"/>
+                                        <rect x="75" y="5" width="20" height="20" fill="white"/>
+                                        <rect x="80" y="10" width="10" height="10" fill="black"/>
+
+                                        <rect x="0" y="70" width="30" height="30" fill="black"/>
+                                        <rect x="5" y="75" width="20" height="20" fill="white"/>
+                                        <rect x="10" y="80" width="10" height="10" fill="black"/>
+
+                                        <rect x="35" y="10" width="10" height="10" fill="black"/>
+                                        <rect x="50" y="5" width="10" height="15" fill="black"/>
+                                        <rect x="35" y="35" width="30" height="30" fill="black"/>
+                                        <rect x="70" y="35" width="15" height="10" fill="black"/>
+                                        <rect x="40" y="75" width="15" height="15" fill="black"/>
+                                        <rect x="65" y="65" width="25" height="25" fill="black"/>
+                                      </svg>
+                                      <div className="absolute inset-0 m-auto w-6 h-6 bg-indigo-600 rounded flex items-center justify-center text-white font-black text-[7px] border border-white">
+                                        MTX
+                                      </div>
+                                    </div>
+                                    <span className="text-[7.5px] text-white/50 mt-2 font-mono uppercase">SCAN WITH AUTHENTICATOR APP</span>
+                                  </div>
+
+                                  {/* Secret Key & Verification Form */}
+                                  <div className="space-y-3">
+                                    <div className="space-y-1">
+                                      <span className="text-[7.5px] text-white/40 font-bold uppercase block">SECRET MANUAL KEY</span>
+                                      <div className="flex items-center gap-1.5 bg-[#0b0b0f] p-2 rounded border border-white/10">
+                                        <span className="font-mono text-[9px] text-indigo-300 font-bold tracking-wider flex-1">{totpSecret}</span>
+                                        <button
+                                          type="button"
+                                          onClick={handleCopyTotpSecret}
+                                          className="p-1 hover:bg-white/10 rounded text-white/60 hover:text-white cursor-pointer"
+                                          title="Copy secret key"
+                                        >
+                                          {totpCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <form onSubmit={handleVerifyTotpCode} className="space-y-2">
+                                      <span className="text-[7.5px] text-white/40 font-bold uppercase block">ENTER 6-DIGIT TEST TOKEN</span>
+                                      <div className="flex gap-2">
+                                        <input
+                                          type="text"
+                                          maxLength={6}
+                                          placeholder="123456"
+                                          value={totpVerificationInput}
+                                          onChange={(e) => setTotpVerificationInput(e.target.value.replace(/\D/g, ''))}
+                                          className="bg-[#0b0b0f] text-white text-[10px] font-mono tracking-widest px-3 py-1.5 rounded border border-white/10 outline-none focus:border-indigo-500/50 w-28 text-center"
+                                        />
+                                        <button
+                                          type="submit"
+                                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[8px] font-bold uppercase rounded cursor-pointer"
+                                        >
+                                          PAIR & VERIFY
+                                        </button>
+                                      </div>
+                                    </form>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* SMS OTP METHOD DETAILS */}
+                          {twoFactorMethod === 'sms' && (
+                            <div className="p-3.5 bg-white/[0.02] border border-white/10 rounded-lg space-y-3 animate-fadeIn">
+                              <span className="font-bold text-white text-[9px] uppercase block">MOBILE PHONE SMS OTP GATEWAY</span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <span className="text-[7.5px] text-white/40 font-bold uppercase block">VERIFIED MOBILE PHONE NUMBER</span>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      value={smsNumber}
+                                      onChange={(e) => setSmsNumber(e.target.value)}
+                                      className="bg-[#0b0b0f] text-white text-[9px] font-mono px-3 py-1.5 rounded border border-white/10 outline-none focus:border-indigo-500/50 flex-1"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={handleSendSmsCode}
+                                      className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[7.5px] font-bold uppercase rounded cursor-pointer shrink-0"
+                                    >
+                                      SEND CODE
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {smsCodeSent && (
+                                  <form onSubmit={handleVerifySmsCode} className="space-y-1 animate-fadeIn">
+                                    <span className="text-[7.5px] text-white/40 font-bold uppercase block">ENTER 6-DIGIT SMS CODE</span>
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="text"
+                                        maxLength={6}
+                                        placeholder="654321"
+                                        value={smsCodeInput}
+                                        onChange={(e) => setSmsCodeInput(e.target.value.replace(/\D/g, ''))}
+                                        className="bg-[#0b0b0f] text-white text-[10px] font-mono tracking-widest px-3 py-1.5 rounded border border-white/10 outline-none focus:border-indigo-500/50 w-28 text-center"
+                                      />
+                                      <button
+                                        type="submit"
+                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[8px] font-bold uppercase rounded cursor-pointer"
+                                      >
+                                        VERIFY SMS
+                                      </button>
+                                    </div>
+                                  </form>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* HARDWARE / WEBAUTHN PASSKEY DETAILS */}
+                          {twoFactorMethod === 'hardware' && (
+                            <div className="p-3.5 bg-white/[0.02] border border-white/10 rounded-lg space-y-3 animate-fadeIn">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="font-bold text-white text-[9px] uppercase block">FIDO2 / WEBAUTHN PASSKEYS & YUBIKEY</span>
+                                  <span className="text-[7.5px] text-white/40 block mt-0.5">Use hardware cryptographic tokens (YubiKey) or device biometrics (Touch ID / Face ID) for zero-trust login clearance.</span>
+                                </div>
+                                <SwitchItem checked={isPasskeysEnabled} onChange={() => {
+                                  const next = !isPasskeysEnabled;
+                                  setIsPasskeysEnabled(next);
+                                  showSecToast(next ? 'FIDO2 Passkeys & Biometric clearance enabled.' : 'Passkey biometrics disabled.');
+                                }} />
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => showSecToast('Initiating FIDO2 WebAuthn credential registration handshake... Hardware passkey paired.')}
+                                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-[8px] font-black uppercase rounded border border-indigo-400/30 cursor-pointer flex items-center gap-1.5"
+                              >
+                                <Key className="w-3.5 h-3.5" />
+                                REGISTER NEW HARDWARE PASSKEY TOKEN
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 2FA ACTION ENFORCEMENT POLICY */}
+                      {is2FaEnabled && (
+                        <div className="p-4 bg-black/40 border border-white/5 rounded-xl space-y-3">
+                          <span className="text-[9px] text-white font-black uppercase tracking-wider block">2FA ACTION ENFORCEMENT POLICY</span>
+                          <span className="text-[7.5px] text-white/40 block">Configure which account operations trigger mandatory secondary 2FA verification.</span>
+
+                          <div className="space-y-2">
+                            <label
+                              onClick={() => {
+                                setTwoFactorPolicy('all_actions');
+                                showSecToast('2FA Enforcement Policy updated: All System Actions.');
+                              }}
+                              className={`p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${twoFactorPolicy === 'all_actions' ? 'bg-indigo-950/30 border-indigo-500/50' : 'bg-white/[0.01] border-white/5 hover:border-white/10'}`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${twoFactorPolicy === 'all_actions' ? 'border-indigo-400 bg-indigo-500' : 'border-white/30'}`}>
+                                  {twoFactorPolicy === 'all_actions' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                </div>
+                                <div>
+                                  <span className="font-bold text-white text-[8.5px] block">Full System Enforcement (High Security)</span>
+                                  <span className="text-[7.5px] text-white/40 block">Prompts 2FA on login, order routing, withdrawal, & password changes.</span>
+                                </div>
+                              </div>
+                              <span className="text-[7px] text-indigo-300 font-bold uppercase">INSTITUTIONAL GRADE</span>
+                            </label>
+
+                            <label
+                              onClick={() => {
+                                setTwoFactorPolicy('withdrawals_only');
+                                showSecToast('2FA Enforcement Policy updated: Withdrawals & Outflows Only.');
+                              }}
+                              className={`p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${twoFactorPolicy === 'withdrawals_only' ? 'bg-indigo-950/30 border-indigo-500/50' : 'bg-white/[0.01] border-white/5 hover:border-white/10'}`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${twoFactorPolicy === 'withdrawals_only' ? 'border-indigo-400 bg-indigo-500' : 'border-white/30'}`}>
+                                  {twoFactorPolicy === 'withdrawals_only' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                </div>
+                                <div>
+                                  <span className="font-bold text-white text-[8.5px] block">Capital Outflows & Bank Transfers Only</span>
+                                  <span className="text-[7.5px] text-white/40 block">Prompts 2FA exclusively on wire transfers, crypto payouts, and bank changes.</span>
+                                </div>
+                              </div>
+                              <span className="text-[7px] text-white/40 font-bold uppercase">BALANCED</span>
+                            </label>
+
+                            <label
+                              onClick={() => {
+                                setTwoFactorPolicy('high_value');
+                                showSecToast('2FA Enforcement Policy updated: High-Value Orders (> $10k).');
+                              }}
+                              className={`p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${twoFactorPolicy === 'high_value' ? 'bg-indigo-950/30 border-indigo-500/50' : 'bg-white/[0.01] border-white/5 hover:border-white/10'}`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${twoFactorPolicy === 'high_value' ? 'border-indigo-400 bg-indigo-500' : 'border-white/30'}`}>
+                                  {twoFactorPolicy === 'high_value' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                </div>
+                                <div>
+                                  <span className="font-bold text-white text-[8.5px] block">High-Value Trades (&gt; $10,000 Nominal)</span>
+                                  <span className="text-[7.5px] text-white/40 block">Prompts 2FA when order position size exceeds $10,000 USD value.</span>
+                                </div>
+                              </div>
+                              <span className="text-[7px] text-white/40 font-bold uppercase">FAST EXECUTION</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* EMERGENCY BACKUP RECOVERY CODES VAULT */}
+                      <div className="p-4 bg-black/40 border border-white/5 rounded-xl space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2.5">
+                          <div>
+                            <span className="text-[9px] text-white font-black uppercase tracking-wider block">EMERGENCY CRYPTOGRAPHIC BACKUP RECOVERY CODES</span>
+                            <span className="text-[7.5px] text-white/40 block">Single-use emergency recovery passcodes for account retrieval if mobile 2FA device is unavailable.</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setShowRecoveryCodes(!showRecoveryCodes)}
+                              className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-indigo-300 text-[8px] font-bold uppercase rounded border border-white/10 cursor-pointer flex items-center gap-1"
+                            >
+                              {showRecoveryCodes ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                              {showRecoveryCodes ? 'Hide' : 'Reveal'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleRegenerateBackupCodes}
+                              className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-[8px] font-bold uppercase rounded border border-white/10 cursor-pointer flex items-center gap-1"
+                              title="Regenerate Codes"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              Rotate
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDownloadBackupCodes}
+                              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[8px] font-bold uppercase rounded cursor-pointer flex items-center gap-1"
+                              title="Download Backup File"
+                            >
+                              <Download className="w-3 h-3" />
+                              Save TXT
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-center">
+                          {recoveryCodes.map((code, idx) => (
+                            <div key={idx} className="p-2 bg-[#0b0b0f] border border-white/10 rounded text-[9px] text-indigo-300 font-bold tracking-wider select-all">
+                              {showRecoveryCodes ? code : '••••_••••_••••'}
+                            </div>
+                          ))}
+                        </div>
+                        <span className="text-[7.5px] text-white/30 block text-right">Each code can only be redeemed once. Downloading stores a backup file.</span>
+                      </div>
+
+                      {/* ROTATIONAL PASSWORD MATRIX */}
+                      <form onSubmit={handlePasswordChangeSubmit} className="p-4 bg-white/[0.02] border border-white/5 rounded-xl space-y-3">
+                        <span className="text-[8px] text-white/40 font-black uppercase tracking-wider block">PASSCODE & PASSWORD ROTATION</span>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="flex flex-col gap-1">
                             <span className="text-[7.5px] text-white/30 font-bold block uppercase">CURRENT CODE</span>
@@ -925,81 +1483,41 @@ export default function AccountControlCenter({
                         </button>
                       </form>
 
-                      {/* 2FA & Hardware security keys */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="p-3 bg-black/40 border border-white/5 rounded-lg flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <Smartphone className="w-5 h-5 text-indigo-400" />
-                            <div>
-                              <span className="font-bold text-white block">Two-Factor Authentication (2FA)</span>
-                              <span className="text-[7.5px] text-white/40 block">Requires one-time OTP for clearing.</span>
-                            </div>
-                          </div>
-                          <SwitchItem checked={is2FaEnabled} onChange={() => setIs2FaEnabled(!is2FaEnabled)} />
-                        </div>
-
-                        <div className="p-3 bg-black/40 border border-white/5 rounded-lg flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <Lock className="w-5 h-5 text-indigo-400" />
-                            <div>
-                              <span className="font-bold text-white block">FIDO2 Passkeys Verification</span>
-                              <span className="text-[7.5px] text-white/40 block">Cryptographic biometric clearing.</span>
-                            </div>
-                          </div>
-                          <SwitchItem checked={isPasskeysEnabled} onChange={() => setIsPasskeysEnabled(!isPasskeysEnabled)} />
-                        </div>
-                      </div>
-
-                      {/* Trusted Devices & Sessions */}
-                      <div className="p-4 bg-black/20 border border-white/5 rounded-lg space-y-3">
+                      {/* ACTIVE SESSIONS & GEOGRAPHIC TERMINALS */}
+                      <div className="p-4 bg-black/20 border border-white/5 rounded-xl space-y-3">
                         <div className="flex justify-between items-center border-b border-white/5 pb-2">
                           <span className="text-[8px] text-white/40 font-black uppercase tracking-wider block">ACTIVE CLEARING SESSIONS & GEOGRAPHIC TRACKS</span>
                           <button
                             type="button"
-                            onClick={() => setShowRecoveryCodes(!showRecoveryCodes)}
-                            className="text-indigo-400 hover:underline cursor-pointer font-bold text-[8px] uppercase tracking-wider"
+                            onClick={handleTerminateOtherSessions}
+                            className="text-rose-400 hover:text-rose-300 cursor-pointer font-bold text-[8px] uppercase tracking-wider flex items-center gap-1"
                           >
-                            {showRecoveryCodes ? 'Hide Backup Codes' : 'Verify Recovery Codes'}
+                            <Trash2 className="w-3 h-3" />
+                            Terminate Other Sessions
                           </button>
                         </div>
 
-                        {showRecoveryCodes && (
-                          <div className="bg-indigo-950/20 p-3 border border-indigo-500/35 rounded-lg text-[9px] text-indigo-300 font-mono space-y-2 mb-2 animate-fadeIn">
-                            <span className="font-bold uppercase text-[8px] block text-white/50 mb-1">EMERGENCY CRYPTOGRAPHIC BACKUP RECOVERY CODES</span>
-                            <div className="grid grid-cols-3 gap-2 text-center font-bold">
-                              <span className="bg-black/40 p-1.5 border border-white/5 rounded">RC_9918_FF_CLEAR</span>
-                              <span className="bg-black/40 p-1.5 border border-white/5 rounded">RC_4412_AA_VANCE</span>
-                              <span className="bg-black/40 p-1.5 border border-white/5 rounded">RC_1082_ZX_CLEAR</span>
-                              <span className="bg-black/40 p-1.5 border border-white/5 rounded">RC_8820_QM_DESK</span>
-                              <span className="bg-black/40 p-1.5 border border-white/5 rounded">RC_5033_OB_PROJ</span>
-                              <span className="bg-black/40 p-1.5 border border-white/5 rounded">RC_4958_FG_GATE</span>
-                            </div>
-                            <span className="text-[7.5px] text-white/30 block text-right">Keep these in physical safe vaults. Regenerate rotates database hashes.</span>
-                          </div>
-                        )}
-
                         <div className="space-y-2.5">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-white/[0.01] border border-white/5 rounded">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Laptop className="w-4 h-4 text-emerald-400 shrink-0" />
-                              <div className="min-w-0">
-                                <span className="font-bold text-white block text-[9px] truncate">Apple MacBook Pro (San Francisco, CA)</span>
-                                <span className="text-[7.5px] text-white/40 block truncate">IP: 198.51.100.41 • Web Terminal interface</span>
+                          {activeSessions.map((session) => (
+                            <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-white/[0.01] border border-white/5 rounded">
+                              <div className="flex items-center gap-2 min-w-0">
+                                {session.device.toLowerCase().includes('macbook') || session.device.toLowerCase().includes('linux') ? (
+                                  <Laptop className="w-4 h-4 text-emerald-400 shrink-0" />
+                                ) : (
+                                  <Smartphone className="w-4 h-4 text-indigo-400 shrink-0" />
+                                )}
+                                <div className="min-w-0">
+                                  <span className="font-bold text-white block text-[9px] truncate">{session.device}</span>
+                                  <span className="text-[7.5px] text-white/40 block truncate">IP: {session.ip} • {session.client}</span>
+                                </div>
                               </div>
+                              {session.isCurrent ? (
+                                <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[7.5px] text-emerald-400 font-bold uppercase tracking-wider animate-pulse self-start sm:self-auto shrink-0">ACTIVE NOW</span>
+                              ) : (
+                                <span className="text-[7.5px] text-white/30 self-start sm:self-auto shrink-0">{session.time}</span>
+                              )}
                             </div>
-                            <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[7.5px] text-emerald-400 font-bold uppercase tracking-wider animate-pulse self-start sm:self-auto shrink-0">ACTIVE NOW</span>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-white/[0.01] border border-white/5 rounded">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Smartphone className="w-4 h-4 text-white/30 shrink-0" />
-                              <div className="min-w-0">
-                                <span className="font-bold text-white/70 block text-[9px] truncate">iPhone 15 Pro Max (Eldoret, Kenya)</span>
-                                <span className="text-[7.5px] text-white/40 block truncate">IP: 102.168.1.108 • Mobile Application Hub</span>
-                              </div>
-                            </div>
-                            <span className="text-[7.5px] text-white/30 self-start sm:self-auto shrink-0">2 hrs ago</span>
-                          </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -1133,7 +1651,7 @@ export default function AccountControlCenter({
                               <X className="w-4 h-4" />
                             </button>
                           </div>
-                          <div className="grid grid-cols-1 xs:grid-cols-3 gap-1.5">
+                          <div className="grid grid-cols-2 xs:grid-cols-4 gap-1.5">
                             <button
                               type="button"
                               onClick={() => setNewPaymentType('bank')}
@@ -1155,6 +1673,13 @@ export default function AccountControlCenter({
                             >
                               CRYPTO WALLET
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => setNewPaymentType('mobile_wallet')}
+                              className={`py-1.5 rounded font-black text-[8px] uppercase tracking-wider text-center transition-all cursor-pointer ${newPaymentType === 'mobile_wallet' ? 'bg-indigo-600 text-white shadow' : 'bg-black/40 text-white/40'}`}
+                            >
+                              MOBILE WALLET
+                            </button>
                           </div>
                           
                           {newPaymentType === 'bank' && (
@@ -1173,6 +1698,91 @@ export default function AccountControlCenter({
                                 placeholder="Clearing Account Number"
                                 value={newBankAccount}
                                 onChange={(e) => setNewBankAccount(e.target.value)}
+                                className="bg-[#0b0b0f] text-white font-mono text-[9px] px-3 py-2 rounded border border-white/10 outline-none"
+                              />
+                            </div>
+                          )}
+
+                          {newPaymentType === 'card' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <select
+                                value={newCardBrand}
+                                onChange={(e) => setNewCardBrand(e.target.value)}
+                                className="bg-[#0b0b0f] text-white font-mono text-[9px] px-3 py-2 rounded border border-white/10 outline-none cursor-pointer"
+                              >
+                                <option value="Visa Infinite">Visa Infinite</option>
+                                <option value="Mastercard World Elite">Mastercard World Elite</option>
+                                <option value="American Express">American Express Centurion</option>
+                              </select>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Card Number (e.g. 4532...)"
+                                value={newCardNumber}
+                                onChange={(e) => setNewCardNumber(e.target.value)}
+                                className="bg-[#0b0b0f] text-white font-mono text-[9px] px-3 py-2 rounded border border-white/10 outline-none"
+                              />
+                              <input
+                                type="text"
+                                placeholder="MM/YY"
+                                value={newCardExpiry}
+                                onChange={(e) => setNewCardExpiry(e.target.value)}
+                                className="bg-[#0b0b0f] text-white font-mono text-[9px] px-3 py-2 rounded border border-white/10 outline-none"
+                              />
+                            </div>
+                          )}
+
+                          {newPaymentType === 'wallet' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <select
+                                value={newWalletType}
+                                onChange={(e) => setNewWalletType(e.target.value)}
+                                className="bg-[#0b0b0f] text-white font-mono text-[9px] px-3 py-2 rounded border border-white/10 outline-none cursor-pointer"
+                              >
+                                <option value="Polygon ERC-20 (USDC/USDT)">Polygon ERC-20 (USDC/USDT)</option>
+                                <option value="Solana SPL (USDC)">Solana SPL (USDC)</option>
+                                <option value="Ethereum ERC-20 (USDT)">Ethereum ERC-20 (USDT)</option>
+                                <option value="Bitcoin Native (BTC)">Bitcoin Native (BTC)</option>
+                              </select>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Public Wallet Address (0x... or SPL)"
+                                value={newWalletAddress}
+                                onChange={(e) => setNewWalletAddress(e.target.value)}
+                                className="bg-[#0b0b0f] text-white font-mono text-[9px] px-3 py-2 rounded border border-white/10 outline-none"
+                              />
+                            </div>
+                          )}
+
+                          {newPaymentType === 'mobile_wallet' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <select
+                                value={newMobileProvider}
+                                onChange={(e) => setNewMobileProvider(e.target.value)}
+                                className="bg-[#0b0b0f] text-white font-mono text-[9px] px-3 py-2 rounded border border-white/10 outline-none cursor-pointer"
+                              >
+                                <option value="M-Pesa (Safaricom)">M-Pesa (Safaricom)</option>
+                                <option value="Airtel Money">Airtel Money</option>
+                                <option value="MTN Mobile Money">MTN Mobile Money</option>
+                                <option value="Orange Money">Orange Money</option>
+                                <option value="Vodafone Cash">Vodafone Cash</option>
+                                <option value="Apple Pay Mobile">Apple Pay Mobile</option>
+                                <option value="Google Pay Mobile">Google Pay Mobile</option>
+                              </select>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Mobile Number (+254...)"
+                                value={newMobileNumber}
+                                onChange={(e) => setNewMobileNumber(e.target.value)}
+                                className="bg-[#0b0b0f] text-white font-mono text-[9px] px-3 py-2 rounded border border-white/10 outline-none"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Holder Alias (e.g. Primary Line)"
+                                value={newMobileHolder}
+                                onChange={(e) => setNewMobileHolder(e.target.value)}
                                 className="bg-[#0b0b0f] text-white font-mono text-[9px] px-3 py-2 rounded border border-white/10 outline-none"
                               />
                             </div>
@@ -1255,32 +1865,45 @@ export default function AccountControlCenter({
                             </div>
                           ))}
 
+                        {/* Mobile Wallets Stack */}
+                        <div className="space-y-1.5 text-left">
+                          <span className="text-[8px] text-white/40 font-black uppercase tracking-wider block">APPROVED MOBILE WALLET GATEWAYS</span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                            <div className="p-3 bg-[#0a0a0f] border border-white/5 rounded-lg text-left">
-                              <span className="text-white/30 text-[7.5px] font-bold block uppercase mb-1">M-PESA MOBILE WALLET</span>
-                              <div className="flex items-center gap-2">
-                                <Phone className="w-3.5 h-3.5 text-indigo-400" />
-                                <input 
-                                  type="text" 
-                                  value={mpesaNo} 
-                                  onChange={(e) => setMpesaNo(e.target.value)}
-                                  className="bg-transparent text-white font-mono text-[9px] w-full outline-none focus:text-indigo-300"
-                                />
-                              </div>
-                            </div>
-                            <div className="p-3 bg-[#0a0a0f] border border-white/5 rounded-lg text-left">
-                              <span className="text-white/30 text-[7.5px] font-bold block uppercase mb-1">AIRTEL MONEY MOBILE WALLET</span>
-                              <div className="flex items-center gap-2">
-                                <Phone className="w-3.5 h-3.5 text-indigo-400" />
-                                <input 
-                                  type="text" 
-                                  value={airtelNo} 
-                                  onChange={(e) => setAirtelNo(e.target.value)}
-                                  className="bg-transparent text-white font-mono text-[9px] w-full outline-none focus:text-indigo-300"
-                                />
-                              </div>
-                            </div>
+                            {linkedMobileWallets.map(m => {
+                              const p = m.provider.toUpperCase();
+                              const label = p.includes('M-PESA') ? 'M-PESA MOBILE WALLET' : p.includes('AIRTEL') ? 'AIRTEL MONEY MOBILE WALLET' : p.includes('MOBILE WALLET') ? p : `${p} MOBILE WALLET`;
+                              return (
+                                <div key={m.id} className="p-3 bg-[#0a0a0f] border border-white/5 rounded-lg text-left relative group">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-white/30 text-[7.5px] font-mono font-bold block uppercase tracking-wider">
+                                      {label}
+                                    </span>
+                                    <button 
+                                      type="button" 
+                                      onClick={() => handleRemoveMobileLocal(m.id)}
+                                      className="opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-300 p-0.5 cursor-pointer transition-opacity"
+                                      title="Unlink Mobile Gateway"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                    <input 
+                                      type="text" 
+                                      value={m.number} 
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setLinkedMobileWallets(prev => prev.map(item => item.id === m.id ? { ...item, number: val } : item));
+                                      }}
+                                      className="bg-transparent text-white font-mono text-[10px] sm:text-xs font-bold w-full outline-none focus:text-indigo-300 tracking-wide"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
+                        </div>
                         </div>
                       </div>
                     </div>
@@ -1488,6 +2111,78 @@ export default function AccountControlCenter({
                           </div>
                         </div>
 
+                        {/* Backdrop Wallpaper Configurator */}
+                        <div className="p-4 bg-white/[0.01] border border-white/5 rounded-lg space-y-4 text-left">
+                          <div>
+                            <span className="text-[8px] text-white/40 font-black uppercase tracking-wider block font-mono font-bold">Terminal Backdrop Wallpaper</span>
+                            <span className="text-[7.5px] text-white/30 block mt-0.5">Choose an institutional backdrop layout synchronized to the cloud.</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                            {[
+                              { name: 'Classic Slate', url: '' },
+                              { name: 'Cyber Grid', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80' },
+                              { name: 'Neon Night', url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=1200&q=80' },
+                              { name: 'City Skyline', url: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=1200&q=80' },
+                              { name: 'Data Matrix', url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80' }
+                            ].map((preset) => {
+                              const isActive = localBgUrl === preset.url;
+                              return (
+                                <button
+                                  key={preset.name}
+                                  type="button"
+                                  onClick={() => handleUpdateWallpaper(preset.url, localBgOpacity)}
+                                  className={`p-2 rounded-md border text-[9px] font-mono font-bold text-center transition-all cursor-pointer select-none flex flex-col justify-between h-14 ${
+                                    isActive 
+                                      ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]'
+                                      : 'bg-black/40 border-white/5 text-white/50 hover:text-white hover:border-white/15'
+                                  }`}
+                                >
+                                  {preset.url ? (
+                                    <div 
+                                      className="w-full h-5 rounded bg-cover bg-center mb-1 opacity-60" 
+                                      style={{ backgroundImage: `url(${preset.url})` }}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-5 rounded bg-[#050505] border border-white/10 mb-1 flex items-center justify-center text-[7px] text-white/30">
+                                      SOLID
+                                    </div>
+                                  )}
+                                  <span className="truncate w-full block text-[8px] leading-tight">{preset.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                            <div>
+                              <span className="text-[8px] text-white/40 font-bold uppercase block mb-1.5">Custom Image URL</span>
+                              <input
+                                type="text"
+                                placeholder="Paste Unsplash or external background image URL..."
+                                value={localBgUrl}
+                                onChange={(e) => handleUpdateWallpaper(e.target.value, localBgOpacity)}
+                                className="w-full bg-black/40 text-white placeholder:text-white/25 text-[10px] font-mono border border-white/10 px-3 py-2 rounded-md outline-none focus:border-indigo-500/50 focus:text-indigo-200 transition-all"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[8px] text-white/40 font-bold uppercase block">Backdrop Opacity</span>
+                                <span className="text-[9px] text-indigo-400 font-mono font-bold">{localBgOpacity}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="5"
+                                max="60"
+                                step="5"
+                                value={localBgOpacity}
+                                onChange={(e) => handleUpdateWallpaper(localBgUrl, parseInt(e.target.value))}
+                                className="w-full accent-indigo-500 bg-white/5 h-1 rounded-lg cursor-pointer border-none"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Security Access Alignment */}
                         <div className="p-3 bg-[#0d0c13]/50 border border-indigo-500/10 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
                           <div className="flex items-start gap-2.5">
@@ -1563,6 +2258,57 @@ export default function AccountControlCenter({
                                 <span className="text-[7.5px] text-white/40 block">Warn upon Daily PnL boundaries.</span>
                               </div>
                               <SwitchItem checked={dailyPnLAlertEnabled} onChange={onToggleDailyPnLAlert} />
+                            </div>
+                          </div>
+
+                          {/* Custom Notification Sound Selector */}
+                          <div className="p-3.5 bg-black/40 border border-white/5 rounded-lg space-y-2.5 text-[9px]">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Music className="w-3.5 h-3.5 text-indigo-400" />
+                                <div>
+                                  <span className="font-bold text-white block">Custom Notification Sound</span>
+                                  <span className="text-[7.5px] text-white/40 block">Audio tone for price alerts and order status updates.</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => playNotificationSound(notificationSound, true)}
+                                className="px-2.5 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded flex items-center gap-1.5 text-[9px] font-mono font-bold transition-all cursor-pointer"
+                                title="Test selected notification sound"
+                              >
+                                <Play className="w-3 h-3 fill-indigo-400 text-indigo-400" />
+                                <span>Test Sound</span>
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                              {NOTIFICATION_SOUND_OPTIONS.map((opt) => {
+                                const isSelected = notificationSound === opt.id;
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => {
+                                      if (onSelectNotificationSound) {
+                                        onSelectNotificationSound(opt.id);
+                                      }
+                                      playNotificationSound(opt.id, true);
+                                    }}
+                                    className={`p-2.5 rounded text-left border transition-all cursor-pointer flex flex-col justify-between ${
+                                      isSelected
+                                        ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.2)]'
+                                        : 'bg-white/[0.02] border-white/5 text-white/60 hover:text-white hover:border-white/15'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between w-full">
+                                      <span className="font-bold text-[9px]">{opt.label}</span>
+                                      {isSelected && <Check className="w-3 h-3 text-indigo-400 shrink-0" />}
+                                    </div>
+                                    <span className="text-[7.5px] text-white/40 block mt-0.5 line-clamp-1">{opt.description}</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>

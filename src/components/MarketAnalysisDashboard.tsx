@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -33,15 +33,61 @@ import {
   Layers, 
   Search,
   Scale,
-  Shield,
   Percent,
   LineChart as LineIcon,
   BookOpen,
   PieChart,
-  DollarSign
+  DollarSign,
+  Globe,
+  ExternalLink,
+  RefreshCw,
+  Newspaper,
+  Sparkles,
+  ShieldCheck,
+  ArrowUpRight,
+  Tag
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Trade } from '../types.ts';
+
+interface GroundedHeadline {
+  title: string;
+  snippet: string;
+  category: string;
+  impact: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+  timestamp: string;
+  sourceEngine?: string;
+  sourceUrl?: string;
+}
+
+interface GroundingCitationSource {
+  title: string;
+  uri: string;
+  engine?: string;
+}
+
+interface EngineQuickLink {
+  engine: string;
+  label: string;
+  url: string;
+}
+
+interface GroundedNewsData {
+  symbol: string;
+  companyName: string;
+  headlineSynthesis: string;
+  sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'VOLATILE';
+  sentimentScore: number;
+  searchQueries?: string[];
+  headlines: GroundedHeadline[];
+  keyDrivers: string[];
+  groundingSources: GroundingCitationSource[];
+  engineQuickLinks?: EngineQuickLink[];
+  engineBreakdown?: Array<{ engine: string; count: number; status: string }>;
+  searchEngine?: string;
+  lastUpdated: string;
+  isFallback?: boolean;
+}
 
 interface MarketAnalysisDashboardProps {
   trades: Trade[];
@@ -359,8 +405,15 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
   // Navigation & Toggle States
   const [activeTimeframe, setActiveTimeframe] = useState<'1W' | '1M' | '3M' | 'YTD' | '1Y' | 'ALL'>('3M');
   const [selectedAssetKey, setSelectedAssetKey] = useState<string>('AAPL');
-  const [assetTab, setAssetTab] = useState<'FINANCIALS' | 'RISK' | 'THESIS'>('FINANCIALS');
+  const [assetTab, setAssetTab] = useState<'FINANCIALS' | 'RISK' | 'THESIS' | 'GROUNDED_NEWS'>('FINANCIALS');
   
+  // Search Engine Grounding States for Market News across Major Search Engines
+  const [groundedNewsMap, setGroundedNewsMap] = useState<Record<string, GroundedNewsData>>({});
+  const [isLoadingNews, setIsLoadingNews] = useState<boolean>(false);
+  const [customNewsQuery, setCustomNewsQuery] = useState<string>('');
+  const [customSearchSymbol, setCustomSearchSymbol] = useState<string>('AAPL');
+  const [selectedSearchEngine, setSelectedSearchEngine] = useState<'ALL' | 'GOOGLE' | 'BING' | 'YAHOO' | 'DUCKDUCKGO' | 'BRAVE'>('ALL');
+
   // Benchmark Overlays
   const [benchmarks, setBenchmarks] = useState<Record<string, boolean>>({
     'Portfolio Value': true,
@@ -387,45 +440,61 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
     return HOLDINGS_DETAILS[selectedAssetKey] || HOLDINGS_DETAILS['AAPL'];
   }, [selectedAssetKey]);
 
+  // Fetch Grounded Financial News via API with Multi-Engine Search Grounding
+  const fetchGroundedNews = async (
+    symbolToFetch: string, 
+    nameToFetch?: string, 
+    forceRefresh = false, 
+    engineToUse?: 'ALL' | 'GOOGLE' | 'BING' | 'YAHOO' | 'DUCKDUCKGO' | 'BRAVE'
+  ) => {
+    const cleanSym = symbolToFetch.trim().toUpperCase();
+    if (!cleanSym) return;
+
+    const engine = engineToUse || selectedSearchEngine;
+    const cacheKey = `${cleanSym}_${engine}`;
+
+    if (!forceRefresh && groundedNewsMap[cacheKey]) {
+      return;
+    }
+
+    setIsLoadingNews(true);
+    try {
+      const response = await fetch('/api/market-analysis/search-news', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: cleanSym,
+          companyName: nameToFetch || HOLDINGS_DETAILS[cleanSym]?.name || cleanSym,
+          searchEngine: engine
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGroundedNewsMap(prev => ({
+          ...prev,
+          [cleanSym]: data,
+          [cacheKey]: data
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch Search Grounded market news across engines:', err);
+    } finally {
+      setIsLoadingNews(false);
+    }
+  };
+
+  // Trigger Google Search Grounding fetch on symbol selection
+  useEffect(() => {
+    if (selectedAssetKey) {
+      fetchGroundedNews(selectedAssetKey, selectedAsset?.name);
+    }
+  }, [selectedAssetKey]);
+
   return (
     <div id="intelligence-terminal" className="space-y-6">
       
-      {/* HEADER SECTION WITH TOP-RIGHT SYSTEM INDICATORS */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-white/5 pb-5">
-        <div className="text-left">
-          <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20 text-emerald-400">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-lg font-black text-white uppercase tracking-wider font-mono">
-                INTELLIGENCE TERMINAL
-              </h1>
-              <p className="text-[10.5px] text-white/40 font-mono">
-                Institutional research, portfolio diagnostics, risk decomposition, and market intelligence.
-              </p>
-            </div>
-          </div>
-        </div>
 
-        {/* System Indicators Panel */}
-        <div className="flex flex-wrap items-center gap-4 text-[10px] font-mono">
-          <div className="bg-white/[0.02] border border-white/5 px-3 py-1.5 rounded-lg flex items-center gap-2">
-            <span className="text-white/30 uppercase tracking-wider text-[8.5px]">Market Regime:</span>
-            <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              Risk-On
-            </span>
-          </div>
-
-          <div className="bg-white/[0.02] border border-white/5 px-3 py-1.5 rounded-lg flex items-center gap-2">
-            <span className="text-white/30 uppercase tracking-wider text-[8.5px]">Portfolio Health:</span>
-            <span className="text-indigo-400 font-black">91 / 100</span>
-          </div>
-
-
-        </div>
-      </div>
 
       {/* SECTION 1: PORTFOLIO INTELLIGENCE OVERVIEW */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
@@ -436,12 +505,11 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
         >
-          <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500/50"></div>
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider block">Portfolio Return</span>
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Portfolio Return</span>
           <span className="text-lg font-black font-mono block text-emerald-400 mt-1">
             +$4,670.12
           </span>
-          <span className="text-[8.5px] font-mono text-emerald-400/80 block">
+          <span className="text-[8.5px] font-mono text-emerald-400 block font-bold">
             +18.4% YTD
           </span>
         </motion.div>
@@ -452,8 +520,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
         >
-          <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500/50"></div>
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider block">Diversification Score</span>
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Diversification Score</span>
           <span className="text-lg font-black font-mono block text-white mt-1">
             84 / 100
           </span>
@@ -468,12 +535,11 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
         >
-          <div className="absolute top-0 left-0 w-1 h-full bg-amber-500/50"></div>
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider block">Portfolio Risk</span>
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Portfolio Risk</span>
           <span className="text-lg font-black font-mono block text-amber-400 mt-1">
             Moderate
           </span>
-          <span className="text-[8.5px] font-mono text-white/30 block">
+          <span className="text-[8.5px] font-mono text-white/70 block font-bold">
             Beta: 1.08
           </span>
         </motion.div>
@@ -484,8 +550,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
         >
-          <div className="absolute top-0 left-0 w-1 h-full bg-pink-500/50"></div>
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider block">Concentration Exposure</span>
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Concentration Exposure</span>
           <span className="text-lg font-black font-mono block text-white mt-1">
             34%
           </span>
@@ -500,12 +565,11 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
         >
-          <div className="absolute top-0 left-0 w-1 h-full bg-teal-500/50"></div>
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider block">Dividend Yield</span>
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Dividend Yield</span>
           <span className="text-lg font-black font-mono block text-teal-400 mt-1">
             2.9%
           </span>
-          <span className="text-[8.5px] font-mono text-white/30 block">
+          <span className="text-[8.5px] font-mono text-white/70 block font-bold">
             Est. Annual Income
           </span>
         </motion.div>
@@ -516,12 +580,11 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
         >
-          <div className="absolute top-0 left-0 w-1 h-full bg-red-500/50"></div>
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider block">Downside Stress</span>
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Downside Stress</span>
           <span className="text-lg font-black font-mono block text-red-400 mt-1">
             -11%
           </span>
-          <span className="text-[8.5px] font-mono text-red-400/80 block uppercase tracking-wide">
+          <span className="text-[8.5px] font-mono text-red-400 block font-bold uppercase tracking-wide">
             Simulated Crash
           </span>
         </motion.div>
@@ -539,7 +602,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
             <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono flex items-center gap-2">
               <Activity className="w-4 h-4 text-indigo-400" /> Portfolio Value & Performance
             </h3>
-            <p className="text-[10px] text-white/40 font-mono">
+            <p className="text-[10px] text-white/70 font-mono font-bold">
               Sovereign investment value over time overlaid against benchmark indices.
             </p>
           </div>
@@ -555,7 +618,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                   className={`px-2 py-1 rounded font-bold transition-all cursor-pointer ${
                     activeTimeframe === tf 
                       ? 'bg-indigo-600 text-white' 
-                      : 'text-white/45 hover:text-white/95'
+                      : 'text-white/70 hover:text-white'
                   }`}
                 >
                   {tf}
@@ -580,7 +643,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                             : b === 'Nasdaq'
                               ? 'bg-pink-500/15 border-pink-500/35 text-pink-300'
                               : 'bg-amber-500/15 border-amber-500/35 text-amber-300'
-                        : 'bg-white/[0.01] border-white/5 text-white/30 hover:border-white/10'
+                        : 'bg-white/[0.03] border-white/10 text-white/70 hover:text-white hover:border-white/20'
                     }`}
                   >
                     {b}
@@ -620,29 +683,29 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                     <stop offset="95%" stopColor="#ec4899" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="3 3" />
+                <CartesianGrid stroke="#ffffff" strokeOpacity={0.08} strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="date" 
                   stroke="#ffffff" 
-                  strokeOpacity={0.15} 
-                  tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 9.5, fontFamily: 'monospace' }}
+                  strokeOpacity={0.5} 
+                  tick={{ fill: '#ffffff', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold' }}
                   dy={6}
                 />
                 <YAxis 
                   stroke="#ffffff" 
-                  strokeOpacity={0.15} 
-                  tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 9.5, fontFamily: 'monospace' }}
+                  strokeOpacity={0.5} 
+                  tick={{ fill: '#ffffff', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold' }}
                   domain={['dataMin - 1000', 'dataMax + 1000']}
                   tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
                   dx={-6}
                 />
                 <Tooltip
-                  cursor={{ stroke: 'rgba(255, 255, 255, 0.15)', strokeWidth: 1 }}
+                  cursor={{ stroke: 'rgba(255, 255, 255, 0.25)', strokeWidth: 1 }}
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
                         <div className="bg-[#0a0a0f] border border-white/10 p-3 rounded-lg shadow-2xl font-mono text-[10px] space-y-1.5 text-left">
-                          <div className="border-b border-white/5 pb-1 text-white/50 font-bold">
+                          <div className="border-b border-white/10 pb-1 text-white/80 font-bold">
                             {payload[0].payload.date}
                           </div>
                           {payload.map((item, index) => {
@@ -747,7 +810,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
             <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
               <PieChart className="w-4 h-4 text-indigo-400" /> Contribution To Returns
             </h4>
-            <p className="text-[10px] text-white/40 font-mono">
+            <p className="text-[10px] text-white/70 font-mono font-bold">
               Individual asset allocations ranked by absolute returns contribution.
             </p>
           </div>
@@ -766,7 +829,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                 <div key={i} className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-white text-[10px]">{item.asset}</span>
-                    <span className={`font-bold ${isPositive ? 'text-emerald-400' : isZero ? 'text-white/40' : 'text-pink-400'}`}>
+                    <span className={`font-bold ${isPositive ? 'text-emerald-400' : isZero ? 'text-white/70' : 'text-pink-400'}`}>
                       {isPositive ? '+$' : isZero ? '$' : '-$'}{Math.abs(item.pnl).toLocaleString()}
                     </span>
                   </div>
@@ -797,14 +860,14 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
             <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
               <Zap className="w-4 h-4 text-emerald-400" /> Market Opportunity Map
             </h4>
-            <p className="text-[10px] text-white/40 font-mono">
+            <p className="text-[10px] text-white/70 font-mono font-bold">
               Quantitative asset score card based on proprietary machine intelligence.
             </p>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-[10px] font-mono text-left border-collapse">
-              <thead className="text-white/35 uppercase border-b border-white/10 text-[9px]">
+              <thead className="text-white/80 uppercase border-b border-white/10 text-[9px] font-bold">
                 <tr>
                   <th className="pb-2.5">Asset</th>
                   <th className="pb-2.5 text-center">Momentum</th>
@@ -834,13 +897,13 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                       <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
                         row.val === 'Expensive' 
                           ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
-                          : 'bg-white/5 text-white/50 border border-white/10'
+                          : 'bg-white/10 text-white/80 border border-white/15'
                       }`}>
                         {row.val}
                       </span>
                     </td>
                     <td className="py-2.5 text-right text-white font-bold">
-                      <span className={`px-1.5 py-0.5 rounded text-[9.5px] ${row.color} bg-white/[0.02] border border-white/5 font-bold`}>
+                      <span className={`px-1.5 py-0.5 rounded text-[9.5px] ${row.color} bg-white/[0.05] border border-white/10 font-bold`}>
                         {row.score}
                       </span>
                     </td>
@@ -863,7 +926,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                 <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono">
                   Holdings Ledger
                 </h4>
-                <p className="text-[10px] text-white/40 font-mono">
+                <p className="text-[10px] text-white/70 font-mono font-bold">
                   Active asset weights, acquisition prices, and immediate market return summaries.
                 </p>
               </div>
@@ -871,7 +934,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
 
             <div className="overflow-x-auto border border-white/5 rounded-lg">
               <table className="w-full text-[10.5px] font-mono text-left border-collapse">
-                <thead className="bg-[#0b0b0f] text-white/40 sticky top-0 uppercase tracking-wider text-[9px] border-b border-b-white/10">
+                <thead className="bg-[#0b0b0f] text-white/80 sticky top-0 uppercase tracking-wider text-[9px] border-b border-b-white/10 font-bold">
                   <tr>
                     <th className="p-2.5">Asset</th>
                     <th className="p-2.5 text-right">Quantity</th>
@@ -898,12 +961,12 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                       >
                         <td className="p-2.5">
                           <span className="text-white font-bold">{h.symbol}</span>
-                          <span className="text-[9px] text-white/30 block mt-0.5 font-sans font-normal">{h.name}</span>
+                          <span className="text-[9px] text-white/70 block mt-0.5 font-sans font-medium">{h.name}</span>
                         </td>
-                        <td className="p-2.5 text-right text-white/80">{h.qty.toLocaleString()}</td>
-                        <td className="p-2.5 text-right text-white/60">${h.avgCost.toFixed(2)}</td>
+                        <td className="p-2.5 text-right text-white/90 font-medium">{h.qty.toLocaleString()}</td>
+                        <td className="p-2.5 text-right text-white/80 font-medium">${h.avgCost.toFixed(2)}</td>
                         <td className="p-2.5 text-right text-white font-bold">${h.marketPrice.toFixed(2)}</td>
-                        <td className={`p-2.5 text-right font-bold ${isNeutral ? 'text-white/40' : isPositive ? 'text-emerald-400' : 'text-pink-400'}`}>
+                        <td className={`p-2.5 text-right font-bold ${isNeutral ? 'text-white/70' : isPositive ? 'text-emerald-400' : 'text-pink-400'}`}>
                           {h.returnVal}
                         </td>
                         <td className="p-2.5 text-right text-white font-bold text-indigo-400">
@@ -916,7 +979,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
               </table>
             </div>
           </div>
-          <p className="text-[8.5px] font-mono text-white/20 text-left mt-3 pt-2.5 border-t border-white/5">
+          <p className="text-[8.5px] font-mono text-white/60 font-bold text-left mt-3 pt-2.5 border-t border-white/5">
             Audit Note: Security values refreshed in synchronization with global Bloomberg real-time feeds.
           </p>
         </div>
@@ -929,7 +992,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
               {/* Header Area */}
               <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
                 <div>
-                  <span className="text-[9px] font-mono text-white/30 uppercase block">Asset Intelligence</span>
+                  <span className="text-[9px] font-mono text-white/70 uppercase block font-bold">Asset Intelligence</span>
                   <h5 className="text-xs font-black text-white font-mono uppercase tracking-wide">
                     {selectedAsset.symbol} - {selectedAsset.name}
                   </h5>
@@ -944,22 +1007,27 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
               </div>
 
               {/* Sub-header interactive tabs */}
-              <div className="flex border-b border-white/5 pb-2 text-[10px] font-mono gap-1.5">
-                {(['FINANCIALS', 'RISK', 'THESIS'] as const).map((tab) => (
+              <div className="flex border-b border-white/5 pb-2 text-[10px] font-mono gap-1.5 flex-wrap">
+                {(['FINANCIALS', 'RISK', 'THESIS', 'GROUNDED_NEWS'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setAssetTab(tab)}
-                    className={`px-2.5 py-1 rounded border uppercase tracking-wider text-[8.5px] font-black cursor-pointer transition-all ${
+                    className={`px-2 py-1 rounded border uppercase tracking-wider text-[8px] font-black cursor-pointer transition-all flex items-center gap-1 ${
                       assetTab === tab 
-                        ? tab === 'FINANCIALS'
-                          ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-400'
-                          : 'bg-indigo-600/15 border-indigo-500/50 text-indigo-400' 
-                        : tab === 'FINANCIALS'
-                          ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500/60 hover:text-emerald-400 hover:bg-emerald-500/10'
-                          : 'bg-transparent border-transparent text-white/40 hover:text-white/85'
+                        ? tab === 'GROUNDED_NEWS'
+                          ? 'bg-sky-500/20 border-sky-400/50 text-sky-300'
+                          : tab === 'FINANCIALS'
+                            ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-400'
+                            : 'bg-indigo-600/15 border-indigo-500/50 text-indigo-400' 
+                        : tab === 'GROUNDED_NEWS'
+                          ? 'bg-sky-500/5 border-sky-500/20 text-sky-400 font-bold hover:bg-sky-500/10'
+                          : tab === 'FINANCIALS'
+                            ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400 font-bold hover:bg-emerald-500/10'
+                            : 'bg-transparent border-transparent text-white/70 hover:text-white font-bold'
                     }`}
                   >
-                    {tab}
+                    {tab === 'GROUNDED_NEWS' && <Globe className="w-2.5 h-2.5 text-sky-400 shrink-0 animate-pulse" />}
+                    {tab === 'GROUNDED_NEWS' ? 'LIVE NEWS' : tab}
                   </button>
                 ))}
               </div>
@@ -975,8 +1043,8 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                   return (
                     <div className="bg-black/40 p-2.5 rounded border border-white/5 flex flex-col justify-between relative group overflow-visible cursor-help hover:border-indigo-500/40 hover:bg-indigo-500/[0.02] transition-all min-h-[56px]">
                       <div className="flex justify-between items-start w-full">
-                        <span className="text-white/30 text-[8px] uppercase tracking-wider block">{label}</span>
-                        <Info className="w-2.5 h-2.5 text-white/20 group-hover:text-indigo-400 transition-colors" />
+                        <span className="text-white/70 text-[8px] uppercase tracking-wider block font-bold">{label}</span>
+                        <Info className="w-2.5 h-2.5 text-white/60 group-hover:text-indigo-400 transition-colors" />
                       </div>
                       <span className={`${textClass} font-black text-xs mt-1 block`}>{value}</span>
 
@@ -993,11 +1061,11 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                         </p>
                         <div className="bg-[#08080c] rounded p-2 border border-white/5 font-mono text-[9px] space-y-1">
                           <div className="flex justify-between items-center gap-1">
-                            <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
+                            <span className="text-white/70 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
                             <span className="text-white font-medium text-[8.5px] text-right">{info.average}</span>
                           </div>
                           <div className="flex justify-between items-center gap-1">
-                            <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
+                            <span className="text-white/70 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
                             <span className="text-indigo-400 font-bold text-[8.5px] text-right">{info.alert}</span>
                           </div>
                         </div>
@@ -1024,8 +1092,8 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                         <div className="bg-[#0b0b0f] p-3 rounded-lg border border-white/5 space-y-1.5 relative group overflow-visible cursor-help hover:border-indigo-500/40 hover:bg-indigo-500/[0.02] transition-all">
                           <div className="flex justify-between items-center text-[9px]">
                             <div className="flex items-center gap-1">
-                              <span className="text-white/45 uppercase">PROFIT MARGIN:</span>
-                              <Info className="w-2.5 h-2.5 text-white/20 group-hover:text-indigo-400 transition-colors" />
+                              <span className="text-white/70 uppercase font-bold">PROFIT MARGIN:</span>
+                              <Info className="w-2.5 h-2.5 text-white/60 group-hover:text-indigo-400 transition-colors" />
                             </div>
                             <span className="text-emerald-400 font-bold">{selectedAsset.profitMargin}</span>
                           </div>
@@ -1049,11 +1117,11 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                             </p>
                             <div className="bg-[#08080c] rounded p-2 border border-white/5 font-mono text-[9px] space-y-1">
                               <div className="flex justify-between items-center gap-1">
-                                <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
+                                <span className="text-white/70 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
                                 <span className="text-white font-medium text-[8.5px] text-right">{info.average}</span>
                               </div>
                               <div className="flex justify-between items-center gap-1">
-                                <span className="text-white/35 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
+                                <span className="text-white/70 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
                                 <span className="text-indigo-400 font-bold text-[8.5px] text-right">{info.alert}</span>
                               </div>
                             </div>
@@ -1076,38 +1144,38 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                 <div className="space-y-3.5 animate-fadeIn">
                   <div className="bg-black/40 border border-white/5 p-3 rounded-lg space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[9.5px] font-mono text-white/40 uppercase">RETURN CONTRIBUTED</span>
+                      <span className="text-[9.5px] font-mono text-white/70 uppercase font-bold">RETURN CONTRIBUTED</span>
                       <span className={`text-xs font-black font-mono ${selectedAsset.returnPnl >= 0 ? 'text-emerald-400' : 'text-pink-400'}`}>
                         {selectedAsset.returnPnl >= 0 ? '+' : ''}${selectedAsset.returnPnl.toLocaleString()}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[10px] border-t border-white/5 pt-2">
-                      <span className="text-white/40">Portfolio Weight:</span>
+                      <span className="text-white/70 font-bold">Portfolio Weight:</span>
                       <strong className="text-indigo-400 text-xs font-black">
                         {selectedAsset.weight}
                       </strong>
                     </div>
                     <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-white/40">Dividend Yield:</span>
+                      <span className="text-white/70 font-bold">Dividend Yield:</span>
                       <span className="text-white font-bold">{selectedAsset.dividend}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
                     <div className="bg-[#0b0b0f] p-2.5 rounded border border-white/5">
-                      <span className="text-white/30 block text-[8px] uppercase tracking-wider mb-0.5">Volatility</span>
+                      <span className="text-white/70 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">Volatility</span>
                       <span className="text-white font-bold">{selectedAsset.volatility}</span>
                     </div>
                     <div className="bg-[#0b0b0f] p-2.5 rounded border border-white/5">
-                      <span className="text-white/30 block text-[8px] uppercase tracking-wider mb-0.5">Risk Contribution</span>
+                      <span className="text-white/70 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">Risk Contribution</span>
                       <span className="text-indigo-400 font-bold">{selectedAsset.riskContrib}</span>
                     </div>
                     <div className="bg-[#0b0b0f] p-2.5 rounded border border-white/5">
-                      <span className="text-white/30 block text-[8px] uppercase tracking-wider mb-0.5">52-Week Range</span>
+                      <span className="text-white/70 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">52-Week Range</span>
                       <span className="text-white font-bold">{selectedAsset.fiftyTwoWeek}</span>
                     </div>
                     <div className="bg-[#0b0b0f] p-2.5 rounded border border-white/5">
-                      <span className="text-white/30 block text-[8px] uppercase tracking-wider mb-0.5">Consensus Grade</span>
+                      <span className="text-white/70 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">Consensus Grade</span>
                       <span className="text-emerald-400 font-bold">{selectedAsset.consensus}</span>
                     </div>
                   </div>
@@ -1118,7 +1186,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
               {assetTab === 'THESIS' && (
                 <div className="space-y-3.5 animate-fadeIn">
                   <div className="space-y-1.5">
-                    <span className="text-[8.5px] font-mono text-white/30 uppercase block">Structural Drivers</span>
+                    <span className="text-[8.5px] font-mono text-white/70 uppercase block font-bold">Structural Drivers</span>
                     <div className="flex flex-wrap gap-1">
                       {selectedAsset.drivers.map((driver, i) => (
                         <span 
@@ -1132,18 +1200,176 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                   </div>
 
                   <div className="space-y-1.5 bg-white/[0.01] p-3 rounded-lg border border-white/5">
-                    <span className="text-[8.5px] font-mono text-white/30 uppercase block">Investment Thesis Narrative</span>
-                    <p className="text-[10px] text-white/60 leading-normal font-sans italic">
+                    <span className="text-[8.5px] font-mono text-white/70 uppercase block font-bold">Investment Thesis Narrative</span>
+                    <p className="text-[10px] text-white/80 leading-normal font-sans italic font-medium">
                       "{selectedAsset.thesis}"
                     </p>
                   </div>
                 </div>
               )}
 
+              {/* Tab 4: Multi-Engine Grounded Market News */}
+              {assetTab === 'GROUNDED_NEWS' && (() => {
+                const activeNews = groundedNewsMap[selectedAssetKey];
+                return (
+                  <div className="space-y-3 animate-fadeIn font-mono">
+                    <div className="flex items-center justify-between bg-sky-950/20 p-2 rounded border border-sky-500/20">
+                      <div className="flex items-center gap-1.5">
+                        <Globe className="w-3.5 h-3.5 text-sky-400 animate-spin-slow shrink-0" />
+                        <span className="text-[9px] font-bold text-sky-300 uppercase tracking-wide">
+                          Multi-Engine Search Grounding
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => fetchGroundedNews(selectedAssetKey, selectedAsset?.name, true)}
+                        disabled={isLoadingNews}
+                        className="p-1 hover:bg-sky-500/20 rounded text-sky-300 transition-colors cursor-pointer"
+                        title="Refresh Grounded Search"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isLoadingNews ? 'animate-spin text-sky-400' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Search Engine Selector Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[8.5px]">
+                      {[
+                        { id: 'ALL', label: 'All Major Engines' },
+                        { id: 'GOOGLE', label: 'Google Search' },
+                        { id: 'BING', label: 'Bing Finance' },
+                        { id: 'YAHOO', label: 'Yahoo! Finance' },
+                        { id: 'DUCKDUCKGO', label: 'DuckDuckGo' },
+                        { id: 'BRAVE', label: 'Brave Search' }
+                      ].map((eng) => (
+                        <button
+                          key={eng.id}
+                          onClick={() => {
+                            const newEng = eng.id as any;
+                            setSelectedSearchEngine(newEng);
+                            fetchGroundedNews(selectedAssetKey, selectedAsset?.name, true, newEng);
+                          }}
+                          className={`px-1.5 py-0.5 rounded border uppercase font-bold shrink-0 transition-all cursor-pointer ${
+                            selectedSearchEngine === eng.id
+                              ? 'bg-sky-500/20 border-sky-400 text-sky-300'
+                              : 'bg-black/40 border-white/10 text-white/60 hover:text-white'
+                          }`}
+                        >
+                          {eng.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {isLoadingNews ? (
+                      <div className="p-6 text-center space-y-2 bg-black/40 rounded border border-white/5">
+                        <RefreshCw className="w-5 h-5 text-sky-400 animate-spin mx-auto" />
+                        <p className="text-[9.5px] font-mono text-sky-300 font-bold">
+                          Grounding live financial news for {selectedAssetKey} across major search engines...
+                        </p>
+                      </div>
+                    ) : activeNews ? (
+                      <div className="space-y-2.5 text-[9.5px]">
+                        {/* Sentiment badge */}
+                        <div className="flex items-center justify-between bg-white/[0.02] p-2 rounded border border-white/5">
+                          <span className="text-white/70 font-bold">MARKET SENTIMENT:</span>
+                          <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase ${
+                            activeNews.sentiment === 'BULLISH' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                            activeNews.sentiment === 'BEARISH' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30' :
+                            'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          }`}>
+                            {activeNews.sentiment} ({activeNews.sentimentScore}/100)
+                          </span>
+                        </div>
+
+                        {/* Executive Synthesis */}
+                        <div className="bg-black/50 p-2.5 rounded border border-white/5 space-y-1">
+                          <span className="text-[8px] text-white/70 uppercase block font-bold">Executive Synthesis</span>
+                          <p className="text-white/90 text-[10px] leading-relaxed font-sans font-medium">
+                            {activeNews.headlineSynthesis}
+                          </p>
+                        </div>
+
+                        {/* Top Headlines List */}
+                        <div className="space-y-2">
+                          <span className="text-[8px] text-white/70 uppercase block font-bold">Latest Grounded Headlines</span>
+                          {activeNews.headlines.slice(0, 3).map((item, idx) => (
+                            <div key={idx} className="bg-white/[0.02] p-2 rounded border border-white/5 space-y-1 hover:border-sky-500/30 transition-all">
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[8px] font-bold text-sky-300 px-1 py-0.2 rounded bg-sky-500/10 border border-sky-500/20">
+                                    {item.category}
+                                  </span>
+                                  {item.sourceEngine && (
+                                    <span className="text-[7.5px] font-bold text-indigo-300 px-1 py-0.2 rounded bg-indigo-500/10 border border-indigo-500/20">
+                                      {item.sourceEngine}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[8px] text-white/60">{item.timestamp}</span>
+                              </div>
+                              <h6 className="text-white font-bold text-[10px] leading-snug font-sans">{item.title}</h6>
+                              <p className="text-white/70 text-[9px] line-clamp-2 font-sans font-normal">{item.snippet}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Search Engine Quick Links */}
+                        {activeNews.engineQuickLinks && activeNews.engineQuickLinks.length > 0 && (
+                          <div className="pt-2 border-t border-white/5 space-y-1">
+                            <span className="text-[8px] text-white/70 uppercase block font-bold">Open Search Engine Index</span>
+                            <div className="flex flex-wrap gap-1">
+                              {activeNews.engineQuickLinks.map((link, idx) => (
+                                <a
+                                  key={idx}
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-1.5 py-0.5 rounded bg-sky-950/40 border border-sky-500/20 text-[8px] text-sky-300 hover:text-white hover:border-sky-400 transition-colors flex items-center gap-1"
+                                >
+                                  {link.label} <ExternalLink className="w-2 h-2" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Grounding Sources / Links */}
+                        {activeNews.groundingSources && activeNews.groundingSources.length > 0 && (
+                          <div className="pt-2 border-t border-white/5 space-y-1.5">
+                            <span className="text-[8px] text-white/70 uppercase block font-bold">Web Citations & Sources</span>
+                            <div className="space-y-1">
+                              {activeNews.groundingSources.slice(0, 3).map((src, idx) => (
+                                <a
+                                  key={idx}
+                                  href={src.uri}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-between text-[8.5px] text-sky-400 hover:text-sky-300 hover:underline transition-colors group bg-sky-950/20 p-1.5 rounded border border-sky-500/10"
+                                >
+                                  <span className="truncate max-w-[200px] font-sans font-medium">{src.title}</span>
+                                  <ExternalLink className="w-2.5 h-2.5 shrink-0 text-sky-400 group-hover:translate-x-0.5 transition-transform" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center space-y-2">
+                        <button
+                          onClick={() => fetchGroundedNews(selectedAssetKey, selectedAsset?.name, true)}
+                          className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-[10px] rounded transition-colors cursor-pointer"
+                        >
+                          Fetch Grounded News for {selectedAssetKey}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
             </div>
 
             {/* Timestamp footer */}
-            <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[8px] font-mono text-white/30">
+            <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[8px] font-mono text-white/70 font-bold">
               <span>LEDGER: ACTIVE</span>
               <span>EXCHANGE: NYSE/NASDAQ</span>
             </div>
@@ -1162,7 +1388,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
             <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
               <Scale className="w-4 h-4 text-amber-400" /> Portfolio Risk Matrix
             </h4>
-            <p className="text-[10px] text-white/40 font-mono">
+            <p className="text-[10px] text-white/70 font-mono font-bold">
               Risk decomposition limits, asset concentrations, and currency indicators.
             </p>
           </div>
@@ -1177,9 +1403,9 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
               { label: 'Stress Buffer', val: 'AAA Rated', sub: 'High liquidity safety compliance', barColor: 'bg-emerald-500' }
             ].map((item, i) => (
               <div key={i} className="bg-white/[0.01] border border-white/5 p-3 rounded-lg space-y-1 font-mono text-left">
-                <span className="text-[8px] text-white/30 uppercase block">{item.label}</span>
+                <span className="text-[8px] text-white/70 uppercase block font-bold">{item.label}</span>
                 <span className="text-sm font-black text-white block">{item.val}</span>
-                <span className="text-[8.5px] text-white/40 block leading-normal">{item.sub}</span>
+                <span className="text-[8.5px] text-white/70 block leading-normal font-medium">{item.sub}</span>
                 <div className="h-0.5 w-full bg-white/5 rounded-full mt-1.5 overflow-hidden">
                   <div className={`h-full w-2/3 ${item.barColor}`}></div>
                 </div>
@@ -1194,7 +1420,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
             <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
               <Zap className="w-4 h-4 text-red-400" /> Scenario Simulator
             </h4>
-            <p className="text-[10px] text-white/40 font-mono">
+            <p className="text-[10px] text-white/70 font-mono font-bold">
               Hypothetical macro events applied dynamically against the active portfolio value.
             </p>
           </div>
@@ -1223,7 +1449,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
               <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.01] border border-white/5 font-mono text-[10px]">
                 <div className="space-y-0.5">
                   <span className="text-white font-bold block">{sc.title}</span>
-                  <span className="text-white/45 block">{sc.impact}</span>
+                  <span className="text-white/70 block font-medium">{sc.impact}</span>
                 </div>
                 <div className={`px-2 py-1 rounded text-[10px] font-bold ${
                   sc.isPositive 
@@ -1239,60 +1465,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
 
       </div>
 
-      {/* SECTION 8: RESEARCH FEED */}
-      <div className="bg-[#080808] border border-white/5 rounded-xl p-4 text-left">
-        <div className="border-b border-white/5 pb-3 mb-3">
-          <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
-            <BookOpen className="w-4 h-4 text-indigo-400" /> Real-Time Research Feed
-          </h4>
-          <p className="text-[10px] text-white/40 font-mono">
-            Key macroeconomic alerts and algorithmic observations impacting the tokenized landscape.
-          </p>
-        </div>
 
-        {/* Scrollable grid layout */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
-          {[
-            {
-              asset: 'AAPL',
-              body: 'Services revenue reaches record highs. Subscription upgrades provide cash compounding resilience.',
-              source: 'Bloomberg Research'
-            },
-            {
-              asset: 'NVDA',
-              body: 'AI infrastructure spending accelerates worldwide. Institutional accumulation remains heavily focused on next-gen silicon pipelines.',
-              source: 'Stripe Analyst Feed'
-            },
-            {
-              asset: 'SPY',
-              body: 'Federal Reserve maintains restrictive interest rates. Yield capture parameters remain elevated.',
-              source: 'Sovereign Macro'
-            },
-            {
-              asset: 'MSFT',
-              body: 'Enterprise cloud margins exceed expectations. Azure integration of large language engines continues scaling.',
-              source: 'Intelligence Desk'
-            }
-          ].map((feed, i) => (
-            <div key={i} className="bg-white/[0.01] border border-white/5 p-3 rounded-lg flex flex-col justify-between space-y-3 font-mono text-left">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9.5px] font-black text-white bg-indigo-500/10 px-1.5 py-0.2 rounded border border-indigo-500/25">
-                    {feed.asset}
-                  </span>
-                  <span className="text-[8px] text-white/20 uppercase font-bold">{feed.source}</span>
-                </div>
-                <p className="text-[10px] text-white/60 leading-normal font-sans italic">
-                  "{feed.body}"
-                </p>
-              </div>
-              <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wide">
-                ● TIER-1 INSIGHT CLEARED
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
 
     </div>
   );

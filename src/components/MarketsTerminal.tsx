@@ -21,6 +21,7 @@ const slideOverVariants = {
   }),
 };
 import { generateScreenerDatabase } from '../lib/screenerTickersData';
+import OrderConfirmationModal, { OrderDetails } from './OrderConfirmationModal';
 import { 
   TrendingUp, 
   Search, 
@@ -44,7 +45,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   X,
-  Cpu
+  Cpu,
+  Compass
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -54,6 +56,7 @@ import {
   YAxis, 
   Tooltip, 
   ReferenceLine,
+  CartesianGrid,
   LineChart as RechartsLineChart, 
   Line as RechartsLine, 
   BarChart, 
@@ -214,103 +217,44 @@ const getModuleApprovedTickers = () => {
   return list;
 };
 
-let moduleApprovedTickersSet: Set<string> | null = null;
+function getBasePriceForTicker(ticker: string): number {
+  const t = (ticker || '').trim().toUpperCase();
+  if (t === 'BTC-USD' || t === 'BTC/USDT' || t === 'BTC') return 67250.0;
+  if (t === 'ETH-USD' || t === 'ETH/USDT' || t === 'ETH') return 3450.0;
+  if (t === 'SOL-USD' || t === 'SOL/USDT' || t === 'SOL') return 145.0;
+  if (t === 'AAPL') return 182.3;
+  if (t === 'MSFT') return 421.9;
+  if (t === 'NVDA') return 125.4;
+  if (t === 'GOOG' || t === 'GOOGL') return 175.2;
+  if (t === 'TSLA') return 178.6;
+  if (t === 'AMZN') return 185.5;
+  if (t === 'META') return 475.3;
+  if (t === 'NFLX') return 620.0;
+  if (t === 'AMD') return 160.0;
+  if (t === 'SPY') return 512.4;
+  if (t === 'UK100') return 8220.0;
+  if (t === 'JPN225') return 38500.0;
+  if (t === 'GOLD/USD' || t === 'GLD') return 2350.0;
+  if (t === 'SILVER/USD') return 28.5;
+  if (t === 'BRENT') return 82.3;
+  if (t === 'EURUSD=X' || t === 'EUR/USD') return 1.085;
+  if (t === 'GBPUSD=X' || t === 'GBP/USD') return 1.272;
+  if (t === 'USDJPY=X' || t === 'USD/JPY') return 156.4;
+  
+  let hash = 0;
+  for (let i = 0; i < t.length; i++) {
+    hash = (hash << 5) - hash + t.charCodeAt(i);
+    hash |= 0;
+  }
+  const absHash = Math.abs(hash);
+  return parseFloat((15.0 + (absHash % 2850) / 10).toFixed(2));
+}
+
 const isApprovedTicker = (ticker: string): boolean => {
   if (!ticker || typeof ticker !== 'string') return false;
   const t = ticker.trim().toUpperCase();
-  if (t.length < 1 || t.length > 15 || !/^[A-Z0-9=\.-]+$/.test(t)) {
-    return false;
-  }
-  if (!moduleApprovedTickersSet) {
-    moduleApprovedTickersSet = getModuleApprovedTickers();
-  }
-  return moduleApprovedTickersSet.has(t);
+  return t.length >= 1 && t.length <= 15 && /^[A-Z0-9=\.\/\-]+$/.test(t);
 };
-
-function getClientSimulatedHistoricalData(ticker: string, range: string) {
-  if (!isApprovedTicker(ticker)) {
-    throw new Error(`Ticker '${ticker}' is not a valid financial instrument. Integrity validation failed.`);
-  }
-  const bars: any[] = [];
-  const days = range === '1d' ? 24 : range === '5d' ? 5 : range === '1mo' ? 30 : range === '3mo' ? 90 : range === '1y' ? 250 : 30;
-  let currentPrice = ticker === 'BTC-USD' ? 64000 : ticker === 'ETH-USD' ? 3200 : ticker === 'AAPL' ? 180 : ticker === 'MSFT' ? 420 : ticker === 'NVDA' ? 120 : ticker === 'TSLA' ? 175 : 100;
-  
-  const now = Date.now();
-  const step = range === '1d' ? 3600 * 1000 : 24 * 3600 * 1000;
-
-  for (let i = days; i >= 0; i--) {
-    const time = now - i * step;
-    const change = (Math.random() - 0.49) * (currentPrice * 0.03);
-    const open = currentPrice;
-    const close = currentPrice + change;
-    const high = Math.max(open, close) + Math.random() * (currentPrice * 0.015);
-    const low = Math.min(open, close) - Math.random() * (currentPrice * 0.015);
-    const volume = Math.round(1000000 + Math.random() * 5000000);
-
-    bars.push({
-      timestamp: new Date(time).toISOString(),
-      open: parseFloat(open.toFixed(2)),
-      high: parseFloat(high.toFixed(2)),
-      low: parseFloat(low.toFixed(2)),
-      close: parseFloat(close.toFixed(2)),
-      volume
-    });
-
-    currentPrice = close;
-  }
-
-  return {
-    ticker,
-    currency: 'USD',
-    symbol: ticker,
-    regularMarketPrice: parseFloat(currentPrice.toFixed(2)),
-    bars
-  };
-}
-
-function getClientSimulatedFundamentals(ticker: string) {
-  if (!isApprovedTicker(ticker)) {
-    throw new Error(`Ticker '${ticker}' is not a valid financial instrument. Integrity validation failed.`);
-  }
-  const isTech = ['AAPL', 'MSFT', 'NVDA', 'GOOG', 'AMZN', 'META'].includes(ticker);
-  const pe = isTech ? 25 + Math.random() * 15 : 12 + Math.random() * 10;
-  const roe = isTech ? 0.25 + Math.random() * 0.2 : 0.1 + Math.random() * 0.1;
-  const debtToEquity = isTech ? 40 + Math.random() * 80 : 80 + Math.random() * 100;
-  const profitMargin = isTech ? 0.2 + Math.random() * 0.15 : 0.05 + Math.random() * 0.1;
-
-  return {
-    ticker,
-    incomeStatement: [
-      { endDate: '2025-12-31', totalRevenue: 385000000000, costOfRevenue: 220000000000, grossProfit: 165000000000, operatingIncome: 115000000000, netIncome: 95000000000 },
-      { endDate: '2024-12-31', totalRevenue: 365000000000, costOfRevenue: 210000000000, grossProfit: 155000000000, operatingIncome: 105000000000, netIncome: 85000000000 },
-      { endDate: '2023-12-31', totalRevenue: 345000000000, costOfRevenue: 200000000000, grossProfit: 145000000000, operatingIncome: 95000000000, netIncome: 75000000000 }
-    ],
-    balanceSheet: [
-      { endDate: '2025-12-31', totalAssets: 420000000000, totalLiab: 280000000000, totalStockholderEquity: 140000000000, cash: 65000000000, shortTermInvestments: 55000000000 },
-      { endDate: '2024-12-31', totalAssets: 380000000000, totalLiab: 260000000000, totalStockholderEquity: 120000000000, cash: 55000000000, shortTermInvestments: 45000000000 }
-    ],
-    cashFlow: [
-      { endDate: '2025-12-31', operatingCashflow: 110000000000, capitalExpenditure: -12000000000, investingCashflow: -30000000000, financingCashflow: -70000000000, freeCashflow: 98000000000 },
-      { endDate: '2024-12-31', operatingCashflow: 95000000000, capitalExpenditure: -10000000000, investingCashflow: -25000000000, financingCashflow: -65000000000, freeCashflow: 85000000000 }
-    ],
-    ratios: {
-      peRatio: pe,
-      forwardPE: pe * 0.9,
-      priceToBook: 4.5 + Math.random() * 8,
-      roe: roe,
-      roa: roe * 0.6,
-      marketCap: ticker === 'AAPL' ? 3000000000000 : ticker === 'MSFT' ? 3200000000000 : ticker === 'NVDA' ? 2800000000000 : 500000000000,
-      operatingMargin: profitMargin * 1.3,
-      profitMargin: profitMargin,
-      beta: 1.0 + (Math.random() - 0.5) * 0.4,
-      dividendYield: 0.005 + Math.random() * 0.015,
-      debtToEquity: debtToEquity,
-      revenueGrowth: 0.05 + Math.random() * 0.15,
-      earningsGrowth: 0.08 + Math.random() * 0.2,
-      fiftyTwoWeekChange: 0.15 + Math.random() * 0.3
-    }
-  };
-}
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -337,10 +281,12 @@ const itemVariants = {
 
 interface MarketsTerminalProps {
   initialTicker?: string;
+  initialSubTab?: 'ANALYSIS' | 'SCREENER';
 }
 
-export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps = {}) {
+export default function MarketsTerminal({ initialTicker, initialSubTab }: MarketsTerminalProps = {}) {
   const [activeSubTab, setActiveSubTab] = useState<'ANALYSIS' | 'SCREENER'>(() => {
+    if (initialSubTab) return initialSubTab;
     try {
       const saved = localStorage.getItem('mtx_markets_subtab');
       return (saved === 'ANALYSIS' || saved === 'SCREENER') ? saved : 'ANALYSIS';
@@ -348,6 +294,12 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
       return 'ANALYSIS';
     }
   });
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   const subTabDirection = activeSubTab === 'SCREENER' ? 1 : -1;
 
@@ -413,6 +365,19 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleNavMarkets = () => {
+      setActiveSubTab('ANALYSIS');
+      try {
+        localStorage.setItem('mtx_markets_subtab', 'ANALYSIS');
+      } catch {}
+    };
+    window.addEventListener('mtx_nav_markets', handleNavMarkets);
+    return () => {
+      window.removeEventListener('mtx_nav_markets', handleNavMarkets);
     };
   }, []);
 
@@ -484,6 +449,36 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
   const [hoveredY, setHoveredY] = useState<number | null>(null);
   const [fundamentalData, setFundamentalData] = useState<Fundamentals | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const displayBars = useMemo(() => {
+    if (!marketData?.bars || marketData.bars.length === 0) return [];
+    const bars = [...marketData.bars];
+    const lastBar = bars[bars.length - 1];
+    if (!lastBar || !lastBar.timestamp) return bars;
+
+    const lastTime = new Date(lastBar.timestamp).getTime();
+    const now = Date.now();
+
+    // If last bar timestamp is older than 2 hours (e.g. stock market closed on weekend/Friday),
+    // append today's current bar so the chart extends all the way to the right edge and touches the Y-axis.
+    if (!isNaN(lastTime) && now - lastTime > 2 * 3600 * 1000) {
+      const currentPrice = typeof marketData.regularMarketPrice === 'number' && marketData.regularMarketPrice > 0
+        ? marketData.regularMarketPrice
+        : (typeof lastBar.close === 'number' ? lastBar.close : 0);
+
+      const baseClose = typeof lastBar.close === 'number' ? lastBar.close : currentPrice;
+
+      bars.push({
+        timestamp: new Date().toISOString(),
+        open: baseClose,
+        high: Math.max(baseClose, currentPrice),
+        low: Math.min(baseClose, currentPrice),
+        close: currentPrice,
+        volume: lastBar.volume || 0
+      });
+    }
+    return bars;
+  }, [marketData]);
 
   const allApprovedTickers = useMemo(() => {
     const list = new Set<string>();
@@ -893,7 +888,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
       };
 
       let themeClasses = {
-        bg: 'bg-indigo-950/10 hover:bg-indigo-950/20 border-indigo-500/15 hover:border-indigo-500/50 border-l-indigo-500',
+        bg: 'bg-indigo-950/10 hover:bg-indigo-950/20 border-indigo-500/15 hover:border-indigo-500/50',
         labelColor: 'text-indigo-400/85',
         valueColor: 'text-indigo-300 font-extrabold',
         iconColor: 'text-indigo-400',
@@ -903,7 +898,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
 
       if (colorTheme === 'emerald') {
         themeClasses = {
-          bg: 'bg-emerald-950/10 hover:bg-emerald-950/20 border-emerald-500/15 hover:border-emerald-500/50 border-l-emerald-500',
+          bg: 'bg-emerald-950/10 hover:bg-emerald-950/20 border-emerald-500/15 hover:border-emerald-500/50',
           labelColor: 'text-emerald-400/85',
           valueColor: 'text-emerald-300 font-extrabold',
           iconColor: 'text-emerald-400',
@@ -912,7 +907,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
         };
       } else if (colorTheme === 'cyan') {
         themeClasses = {
-          bg: 'bg-cyan-950/10 hover:bg-cyan-950/20 border-cyan-500/15 hover:border-cyan-500/50 border-l-cyan-500',
+          bg: 'bg-cyan-950/10 hover:bg-cyan-950/20 border-cyan-500/15 hover:border-cyan-500/50',
           labelColor: 'text-cyan-400/85',
           valueColor: 'text-cyan-300 font-extrabold',
           iconColor: 'text-cyan-400',
@@ -924,7 +919,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
       return (
         <div 
           key={index} 
-          className={`border border-l-2 rounded-lg py-2 px-2.5 flex flex-col justify-between space-y-1 relative group overflow-visible cursor-help transition-all duration-300 ${themeClasses.bg}`}
+          className={`border rounded-lg py-2 px-2.5 flex flex-col justify-between space-y-1 relative group overflow-visible cursor-help transition-all duration-300 ${themeClasses.bg}`}
         >
           <div className="flex justify-between items-start w-full">
             <span className={`text-[8px] font-mono uppercase tracking-wider block font-bold ${themeClasses.labelColor}`}>
@@ -1080,6 +1075,50 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
   const [orderStatus, setOrderStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isExecutingOrder, setIsExecutingOrder] = useState<boolean>(false);
 
+  // Order Confirmation Dialog State
+  const [showOrderConfirmModal, setShowOrderConfirmModal] = useState<boolean>(false);
+  const [pendingOrderDetails, setPendingOrderDetails] = useState<OrderDetails | null>(null);
+
+  const handleOpenOrderConfirmation = () => {
+    if (!marketData?.regularMarketPrice) return;
+    const currentPrice = marketData.regularMarketPrice;
+    const executionPrice = orderType === 'LIMIT' ? orderLimitPrice || currentPrice : currentPrice;
+    const dollarAmount = parseFloat(orderShares) || 0;
+    const calculatedQty = executionPrice > 0 ? dollarAmount / executionPrice : 0;
+
+    if (orderSide === 'BUY' && dollarAmount < 50) {
+      setOrderStatus({
+        type: 'error',
+        message: 'Minimum purchase amount is $50.00 for fractional shares.'
+      });
+      return;
+    }
+
+    const slPrice = useBracketProtection ? executionPrice * (1 - stopLossPct / 100) : undefined;
+    const tpPrice = useBracketProtection ? executionPrice * (1 + takeProfitPct / 100) : undefined;
+
+    setPendingOrderDetails({
+      symbol: ticker,
+      name: marketData.shortName || marketData.longName || ticker,
+      side: orderSide,
+      orderType: orderType,
+      limitPrice: orderType === 'LIMIT' ? orderLimitPrice : undefined,
+      dollarAmount: dollarAmount,
+      sharesOrUnits: calculatedQty,
+      unitLabel: 'shares',
+      executionPrice: executionPrice,
+      useBracketProtection: useBracketProtection,
+      stopLossPrice: slPrice,
+      stopLossPct: stopLossPct,
+      takeProfitPrice: tpPrice,
+      takeProfitPct: takeProfitPct,
+      currentBalance: brokerCash,
+      postBalance: orderSide === 'BUY' ? brokerCash - dollarAmount : brokerCash + dollarAmount
+    });
+
+    setShowOrderConfirmModal(true);
+  };
+
   // Mobile order execution desk minimized view states
   const [showExecutionDetails, setShowExecutionDetails] = useState<boolean>(false);
   const executionDeskRef = useRef<HTMLDivElement>(null);
@@ -1231,49 +1270,29 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
     setErrorMsg('');
     try {
       // 1. Fetch Historical Price
-      let histData;
-      try {
-        const histResponse = await fetch(`/api/markets/historical?ticker=${ticker}&range=${range}`);
-        if (histResponse.ok && histResponse.headers.get('content-type')?.includes('application/json')) {
-          const data = await histResponse.json();
-          if (data && !data.error) {
-            histData = data;
-          }
+      const histResponse = await fetch(`/api/markets/historical?ticker=${encodeURIComponent(ticker)}&range=${range}`);
+      if (histResponse.ok) {
+        const data = await histResponse.json();
+        if (data && !data.error) {
+          setMarketData(data);
+        } else {
+          setErrorMsg(data?.error || `Unable to fetch live chart data for ${ticker}`);
         }
-      } catch (fetchErr) {
-        console.warn("Historical fetch failed, using client fallback", fetchErr);
+      } else {
+        setErrorMsg(`Market data feed offline for ${ticker}`);
       }
-
-      if (!histData) {
-        // Fallback to client simulation
-        histData = getClientSimulatedHistoricalData(ticker, range);
-      }
-      setMarketData(histData);
 
       // 2. Fetch Fundamentals
-      let fundData;
-      try {
-        const fundResponse = await fetch(`/api/markets/fundamentals?ticker=${ticker}`);
-        if (fundResponse.ok && fundResponse.headers.get('content-type')?.includes('application/json')) {
-          const data = await fundResponse.json();
-          if (data && !data.error) {
-            fundData = data;
-          }
+      const fundResponse = await fetch(`/api/markets/fundamentals?ticker=${encodeURIComponent(ticker)}`);
+      if (fundResponse.ok) {
+        const data = await fundResponse.json();
+        if (data && !data.error) {
+          setFundamentalData(data);
         }
-      } catch (fetchErr) {
-        console.warn("Fundamentals fetch failed, using client fallback", fetchErr);
       }
-
-      if (!fundData) {
-        // Fallback to client simulation
-        fundData = getClientSimulatedFundamentals(ticker);
-      }
-      setFundamentalData(fundData);
     } catch (err: any) {
-      console.error(err);
-      // Absolute fallback
-      setMarketData(getClientSimulatedHistoricalData(ticker, range));
-      setFundamentalData(getClientSimulatedFundamentals(ticker));
+      console.error("Error loading live ticker data:", err);
+      setErrorMsg(`Connection error fetching live market data for ${ticker}`);
     } finally {
       setLoading(false);
     }
@@ -1535,11 +1554,12 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
   };
 
   const handleBacktest = () => {
-    if (!marketData?.bars || marketData.bars.length === 0) return;
+    const activeBars = displayBars.length > 0 ? displayBars : marketData?.bars;
+    if (!activeBars || activeBars.length === 0) return;
     setIsBacktesting(true);
 
     setTimeout(() => {
-      const bars: HistoricalBar[] = marketData.bars;
+      const bars: HistoricalBar[] = activeBars;
       let cash = 10000;
       let holdings = 0;
       const initialCash = cash;
@@ -1847,7 +1867,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
     >
       {/* Swipe Navigation Visual Indicator */}
       {swipeIndicator && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[#09090c]/90 border border-indigo-500/30 backdrop-blur-md px-4 py-2.5 rounded-full flex items-center gap-2.5 shadow-2xl z-50 pointer-events-none animate-bounce">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[#09090c] border border-indigo-500/30 px-4 py-2.5 rounded-full flex items-center gap-2.5 shadow-2xl z-50 pointer-events-none animate-bounce">
           <div className="flex items-center gap-2 font-mono text-[10px] font-bold text-indigo-400">
             {swipeIndicator.direction === 'left' ? (
               <>
@@ -1956,7 +1976,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                 </button>
 
                 {/* Range selectors */}
-                <div className="flex bg-[#040405] border border-white/10 p-0.5 rounded text-white/40 shrink-0">
+                <div className="flex bg-[#040405] border border-white/10 p-0.5 rounded text-white/70 shrink-0">
                   {(['5d', '1mo', '3mo', '1y'] as const).map((r) => (
                     <button
                       key={r}
@@ -1965,7 +1985,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                       className={`px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-[8px] sm:text-[9px] font-mono rounded cursor-pointer ${
                         range === r 
                           ? 'bg-indigo-600/20 text-indigo-300 font-bold border border-indigo-500/20' 
-                          : 'text-white/40 hover:text-white/70'
+                          : 'text-white/70 hover:text-white'
                       }`}
                     >
                       {r.toUpperCase()}
@@ -1994,7 +2014,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                 {/* LEFT COLUMN: widescreen data panels (Chart and AI core analysis) */}
                 <div className="lg:col-span-2 flex-1 flex flex-col lg:h-full min-h-0">
                   {/* Visual Chart Canvas Skeleton */}
-                  <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
+                  <div className="bg-[#080808] border border-white/5 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
                     
                     {/* Header line mimicking symbol/price/indicators */}
                     <div className="flex flex-row items-center justify-between gap-2 pb-2 border-b border-white/5 w-full">
@@ -2049,7 +2069,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                       </div>
 
                       {/* Animated gateway query spinner in center of chart */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 bg-black/20 backdrop-blur-[1px] z-10">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 bg-black/40 z-10">
                         <RefreshCw className="w-7 h-7 text-indigo-400 animate-spin" />
                         <span className="text-[10px] text-white/50 font-mono uppercase tracking-widest bg-black/80 px-2.5 py-1 rounded-md border border-white/5 shadow-xl animate-pulse">
                           Connecting to Yahoo Finance REST Gateway...
@@ -2077,22 +2097,22 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
 
                 {/* RIGHT COLUMN: Order Ticket & Interactive AI Copilot Chat Skeleton */}
                 <div className="lg:col-span-1 flex flex-col lg:h-full h-auto">
-                  <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-5 flex flex-col lg:h-full h-auto">
+                  <div className="bg-[#080808] border border-white/5 rounded-xl p-5 space-y-5 flex flex-col lg:h-full h-auto">
                     
                     {/* Action Tabs Placeholder */}
-                    <div className="grid grid-cols-2 bg-[#040405] p-1 rounded-lg border border-white/5">
+                    <div className="grid grid-cols-2 bg-[#050505] p-1 rounded-lg border border-white/5">
                       <div className="h-7 bg-white/5 rounded animate-pulse" />
                       <div className="h-7 bg-white/[0.01] rounded" />
                     </div>
 
                     <div className="space-y-4 font-mono">
                       {/* Active asset details placeholders */}
-                      <div className="flex justify-between items-center text-xs bg-[#040405] p-2.5 rounded border border-white/5">
+                      <div className="flex justify-between items-center text-xs bg-[#050505] p-2.5 rounded border border-white/5">
                         <span className="text-white/20">ACTIVE ASSET:</span>
                         <div className="h-3 w-12 bg-white/10 rounded animate-pulse" />
                       </div>
                       
-                      <div className="flex justify-between items-center text-xs bg-[#040405] p-2.5 rounded border border-white/5">
+                      <div className="flex justify-between items-center text-xs bg-[#050505] p-2.5 rounded border border-white/5">
                         <span className="text-white/20">MARKET PRICE:</span>
                         <div className="h-3 w-16 bg-white/10 rounded animate-pulse" />
                       </div>
@@ -2136,10 +2156,10 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                   <div className="lg:col-span-2 flex-1 flex flex-col lg:h-full min-h-0">
                     
                     {/* Visual Chart Canvas */}
-                    <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
-                      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 pb-2 border-b border-white/5 w-full overflow-x-auto no-scrollbar flex-nowrap">
+                    <div className="bg-[#080808] border border-white/5 rounded-xl p-4 md:p-6 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
+                      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 pb-3 border-b border-white/5 w-full overflow-x-auto no-scrollbar flex-nowrap">
                         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                          <h4 className="text-base sm:text-xl font-black font-mono tracking-tight text-white">
+                          <h4 className="text-base sm:text-xl font-black font-mono tracking-tight text-white flex items-center gap-2">
                             {marketData.symbol}
                           </h4>
                           <span className="text-sm sm:text-lg font-bold font-mono text-indigo-400">
@@ -2151,7 +2171,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                               return marketData.regularMarketPrice.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
                             })()}
                           </span>
-                          <span className="text-[9px] sm:text-[10px] text-white/30 font-mono uppercase tracking-wider">
+                          <span className="text-[9px] sm:text-[10px] text-white/70 font-mono uppercase tracking-wider">
                             {marketData.currency || 'USD'}
                           </span>
                           
@@ -2168,7 +2188,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                             <Star className={`w-3.5 h-3.5 ${isInWatchlist ? 'fill-indigo-400 text-indigo-400' : ''}`} />
                           </button>
                         </div>
-                        {marketData.bars && marketData.bars.length > 1 && (
+                        {displayBars && displayBars.length > 1 && (
                           <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
                             {/* Financials Toggle Button */}
                             <button
@@ -2186,13 +2206,13 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
 
                             <div>
                               {(() => {
-                                const first = marketData.bars[0].close;
-                                const last = marketData.bars[marketData.bars.length - 1].close;
+                                const first = displayBars[0].close;
+                                const last = displayBars[displayBars.length - 1].close;
                                 const pct = ((last - first) / first) * 100;
                                 const up = pct >= 0;
                                 return (
-                                  <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-1.5 py-1 sm:px-2 sm:py-1 rounded shrink-0 ${
-                                    up ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                                  <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-2 py-1 rounded shrink-0 ${
+                                    up ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/35' : 'bg-rose-500/15 text-rose-300 border border-rose-500/35'
                                   }`}>
                                     {up ? <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <ArrowDownRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
                                     {pct.toFixed(2)}% ({range.toUpperCase()})
@@ -2205,13 +2225,13 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                       </div>
 
                       {/* Recharts Price Area Chart */}
-                      <div className={`flex-1 h-0 -mr-5 relative transition-all duration-300 ease-in-out outline-none focus:outline-none ${
+                      <div className={`flex-1 h-0 relative transition-all duration-300 ease-in-out outline-none focus:outline-none ${
                         showExecutionDetails ? 'min-h-[160px] lg:min-h-[250px]' : 'min-h-[240px] md:min-h-[480px] lg:min-h-[350px]'
                       }`}>
                         <ResponsiveContainer width="100%" height="100%" className="outline-none focus:outline-none">
                           <AreaChart 
-                            data={marketData.bars} 
-                            margin={{ top: 10, right: 32, left: -20, bottom: 0 }}
+                            data={displayBars} 
+                            margin={{ top: 12, right: 1.5, left: -15, bottom: 0 }}
                             className="outline-none focus:outline-none"
                             onMouseMove={(state: any) => {
                               if (state && state.activeTooltipIndex !== undefined) {
@@ -2231,62 +2251,81 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                             }}
                           >
                             <defs>
-                               <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                                 <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
-                                 <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0}/>
-                                </linearGradient>
+                              <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25} />
+                                <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0} />
+                              </linearGradient>
                             </defs>
+                            
+                            <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="3 3" />
+
                             <XAxis 
                               dataKey="timestamp" 
-                              tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
-                              tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
-                              axisLine={false}
+                              stroke="#ffffff" 
+                              strokeOpacity={0.15} 
+                              tick={{ fill: '#ffffff', fontSize: 9.5, fontFamily: 'monospace' }}
+                              dy={6}
+                              axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
                               tickLine={false}
+                              padding={{ left: 0, right: 0 }}
+                              minTickGap={15}
+                              tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
                             />
                             <YAxis 
                               domain={['auto', 'auto']}
-                              tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
-                              axisLine={false}
+                              stroke="#ffffff" 
+                              strokeOpacity={0.15} 
+                              tick={{ fill: '#ffffff', fontSize: 9.5, fontFamily: 'monospace' }}
+                              dx={-2}
+                              axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
                               tickLine={false}
                               orientation="right"
-                              width={32}
+                              width={48}
+                              tickFormatter={(val) => {
+                                if (val >= 1000) return `$${(val / 1000).toFixed(0)}k`;
+                                if (val >= 1) return `$${val.toFixed(2)}`;
+                                return `$${val.toFixed(4)}`;
+                              }}
                             />
                             <Tooltip
-                              contentStyle={{ backgroundColor: '#0c0c0e', border: '1px solid #ffffff10', borderRadius: '8px' }}
-                              labelFormatter={(str) => new Date(str).toLocaleString()}
-                              formatter={(val: any) => [`$${Number(val).toFixed(4)}`, 'Close Price']}
+                              cursor={{ stroke: 'rgba(255, 255, 255, 0.75)', strokeWidth: 1 }}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="bg-[#0c0c0e] border border-white/10 px-3.5 py-2.5 rounded-xl shadow-2xl font-sans text-xs space-y-1 text-left">
+                                      <div className="text-white font-medium text-xs">
+                                        {new Date(data.timestamp).toLocaleString()}
+                                      </div>
+                                      <div className="text-indigo-400 font-medium text-xs">
+                                        Close Price : ${Number(data.close).toFixed(4)}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
                             />
-                            <Area type="monotone" dataKey="close" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#priceGradient)" />
-                            
-                            {/* Horizontal & Vertical Crosshair Lines */}
-                            {hoveredBar && (
-                              <ReferenceLine
-                                x={hoveredBar.timestamp}
-                                stroke="#6366f1"
-                                strokeOpacity={0.4}
-                                strokeWidth={1}
-                                strokeDasharray="3 3"
-                              />
-                            )}
-                            {hoveredBar && (
-                              <ReferenceLine
-                                y={hoveredBar.close}
-                                stroke="#6366f1"
-                                strokeOpacity={0.4}
-                                strokeWidth={1}
-                                strokeDasharray="3 3"
-                              />
-                            )}
+                            <Area 
+                              type="monotone" 
+                              dataKey="close" 
+                              stroke="#6366f1" 
+                              strokeWidth={2.5} 
+                              fillOpacity={1} 
+                              fill="url(#priceGradient)" 
+                              activeDot={{ r: 5, fill: '#6366f1', stroke: '#ffffff', strokeWidth: 2 }}
+                              isAnimationActive={false}
+                            />
                           </AreaChart>
                         </ResponsiveContainer>
 
                         {/* Floating Y-Axis Badge for expanded price precision */}
                         {hoveredY !== null && hoveredBar && (
                           <div 
-                            className="absolute right-0 bg-indigo-600 text-white font-mono text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded shadow-lg pointer-events-none transform -translate-y-1/2 border border-indigo-400/50 z-20 select-none animate-in fade-in duration-75"
+                            className="absolute right-0 bg-indigo-600 text-white font-mono text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded shadow-xl pointer-events-none transform -translate-y-1/2 border border-indigo-400/50 z-20 select-none animate-in fade-in duration-75"
                             style={{ top: `${hoveredY}px` }}
                           >
-                            ${hoveredBar.close.toFixed(6)}
+                            ${hoveredBar.close.toFixed(4)}
                           </div>
                         )}
                       </div>
@@ -2340,12 +2379,12 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                   <div className="lg:col-span-1 flex flex-col lg:h-full h-auto">
 
                      {/* MULTI-ASSET BROKERAGE ORDER TICKET */}
-                    <div ref={executionDeskRef} className={`bg-[#09090c] border border-white/5 rounded-xl transition-all duration-300 flex flex-col lg:p-5 lg:space-y-4 lg:h-full lg:flex-1 ${
+                    <div ref={executionDeskRef} className={`bg-[#050505] border border-white/10 rounded-xl transition-all duration-300 flex flex-col lg:p-5 lg:space-y-4 lg:h-full lg:flex-1 ${
                       showExecutionDetails ? 'p-5 space-y-4 h-full flex-1' : 'p-0 space-y-0 h-auto overflow-hidden'
                     }`}>
                       {/* BUY / SELL Action Tabs */}
-                      <div className={`grid grid-cols-2 bg-[#040405] p-0.5 rounded transition-all ${
-                        showExecutionDetails ? 'border border-white/5' : 'border-0'
+                      <div className={`grid grid-cols-2 bg-[#050505] p-0.5 rounded transition-all ${
+                        showExecutionDetails ? 'border border-white/10' : 'border-0'
                       }`}>
                         <button
                           type="button"
@@ -2359,7 +2398,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                               : 'text-white/40 hover:text-white/80'
                           }`}
                         >
-                          Buy USD ($)
+                          BUY
                         </button>
                         <button
                           type="button"
@@ -2373,7 +2412,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                               : 'text-white/40 hover:text-white/80'
                           }`}
                         >
-                          Sell USD ($)
+                          SELL
                         </button>
                       </div>
 
@@ -2381,14 +2420,14 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                         showExecutionDetails ? 'block opacity-100' : 'hidden lg:block lg:opacity-100'
                       }`}>
                         {/* Active asset & price */}
-                        <div className="flex justify-between items-center text-xs bg-[#040405] p-2 rounded border border-white/5">
-                          <span className="text-white/40">ACTIVE ASSET:</span>
-                          <span className="font-bold text-white">{ticker}</span>
+                        <div className="flex justify-between items-center text-xs bg-[#050505] px-3.5 py-2.5 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
+                          <span className="text-[10px] font-mono text-white/70 uppercase tracking-widest font-semibold">ACTIVE ASSET:</span>
+                          <span className="font-mono font-bold text-white text-xs tracking-wide">{ticker}</span>
                         </div>
                         
-                        <div className="flex justify-between items-center text-xs bg-[#040405] p-2 rounded border border-white/5">
-                          <span className="text-white/40">MARKET PRICE:</span>
-                          <span className="font-bold text-indigo-300">
+                        <div className="flex justify-between items-center text-xs bg-[#050505] px-3.5 py-2.5 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
+                          <span className="text-[10px] font-mono text-white/70 uppercase tracking-widest font-semibold">MARKET PRICE:</span>
+                          <span className="font-mono font-black text-indigo-300 text-xs tracking-wide">
                             ${(() => {
                               if (!marketData?.regularMarketPrice) return '0.00';
                               const sym = marketData.symbol || ticker || '';
@@ -2402,12 +2441,12 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
 
                         {/* Dollar Entry Input */}
                         <div className="space-y-1.5">
-                          <div className="flex justify-between text-[10px] text-white/40 uppercase">
+                          <div className="flex justify-between text-[10px] font-mono font-semibold text-white/70 uppercase tracking-wider">
                             <span>{orderSide === 'BUY' ? 'Amount to Buy ($)' : 'Amount to Sell ($)'}:</span>
-                            <span>Holding: {(brokerHoldings[ticker] || 0).toFixed(6)} shares</span>
+                            <span className="text-white/60 font-normal">Holding: {(brokerHoldings[ticker] || 0).toFixed(6)} shares</span>
                           </div>
                           <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 font-bold">$</span>
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/60 font-bold font-mono">$</span>
                             <input
                               type="number"
                               min="0"
@@ -2420,12 +2459,12 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                                 }
                                 setOrderShares(cleaned);
                               }}
-                              className="w-full bg-[#040405] border border-white/10 rounded pl-7 pr-3 py-2 text-xs focus:outline-none focus:border-indigo-500 text-white font-bold font-mono"
+                              className="w-full bg-[#050505] border border-white/10 hover:border-white/20 focus:border-indigo-500/60 rounded-lg pl-8 pr-3.5 py-2.5 text-xs focus:outline-none text-white font-bold font-mono transition-all"
                               placeholder="0.00"
                             />
                           </div>
                           {orderSide === 'BUY' && (
-                            <div className="flex justify-between text-[8px] text-indigo-400 font-bold uppercase">
+                            <div className="flex justify-between text-[9px] font-mono text-indigo-400 font-semibold uppercase tracking-wider pt-0.5">
                               <span>Minimum purchase:</span>
                               <span>$50.00</span>
                             </div>
@@ -2434,7 +2473,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
 
                         {/* Order Type */}
                         <div className="space-y-1.5">
-                          <span className="text-[10px] text-white/40 uppercase block">ORDER TYPE:</span>
+                          <span className="text-[10px] font-mono font-semibold text-white/70 uppercase tracking-wider block">ORDER TYPE:</span>
                           <select
                             value={orderType}
                             onChange={(e) => {
@@ -2443,30 +2482,30 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                                 setOrderLimitPrice(marketData.regularMarketPrice);
                               }
                             }}
-                            className="w-full bg-[#040405] border border-white/10 rounded px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 text-white font-bold"
+                            className="w-full bg-[#050505] border border-white/10 hover:border-white/20 focus:border-indigo-500/60 rounded-lg px-3.5 py-2.5 text-xs focus:outline-none text-white font-bold font-mono transition-all cursor-pointer"
                           >
-                            <option value="MARKET">MARKET ORDER (FILL NOW)</option>
-                            <option value="LIMIT">LIMIT ORDER</option>
+                            <option value="MARKET" className="bg-[#050505] text-white">MARKET ORDER (FILL NOW)</option>
+                            <option value="LIMIT" className="bg-[#050505] text-white">LIMIT ORDER</option>
                           </select>
                         </div>
 
                         {/* Limit price input */}
                         {orderType === 'LIMIT' && (
                           <div className="space-y-1.5">
-                            <span className="text-[10px] text-white/40 uppercase block">LIMIT PRICE ($):</span>
+                            <span className="text-[10px] font-mono font-semibold text-white/70 uppercase tracking-wider block">LIMIT PRICE ($):</span>
                             <input
                               type="number"
                               step="0.01"
                               value={orderLimitPrice}
                               onChange={(e) => setOrderLimitPrice(Math.max(0.01, parseFloat(e.target.value) || 0))}
-                              className="w-full bg-[#040405] border border-white/10 rounded px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 text-white font-bold"
+                              className="w-full bg-[#050505] border border-white/10 hover:border-white/20 focus:border-indigo-500/60 rounded-lg px-3.5 py-2.5 text-xs focus:outline-none text-white font-bold font-mono transition-all"
                             />
                           </div>
                         )}
 
                         {/* Bracket Protection Toggle */}
                         <div className="space-y-2 border-t border-white/5 pt-3">
-                          <label className="flex items-center gap-2 text-[10px] text-white/50 cursor-pointer uppercase select-none">
+                          <label className="flex items-center gap-2 text-[10px] font-mono text-white/70 cursor-pointer uppercase tracking-wider select-none">
                             <input
                               type="checkbox"
                               checked={useBracketProtection}
@@ -2479,25 +2518,25 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                           {useBracketProtection && (
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <span className="text-[8px] text-rose-400 block mb-1 uppercase">Stop Loss (%):</span>
+                                <span className="text-[8px] font-mono text-rose-400 block mb-1 uppercase tracking-wider">Stop Loss (%):</span>
                                 <input
                                   type="number"
                                   min="1"
                                   max="50"
                                   value={stopLossPct}
                                   onChange={(e) => setStopLossPct(Math.max(1, parseInt(e.target.value) || 1))}
-                                  className="w-full bg-[#040405] border border-white/10 rounded px-2.5 py-1.5 text-xs text-rose-300 font-bold focus:outline-none focus:border-rose-500"
+                                  className="w-full bg-[#050505] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-rose-300 font-bold font-mono focus:outline-none focus:border-rose-500"
                                 />
                               </div>
                               <div>
-                                <span className="text-[8px] text-emerald-400 block mb-1 uppercase">Take Profit (%):</span>
+                                <span className="text-[8px] font-mono text-emerald-400 block mb-1 uppercase tracking-wider">Take Profit (%):</span>
                                 <input
                                   type="number"
                                   min="1"
                                   max="200"
                                   value={takeProfitPct}
                                   onChange={(e) => setTakeProfitPct(Math.max(1, parseInt(e.target.value) || 1))}
-                                  className="w-full bg-[#040405] border border-white/10 rounded px-2.5 py-1.5 text-xs text-emerald-300 font-bold focus:outline-none focus:border-emerald-500"
+                                  className="w-full bg-[#050505] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-emerald-300 font-bold font-mono focus:outline-none focus:border-emerald-500"
                                 />
                               </div>
                             </div>
@@ -2505,27 +2544,27 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                         </div>
 
                         {/* Cost estimate */}
-                        <div className="flex justify-between items-center text-xs font-bold border-t border-white/5 pt-3 pb-1">
-                          <span className="text-white/40">EST. TOTAL:</span>
-                          <span className="text-white">
+                        <div className="flex justify-between items-center text-xs font-bold font-mono border-t border-white/5 pt-3 pb-1">
+                          <span className="text-white/70 uppercase tracking-wider text-[10px]">EST. TOTAL:</span>
+                          <span className="text-white font-mono font-black">
                             ${(parseFloat(orderShares) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-[10px] text-indigo-400 font-mono">
-                          <span>Est. Shares:</span>
+                          <span className="uppercase tracking-wider">Est. Shares:</span>
                           <span className="font-bold">
                             {((parseFloat(orderShares) || 0) / (orderType === 'LIMIT' ? orderLimitPrice : marketData?.regularMarketPrice || 1)).toFixed(6)} shares
                           </span>
                         </div>
                         {orderSide === 'BUY' && (parseFloat(orderShares) || 0) < 50 && (
-                          <div className="text-rose-400 text-[9px] font-bold text-center mt-1 uppercase tracking-wide">
+                          <div className="text-rose-400 text-[9px] font-mono font-bold text-center mt-1 uppercase tracking-wider">
                             ⚠️ Minimum purchase is $50.00
                           </div>
                         )}
 
                         {/* Feedback Message */}
                         {orderStatus && (
-                          <div className={`p-2 rounded text-[10px] border ${
+                          <div className={`p-2.5 rounded-lg text-[10px] font-mono border ${
                             orderStatus.type === 'success'
                               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                               : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
@@ -2538,11 +2577,11 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                         <button
                           type="button"
                           disabled={isExecutingOrder || !marketData?.regularMarketPrice || (orderSide === 'BUY' && (parseFloat(orderShares) || 0) < 50)}
-                          onClick={() => handleExecuteOrder()}
-                          className={`w-full py-2.5 rounded font-mono font-black text-xs uppercase tracking-wider text-white transition-all cursor-pointer outline-none focus:outline-none ${
+                          onClick={handleOpenOrderConfirmation}
+                          className={`w-full py-3 rounded-lg font-mono font-black text-xs uppercase tracking-wider text-white transition-all cursor-pointer outline-none focus:outline-none ${
                             orderSide === 'BUY'
-                              ? 'bg-emerald-600 hover:bg-emerald-500'
-                              : 'bg-rose-600 hover:bg-rose-500'
+                              ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-950/40'
+                              : 'bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-950/40'
                           } disabled:opacity-50 flex items-center justify-center gap-1.5`}
                         >
                           {isExecutingOrder ? (
@@ -2551,7 +2590,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                               <span>Routing Order...</span>
                             </>
                           ) : (
-                            <span>ROUTE SIMULATED {orderSide === 'BUY' ? 'BUY' : 'SELL'} ($)</span>
+                            <span>ROUTE SIMULATED {orderSide === 'BUY' ? 'BUY' : 'SELL'}</span>
                           )}
                         </button>
                       </div>
@@ -2562,7 +2601,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                 </div>
               </>
             ) : (
-              <div className="text-center py-16 bg-[#09090c] border border-white/5 rounded-xl text-white/30 text-xs font-mono">
+              <div className="text-center py-16 bg-[#050505] border border-white/5 rounded-xl text-white/30 text-xs font-mono">
                 Provide a valid ticker above and press 'Pull Data' to view interactive terminal diagnostics.
               </div>
             )}
@@ -2583,57 +2622,26 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
             >
             
             {/* SCREENER FILTER CONTROLLER */}
-            <div className="bg-[#09090c] p-5 rounded-xl border border-white/5 space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
-                <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-indigo-400" />
-                  <span className="text-[11px] font-mono font-black uppercase tracking-wider text-indigo-400 font-sans">DataFrame Query Parameters (Pandas Filters)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveSubTab('ANALYSIS')}
-                    className="px-2.5 py-1 text-[10px] font-mono border border-indigo-500/30 hover:border-indigo-500/50 bg-indigo-500/10 hover:bg-indigo-500/20 rounded text-indigo-300 font-bold transition-all cursor-pointer"
-                  >
-                    ← Back to Ticker Analysis
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScreenerPEFilter(100);
-                      setScreenerROEFilter(-0.2);
-                      setScreenerSearch('');
-                      setScreenerSector('ALL');
-                      setScreenerMinCap(0);
-                      setScreenerMinMomentum(-0.5);
-                      setScreenerDivOnly(false);
-                    }}
-                    className="px-2.5 py-1 text-[10px] font-mono border border-white/10 hover:border-white/20 hover:bg-white/5 rounded text-white/60 hover:text-white transition-all cursor-pointer"
-                  >
-                    Reset All Filters
-                  </button>
-                </div>
-              </div>
-              
+            <div className="bg-[#050505] p-5 rounded-xl border border-white/5 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {/* Left Column: Search & Sector */}
                 <div className="space-y-4">
                   {/* Search Bar */}
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-white/40 block uppercase">Search Ticker/Company</label>
+                    <label className="text-[10px] font-mono text-white/70 block uppercase">Search Ticker/Company</label>
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-white/30" />
+                      <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-white/60" />
                       <input
                         type="text"
                         value={screenerSearch}
                         onChange={(e) => setScreenerSearch(e.target.value)}
                         placeholder="Search AAPL, Microsoft..."
-                        className="w-full bg-[#040405] border border-white/10 focus:border-indigo-500/50 rounded pl-8 pr-2.5 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none font-mono"
+                        className="w-full bg-[#050505] border border-white/10 focus:border-indigo-500/50 rounded pl-8 pr-2.5 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none font-mono"
                       />
                       {screenerSearch && (
                         <button 
                           onClick={() => setScreenerSearch('')}
-                          className="absolute right-2 top-2.5 text-white/40 hover:text-white cursor-pointer"
+                          className="absolute right-2 top-2.5 text-white/60 hover:text-white cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -2643,11 +2651,11 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
 
                   {/* Sector Filter */}
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-white/40 block uppercase">Sector Classification</label>
+                    <label className="text-[10px] font-mono text-white/70 block uppercase">Sector Classification</label>
                     <select
                       value={screenerSector}
                       onChange={(e) => setScreenerSector(e.target.value)}
-                      className="w-full bg-[#040405] border border-white/10 focus:border-indigo-500/50 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none font-mono cursor-pointer"
+                      className="w-full bg-[#050505] border border-white/10 focus:border-indigo-500/50 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none font-mono cursor-pointer"
                     >
                       <option value="ALL">ALL SECTORS (Consolidated)</option>
                       <option value="Technology">Technology</option>
@@ -2671,7 +2679,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                   {/* Market Cap min slider */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-white/40 uppercase">MIN MARKET CAP</span>
+                      <span className="text-white/70 uppercase">MIN MARKET CAP</span>
                       <span className="text-indigo-400 font-bold">{screenerMinCap === 0 ? 'Any' : `>= $${screenerMinCap}B`}</span>
                     </div>
                     <input
@@ -2681,14 +2689,14 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                       step="50"
                       value={screenerMinCap}
                       onChange={(e) => setScreenerMinCap(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#040405] rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      className="w-full h-1.5 bg-white/20 hover:bg-white/30 border border-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-400 transition-colors"
                     />
                   </div>
 
                   {/* Max PE slider */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-white/40 uppercase">MAX P/E RATIO</span>
+                      <span className="text-white/70 uppercase">MAX P/E RATIO</span>
                       <span className="text-indigo-400 font-bold">{screenerPEFilter >= 100 ? 'No Cap' : `<= ${screenerPEFilter}x`}</span>
                     </div>
                     <input
@@ -2698,7 +2706,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                       step="5"
                       value={screenerPEFilter}
                       onChange={(e) => setScreenerPEFilter(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#040405] rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      className="w-full h-1.5 bg-white/20 hover:bg-white/30 border border-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-400 transition-colors"
                     />
                   </div>
                 </div>
@@ -2708,7 +2716,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                   {/* Min ROE slider */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-white/40 uppercase">MIN ROE</span>
+                      <span className="text-white/70 uppercase">MIN ROE</span>
                       <span className="text-indigo-400 font-bold">{screenerROEFilter <= -0.2 ? 'Any' : `>= ${(screenerROEFilter * 100).toFixed(0)}%`}</span>
                     </div>
                     <input
@@ -2718,14 +2726,14 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                       step="0.05"
                       value={screenerROEFilter}
                       onChange={(e) => setScreenerROEFilter(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#040405] rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      className="w-full h-1.5 bg-white/20 hover:bg-white/30 border border-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-400 transition-colors"
                     />
                   </div>
 
                   {/* Min Momentum (52W change) slider */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-white/40 uppercase">MIN 52W CHANGE (MOMENTUM)</span>
+                      <span className="text-white/70 uppercase">MIN 52W CHANGE (MOMENTUM)</span>
                       <span className="text-indigo-400 font-bold">{screenerMinMomentum <= -0.5 ? 'Any' : `>= ${(screenerMinMomentum * 100).toFixed(0)}%`}</span>
                     </div>
                     <input
@@ -2735,13 +2743,13 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                       step="0.1"
                       value={screenerMinMomentum}
                       onChange={(e) => setScreenerMinMomentum(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#040405] rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      className="w-full h-1.5 bg-white/20 hover:bg-white/30 border border-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-400 transition-colors"
                     />
                   </div>
                 </div>
 
-                {/* Fourth Column: Div Yield */}
-                <div className="flex flex-col justify-start space-y-4 md:border-l md:border-white/5 md:pl-6">
+                {/* Fourth Column: Div Yield & Reset */}
+                <div className="flex flex-col justify-between space-y-4 md:border-l md:border-white/5 md:pl-6">
                   {/* Dividend pay toggle */}
                   <div className="flex items-center gap-3 py-1">
                     <input
@@ -2749,11 +2757,30 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                       id="screenerDivOnly"
                       checked={screenerDivOnly}
                       onChange={(e) => setScreenerDivOnly(e.target.checked)}
-                      className="w-4 h-4 text-indigo-600 border-white/10 rounded bg-[#040405] focus:ring-indigo-500 cursor-pointer"
+                      className="w-4 h-4 text-indigo-600 border-white/10 rounded bg-[#050505] focus:ring-indigo-500 cursor-pointer"
                     />
                     <label htmlFor="screenerDivOnly" className="text-xs font-mono text-white/70 select-none cursor-pointer">
                       Dividend Payers Only
                     </label>
+                  </div>
+
+                  {/* Reset Filters button inside this card/column */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScreenerPEFilter(100);
+                        setScreenerROEFilter(-0.2);
+                        setScreenerSearch('');
+                        setScreenerSector('ALL');
+                        setScreenerMinCap(0);
+                        setScreenerMinMomentum(-0.5);
+                        setScreenerDivOnly(false);
+                      }}
+                      className="w-full sm:w-auto px-3 py-1.5 text-[10px] font-mono border border-white/10 hover:border-white/20 hover:bg-white/5 rounded text-white/60 hover:text-white transition-all cursor-pointer"
+                    >
+                      Reset All Filters
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2761,13 +2788,21 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
 
             {/* QUICK STATS CARD GRID */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-[#09090c] p-4 rounded-xl border border-white/5 space-y-2">
-                <span className="text-[10px] font-mono text-white/40 block uppercase tracking-wider">MATCHING ASSETS</span>
+              <motion.div 
+                whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                className="bg-[#080808] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
+              >
+                <span className="text-[10px] font-mono text-white/70 block uppercase tracking-wider">MATCHING ASSETS</span>
                 <span className="text-2xl font-bold font-mono text-white block mt-1">{sortedScreenerData.length}</span>
                 <span className="text-[9px] font-mono text-emerald-400 block mt-1">of {screenerData.length} indexed tickers</span>
-              </div>
-              <div className="bg-[#09090c] p-4 rounded-xl border border-white/5 space-y-2">
-                <span className="text-[10px] font-mono text-white/40 block uppercase tracking-wider">AVG P/E RATIO</span>
+              </motion.div>
+              <motion.div 
+                whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                className="bg-[#080808] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
+              >
+                <span className="text-[10px] font-mono text-white/70 block uppercase tracking-wider">AVG P/E RATIO</span>
                 <span className="text-2xl font-bold font-mono text-indigo-400 block mt-1">
                   {(() => {
                     const valid = sortedScreenerData.filter(r => r.peRatio !== null);
@@ -2775,10 +2810,14 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                     return `${(valid.reduce((sum, r) => sum + r.peRatio!, 0) / valid.length).toFixed(1)}x`;
                   })()}
                 </span>
-                <span className="text-[9px] font-mono text-white/20 block mt-1">growth valuation index</span>
-              </div>
-              <div className="bg-[#09090c] p-4 rounded-xl border border-white/5 space-y-2">
-                <span className="text-[10px] font-mono text-white/40 block uppercase tracking-wider">AVG RETURN ON EQUITY</span>
+                <span className="text-[9px] font-mono text-white/60 block mt-1">growth valuation index</span>
+              </motion.div>
+              <motion.div 
+                whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                className="bg-[#080808] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
+              >
+                <span className="text-[10px] font-mono text-white/70 block uppercase tracking-wider">AVG RETURN ON EQUITY</span>
                 <span className="text-2xl font-bold font-mono text-emerald-400 block mt-1">
                   {(() => {
                     const valid = sortedScreenerData.filter(r => r.roe !== null);
@@ -2786,10 +2825,14 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                     return `${((valid.reduce((sum, r) => sum + r.roe!, 0) / valid.length) * 100).toFixed(1)}%`;
                   })()}
                 </span>
-                <span className="text-[9px] font-mono text-white/20 block mt-1">profitability metric</span>
-              </div>
-              <div className="bg-[#09090c] p-4 rounded-xl border border-white/5 space-y-2">
-                <span className="text-[10px] font-mono text-white/40 block uppercase tracking-wider">AVG 52W CHANGE</span>
+                <span className="text-[9px] font-mono text-white/60 block mt-1">profitability metric</span>
+              </motion.div>
+              <motion.div 
+                whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                className="bg-[#080808] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
+              >
+                <span className="text-[10px] font-mono text-white/70 block uppercase tracking-wider">AVG 52W CHANGE</span>
                 <span className="text-2xl font-bold font-mono text-white block mt-1">
                   {(() => {
                     if (sortedScreenerData.length === 0) return 'N/A';
@@ -2797,27 +2840,27 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                     return `${avg >= 0 ? '+' : ''}${(avg * 100).toFixed(1)}%`;
                   })()}
                 </span>
-                <span className="text-[9px] font-mono text-white/20 block mt-1">momentum index factor</span>
-              </div>
+                <span className="text-[9px] font-mono text-white/60 block mt-1">momentum index factor</span>
+              </motion.div>
             </div>
 
             {/* INTERACTIVE PANDAS DATAFRAME VIEW */}
             {screenerLoading ? (
               <div className="flex flex-col items-center justify-center py-20 space-y-3">
                 <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
-                <span className="text-xs text-white/40 font-mono uppercase tracking-widest">Iterating tickers via Pandas fundamentals loop...</span>
+                <span className="text-xs text-white/70 font-mono uppercase tracking-widest">Iterating tickers via Pandas fundamentals loop...</span>
               </div>
             ) : (
-              <div className="bg-[#09090c] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
+              <div className="bg-[#080808] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
                 <div className="p-4 border-b border-white/5 bg-white/[0.01] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-400">Filtered DataFrame: {sortedScreenerData.length} entries</span>
-                    <span className="text-[8px] bg-emerald-500/15 text-emerald-400 font-mono px-1.5 py-0.5 rounded">STATUS: PERSISTED</span>
+                    <span className="text-[8px] bg-emerald-500/15 text-emerald-400 font-mono px-1.5 py-0.5 rounded font-bold">STATUS: PERSISTED</span>
                   </div>
                   <button
                     onClick={downloadScreenerCSV}
                     disabled={sortedScreenerData.length === 0}
-                    className="px-3 py-1.5 bg-[#040405] hover:bg-emerald-600/10 disabled:opacity-30 border border-white/10 hover:border-emerald-500/20 text-white/70 hover:text-emerald-400 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-[#040405] hover:bg-emerald-600/10 disabled:opacity-30 border border-white/10 hover:border-emerald-500/20 text-white hover:text-emerald-400 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     <Sliders className="w-3 h-3" />
                     Export CSV DataFrame
@@ -2827,7 +2870,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse font-mono text-[11px]">
                     <thead>
-                      <tr className="border-b border-white/10 bg-white/[0.02] text-white/50 font-black tracking-wider uppercase select-none">
+                      <tr className="border-b border-white/10 bg-white/[0.02] text-white/80 font-black tracking-wider uppercase select-none">
                         <th className="p-3.5 pl-5 cursor-pointer hover:text-white" onClick={() => triggerSort('ticker')}>
                           <span className="flex items-center gap-1">
                             Ticker
@@ -2880,7 +2923,7 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                     >
                       {sortedScreenerData.length === 0 ? (
                         <motion.tr variants={itemVariants}>
-                          <td colSpan={8} className="text-center py-12 text-white/20">No assets match your query filters. Broaden parameters or search queries.</td>
+                          <td colSpan={8} className="text-center py-12 text-white/50">No assets match your query filters. Broaden parameters or search queries.</td>
                         </motion.tr>
                       ) : (
                         sortedScreenerData.map((row, idx) => (
@@ -2890,39 +2933,55 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
                             className="border-b border-white/5 hover:bg-white/[0.02] transition-all"
                           >
                             <td className="p-3.5 pl-5 font-bold text-indigo-400">{row.ticker}</td>
-                            <td className="p-3.5 text-white/70 max-w-[150px] truncate" title={row.name}>{row.name}</td>
+                            <td className="p-3.5 text-white font-medium max-w-[150px] truncate" title={row.name}>{row.name}</td>
                             <td className="p-3.5">
-                              <span className="px-1.5 py-0.5 rounded text-[9px] bg-white/5 text-white/60">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] bg-white/10 text-white/90 font-medium">
                                 {row.sector}
                               </span>
                             </td>
-                            <td className="p-3.5 text-white/70">
+                            <td className="p-3.5 text-white/90">
                               {row.marketCap === 0 ? 'N/A' : row.marketCap >= 1e12 ? `$${(row.marketCap / 1e12).toFixed(2)}T` : `$${(row.marketCap / 1e9).toFixed(1)}B`}
                             </td>
-                            <td className="p-3.5 text-white/70">{row.peRatio !== null ? `${row.peRatio.toFixed(1)}x` : 'N/A'}</td>
+                            <td className="p-3.5 text-white/90">{row.peRatio !== null ? `${row.peRatio.toFixed(1)}x` : 'N/A'}</td>
                             <td className="p-3.5">
                               {row.roe !== null ? (
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] ${row.roe >= 0.15 ? 'bg-emerald-500/10 text-emerald-400 font-bold' : row.roe < 0 ? 'bg-rose-500/10 text-rose-400' : 'bg-white/5 text-white/50'}`}>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] ${row.roe >= 0.15 ? 'bg-emerald-500/10 text-emerald-400 font-bold' : row.roe < 0 ? 'bg-rose-500/10 text-rose-400' : 'bg-white/10 text-white/80'}`}>
                                   {(row.roe * 100).toFixed(1)}%
                                 </span>
                               ) : (
-                                <span className="text-white/20">N/A</span>
+                                <span className="text-white/40">N/A</span>
                               )}
                             </td>
                             <td className={`p-3.5 font-bold ${row.fiftyTwoWeekChange >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                               {row.fiftyTwoWeekChange >= 0 ? '+' : ''}{(row.fiftyTwoWeekChange * 100).toFixed(1)}%
                             </td>
                             <td className="p-3.5 pr-5 text-right">
-                              <button
-                                onClick={() => {
-                                  setTicker(row.ticker);
-                                  setSearchInput(row.ticker);
-                                  setActiveSubTab('ANALYSIS');
-                                }}
-                                className="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 rounded text-[9px] font-bold uppercase transition-all cursor-pointer"
-                              >
-                                Analyze Ticker
-                              </button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setTicker(row.ticker);
+                                    setSearchInput(row.ticker);
+                                    setOrderSide('BUY');
+                                    setShowExecutionDetails(true);
+                                    setActiveSubTab('ANALYSIS');
+                                  }}
+                                  className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold uppercase transition-all cursor-pointer focus:outline-none focus-visible:outline-none hover:scale-[1.03]"
+                                >
+                                  Buy
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setTicker(row.ticker);
+                                    setSearchInput(row.ticker);
+                                    setOrderSide('SELL');
+                                    setShowExecutionDetails(true);
+                                    setActiveSubTab('ANALYSIS');
+                                  }}
+                                  className="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 rounded text-[9px] font-bold uppercase transition-all cursor-pointer focus:outline-none focus-visible:outline-none hover:scale-[1.03]"
+                                >
+                                  Sell
+                                </button>
+                              </div>
                             </td>
                           </motion.tr>
                         ))
@@ -2937,6 +2996,18 @@ export default function MarketsTerminal({ initialTicker }: MarketsTerminalProps 
         </AnimatePresence>
 
       </div> {/* Closes SUBTAB CONTENT PORTAL */}
+
+      {/* Order Confirmation Modal */}
+      <OrderConfirmationModal
+        isOpen={showOrderConfirmModal}
+        orderDetails={pendingOrderDetails}
+        isRouting={isExecutingOrder}
+        onConfirm={async () => {
+          setShowOrderConfirmModal(false);
+          await handleExecuteOrder();
+        }}
+        onClose={() => setShowOrderConfirmModal(false)}
+      />
 
   </div> // Closes markets-terminal-container
 );

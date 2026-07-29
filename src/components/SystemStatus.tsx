@@ -283,15 +283,6 @@ export default function SystemStatus() {
       {/* Upper overview status summary banner with Live Pulse score */}
       <div className="bg-[#0a0a0b] border border-white/5 p-5 rounded-lg flex flex-col xl:flex-row items-center justify-between gap-6 select-none relative overflow-hidden">
         
-        {/* Abstract design element background indicator */}
-        <div className={`absolute top-0 right-0 w-80 h-full opacity-10 pointer-events-none blur-3xl transition-colors duration-500 ${
-          reliabilityScore === 100 
-            ? 'bg-emerald-500' 
-            : reliabilityScore > 85 
-            ? 'bg-amber-500' 
-            : 'bg-rose-500'
-        }`} />
-
         <div className="flex flex-col md:flex-row items-center gap-5 w-full xl:w-auto">
           <div className="relative">
             <div className={`h-14 w-14 rounded-full flex items-center justify-center border transition-all duration-300 ${

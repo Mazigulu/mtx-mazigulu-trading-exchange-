@@ -134,7 +134,12 @@ export default function InstitutionalSentimentAlertSystem({ bannerOnly = false }
       }
 
       if (!data || !data.sentiment) {
-        const symbols: MarketSymbol[] = ['US30', 'NAS100', 'GER40', 'SPX500', 'AAPL', 'MSFT', 'NVDA', 'TSLA'];
+        const symbols: MarketSymbol[] = [
+          'US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225',
+          'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD',
+          'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+          'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'
+        ];
         const simulatedSentiment: Record<string, any> = {};
         symbols.forEach((sym) => {
           const isBullishTrend = Math.random() > 0.5;

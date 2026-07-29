@@ -109,10 +109,27 @@ const tradingViewSymbols: Record<MarketSymbol, string> = {
   'NAS100': 'NASDAQ:NDX',
   'GER40': 'INDEX:DEU40',
   'SPX500': 'FOREXCOM:SPX500',
+  'UK100': 'FOREXCOM:UK100',
+  'JPN225': 'INDEX:NKY',
   'AAPL': 'NASDAQ:AAPL',
   'MSFT': 'NASDAQ:MSFT',
   'NVDA': 'NASDAQ:NVDA',
-  'TSLA': 'NASDAQ:TSLA'
+  'TSLA': 'NASDAQ:TSLA',
+  'AMZN': 'NASDAQ:AMZN',
+  'META': 'NASDAQ:META',
+  'GOOGL': 'NASDAQ:GOOGL',
+  'NFLX': 'NASDAQ:NFLX',
+  'AMD': 'NASDAQ:AMD',
+  'BTC/USDT': 'BINANCE:BTCUSDT',
+  'ETH/USDT': 'BINANCE:ETHUSDT',
+  'SOL/USDT': 'BINANCE:SOLUSDT',
+  'EUR/USD': 'FX:EURUSD',
+  'GBP/USD': 'FX:GBPUSD',
+  'USD/JPY': 'FX:USDJPY',
+  'AUD/USD': 'FX:AUDUSD',
+  'GOLD/USD': 'TVC:GOLD',
+  'SILVER/USD': 'TVC:SILVER',
+  'BRENT': 'TVC:UKOIL'
 };
 
 function parseTradingViewCandles(data: any): Candlestick[] {
@@ -170,16 +187,61 @@ function parseTradingViewCandles(data: any): Candlestick[] {
   return [];
 }
 
+const yahooSymbolMap: Record<string, string> = {
+  'US30': '^DJI',
+  'NAS100': '^NDX',
+  'GER40': '^GDAXI',
+  'SPX500': '^GSPC',
+  'UK100': '^FTSE',
+  'JPN225': '^N225',
+  'AAPL': 'AAPL',
+  'MSFT': 'MSFT',
+  'NVDA': 'NVDA',
+  'TSLA': 'TSLA',
+  'AMZN': 'AMZN',
+  'META': 'META',
+  'GOOGL': 'GOOGL',
+  'NFLX': 'NFLX',
+  'AMD': 'AMD',
+  'BTC/USDT': 'BTC-USD',
+  'ETH/USDT': 'ETH-USD',
+  'SOL/USDT': 'SOL-USD',
+  'EUR/USD': 'EURUSD=X',
+  'GBP/USD': 'GBPUSD=X',
+  'USD/JPY': 'USDJPY=X',
+  'AUD/USD': 'AUDUSD=X',
+  'GOLD/USD': 'GC=F',
+  'SILVER/USD': 'SI=F',
+  'BRENT': 'BZ=F'
+};
+
 export class MarketSimulator {
   private candles: Record<MarketSymbol, Candlestick[]> = {
     'US30': [],
     'NAS100': [],
     'GER40': [],
     'SPX500': [],
+    'UK100': [],
+    'JPN225': [],
     'AAPL': [],
     'MSFT': [],
     'NVDA': [],
-    'TSLA': []
+    'TSLA': [],
+    'AMZN': [],
+    'META': [],
+    'GOOGL': [],
+    'NFLX': [],
+    'AMD': [],
+    'BTC/USDT': [],
+    'ETH/USDT': [],
+    'SOL/USDT': [],
+    'EUR/USD': [],
+    'GBP/USD': [],
+    'USD/JPY': [],
+    'AUD/USD': [],
+    'GOLD/USD': [],
+    'SILVER/USD': [],
+    'BRENT': []
   };
 
   private gatewayActive: Record<MarketSymbol, boolean> = {
@@ -187,23 +249,57 @@ export class MarketSimulator {
     'NAS100': false,
     'GER40': false,
     'SPX500': false,
+    'UK100': false,
+    'JPN225': false,
     'AAPL': false,
     'MSFT': false,
     'NVDA': false,
-    'TSLA': false
+    'TSLA': false,
+    'AMZN': false,
+    'META': false,
+    'GOOGL': false,
+    'NFLX': false,
+    'AMD': false,
+    'BTC/USDT': false,
+    'ETH/USDT': false,
+    'SOL/USDT': false,
+    'EUR/USD': false,
+    'GBP/USD': false,
+    'USD/JPY': false,
+    'AUD/USD': false,
+    'GOLD/USD': false,
+    'SILVER/USD': false,
+    'BRENT': false
   };
 
   public lastTvStatus: Record<string, any> = {};
 
   private basePrices: Record<MarketSymbol, number> = {
-    'US30': 38850.0,
-    'NAS100': 18550.0,
+    'US30': 40800.0,
+    'NAS100': 27192.30,
     'GER40': 18200.0,
     'SPX500': 5300.0,
+    'UK100': 8220.0,
+    'JPN225': 38650.0,
     'AAPL': 188.30,
     'MSFT': 415.50,
     'NVDA': 945.00,
-    'TSLA': 175.50
+    'TSLA': 175.50,
+    'AMZN': 186.40,
+    'META': 492.10,
+    'GOOGL': 176.80,
+    'NFLX': 624.50,
+    'AMD': 162.30,
+    'BTC/USDT': 65200.0,
+    'ETH/USDT': 3420.0,
+    'SOL/USDT': 148.50,
+    'EUR/USD': 1.0865,
+    'GBP/USD': 1.2720,
+    'USD/JPY': 155.40,
+    'AUD/USD': 0.6670,
+    'GOLD/USD': 2362.0,
+    'SILVER/USD': 29.80,
+    'BRENT': 84.50
   };
 
   private tickSizes: Record<MarketSymbol, number> = {
@@ -211,61 +307,58 @@ export class MarketSimulator {
     'NAS100': 1.0,
     'GER40': 1.0,
     'SPX500': 0.10,
+    'UK100': 0.50,
+    'JPN225': 5.0,
     'AAPL': 0.05,
     'MSFT': 0.05,
     'NVDA': 0.10,
-    'TSLA': 0.05
+    'TSLA': 0.05,
+    'AMZN': 0.05,
+    'META': 0.10,
+    'GOOGL': 0.05,
+    'NFLX': 0.20,
+    'AMD': 0.05,
+    'BTC/USDT': 10.0,
+    'ETH/USDT': 0.50,
+    'SOL/USDT': 0.05,
+    'EUR/USD': 0.0001,
+    'GBP/USD': 0.0001,
+    'USD/JPY': 0.01,
+    'AUD/USD': 0.0001,
+    'GOLD/USD': 0.10,
+    'SILVER/USD': 0.01,
+    'BRENT': 0.05
   };
 
   private lastTvFetch: Record<MarketSymbol, number> = {} as any;
 
   private ensureSymbolInitialized(symbol: MarketSymbol) {
     if (!symbol) return;
-    if (this.candles[symbol]) return;
+    if (this.candles[symbol] && this.candles[symbol].length > 0) return;
 
-    // Set a default base price and tick size for this symbol
-    let basePrice = 100.0;
-    let tickSize = 0.05;
-
-    // Check if it's in our supported assets list or a known pattern
-    const symStr = String(symbol).toUpperCase();
-    if (symStr === 'BTC-USD') {
-      basePrice = 65000.0;
-      tickSize = 5.0;
-    } else if (symStr === 'ETH-USD') {
-      basePrice = 3400.0;
-      tickSize = 0.5;
-    } else if (symStr === 'SOL-USD') {
-      basePrice = 140.0;
-      tickSize = 0.05;
-    } else if (symStr === 'JNJ') {
-      basePrice = 155.0;
-      tickSize = 0.05;
-    } else if (symStr === 'SPY') {
-      basePrice = 510.0;
-      tickSize = 0.1;
-    } else if (symStr === 'QQQ') {
-      basePrice = 435.0;
-      tickSize = 0.1;
-    } else if (symStr.endsWith('USD')) {
-      basePrice = 100.0;
-      tickSize = 0.1;
-    } else {
-      // Look up default price from some standard or generate a random one
-      basePrice = 100.0 + Math.random() * 200;
-      tickSize = basePrice > 1000 ? 1.0 : basePrice > 100 ? 0.1 : 0.01;
-    }
+    const basePrice = this.basePrices[symbol] || 100.0;
+    const tickSize = this.tickSizes[symbol] || 0.05;
 
     this.basePrices[symbol] = basePrice;
     this.tickSizes[symbol] = tickSize;
-    this.candles[symbol] = this.generateHistory(symbol);
+    this.candles[symbol] = [];
     this.gatewayActive[symbol] = false;
+
+    // Trigger immediate async fetch of real Yahoo Finance candles
+    this.fetchYahooCandlesForSymbol(symbol).then(bars => {
+      if (bars && bars.length > 0) {
+        this.candles[symbol] = bars;
+        this.gatewayActive[symbol] = true;
+      }
+    }).catch(err => {
+      console.error(`[Market Engine] Initial fetch error for ${symbol}:`, err);
+    });
   }
 
   constructor() {
     this.initializeAll();
-    // Start live updates
-    setInterval(() => this.tickAll(), 5000);
+    // Start live market data feed polling
+    setInterval(() => this.tickAll(), 10000);
   }
 
   public async fetchTradingViewData(symbol: MarketSymbol): Promise<boolean> {
@@ -435,53 +528,65 @@ export class MarketSimulator {
     return false;
   }
 
-  private initializeAll() {
-    const symbols = Object.keys(this.basePrices) as MarketSymbol[];
-    for (const sym of symbols) {
-      this.candles[sym] = this.generateHistory(sym);
+  private async fetchYahooCandlesForSymbol(symbol: MarketSymbol): Promise<Candlestick[]> {
+    const ySym = yahooSymbolMap[symbol] || symbol;
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?range=1mo&interval=1h`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!res.ok) return [];
+      const data = await res.json() as any;
+      const result = data?.chart?.result?.[0];
+      if (!result) return [];
+      const timestamps = result.timestamp || [];
+      const quote = result.indicators?.quote?.[0] || {};
+      const opens = quote.open || [];
+      const highs = quote.high || [];
+      const lows = quote.low || [];
+      const closes = quote.close || [];
+      const volumes = quote.volume || [];
+
+      const bars: Candlestick[] = [];
+      const dec = getDecimals(symbol);
+      for (let i = 0; i < timestamps.length; i++) {
+        if (opens[i] != null && highs[i] != null && lows[i] != null && closes[i] != null) {
+          bars.push({
+            timestamp: new Date(timestamps[i] * 1000).toISOString(),
+            open: parseFloat(opens[i].toFixed(dec)),
+            high: parseFloat(highs[i].toFixed(dec)),
+            low: parseFloat(lows[i].toFixed(dec)),
+            close: parseFloat(closes[i].toFixed(dec)),
+            volume: volumes[i] ? Math.round(volumes[i]) : 0
+          });
+        }
+      }
+      this.recalculateIndicators(bars);
+      return bars;
+    } catch (err) {
+      console.error(`[Real Market Engine] Failed to fetch live Yahoo candles for ${symbol}:`, err);
+      return [];
     }
   }
 
-  private generateHistory(symbol: MarketSymbol): Candlestick[] {
-    const list: Candlestick[] = [];
-    const base = this.basePrices[symbol];
-    const tick = this.tickSizes[symbol];
-    let currentPrice = base;
-
-    // We generate 240 candles representing 4H units
-    const now = new Date();
-    for (let i = 240; i >= 1; i--) {
-      const time = new Date(now.getTime() - i * 4 * 60 * 60 * 1000);
-      const isUp = Math.random() > 0.45; // slight bullish tint
-      const isHighVol = ['AAPL', 'TSLA', 'NVDA'].includes(symbol);
-      const bodySize = (Math.random() * 5 + 1) * tick * (isHighVol ? 15 : 5);
-      const wickHigh = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
-      const wickLow = Math.random() * 3 * tick * (isHighVol ? 8 : 3);
-
-      const open = currentPrice;
-      const close = isUp ? open + bodySize : open - bodySize;
-      const high = Math.max(open, close) + wickHigh;
-      const low = Math.min(open, close) - wickLow;
-      const volume = Math.floor(Math.random() * 10000) + 5000;
-      const dec = getDecimals(symbol);
-
-      list.push({
-        timestamp: time.toISOString(),
-        open: parseFloat(open.toFixed(dec)),
-        high: parseFloat(high.toFixed(dec)),
-        low: parseFloat(low.toFixed(dec)),
-        close: parseFloat(close.toFixed(dec)),
-        volume
-      });
-
-      currentPrice = close;
+  private async initializeAll() {
+    const symbols = Object.keys(this.basePrices) as MarketSymbol[];
+    console.log(`[Real Market Engine] Fetching live market data streams for ${symbols.length} tickers...`);
+    for (const sym of symbols) {
+      const bars = await this.fetchYahooCandlesForSymbol(sym);
+      if (bars && bars.length > 0) {
+        this.candles[sym] = bars;
+        this.gatewayActive[sym] = true;
+      }
     }
-
-    this.recalculateIndicators(list);
-    return list;
+    console.log(`[Real Market Engine] All tickers initialized with live real-time market data.`);
   }
 
   private recalculateIndicators(list: Candlestick[]) {
+    if (!list || list.length === 0) return;
     const closes = list.map(c => c.close);
     const highs = list.map(c => c.high);
     const lows = list.map(c => c.low);
@@ -492,46 +597,50 @@ export class MarketSimulator {
     const atr = calculateATR(highs, lows, closes, 14);
 
     for (let i = 0; i < list.length; i++) {
-      list[i].ema50 = parseFloat(ema50[i].toFixed(5));
-      list[i].sma200 = parseFloat(sma200[i].toFixed(5));
-      list[i].rsi = parseFloat(rsi[i].toFixed(1));
-      list[i].atr = parseFloat(atr[i].toFixed(5));
+      list[i].ema50 = parseFloat((ema50[i] || list[i].close).toFixed(5));
+      list[i].sma200 = parseFloat((sma200[i] || list[i].close).toFixed(5));
+      list[i].rsi = parseFloat((rsi[i] || 50).toFixed(1));
+      list[i].atr = parseFloat((atr[i] || 0.0010).toFixed(5));
     }
   }
 
-  private tickAll() {
+  private async tickAll() {
     const symbols = Object.keys(this.basePrices) as MarketSymbol[];
     for (const sym of symbols) {
-      const list = this.candles[sym];
-      if (list.length === 0) continue;
-
-      const last = list[list.length - 1];
-      const tick = this.tickSizes[sym];
-      const drift = (Math.random() - 0.495) * tick * 4;
-
-      // Mutate current (last) candle's close
-      const newClose = last.close + drift;
-      const dec = getDecimals(sym);
-      last.close = parseFloat(newClose.toFixed(dec));
-      if (last.close > last.high) last.high = last.close;
-      if (last.close < last.low) last.low = last.close;
-
-      // Occasional new candle generation (10% chance) - ONLY if live gateway connector is not active
-      if (!this.gatewayActive[sym] && Math.random() > 0.90) {
-        // Shift list, add new candle
-        const nextTime = new Date(new Date(last.timestamp).getTime() + 4 * 60 * 60 * 1000);
-        list.shift();
-        list.push({
-          timestamp: nextTime.toISOString(),
-          open: last.close,
-          high: last.close,
-          low: last.close,
-          close: last.close,
-          volume: Math.floor(Math.random() * 10000) + 5000
+      const ySym = yahooSymbolMap[sym] || sym;
+      try {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?range=1d&interval=1m`;
+        const res = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          },
+          signal: AbortSignal.timeout(3500)
         });
-      }
+        if (!res.ok) continue;
+        const data = await res.json() as any;
+        const result = data?.chart?.result?.[0];
+        const meta = result?.meta;
+        const livePrice = meta?.regularMarketPrice;
 
-      this.recalculateIndicators(list);
+        if (typeof livePrice === 'number' && livePrice > 0) {
+          let list = this.candles[sym];
+          if (!list || list.length === 0) {
+            list = await this.fetchYahooCandlesForSymbol(sym);
+            this.candles[sym] = list;
+          }
+          if (list && list.length > 0) {
+            const last = list[list.length - 1];
+            const dec = getDecimals(sym);
+            last.close = parseFloat(livePrice.toFixed(dec));
+            if (last.close > last.high) last.high = last.close;
+            if (last.close < last.low) last.low = last.close;
+            this.recalculateIndicators(list);
+            this.gatewayActive[sym] = true;
+          }
+        }
+      } catch {
+        // Keep active candles on momentary network timeouts
+      }
     }
   }
 

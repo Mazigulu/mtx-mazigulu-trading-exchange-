@@ -1,0 +1,28 @@
+# robots.txt for mtx Securities and mtxquant
+# Optimized for Googlebot, Bingbot, GPTBot, ClaudeBot, PerplexityBot and AI Search Crawlers
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /private/
+Disallow: /auth/
+Disallow: /admin/
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+# Sitemap references
+Sitemap: https://mtxquant.com/sitemap.xml
+Sitemap: https://mtx.brokerage/sitemap.xml

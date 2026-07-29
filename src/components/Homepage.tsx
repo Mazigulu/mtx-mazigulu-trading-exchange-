@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import SistineFinancialCeiling from './SistineFinancialCeiling';
+import FeatureLandingPage, { FeatureId } from './FeatureLandingPage';
+import { isMarketOpenForSymbol, getMarketSessionInfo } from '../utils/marketHours';
 import { 
   ArrowRight, 
   LineChart, 
@@ -36,10 +38,12 @@ import {
   UserPlus,
   Terminal,
   Menu,
-  X
+  X,
+  BarChart2,
+  Radio
 } from 'lucide-react';
 
-interface WorkspaceSpec {
+export interface WorkspaceSpec {
   id: string;
   name: string;
   files: string;
@@ -51,7 +55,7 @@ interface WorkspaceSpec {
   roleExplanation: string;
 }
 
-const workspacesData: WorkspaceSpec[] = [
+export const workspacesData: WorkspaceSpec[] = [
   {
     id: 'markets',
     name: 'Markets View',
@@ -315,7 +319,9 @@ const instrumentRows = [
   [
     { name: "Investment Plans", hasBadge: false },
     { name: "IRAs", hasBadge: true, badge: "1% MATCH", badgeType: "match" },
-    { name: "Crypto IRA", hasBadge: false },
+    { name: "Crypto IRA", hasBadge: false }
+  ],
+  [
     { name: "Agents", hasBadge: false },
     { name: "API", hasBadge: false }
   ]
@@ -528,6 +534,103 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
   // --- Watchlist view states ---
   const [watchlistQuery, setWatchlistQuery] = useState<string>('');
   const [highlightedRow, setHighlightedRow] = useState<string | null>(null);
+  const [watchlistRows, setWatchlistRows] = useState([
+    { sym: 'AAPL', name: 'Apple Inc.', price: 216.57, basePrice24h: 216.42, change: '+0.07%', isUp: true, vol: '$4.2B' },
+    { sym: 'TSLA', name: 'Tesla Inc.', price: 288.45, basePrice24h: 288.68, change: '-0.08%', isUp: false, vol: '$2.8B' },
+    { sym: 'NVDA', name: 'NVIDIA Corp.', price: 1052.70, basePrice24h: 1051.33, change: '+0.13%', isUp: true, vol: '$5.5B' },
+    { sym: 'MSFT', name: 'Microsoft Corp.', price: 456.68, basePrice24h: 456.31, change: '+0.08%', isUp: true, vol: '$3.1B' },
+    { sym: 'BTCUSD', name: 'Bitcoin / USD', price: 58325.36, basePrice24h: 59213.56, change: '-1.50%', isUp: false, vol: '$24.6B' },
+  ]);
+
+  useEffect(() => {
+    const fetchLatestPrices = async () => {
+      try {
+        setWatchlistRows(prev => {
+          let updated = [...prev];
+          Promise.all(
+            prev.map(async (row) => {
+              const queryTicker = row.sym === 'BTCUSD' ? 'BTC-USD' : row.sym;
+              try {
+                const res = await fetch(`/api/markets/historical?ticker=${queryTicker}&range=1d`);
+                if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+                  const data = await res.json();
+                  if (data && data.regularMarketPrice) {
+                    const currentPrice = parseFloat(data.regularMarketPrice.toFixed(2));
+                    const basePrice = data.previousClose || (data.bars && data.bars.length > 0 ? data.bars[0].close : (row.basePrice24h || currentPrice));
+                    const changeNum = basePrice > 0 ? ((currentPrice - basePrice) / basePrice) * 100 : 0;
+                    const isUp = changeNum >= 0;
+                    const changeStr = `${isUp ? '+' : ''}${changeNum.toFixed(2)}%`;
+                    return {
+                      ...row,
+                      price: currentPrice,
+                      basePrice24h: basePrice,
+                      change: changeStr,
+                      isUp
+                    };
+                  }
+                }
+              } catch (err) {
+                console.warn(`Failed to fetch live feed for ${queryTicker}:`, err);
+              }
+              // Fallback: simple micro-jitter only if market is open
+              if (!isMarketOpenForSymbol(row.sym)) {
+                return row; // Keep closed market static on weekends/after-hours
+              }
+              const jitterFactor = 1 + (Math.random() - 0.5) * 0.0004;
+              const newPrice = parseFloat((row.price * jitterFactor).toFixed(2));
+              const basePrice = (row as any).basePrice24h || row.price;
+              const changeNum = basePrice > 0 ? ((newPrice - basePrice) / basePrice) * 100 : 0;
+              const isUp = changeNum >= 0;
+              const changeStr = `${isUp ? '+' : ''}${changeNum.toFixed(2)}%`;
+              return {
+                ...row,
+                price: newPrice,
+                basePrice24h: basePrice,
+                change: changeStr,
+                isUp
+              };
+            })
+          ).then(results => {
+            setWatchlistRows(results);
+          });
+          return updated;
+        });
+      } catch (err) {
+        console.warn('Failed to dispatch live prices fetch:', err);
+      }
+    };
+
+    fetchLatestPrices();
+    const fetchInterval = setInterval(fetchLatestPrices, 5000);
+
+    const tickInterval = setInterval(() => {
+      setWatchlistRows(prev => prev.map(row => {
+        // If market is closed for this ticker (e.g. weekend for stocks/equities), do NOT simulate ticks!
+        if (!isMarketOpenForSymbol(row.sym)) {
+          return row;
+        }
+        const jitterFactor = 1 + (Math.random() - 0.5) * 0.0003;
+        const newPrice = parseFloat((row.price * jitterFactor).toFixed(2));
+        const basePrice = (row as any).basePrice24h || row.price;
+        const changeNum = basePrice > 0 ? ((newPrice - basePrice) / basePrice) * 100 : 0;
+        const isUp = changeNum >= 0;
+        const changeStr = `${isUp ? '+' : ''}${changeNum.toFixed(2)}%`;
+
+        return {
+          ...row,
+          price: newPrice,
+          basePrice24h: basePrice,
+          change: changeStr,
+          isUp
+        };
+      }));
+    }, 1200);
+
+    return () => {
+      clearInterval(fetchInterval);
+      clearInterval(tickInterval);
+    };
+  }, []);
 
   // --- Funding view states ---
   const [fundingAmount, setFundingAmount] = useState<string>('50000');
@@ -906,15 +1009,18 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
 
   return (
     <div className="w-full flex-1 flex flex-col justify-between space-y-4">
-      {/* 1. MARKETS VIEW SIMULATOR */}
-      {activeWorkspace === 'markets' && (
-        <motion.div
-          ref={containerRef}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="space-y-4 text-xs font-mono text-neutral-300 relative"
-        >
+      <AnimatePresence mode="wait">
+        {/* 1. MARKETS VIEW SIMULATOR */}
+        {activeWorkspace === 'markets' && (
+          <motion.div
+            key="markets"
+            ref={containerRef}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-4 text-xs font-mono text-neutral-300 relative"
+          >
           
           {/* Simulated search & filters */}
           <div className="flex flex-wrap items-center gap-2 border-b border-neutral-900 pb-3">
@@ -1026,9 +1132,9 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                     </span>
                   ) : (
                     <>
-                      <span className="text-[10px] border border-neutral-850 px-1.5 py-0.5 rounded text-neutral-300">Financials</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                        currentDetails.isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                      <span className="text-[10px] text-neutral-300">Financials</span>
+                      <span className={`text-[9px] font-bold ${
+                        currentDetails.isPositive ? 'text-emerald-400' : 'text-red-400'
                       }`}>
                         {currentDetails.change}
                       </span>
@@ -1243,7 +1349,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                       : 'text-neutral-300 hover:text-white'
                   }`}
                 >
-                  Buy USD ($)
+                  Buy
                 </button>
                 <button
                   id="homepage-sell-btn"
@@ -1257,7 +1363,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                       : 'text-neutral-300 hover:text-white'
                   }`}
                 >
-                  Sell USD ($)
+                  Sell
                 </button>
               </div>
 
@@ -1359,7 +1465,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                     </>
                   ) : (
                     <>
-                      {tradeType === 'buy' ? 'Route Simulated Buy ($)' : 'Route Simulated Sell ($)'}
+                      {tradeType === 'buy' ? 'Route Simulated Buy' : 'Route Simulated Sell'}
                     </>
                   )}
                 </button>
@@ -1429,14 +1535,16 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
         </motion.div>
       )}
 
-      {/* 2. PORTFOLIO DESK SIMULATOR */}
-      {activeWorkspace === 'portfolio' && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="space-y-4 text-xs font-mono text-neutral-300"
-        >
+        {/* 2. PORTFOLIO DESK SIMULATOR */}
+        {activeWorkspace === 'portfolio' && (
+          <motion.div
+            key="portfolio"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-4 text-xs font-mono text-neutral-300"
+          >
           <div className="border-b border-neutral-900 pb-3 flex items-center justify-between">
             <div>
               <span className="text-[10px] text-white uppercase font-bold block">Portfolio Breakdown Summary</span>
@@ -1577,14 +1685,16 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
         </motion.div>
       )}
 
-      {/* 3. WATCHLIST DASHBOARD SIMULATOR */}
-      {activeWorkspace === 'watchlist' && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="space-y-3 text-xs font-mono text-neutral-300"
-        >
+        {/* 3. WATCHLIST DASHBOARD SIMULATOR */}
+        {activeWorkspace === 'watchlist' && (
+          <motion.div
+            key="watchlist"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-3 text-xs font-mono text-neutral-300"
+          >
           <div className="flex items-center justify-between border-b border-neutral-900 pb-2">
             <span className="text-[10px] text-white uppercase font-bold block">Dynamic Watchlist Filter</span>
             <div className="relative w-36">
@@ -1610,13 +1720,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-900">
-                {[
-                  { sym: 'AAPL', name: 'Apple Inc.', price: 316.22, change: '+1.42%', isUp: true, vol: '$4.2B' },
-                  { sym: 'TSLA', name: 'Tesla Inc.', price: 248.50, change: '-2.35%', isUp: false, vol: '$2.8B' },
-                  { sym: 'NVDA', name: 'NVIDIA Corp.', price: 128.45, change: '+4.81%', isUp: true, vol: '$5.5B' },
-                  { sym: 'MSFT', name: 'Microsoft Corp.', price: 415.80, change: '+0.51%', isUp: true, vol: '$3.1B' },
-                  { sym: 'BTCUSD', name: 'Bitcoin / USD', price: 58450.00, change: '-1.27%', isUp: false, vol: '$24.6B' },
-                ]
+                {watchlistRows
                   .filter(item => item.sym.toLowerCase().includes(watchlistQuery.toLowerCase()) || item.name.toLowerCase().includes(watchlistQuery.toLowerCase()))
                   .map(ticker => (
                     <tr
@@ -1637,8 +1741,8 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                         ${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-2.5">
-                        <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${
-                          ticker.isUp ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                        <span className={`font-bold text-[9px] ${
+                          ticker.isUp ? 'text-emerald-400' : 'text-rose-400'
                         }`}>
                           {ticker.change}
                         </span>
@@ -1655,14 +1759,16 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
         </motion.div>
       )}
 
-      {/* 4. FUNDING DESK SIMULATOR */}
-      {activeWorkspace === 'funding' && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="space-y-4 text-xs font-mono text-neutral-300"
-        >
+        {/* 4. FUNDING DESK SIMULATOR */}
+        {activeWorkspace === 'funding' && (
+          <motion.div
+            key="funding"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-4 text-xs font-mono text-neutral-300"
+          >
           <div className="border-b border-neutral-900 pb-3 flex items-center justify-between">
             <div>
               <span className="text-[10px] text-white uppercase font-bold block">Instant Collateral Wire Gate</span>
@@ -1758,14 +1864,16 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
         </motion.div>
       )}
 
-      {/* 5. ACTIVITY DESK SIMULATOR */}
-      {activeWorkspace === 'activity' && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="space-y-3 text-xs font-mono text-neutral-300"
-        >
+        {/* 5. ACTIVITY DESK SIMULATOR */}
+        {activeWorkspace === 'activity' && (
+          <motion.div
+            key="activity"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-3 text-xs font-mono text-neutral-300"
+          >
           <div className="border-b border-neutral-900 pb-2 flex items-center justify-between">
             <span className="text-[10px] text-white uppercase font-bold block">Historical Audit Execution Logs</span>
             <span className="text-[9px] font-bold text-neutral-300">6 transactions cleared</span>
@@ -1808,14 +1916,16 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
         </motion.div>
       )}
 
-      {/* 6. MARKET ANALYSIS SIMULATOR */}
-      {activeWorkspace === 'analysis' && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="space-y-4 text-xs font-mono text-neutral-300"
-        >
+        {/* 6. MARKET ANALYSIS SIMULATOR */}
+        {activeWorkspace === 'analysis' && (
+          <motion.div
+            key="analysis"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-4 text-xs font-mono text-neutral-300"
+          >
           <div className="border-b border-[#16161c] pb-3 flex items-center justify-between">
             <div>
               <span className="text-[10px] text-white uppercase font-bold block">Cross-Asset Correlation Heatmap</span>
@@ -1886,6 +1996,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
           </div>
         </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -2131,6 +2242,25 @@ interface HomepageProps {
 export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) {
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const [activeSeoFeature, setActiveSeoFeature] = useState<FeatureId | null>(null);
+
+  // Check URL hash for direct feature deep linking
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#feature-')) {
+        const featureId = hash.replace('#feature-', '') as FeatureId;
+        const validIds: FeatureId[] = ['markets', 'portfolio', 'watchlist', 'funding', 'activity', 'analysis', 'backtest', 'sentiment'];
+        if (validIds.includes(featureId)) {
+          setActiveSeoFeature(featureId);
+        }
+      }
+    };
+
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
   
   // Interactive Brokerage Calculator States
   const [initialDeposit, setInitialDeposit] = useState<number>(100000);
@@ -2141,6 +2271,16 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
   const [activeWorkspace, setActiveWorkspace] = useState<string>('markets');
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState<boolean>(true);
   const [selectedInstrument, setSelectedInstrument] = useState<string>('');
+
+  // Auto-reset selected instrument after 5 seconds so they all re-appear
+  useEffect(() => {
+    if (selectedInstrument) {
+      const timer = setTimeout(() => {
+        setSelectedInstrument('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedInstrument]);
 
   useEffect(() => {
     setIsWorkspaceLoading(true);
@@ -2359,16 +2499,16 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
   const calcResults = calculateBuyingPower();
 
   return (
-    <div className="min-h-screen bg-[#060608] text-neutral-200 font-sans selection:bg-neutral-800 selection:text-white relative">
+    <div className="min-h-screen bg-[#000000] text-neutral-200 font-sans selection:bg-neutral-800 selection:text-white relative">
       
       {/* Sistine Chapel inspired financial background painted with divine candlestick arches & Fibonacci spirals */}
       <SistineFinancialCeiling />
       
       {/* Structural Swiss Grid & Clean Aesthetic Lines layered on top with low opacity */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#141418_1px,transparent_1px),linear-gradient(to_bottom,#141418_1px,transparent_1px)] bg-[size:6rem_6rem] pointer-events-none z-[1] opacity-30" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:6rem_6rem] pointer-events-none z-[1] opacity-60" />
       
       {/* Header Sticky Navigation */}
-      <header className="sticky top-0 z-50 bg-[#060608]/85 backdrop-blur-md border-b border-neutral-900/80 px-6 lg:px-12 py-4 flex flex-col justify-center relative z-10">
+      <header className="sticky top-0 z-50 bg-[#000000]/85 backdrop-blur-md border-b border-neutral-900/80 px-6 lg:px-12 py-4 flex flex-col justify-center relative z-10">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center">
             <div>
@@ -2481,62 +2621,58 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
               Explore Workspaces
             </a>
           </div>
-        </section>
 
-        {/* Section: Universal Instrument Spectrum (WITHOUT TITLE AND SUBTITLE AS REQUESTED) */}
-        <section id="instruments" className="py-1 sm:py-4 px-1 sm:px-0">
-          <div className="w-full py-2 sm:py-4 flex flex-col justify-center items-center text-center relative overflow-hidden">
-            {/* Subtle background glow effect */}
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.02),transparent_65%)] pointer-events-none"></div>
-            
-            <div 
-              className="w-full flex flex-col gap-3 sm:gap-10 z-10 select-none"
-              onMouseLeave={() => setSelectedInstrument('')}
-            >
+          {/* Mobile-only Universal Instrument Spectrum (Starts just below Explore Workspaces) */}
+          <div className="block md:hidden pt-10 pb-16 w-full select-none text-center">
+            <div className="flex flex-col gap-8 w-full justify-center items-center">
               {instrumentRows.map((row, rIndex) => (
-                <div key={rIndex} className="flex flex-wrap items-center justify-center gap-x-2.5 sm:gap-x-6 gap-y-2.5 sm:gap-y-4 text-center leading-normal">
+                <div 
+                  key={rIndex} 
+                  className="w-full flex flex-wrap items-center justify-center gap-x-4 gap-y-5 px-3 text-center leading-snug"
+                >
                   {row.map((item, iIndex) => {
-                    const isAnyHovered = selectedInstrument !== '';
-                    const isHovered = selectedInstrument === item.name;
-                    const hasBadge = item.hasBadge;
-                    
+                    const isSelected = selectedInstrument === item.name;
+                    const spec = INSTRUMENT_SPECS[item.name];
+                    const hasBadge = item.hasBadge || (spec && !!spec.badge);
+                    const badgeText = item.badge || (spec && spec.badge);
+
                     return (
                       <React.Fragment key={item.name}>
                         <div
-                          onMouseEnter={() => setSelectedInstrument(item.name)}
-                          className="group relative text-center py-0.5 sm:py-1 flex items-center gap-1.5 sm:gap-2 transition-all duration-300"
+                          onClick={() => setSelectedInstrument(isSelected ? '' : item.name)}
+                          className="group relative inline-flex items-center gap-2 py-1 px-0.5 transition-all duration-300 cursor-pointer text-center active:scale-95"
                         >
                           <span 
-                            className={`font-serif text-lg sm:text-3xl md:text-4xl lg:text-5xl tracking-normal leading-none transition-all duration-500 ${
-                              isHovered 
-                                ? 'text-white scale-[1.04] filter drop-shadow-[0_0_15px_rgba(255,255,255,0.25)] font-normal opacity-100' 
-                                : isAnyHovered 
-                                  ? 'text-neutral-200/10 opacity-30' 
-                                  : 'text-neutral-200 group-hover:text-white'
+                            className={`font-serif text-3xl xs:text-4xl sm:text-5xl tracking-tight leading-none transition-all duration-300 ${
+                              isSelected 
+                                ? 'text-white filter drop-shadow-[0_0_12px_rgba(255,255,255,0.25)] font-normal opacity-100' 
+                                : selectedInstrument !== '' 
+                                  ? 'text-neutral-200/35 opacity-40' 
+                                  : 'text-neutral-200 hover:text-white'
                             }`}
                           >
                             {item.name}
                           </span>
 
-                          {hasBadge && (
+                          {hasBadge && badgeText && (
                             <span 
-                              className={`text-[7px] sm:text-[9px] font-mono font-bold tracking-widest uppercase px-1.5 py-0.5 rounded transition-all duration-500 border ${
-                                isHovered 
-                                  ? 'bg-white/10 border-white/40 text-white scale-105' 
-                                  : isAnyHovered 
-                                    ? 'bg-transparent border-neutral-800/10 text-neutral-600/20'
-                                    : 'bg-[#09090b] border-neutral-800 text-neutral-400 group-hover:border-neutral-700 group-hover:text-neutral-300'
+                              className={`text-[8px] xs:text-[9px] font-mono font-bold tracking-wider uppercase transition-all duration-300 ${
+                                isSelected 
+                                  ? 'text-amber-400 font-bold' 
+                                  : selectedInstrument !== ''
+                                    ? 'text-neutral-500/35'
+                                    : 'text-amber-500/80'
                               }`}
                             >
-                              {item.badge}
+                              {badgeText}
                             </span>
                           )}
                         </div>
                         
                         {iIndex < row.length - 1 && (
                           <span 
-                            className={`text-neutral-800/65 font-sans text-xs sm:text-base md:text-lg select-none pointer-events-none transition-all duration-500 ${
-                              isAnyHovered ? 'text-neutral-900/20' : 'text-neutral-800/65'
+                            className={`text-neutral-800 font-sans text-2xl select-none pointer-events-none transition-all duration-300 ${
+                              selectedInstrument !== '' ? 'text-neutral-800/30' : 'text-neutral-800'
                             }`}
                           >
                             ·
@@ -2548,6 +2684,119 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
                 </div>
               ))}
             </div>
+
+            {/* SEO Metadata & Structured Schema (Hidden from visual layout, fully indexable by search engine crawlers) */}
+            <div className="sr-only" aria-hidden="true">
+              <h2>MTX Securities Financial Products Spectrum Details</h2>
+              {Object.values(INSTRUMENT_SPECS).map((spec) => (
+                <article key={spec.name}>
+                  <h3>{spec.name} ({spec.category})</h3>
+                  <p>{spec.desc}</p>
+                  <ul>
+                    {spec.specs.map((s, sIdx) => (
+                      <li key={sIdx}>
+                        <strong>{s.label}:</strong> {s.value}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+
+            <script type="application/ld+json">
+              {JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "name": "MTX Securities Instruments Spectrum",
+                "description": "Comprehensive list of dynamic financial instrument routing, fixed income ledgering, and sovereign debt custody specifications.",
+                "itemListElement": Object.values(INSTRUMENT_SPECS).map((spec, idx) => ({
+                  "@type": "ListItem",
+                  "position": idx + 1,
+                  "item": {
+                    "@type": "Product",
+                    "name": spec.name,
+                    "category": spec.category,
+                    "description": spec.desc,
+                    "additionalProperty": spec.specs.map(item => ({
+                      "@type": "PropertyValue",
+                      "name": item.label,
+                      "value": item.value
+                    }))
+                  }
+                }))
+              })}
+            </script>
+          </div>
+        </section>
+
+        {/* Section: Universal Instrument Spectrum (WITHOUT TITLE AND SUBTITLE AS REQUESTED) */}
+        <section id="instruments" className="hidden md:block py-10 sm:py-16 px-4 sm:px-6">
+          <div className="w-full py-4 sm:py-8 flex flex-col justify-center items-center text-center relative overflow-hidden">
+            {/* Clean clear background space */}
+            <div className="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+            
+            <div 
+              className="w-full flex flex-col gap-8 sm:gap-10 z-10 select-none"
+              onMouseLeave={() => setSelectedInstrument('')}
+            >
+              {instrumentRows.map((row, rIndex) => (
+                <div key={rIndex} className="flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-6 gap-y-4 sm:gap-y-4 text-center leading-normal">
+                  {row.map((item, iIndex) => {
+                    const isAnyHovered = selectedInstrument !== '';
+                    const isHovered = selectedInstrument === item.name;
+                    const hasBadge = item.hasBadge;
+                    
+                    return (
+                      <React.Fragment key={item.name}>
+                        <div
+                          onMouseEnter={() => setSelectedInstrument(item.name)}
+                          onClick={() => setSelectedInstrument(selectedInstrument === item.name ? '' : item.name)}
+                          className="group relative text-center py-2 sm:py-1 px-1 sm:px-1.5 flex items-center gap-1.5 sm:gap-2 transition-all duration-300 cursor-pointer"
+                        >
+                          <span 
+                            className={`font-serif text-xl sm:text-3xl md:text-4xl lg:text-5xl tracking-normal leading-none transition-all duration-500 ${
+                              isHovered 
+                                ? 'text-white scale-[1.04] filter drop-shadow-[0_0_15px_rgba(255,255,255,0.25)] font-normal opacity-100' 
+                                : isAnyHovered 
+                                  ? 'text-neutral-200/40 opacity-70' 
+                                  : 'text-neutral-200 group-hover:text-white'
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+
+                          {hasBadge && (
+                            <span 
+                              className={`text-[7px] sm:text-[9px] font-mono font-bold tracking-widest uppercase transition-all duration-500 ${
+                                isHovered 
+                                  ? 'text-amber-400 scale-105 font-bold' 
+                                  : isAnyHovered 
+                                    ? 'text-neutral-500/55'
+                                    : 'text-amber-500/80 group-hover:text-amber-400'
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {iIndex < row.length - 1 && (
+                          <span 
+                            className={`text-neutral-800/65 font-sans text-sm sm:text-base md:text-lg select-none pointer-events-none transition-all duration-500 ${
+                              isAnyHovered ? 'text-neutral-800/30' : 'text-neutral-800/65'
+                            }`}
+                          >
+                            ·
+                          </span>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            {/* Visual pop-up details drawer has been converted to SEO metadata above for optimal indexing without UI interference */}
           </div>
         </section>
 
@@ -2607,7 +2856,15 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
         </section>
 
         {/* Section: Client Portal Terminal App Integration - Synthesized Workspaces */}
-        <section id="portal" className="space-y-10">
+        <section id="portal" className="space-y-12">
+
+          <div className="space-y-3">
+            <span className="text-[9px] font-mono uppercase tracking-widest text-neutral-300 font-bold block">03 / Quantitative Architecture & Feature Workspaces</span>
+            <h2 className="text-2xl font-semibold tracking-tight text-white">Institutional Workspaces & Feature Specifications</h2>
+            <p className="text-xs text-neutral-200 leading-relaxed font-light max-w-3xl">
+              Explore interactive terminal simulators below. Click &quot;explore&quot; on any workspace card to open its dedicated quantitative feature specification page with live tools, risk matrices, and architecture breakdowns.
+            </p>
+          </div>
 
           <div className="space-y-16 max-w-5xl mx-auto">
             {workspacesData.map((ws, index) => {
@@ -2633,9 +2890,8 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-100px" }}
                     transition={{ duration: 0.5, delay: index * 0.1 }}
-                    className="bg-[#050507]/65 backdrop-blur-md border border-neutral-800/80 rounded-lg p-5 sm:p-6 flex flex-col justify-between font-mono space-y-6 shadow-xl relative overflow-hidden text-left"
+                    className="bg-[#050507] border border-neutral-800/80 rounded-lg p-5 sm:p-6 flex flex-col justify-between font-mono space-y-6 shadow-xl relative overflow-hidden text-left"
                   >
-                    <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.03),transparent_70%)] pointer-events-none"></div>
                     
                     {/* Top amber accent line */}
                     <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-500/25 to-transparent"></div>
@@ -2657,8 +2913,8 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
                         </p>
                       </div>
 
-                      {/* Sub Capabilities */}
-                      <div className="grid grid-cols-2 gap-2 text-[9px] text-neutral-300">
+                      {/* Sub Capabilities & SEO Feature Link */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[9px] text-neutral-300">
                         <div className="flex items-center gap-1.5">
                           <Check className="w-3 h-3 text-amber-500 shrink-0" />
                           <span className="truncate font-sans font-light">Fully functional sandbox execution</span>
@@ -2667,6 +2923,22 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
                           <Check className="w-3 h-3 text-amber-500 shrink-0" />
                           <span className="truncate font-sans font-light">Reactive state binding</span>
                         </div>
+                      </div>
+
+                      {/* Small Explore link on bottom right */}
+                      <div className="pt-2 flex items-center justify-end border-t border-neutral-900/60">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const featId = ws.id as FeatureId;
+                            setActiveSeoFeature(featId);
+                            window.location.hash = `#feature-${featId}`;
+                          }}
+                          className="text-[10px] text-amber-500/80 hover:text-amber-400 font-mono font-medium lowercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer hover:underline"
+                        >
+                          <span>explore</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
                       </div>
                     </div>
                   </motion.div>
@@ -2827,6 +3099,29 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
           </div>
         </div>
       </footer>
+
+      {/* SEO Feature Landing Page Overlay */}
+      {activeSeoFeature && (
+        <FeatureLandingPage
+          featureId={activeSeoFeature}
+          onClose={() => {
+            setActiveSeoFeature(null);
+            if (window.history.pushState) {
+              window.history.pushState("", document.title, window.location.pathname + window.location.search);
+            } else {
+              window.location.hash = "";
+            }
+          }}
+          onLaunchTerminal={(mode) => {
+            setActiveSeoFeature(null);
+            onLaunchTerminal(mode);
+          }}
+          onNavigateToFeature={(id) => {
+            setActiveSeoFeature(id);
+            window.location.hash = `#feature-${id}`;
+          }}
+        />
+      )}
 
     </div>
   );

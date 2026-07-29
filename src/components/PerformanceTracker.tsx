@@ -1345,8 +1345,8 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyMetrics} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" opacity={0.03} />
-                <XAxis dataKey="month" stroke="#ffffff" opacity={0.3} tickLine={false} />
-                <YAxis stroke="#ffffff" opacity={0.3} tickLine={false} tickFormatter={(val) => `$${val}`} />
+                <XAxis dataKey="month" stroke="#ffffff" tickLine={false} tick={{ fill: '#ffffff' }} />
+                <YAxis stroke="#ffffff" tickLine={false} tick={{ fill: '#ffffff' }} tickFormatter={(val) => `$${val}`} />
                 <Tooltip
                   contentStyle={{ 
                     backgroundColor: '#0c0c0e', 
@@ -1460,8 +1460,8 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" />
                 <XAxis 
                   dataKey="index" 
-                  stroke="rgba(255,255,255,0.12)"
-                  tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }} 
+                  stroke="rgba(255,255,255,0.3)"
+                  tick={{ fontSize: 8.5, fill: '#ffffff', fontFamily: 'monospace' }} 
                   tickFormatter={(v) => `#${v}`}
                 />
                 
@@ -1470,7 +1470,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
                   yAxisId="left"
                   orientation="left"
                   stroke="#818cf8"
-                  tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }} 
+                  tick={{ fontSize: 8.5, fill: '#ffffff', fontFamily: 'monospace' }} 
                   tickFormatter={(v) => `${v}h`}
                 />
 
@@ -1480,7 +1480,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
                   orientation="right"
                   stroke="#ef4444"
                   domain={[0, 'auto']}
-                  tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }} 
+                  tick={{ fontSize: 8.5, fill: '#ffffff', fontFamily: 'monospace' }} 
                   tickFormatter={(v) => `-${v}%`}
                 />
 

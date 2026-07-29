@@ -8,6 +8,8 @@ import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'motion/react';
 import { Candlestick, FVG, OrderBlock, LiquiditySweep, MarketMetrics, Trade, NewsEvent, MarketSymbol, CorrelationData, getSymbolCorrelations, PriceAlert } from '../types';
+import { playNotificationSound, NotificationSoundType } from '../utils/audioNotifier';
+import { isMarketOpenForSymbol } from '../utils/marketHours';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Eye, TrendingUp, HelpCircle, Activity, Plus, Minus, Bell, Volume2, VolumeX, Trash2, X, Sliders, Zap, Server, Magnet, Crosshair, Maximize2, Minimize2, ArrowRightLeft, ArrowRight, ChevronDown, Clock, Type, Newspaper } from 'lucide-react';
 
@@ -26,6 +28,8 @@ const FRIENDLY_NAMES: Record<string, string> = {
   'NAS100': 'Nasdaq 100 Index',
   'GER40': 'DAX 40 Index',
   'SPX500': 'S&P 500 Index',
+  'UK100': 'FTSE 100 Index',
+  'JPN225': 'Nikkei 225 Index',
   'DXY': 'US Dollar Index',
   'US10Y': 'US 10-Year Treasury Yield',
   'BRENT': 'Brent Crude Oil Spot',
@@ -33,6 +37,11 @@ const FRIENDLY_NAMES: Record<string, string> = {
   'MSFT': 'Microsoft Corporation',
   'NVDA': 'NVIDIA Corporation',
   'TSLA': 'Tesla, Inc.',
+  'AMZN': 'Amazon.com, Inc.',
+  'META': 'Meta Platforms, Inc.',
+  'GOOGL': 'Alphabet Inc. (Google)',
+  'NFLX': 'Netflix, Inc.',
+  'AMD': 'Advanced Micro Devices',
 };
 
 const FEED_SOURCES: Record<string, string> = {
@@ -40,10 +49,27 @@ const FEED_SOURCES: Record<string, string> = {
   'NAS100': 'BROKER_FEED',
   'GER40': 'BROKER_FEED',
   'SPX500': 'BROKER_FEED',
+  'UK100': 'BROKER_FEED',
+  'JPN225': 'BROKER_FEED',
   'AAPL': 'NASDAQ',
   'MSFT': 'NASDAQ',
   'NVDA': 'NASDAQ',
   'TSLA': 'NASDAQ',
+  'AMZN': 'NASDAQ',
+  'META': 'NASDAQ',
+  'GOOGL': 'NASDAQ',
+  'NFLX': 'NASDAQ',
+  'AMD': 'NASDAQ',
+  'BTC/USDT': 'BINANCE',
+  'ETH/USDT': 'BINANCE',
+  'SOL/USDT': 'BINANCE',
+  'EUR/USD': 'OANDA',
+  'GBP/USD': 'OANDA',
+  'USD/JPY': 'OANDA',
+  'AUD/USD': 'OANDA',
+  'GOLD/USD': 'COMEX',
+  'SILVER/USD': 'COMEX',
+  'BRENT': 'ICE',
 };
 
 const FLAG_EMOJIS: Record<string, { f1: string; f2: string }> = {
@@ -51,40 +77,44 @@ const FLAG_EMOJIS: Record<string, { f1: string; f2: string }> = {
   'NAS100': { f1: '🇺🇸', f2: '📊' },
   'GER40': { f1: '🇩🇪', f2: '📈' },
   'SPX500': { f1: '🇺🇸', f2: '📊' },
+  'UK100': { f1: '🇬🇧', f2: '📈' },
+  'JPN225': { f1: '🇯🇵', f2: '🗾' },
   'AAPL': { f1: '🍎', f2: '🇺🇸' },
   'MSFT': { f1: '💻', f2: '🇺🇸' },
   'NVDA': { f1: '🟩', f2: '🇺🇸' },
   'TSLA': { f1: '🚗', f2: '🇺🇸' },
+  'AMZN': { f1: '📦', f2: '🇺🇸' },
+  'META': { f1: '♾️', f2: '🇺🇸' },
+  'GOOGL': { f1: '🔍', f2: '🇺🇸' },
+  'NFLX': { f1: '🍿', f2: '🇺🇸' },
+  'AMD': { f1: '⚡', f2: '🇺🇸' },
+  'BTC/USDT': { f1: '₿', f2: '🌐' },
+  'ETH/USDT': { f1: 'Ξ', f2: '🌐' },
+  'SOL/USDT': { f1: '◎', f2: '🌐' },
+  'EUR/USD': { f1: '🇪🇺', f2: '🇺🇸' },
+  'GBP/USD': { f1: '🇬🇧', f2: '🇺🇸' },
+  'USD/JPY': { f1: '🇺🇸', f2: '🇯🇵' },
+  'AUD/USD': { f1: '🇦🇺', f2: '🇺🇸' },
+  'GOLD/USD': { f1: '🥇', f2: '🇺🇸' },
+  'SILVER/USD': { f1: '🥈', f2: '🇺🇸' },
+  'BRENT': { f1: '🛢️', f2: '🌐' },
 };
 
 const playAlertSound = () => {
   try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const audioCtx = new AudioContextClass();
-    
-    const osc1 = audioCtx.createOscillator();
-    const osc2 = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(880, audioCtx.currentTime);
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(1100, audioCtx.currentTime);
-    
-    gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-    
-    osc1.connect(gainNode);
-    osc2.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    
-    osc1.start();
-    osc2.start();
-    osc1.stop(audioCtx.currentTime + 0.4);
-    osc2.stop(audioCtx.currentTime + 0.4);
+    let sound: NotificationSoundType = 'chime';
+    let enabled = true;
+    const raw = localStorage.getItem('apex_institutional_settings');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.notificationSound) sound = parsed.notificationSound;
+        if (parsed.soundAlerts === false) enabled = false;
+      }
+    }
+    playNotificationSound(sound, enabled);
   } catch (error) {
-    console.warn("Audio alert failed: Web Audio API not supported.", error);
+    console.warn("Audio alert trigger error:", error);
   }
 };
 
@@ -163,13 +193,25 @@ const ASSET_CLASSES = [
     id: 'INDICES',
     label: 'Equity Indices',
     color: 'text-purple-400',
-    assets: ['US30', 'NAS100', 'GER40', 'SPX500'] as MarketSymbol[]
+    assets: ['US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225'] as MarketSymbol[]
   },
   {
     id: 'STOCKS',
-    label: 'Tech Stocks',
+    label: 'Equities & Mega-Caps',
     color: 'text-amber-400',
-    assets: ['AAPL', 'MSFT', 'NVDA', 'TSLA'] as MarketSymbol[]
+    assets: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD'] as MarketSymbol[]
+  },
+  {
+    id: 'CRYPTO',
+    label: 'Digital Assets',
+    color: 'text-emerald-400',
+    assets: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'] as MarketSymbol[]
+  },
+  {
+    id: 'FX_COMM',
+    label: 'FX & Commodities',
+    color: 'text-blue-400',
+    assets: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'] as MarketSymbol[]
   }
 ];
 
@@ -201,11 +243,11 @@ interface ChartContainerProps {
 
 export default function ChartContainer({
   symbol,
-  candles: candlesInput,
-  fvgs,
-  obs,
-  sweeps,
-  metrics,
+  candles: candlesInput = [],
+  fvgs = [],
+  obs = [],
+  sweeps = [],
+  metrics = {} as any,
   onLogEventToAdvisor,
   trades = [],
   onTradeExecuted,
@@ -343,8 +385,10 @@ export default function ChartContainer({
     }
 
     const allSymbols: MarketSymbol[] = [
-      'US30', 'NAS100', 'GER40', 'SPX500',
-      'AAPL', 'MSFT', 'NVDA', 'TSLA'
+      'US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225',
+      'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD',
+      'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+      'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'
     ];
     const currentIndex = allSymbols.indexOf(symbol);
     if (currentIndex !== -1) {
@@ -679,16 +723,33 @@ export default function ChartContainer({
   } | null>(null);
 
   // Sub-second ticking engine for high-fidelity TradingView mockup style
-  const lastCandle = candles[candles.length - 1];
+  const lastCandle = candles && candles.length > 0 ? candles[candles.length - 1] : undefined;
   const basePrice = lastCandle ? lastCandle.close : (
     symbol === 'US30' ? 39000 :
     symbol === 'NAS100' ? 18000 :
     symbol === 'GER40' ? 18000 :
     symbol === 'SPX500' ? 5100 :
+    symbol === 'UK100' ? 8200 :
+    symbol === 'JPN225' ? 38500 :
     symbol === 'AAPL' ? 170 :
     symbol === 'MSFT' ? 410 :
     symbol === 'NVDA' ? 880 :
-    symbol === 'TSLA' ? 170 : 150
+    symbol === 'TSLA' ? 170 :
+    symbol === 'AMZN' ? 185 :
+    symbol === 'META' ? 490 :
+    symbol === 'GOOGL' ? 175 :
+    symbol === 'NFLX' ? 620 :
+    symbol === 'AMD' ? 160 :
+    symbol === 'BTC/USDT' ? 65000 :
+    symbol === 'ETH/USDT' ? 3400 :
+    symbol === 'SOL/USDT' ? 145 :
+    symbol === 'EUR/USD' ? 1.085 :
+    symbol === 'GBP/USD' ? 1.270 :
+    symbol === 'USD/JPY' ? 155.0 :
+    symbol === 'AUD/USD' ? 0.665 :
+    symbol === 'GOLD/USD' ? 2350 :
+    symbol === 'SILVER/USD' ? 29.5 :
+    symbol === 'BRENT' ? 84.0 : 150
   );
 
   const [livePrice, setLivePrice] = useState(basePrice);
@@ -970,6 +1031,11 @@ export default function ChartContainer({
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Do not jitter prices when the market is closed (e.g. weekend for stocks/equities/forex)
+      if (!isMarketOpenForSymbol(symbol)) {
+        return;
+      }
+
       const pipSize = ['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(symbol) ? 0.01 : 1.0;
       const isUp = Math.random() > 0.49;
       // standard micro jitter: e.g. 0.1 to 0.5 pips
@@ -7620,19 +7686,19 @@ export default function ChartContainer({
         <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/10 bg-[#0c0c0c]/40 p-4 divide-x divide-white/5 font-mono text-center">
         <div className="py-1">
           <span className="text-white/35 text-[10px] block uppercase font-mono tracking-tight">Average True Range</span>
-          <span className="text-white/90 text-sm font-semibold">{metrics.atr.toFixed(2)}</span>
+          <span className="text-white/90 text-sm font-semibold">{(metrics?.atr || 0).toFixed(2)}</span>
         </div>
         <div className="py-1">
           <span className="text-white/35 text-[10px] block uppercase font-mono tracking-tight">Plotted FVGs</span>
-          <span className="text-white/90 text-sm font-semibold">{fvgs.filter(f => !f.isMitigated).length} Open</span>
+          <span className="text-white/90 text-sm font-semibold">{(fvgs || []).filter(f => !f?.isMitigated).length} Open</span>
         </div>
         <div className="py-1">
           <span className="text-white/35 text-[10px] block uppercase font-mono tracking-tight">Active OB blocks</span>
-          <span className="text-white/90 text-sm font-semibold">{obs.filter(o => !o.isBroken).length} Intact</span>
+          <span className="text-white/90 text-sm font-semibold">{(obs || []).filter(o => !o?.isBroken).length} Intact</span>
         </div>
         <div className="py-1">
           <span className="text-white/35 text-[10px] block uppercase font-mono tracking-tight">MSS Sweeps</span>
-          <span className="text-white/90 text-sm font-semibold">{sweeps.length} Detected</span>
+          <span className="text-white/90 text-sm font-semibold">{(sweeps || []).length} Detected</span>
         </div>
       </div>
       )}

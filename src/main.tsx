@@ -14,27 +14,37 @@ if (typeof window !== 'undefined') {
       lowerReason.includes('ethereum') || 
       lowerReason.includes('wallet') || 
       lowerReason.includes('web3') ||
-      lowerReason.includes('provider')
+      lowerReason.includes('provider') ||
+      lowerReason.includes('failed to connect') ||
+      lowerReason.includes('user rejected')
     ) {
       console.warn('Intercepted and secured MetaMask/Web3 async connection exception gracefully:', event.reason);
-      event.preventDefault(); // prevent bubble-up crashes
+      try {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      } catch (_e) {}
     }
-  });
+  }, true);
 
   window.addEventListener('error', (event) => {
-    const errorMsg = event.message || '';
+    const errorMsg = event.message || String(event.error?.message || '');
     const lowerMsg = errorMsg.toLowerCase();
     if (
       lowerMsg.includes('metamask') || 
       lowerMsg.includes('ethereum') || 
       lowerMsg.includes('wallet') || 
       lowerMsg.includes('web3') ||
-      lowerMsg.includes('provider')
+      lowerMsg.includes('provider') ||
+      lowerMsg.includes('failed to connect') ||
+      lowerMsg.includes('user rejected')
     ) {
       console.warn('Intercepted and secured MetaMask/Web3 global error report gracefully:', event.error);
-      event.preventDefault(); // prevent bubble-up crashes
+      try {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      } catch (_e) {}
     }
-  });
+  }, true);
 }
 
 interface Props {
@@ -64,7 +74,35 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   public render() {
-    if ((this as any).state.hasError) {
+    if (this.state.hasError) {
+      const errMessage = (this.state.error?.toString() || '').toLowerCase();
+      if (
+        errMessage.includes('metamask') ||
+        errMessage.includes('ethereum') ||
+        errMessage.includes('failed to connect') ||
+        errMessage.includes('provider') ||
+        errMessage.includes('user rejected')
+      ) {
+        console.warn('Recovered from web3 extension error in ErrorBoundary:', this.state.error);
+        return (
+          <div className="min-h-screen bg-[#060608] text-white flex flex-col items-center justify-center p-6 text-center font-mono">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 max-w-md w-full space-y-4">
+              <h2 className="text-sm font-bold text-amber-400 uppercase">Web3 Handshake Recovered</h2>
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                An external browser wallet signal was intercepted cleanly. Your session is safe.
+              </p>
+              <button
+                type="button"
+                onClick={() => (this as any).setState({ hasError: false, error: null, errorInfo: null })}
+                className="w-full py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold uppercase rounded transition-colors cursor-pointer"
+              >
+                Resume Terminal
+              </button>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div style={{ padding: '30px', background: '#0a0a0f', color: '#f87171', fontFamily: 'monospace', minHeight: '100vh', boxSizing: 'border-box' }}>
           <h1 style={{ fontSize: '24px', marginBottom: '10px', color: '#ef4444' }}>🚨 React Runtime Crash Detected</h1>

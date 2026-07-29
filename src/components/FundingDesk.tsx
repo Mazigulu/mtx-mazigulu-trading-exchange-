@@ -47,6 +47,7 @@ interface FundingTx {
 
 interface WalletDetails {
   ethAddress: string;
+  btcAddress: string;
   bankName: string;
   bankAccountLast4: string;
   bankRouting: string;
@@ -57,6 +58,8 @@ const SUPPORTED_ASSETS = [
   { symbol: 'USDC', name: 'USD Coin (Circle)', type: 'ERC20', logo: 'Ⓢ', network: 'Base L2 Network', rate: 1.0, explorer: 'https://basescan.org', contract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
   { symbol: 'USDT', name: 'Tether USD', type: 'ERC20', logo: '₮', network: 'Ethereum Mainnet', rate: 1.0, explorer: 'https://etherscan.io', contract: '0xdAC17F958D2ee523a2206206994597C13D831ec7' },
   { symbol: 'PYUSD', name: 'PayPal USD', type: 'ERC20', logo: '🅿️', network: 'Ethereum Mainnet', rate: 1.0, explorer: 'https://etherscan.io', contract: '0x6c3ea9036406852006290770bedfc31600287410' },
+  { symbol: 'ETH', name: 'Ethereum', type: 'COIN', logo: '🔷', network: 'Ethereum Mainnet', rate: 3420.0, explorer: 'https://etherscan.io', contract: null },
+  { symbol: 'BTC', name: 'Bitcoin', type: 'BTC', logo: '₿', network: 'Bitcoin Network', rate: 64200.0, explorer: 'https://blockchain.info', contract: null },
   { symbol: 'EUR', name: 'Euro Ledger', type: 'FIAT', logo: '🇪🇺', network: 'SEPA Instant Credit', rate: 1.09, explorer: null, contract: null },
   { symbol: 'GBP', name: 'Sterling Custody', type: 'FIAT', logo: '🇬🇧', network: 'CHAPS Clearing', rate: 1.28, explorer: null, contract: null },
   { symbol: 'KES', name: 'Kenya Shilling', type: 'FIAT', logo: '🇰🇪', network: 'M-Pesa Express', rate: 0.0078, explorer: null, contract: null },
@@ -81,11 +84,14 @@ export default function FundingDesk() {
     GBP: 2500.00,
     USDC: 1200.00,
     USDT: 4500.00,
-    PYUSD: 1500.00
+    PYUSD: 1500.00,
+    ETH: 15.45,
+    BTC: 1.12
   });
 
   const [walletDetails, setWalletDetails] = useState<WalletDetails>({
     ethAddress: '0x3bf92c4a9616ae9d8f36c56df2e718bc321049da4bb27fa1',
+    btcAddress: 'bc1q3bf92c4a9616ae9d8f36c56df2e718bc321049da4bb2',
     bankName: 'Chase Bank N.A.',
     bankAccountLast4: '4821',
     bankRouting: '021000021'
@@ -227,7 +233,7 @@ export default function FundingDesk() {
   useEffect(() => {
     const asset = SUPPORTED_ASSETS.find(a => a.symbol === selectedAsset);
     if (asset) {
-      if (asset.type === 'ERC20') {
+      if (asset.type === 'ERC20' || asset.type === 'COIN' || asset.type === 'BTC') {
         setTransferMethod('STABLECOIN');
       } else {
         if (selectedAsset === 'USD') setTransferMethod('ACH');
@@ -483,10 +489,14 @@ export default function FundingDesk() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
         {/* Card 1: Combined Aggregated Valuation */}
-        <div id="wallet-balance-portfolio-card" className="bg-[#09090c] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1">
-          <div className="absolute right-0 top-0 bottom-0 w-24 bg-indigo-500/5 blur-3xl pointer-events-none" />
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          id="wallet-balance-portfolio-card" 
+          className="bg-[#080808] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1 transition-colors duration-200"
+        >
           <div className="flex justify-between items-start">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black">LIQUID PORTFOLIO VALUE (USD)</span>
+            <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black">LIQUID PORTFOLIO VALUE (USD)</span>
             <div className="p-1.5 rounded-md bg-indigo-500/10 text-indigo-400">
               <Coins className="w-4 h-4" />
             </div>
@@ -500,58 +510,84 @@ export default function FundingDesk() {
               <span>Identity & Funds Audited & Fully Collateralized</span>
             </span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 2: Generated On-Chain Wallet Addresses (Identity Linked) */}
-        <div id="wallet-blockchain-details-card" className="bg-[#09090c] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1">
-          <div className="absolute right-0 top-0 bottom-0 w-24 bg-emerald-500/5 blur-3xl pointer-events-none" />
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black">ON-CHAIN IDENTIFIER (ERC-20)</span>
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          id="wallet-blockchain-details-card" 
+          className="bg-[#080808] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1 transition-colors duration-200"
+        >
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black">ON-CHAIN IDENTIFIERS</span>
             <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400">
               <Globe className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 font-mono">
-            <div className="text-[9px] text-white/30 uppercase font-bold">Base L2 / Ethereum Deposit Address</div>
-            <div className="flex items-center justify-between gap-1 mt-1 bg-white/[0.02] p-2 rounded border border-white/5">
-              <span className="text-white font-bold text-[10px] truncate break-all block mr-2 text-indigo-400 font-mono">
-                {walletDetails.ethAddress}
-              </span>
-              <button 
-                onClick={() => copyToClipboard(walletDetails.ethAddress, 'eth')}
-                className="text-white/40 hover:text-white transition-colors cursor-pointer shrink-0"
-                title="Copy Address"
-              >
-                {copiedField === 'eth' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
+          <div className="space-y-3 font-mono">
+            <div>
+              <div className="text-[9px] text-white/70 uppercase font-bold">Ethereum / ERC-20 Address</div>
+              <div className="flex items-center justify-between gap-1 mt-1 bg-white/[0.02] p-2 rounded border border-white/5">
+                <span className="text-white font-bold text-[10px] truncate break-all block mr-2 text-indigo-400 font-mono">
+                  {walletDetails.ethAddress}
+                </span>
+                <button 
+                  onClick={() => copyToClipboard(walletDetails.ethAddress, 'eth')}
+                  className="text-white/70 hover:text-white transition-colors cursor-pointer shrink-0"
+                  title="Copy Address"
+                >
+                  {copiedField === 'eth' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[9px] text-white/70 uppercase font-bold">Bitcoin Native Address</div>
+              <div className="flex items-center justify-between gap-1 mt-1 bg-white/[0.02] p-2 rounded border border-white/5">
+                <span className="text-white font-bold text-[10px] truncate break-all block mr-2 text-amber-500 font-mono">
+                  {walletDetails.btcAddress || 'bc1q3bf92c4a9616ae9d8f36c56df2e718bc321049da4bb2'}
+                </span>
+                <button 
+                  onClick={() => copyToClipboard(walletDetails.btcAddress || 'bc1q3bf92c4a9616ae9d8f36c56df2e718bc321049da4bb2', 'btc')}
+                  className="text-white/70 hover:text-white transition-colors cursor-pointer shrink-0"
+                  title="Copy Address"
+                >
+                  {copiedField === 'btc' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 3: Institutional Cash Routing (Fiat Clearing) */}
-        <div id="wallet-fiat-routing-card" className="bg-[#09090c] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1">
-          <div className="absolute right-0 top-0 bottom-0 w-24 bg-amber-500/5 blur-3xl pointer-events-none" />
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          id="wallet-fiat-routing-card" 
+          className="bg-[#080808] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1 transition-colors duration-200"
+        >
           <div className="flex justify-between items-start">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black">CUSTODY FIAT ROUTING</span>
+            <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black">CUSTODY FIAT ROUTING</span>
             <div className="p-1.5 rounded-md bg-amber-500/10 text-amber-400">
               <Landmark className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2.5 font-mono text-[10px] space-y-1">
             <div className="flex justify-between">
-              <span className="text-white/30 uppercase text-[9px]">Bank:</span>
+              <span className="text-white/70 uppercase text-[9px]">Bank:</span>
               <span className="font-bold text-white">{walletDetails.bankName}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-white/30 uppercase text-[9px]">Routing ABA:</span>
+              <span className="text-white/70 uppercase text-[9px]">Routing ABA:</span>
               <span className="font-bold text-white tracking-widest">{walletDetails.bankRouting}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-white/30 uppercase text-[9px]">Account Number:</span>
+              <span className="text-white/70 uppercase text-[9px]">Account Number:</span>
               <span className="font-bold text-white">••••••••{walletDetails.bankAccountLast4}</span>
             </div>
           </div>
-        </div>
+        </motion.div>
 
       </div>
 
@@ -574,11 +610,11 @@ export default function FundingDesk() {
 
         {/* SECTION 2: Assets Ledger Matrix (Left Column) */}
         <div className="lg:col-span-3 space-y-4 order-2 lg:order-1">
-          <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 font-mono">
+          <div className="bg-[#080808] border border-white/5 rounded-xl p-5 font-mono">
             <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
               <div>
                 <h4 className="text-xs font-black text-white uppercase tracking-wider">Multi-Currency Liquidity Map</h4>
-                <p className="text-[8.5px] text-white/30 uppercase mt-0.5 font-bold">Aggregated Clearing and Custodial Ledger</p>
+                <p className="text-[8.5px] text-white/70 uppercase mt-0.5 font-bold">Aggregated Clearing and Custodial Ledger</p>
               </div>
               <button 
                 onClick={() => fetchFundingState()} 
@@ -591,7 +627,7 @@ export default function FundingDesk() {
             <div className="overflow-x-auto">
               <table className="w-full text-left font-mono text-[10px] text-white">
                 <thead>
-                  <tr className="border-b border-white/5 text-white/40 text-[9px] uppercase font-black pb-2">
+                  <tr className="border-b border-white/5 text-white/80 text-[9px] uppercase font-black pb-2">
                     <th className="py-2.5">Asset</th>
                     <th>Type</th>
                     <th>Network / Rail</th>
@@ -609,11 +645,11 @@ export default function FundingDesk() {
                           <span className="text-sm bg-white/5 w-6 h-6 rounded-full flex items-center justify-center border border-white/10">{asset.logo}</span>
                           <div>
                             <span className="font-extrabold text-white block">{asset.symbol}</span>
-                            <span className="text-[8.5px] text-white/30 block">{asset.name}</span>
+                            <span className="text-[8.5px] text-white/60 block">{asset.name}</span>
                           </div>
                         </td>
                         <td className="py-3">
-                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider uppercase ${asset.type === 'ERC20' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-white/5 text-white/50 border border-white/5'}`}>
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider uppercase ${asset.type === 'ERC20' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-white/5 text-white/70 border border-white/5'}`}>
                             {asset.type}
                           </span>
                         </td>
@@ -623,7 +659,7 @@ export default function FundingDesk() {
                             {asset.contract && (
                               <button 
                                 onClick={() => copyToClipboard(asset.contract!, asset.symbol)}
-                                className="text-[8px] text-white/30 hover:text-indigo-400 uppercase tracking-widest mt-0.5 transition-colors flex items-center gap-1 cursor-pointer"
+                                className="text-[8px] text-white/60 hover:text-indigo-400 uppercase tracking-widest mt-0.5 transition-colors flex items-center gap-1 cursor-pointer"
                               >
                                 {copiedField === asset.symbol ? 'Copied Contract' : `Contract: ${asset.contract.substring(0, 6)}...${asset.contract.substring(34)}`}
                                 <Copy className="w-2.5 h-2.5" />
@@ -646,7 +682,7 @@ export default function FundingDesk() {
 
             {/* Pagination Controls */}
             {totalAssetPages > 1 && (
-              <div className="flex items-center justify-between border-t border-white/5 pt-3.5 mt-4 text-[9px] text-white/50 font-mono">
+              <div className="flex items-center justify-between border-t border-white/5 pt-3.5 mt-4 text-[9px] text-white/80 font-mono">
                 <span>PAGE {activeAssetPage} OF {totalAssetPages}</span>
                 <div className="flex items-center gap-2">
                   <button
@@ -673,7 +709,7 @@ export default function FundingDesk() {
 
         {/* SECTION 3: Deposit/Withdraw Terminal Form (Right Column) */}
         <div className="lg:col-span-2 space-y-4 order-1 lg:order-2">
-          <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-4 font-mono relative overflow-hidden">
+          <div className="bg-[#080808] border border-white/5 rounded-xl p-5 space-y-4 font-mono relative overflow-hidden">
             
             {/* Simulation Broadcast Overlay */}
             <AnimatePresence>
@@ -775,7 +811,7 @@ export default function FundingDesk() {
                 
                 {/* Select Target Asset */}
                 <div className="space-y-1.5">
-                  <label className="text-[9.5px] uppercase text-white/40 block">Select Fiduciary Asset</label>
+                  <label className="text-[9.5px] uppercase text-white/70 block font-bold">Select Fiduciary Asset</label>
                   <select
                     value={selectedAsset}
                     onChange={(e) => setSelectedAsset(e.target.value)}
@@ -791,9 +827,9 @@ export default function FundingDesk() {
 
                 {/* Numeric Entry */}
                 <div className="space-y-1.5">
-                  <label className="text-[9.5px] uppercase text-white/40 block">Clearing Amount ({selectedAsset})</label>
+                  <label className="text-[9.5px] uppercase text-white/70 block font-bold">Clearing Amount ({selectedAsset})</label>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 font-bold">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/70 font-bold">
                       {selectedAsset === 'USD' ? '$' : selectedAsset === 'EUR' ? '€' : selectedAsset === 'GBP' ? '£' : 'Ⓢ'}
                     </span>
                     <input
@@ -803,16 +839,16 @@ export default function FundingDesk() {
                       onChange={(e) => setTransferAmount(e.target.value)}
                       min="0.1"
                       step="any"
-                      className="w-full bg-[#040405] border border-white/10 rounded-lg py-2 pl-10 pr-16 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-indigo-500 font-bold"
+                      className="w-full bg-[#040405] border border-white/10 rounded-lg py-2 pl-10 pr-16 text-sm text-white font-mono placeholder-white/40 focus:outline-none focus:border-indigo-500 font-bold"
                       required
                     />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[9.5px] text-white/30 font-bold">{selectedAsset}</span>
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[9.5px] text-white/70 font-bold">{selectedAsset}</span>
                   </div>
                 </div>
 
                 {/* Smart settlement selector based on Asset Type */}
                 <div className="space-y-1.5">
-                  <label className="text-[9.5px] uppercase text-white/40 block">Clearing Channel</label>
+                  <label className="text-[9.5px] uppercase text-white/70 block font-bold">Clearing Channel</label>
                   <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {currentAssetDetails?.type === 'ERC20' ? (
@@ -822,7 +858,7 @@ export default function FundingDesk() {
                       )}
                       <div>
                         <span className="font-extrabold text-white text-[10px] block uppercase">{currentAssetDetails?.network} Rail</span>
-                        <span className="text-[8.5px] text-white/30 block">
+                        <span className="text-[8.5px] text-white/70 block">
                           {currentAssetDetails?.type === 'ERC20' ? 'Instant Secure Smart Contract Transfer' : 'Instant Institutional Fiduciary Sweep'}
                         </span>
                       </div>
@@ -832,21 +868,21 @@ export default function FundingDesk() {
 
                 {/* Dynamic Summary Box */}
                 <div className="bg-white/[0.02] border border-white/5 p-3.5 rounded-lg space-y-2 font-mono text-[10px]">
-                  <div className="text-[9px] text-white/30 uppercase tracking-widest font-black border-b border-white/5 pb-1.5 flex items-center gap-1.5">
+                  <div className="text-[9px] text-white/70 uppercase tracking-widest font-black border-b border-white/5 pb-1.5 flex items-center gap-1.5">
                     <Info className="w-3 h-3 text-indigo-400" />
                     <span>Clearing Parameters</span>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between">
-                      <span className="text-white/40 uppercase">Clearing Time:</span>
+                      <span className="text-white/70 uppercase">Clearing Time:</span>
                       <span className="text-white font-bold">Instant Settlement</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-white/40 uppercase">Interoperability Fee:</span>
+                      <span className="text-white/70 uppercase">Interoperability Fee:</span>
                       <span className="text-white font-bold">$0.00</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-white/40 uppercase">Credit Destination:</span>
+                      <span className="text-white/70 uppercase">Credit Destination:</span>
                       <span className="text-indigo-400 font-bold">{selectedAsset} Liquid Balance</span>
                     </div>
                   </div>
@@ -871,18 +907,18 @@ export default function FundingDesk() {
               <div className="space-y-4">
                 
                 {/* Step indicators */}
-                <div className="flex items-center justify-between pb-2 border-b border-white/5 mb-1 text-[9px] font-mono font-black text-white/40">
+                <div className="flex items-center justify-between pb-2 border-b border-white/5 mb-1 text-[9px] font-mono font-black text-white/60">
                   <span className={withdrawalStep >= 1 ? 'text-white' : ''}>1. AMOUNT</span>
-                  <span className="h-px bg-white/5 flex-1 mx-2" />
+                  <span className="h-px bg-white/10 flex-1 mx-2" />
                   <span className={withdrawalStep >= 2 ? 'text-white' : ''}>2. ROUTING</span>
-                  <span className="h-px bg-white/5 flex-1 mx-2" />
+                  <span className="h-px bg-white/10 flex-1 mx-2" />
                   <span className={withdrawalStep >= 3 ? 'text-white' : ''}>3. EXECUTION</span>
                 </div>
 
                 {withdrawalStep === 1 && (
                   <div className="space-y-4 animate-fadeIn text-xs">
                     <div className="space-y-1.5">
-                      <label className="text-[9.5px] uppercase text-white/40 block">Fiduciary Asset Outflow</label>
+                      <label className="text-[9.5px] uppercase text-white/70 block font-bold">Fiduciary Asset Outflow</label>
                       <select
                         value={selectedAsset}
                         onChange={(e) => setSelectedAsset(e.target.value)}
@@ -897,9 +933,9 @@ export default function FundingDesk() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[9.5px] uppercase text-white/40 block">Withdrawal Quantity</label>
+                      <label className="text-[9.5px] uppercase text-white/70 block font-bold">Withdrawal Quantity</label>
                       <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 font-bold">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/70 font-bold">
                           {selectedAsset === 'USD' ? '$' : selectedAsset === 'EUR' ? '€' : selectedAsset === 'GBP' ? '£' : 'Ⓢ'}
                         </span>
                         <input
@@ -909,7 +945,7 @@ export default function FundingDesk() {
                           onChange={(e) => setTransferAmount(e.target.value)}
                           min="0.1"
                           step="any"
-                          className="w-full bg-[#040405] border border-white/10 rounded-lg py-2 pl-10 pr-16 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-indigo-500 font-bold"
+                          className="w-full bg-[#040405] border border-white/10 rounded-lg py-2 pl-10 pr-16 text-sm text-white font-mono placeholder-white/40 focus:outline-none focus:border-indigo-500 font-bold"
                           required
                         />
                       </div>
@@ -939,15 +975,22 @@ export default function FundingDesk() {
                 {withdrawalStep === 2 && (
                   <div className="space-y-4 animate-fadeIn text-xs">
                     <div className="space-y-1.5">
-                      <label className="text-[9.5px] uppercase text-white/40 block">
-                        {currentAssetDetails?.type === 'ERC20' ? 'Target Web3 ERC20 Wallet Address' : 'Fiduciary Bank Account Credentials'}
+                      <label className="text-[9.5px] uppercase text-white/70 block font-bold">
+                        {selectedAsset === 'BTC' ? 'Target Bitcoin Wallet Address' :
+                         selectedAsset === 'ETH' ? 'Target Ethereum Wallet Address' :
+                         currentAssetDetails?.type === 'ERC20' ? 'Target Web3 ERC20 Wallet Address' :
+                         'Fiduciary Bank Account Credentials'}
                       </label>
                       <input
                         type="text"
-                        placeholder={currentAssetDetails?.type === 'ERC20' ? '0x...' : 'Routing / Account Detail or Phone Number'}
+                        placeholder={
+                          selectedAsset === 'BTC' ? 'bc1q...' :
+                          (selectedAsset === 'ETH' || currentAssetDetails?.type === 'ERC20') ? '0x...' :
+                          'Routing / Account Detail or Phone Number'
+                        }
                         value={destWalletAddress}
                         onChange={(e) => setDestWalletAddress(e.target.value)}
-                        className="w-full bg-[#040405] border border-white/10 rounded-lg py-2.5 px-3 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-indigo-500 font-bold"
+                        className="w-full bg-[#040405] border border-white/10 rounded-lg py-2.5 px-3 text-xs text-white font-mono placeholder-white/40 focus:outline-none focus:border-indigo-500 font-bold"
                         required
                       />
                     </div>
@@ -955,7 +998,7 @@ export default function FundingDesk() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => setWithdrawalStep(1)}
-                        className="w-1/3 py-2 bg-white/5 hover:bg-white/10 text-white/50 uppercase rounded-lg cursor-pointer font-bold"
+                        className="w-1/3 py-2 bg-white/5 hover:bg-white/10 text-white/70 uppercase rounded-lg cursor-pointer font-bold"
                       >
                         Back
                       </button>
@@ -979,15 +1022,15 @@ export default function FundingDesk() {
                   <div className="space-y-4 animate-fadeIn text-xs">
                     <div className="bg-white/[0.01] border border-white/5 p-3.5 rounded-lg space-y-2">
                       <div className="flex justify-between border-b border-white/5 pb-1">
-                        <span className="text-white/40 uppercase text-[9px]">Quantity</span>
+                        <span className="text-white/70 uppercase text-[9px]">Quantity</span>
                         <span className="font-extrabold text-white">{transferAmount} {selectedAsset}</span>
                       </div>
                       <div className="flex justify-between border-b border-white/5 pb-1">
-                        <span className="text-white/40 uppercase text-[9px]">Method</span>
+                        <span className="text-white/70 uppercase text-[9px]">Method</span>
                         <span className="font-extrabold text-white">{currentAssetDetails?.network}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-white/40 uppercase text-[9px]">Target</span>
+                        <span className="text-white/70 uppercase text-[9px]">Target</span>
                         <span className="font-extrabold text-indigo-400 truncate w-32 text-right">{destWalletAddress}</span>
                       </div>
                     </div>
@@ -995,7 +1038,7 @@ export default function FundingDesk() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => setWithdrawalStep(2)}
-                        className="w-1/3 py-2 bg-white/5 hover:bg-white/10 text-white/50 uppercase rounded-lg cursor-pointer font-bold"
+                        className="w-1/3 py-2 bg-white/5 hover:bg-white/10 text-white/70 uppercase rounded-lg cursor-pointer font-bold"
                       >
                         Back
                       </button>
@@ -1019,11 +1062,11 @@ export default function FundingDesk() {
       </div>
 
       {/* SECTION 4: Audited Ledger Logs */}
-      <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 font-mono">
+      <div className="bg-[#080808] border border-white/5 rounded-xl p-5 font-mono">
         <div className="border-b border-white/5 pb-3 mb-4 flex items-center justify-between">
           <div>
             <h4 className="text-xs font-black text-white uppercase tracking-wider">Cryptographically Audited Activity</h4>
-            <p className="text-[8.5px] text-white/30 uppercase mt-0.5 font-bold">Ledger Logs and Settlement Receipts</p>
+            <p className="text-[8.5px] text-white/70 uppercase mt-0.5 font-bold">Ledger Logs and Settlement Receipts</p>
           </div>
           <span className="text-[8px] px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold rounded">
             TOTAL TRANSFERS: {txs.length}
@@ -1032,7 +1075,7 @@ export default function FundingDesk() {
 
         <div className="space-y-2">
           {txs.length === 0 ? (
-            <div className="text-center py-12 text-white/20 text-[10px] uppercase font-bold">
+            <div className="text-center py-12 text-white/50 text-[10px] uppercase font-bold">
               No transactions detected in secure log.
             </div>
           ) : (
@@ -1057,11 +1100,11 @@ export default function FundingDesk() {
                           {tx.status}
                         </span>
                       </div>
-                      <div className="text-white/30 text-[8.5px] mt-0.5 flex items-center gap-1">
+                      <div className="text-white/70 text-[8.5px] mt-0.5 flex items-center gap-1">
                         <span>Cleared on {tx.date}</span>
                         {isCrypto && tx.txHash && (
                           <>
-                            <span className="text-white/10">•</span>
+                            <span className="text-white/30">•</span>
                             <span className="text-indigo-400 font-mono">Hash: {tx.txHash.substring(0, 10)}...</span>
                           </>
                         )}
@@ -1092,7 +1135,7 @@ export default function FundingDesk() {
 
         {/* Pagination Controls */}
         {totalActivityPages > 1 && (
-          <div className="flex items-center justify-between border-t border-white/5 pt-3.5 mt-4 text-[9px] text-white/50 font-mono">
+          <div className="flex items-center justify-between border-t border-white/5 pt-3.5 mt-4 text-[9px] text-white/80 font-mono">
             <span>PAGE {activeActivityPage} OF {totalActivityPages}</span>
             <div className="flex items-center gap-2">
               <button
@@ -1138,11 +1181,11 @@ export default function FundingDesk() {
                   <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-400 animate-pulse" /> Decoded Blockchain Receipt
                   </h3>
-                  <p className="text-[9px] text-white/30 uppercase mt-0.5">Distributed Ledger Block Analyzer</p>
+                  <p className="text-[9px] text-white/70 uppercase mt-0.5 font-bold">Distributed Ledger Block Analyzer</p>
                 </div>
                 <button 
                   onClick={() => setInspectorTx(null)}
-                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/50 hover:text-white uppercase cursor-pointer"
+                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/70 hover:text-white uppercase cursor-pointer"
                 >
                   Dismiss
                 </button>
@@ -1153,13 +1196,13 @@ export default function FundingDesk() {
                 {/* Visual Header */}
                 <div className="bg-[#040405] border border-white/5 p-4 rounded-lg space-y-2 flex items-center justify-between">
                   <div>
-                    <span className="text-[9px] text-white/30 uppercase block">Settlement Status</span>
+                    <span className="text-[9px] text-white/70 uppercase block font-bold">Settlement Status</span>
                     <span className="font-black text-emerald-400 text-sm flex items-center gap-1 mt-0.5">
                       <CheckCircle className="w-4.5 h-4.5 text-emerald-400" /> SUCCESSFUL
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-[9px] text-white/30 uppercase block">Outflow Amount</span>
+                    <span className="text-[9px] text-white/70 uppercase block font-bold">Outflow Amount</span>
                     <span className="font-mono text-white text-base font-black">
                       {inspectorTx.amount.toLocaleString()} {inspectorTx.currency}
                     </span>
@@ -1169,57 +1212,57 @@ export default function FundingDesk() {
                 {/* Details list */}
                 <div className="space-y-2.5">
                   <div className="grid grid-cols-3 py-1.5 border-b border-white/[0.03]">
-                    <span className="text-white/30 uppercase">Transaction ID</span>
+                    <span className="text-white/70 uppercase font-bold">Transaction ID</span>
                     <span className="col-span-2 text-white font-bold select-all break-all">{inspectorTx.id}</span>
                   </div>
 
                   <div className="grid grid-cols-3 py-1.5 border-b border-white/[0.03]">
-                    <span className="text-white/30 uppercase">Tx Hash (mempool)</span>
+                    <span className="text-white/70 uppercase font-bold">Tx Hash (mempool)</span>
                     <span className="col-span-2 text-indigo-400 font-bold select-all break-all">{inspectorTx.txHash}</span>
                   </div>
 
                   <div className="grid grid-cols-3 py-1.5 border-b border-white/[0.03]">
-                    <span className="text-white/30 uppercase">Stablecoin Contract</span>
+                    <span className="text-white/70 uppercase font-bold">Stablecoin Contract</span>
                     <span className="col-span-2 text-white font-bold truncate">
                       {SUPPORTED_ASSETS.find(a => a.symbol === inspectorTx.currency)?.contract || 'Unknown contract address'}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-3 py-1.5 border-b border-white/[0.03]">
-                    <span className="text-white/30 uppercase">Clearing Network</span>
+                    <span className="text-white/70 uppercase font-bold">Clearing Network</span>
                     <span className="col-span-2 text-white font-extrabold text-indigo-300">
                       {SUPPORTED_ASSETS.find(a => a.symbol === inspectorTx.currency)?.network || 'Crypto Chain'}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-3 py-1.5 border-b border-white/[0.03]">
-                    <span className="text-white/30 uppercase">Target Address</span>
+                    <span className="text-white/70 uppercase font-bold">Target Address</span>
                     <span className="col-span-2 text-white font-mono break-all font-bold">
                       {inspectorTx.walletAddress || walletDetails.ethAddress}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-3 py-1.5 border-b border-white/[0.03]">
-                    <span className="text-white/30 uppercase">Network Gas Limit</span>
+                    <span className="text-white/70 uppercase font-bold">Network Gas Limit</span>
                     <span className="col-span-2 text-white font-bold">
                       {inspectorTx.gasUsed ? (inspectorTx.gasUsed + 12500).toLocaleString() : 'N/A'} units
                     </span>
                   </div>
 
                   <div className="grid grid-cols-3 py-1.5 border-b border-white/[0.03]">
-                    <span className="text-white/30 uppercase">Gas Price (Gwei)</span>
+                    <span className="text-white/70 uppercase font-bold">Gas Price (Gwei)</span>
                     <span className="col-span-2 text-white font-bold font-mono">
                       {inspectorTx.gasPriceGwei || 'N/A'} Gwei
                     </span>
                   </div>
 
                   <div className="grid grid-cols-3 py-1.5 border-b border-white/[0.03]">
-                    <span className="text-white/30 uppercase">Consensus Cost</span>
+                    <span className="text-white/70 uppercase font-bold">Consensus Cost</span>
                     <span className="col-span-2 text-white font-bold">
                       {inspectorTx.gasUsed && inspectorTx.gasPriceGwei ? (
                         <span>
                           {((inspectorTx.gasUsed * inspectorTx.gasPriceGwei) / 1e9).toFixed(6)} ETH
-                          <span className="text-white/30 font-normal ml-1">
+                          <span className="text-white/60 font-normal ml-1">
                             (~${((inspectorTx.gasUsed * inspectorTx.gasPriceGwei * 3420) / 1e9).toFixed(2)})
                           </span>
                         </span>
@@ -1283,13 +1326,13 @@ export default function FundingDesk() {
                 <div className="space-y-4">
                   <div className="border-b border-white/5 pb-3">
                     <h4 className="text-sm font-black text-white uppercase tracking-wider">MANAGE GLOBAL CONNECTIONS</h4>
-                    <p className="text-[9.5px] text-white/40 leading-normal uppercase">
+                    <p className="text-[9.5px] text-white/70 leading-normal uppercase">
                       Establish and audit institutional capital flow connectors.
                     </p>
                   </div>
 
                   <div className="space-y-2">
-                    <span className="text-[9px] text-white/30 uppercase font-black tracking-wider block">Active Connections</span>
+                    <span className="text-[9px] text-white/70 uppercase font-black tracking-wider block">Active Connections</span>
                     
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center bg-white/[0.02] border border-white/5 p-2.5 rounded-lg">
@@ -1322,7 +1365,7 @@ export default function FundingDesk() {
                     <button
                       type="button"
                       onClick={() => setShowConnectionsModal(false)}
-                      className="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 text-white/50 hover:text-white uppercase text-[9px] font-bold cursor-pointer"
+                      className="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 text-white/70 hover:text-white uppercase text-[9px] font-bold cursor-pointer"
                     >
                       Close
                     </button>
@@ -1341,7 +1384,7 @@ export default function FundingDesk() {
                 <div className="space-y-4">
                   <div className="border-b border-white/5 pb-3">
                     <h5 className="text-sm font-black text-white uppercase tracking-wider">Connect Global Wallet Rail</h5>
-                    <p className="text-[9px] text-white/30 uppercase mt-0.5">Secure Institutional Integration</p>
+                    <p className="text-[9px] text-white/70 uppercase mt-0.5 font-bold">Secure Institutional Integration</p>
                   </div>
 
                   <div className="space-y-2">
@@ -1356,10 +1399,10 @@ export default function FundingDesk() {
                         <Landmark className="w-4 h-4 text-indigo-400" />
                         <div>
                           <div className="font-bold text-white text-[10px]">ACH SWEEP PORTAL (PLAID)</div>
-                          <div className="text-[8px] text-white/40 uppercase mt-0.5">Link checking/deposit account</div>
+                          <div className="text-[8px] text-white/70 uppercase mt-0.5 font-bold">Link checking/deposit account</div>
                         </div>
                       </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+                      <ChevronRight className="w-3.5 h-3.5 text-white/60" />
                     </button>
 
                     <button
@@ -1373,10 +1416,10 @@ export default function FundingDesk() {
                         <CreditCard className="w-4 h-4 text-indigo-400" />
                         <div>
                           <div className="font-bold text-white text-[10px]">CARD GATEWAY (STRIPE)</div>
-                          <div className="text-[8px] text-white/40 uppercase mt-0.5">Link card clearing engine</div>
+                          <div className="text-[8px] text-white/70 uppercase mt-0.5 font-bold">Link card clearing engine</div>
                         </div>
                       </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+                      <ChevronRight className="w-3.5 h-3.5 text-white/60" />
                     </button>
 
                     <button
@@ -1390,10 +1433,27 @@ export default function FundingDesk() {
                         <Wallet className="w-4 h-4 text-indigo-400" />
                         <div>
                           <div className="font-bold text-white text-[10px]">COINBASE PRIME / WEB3 LINK</div>
-                          <div className="text-[8px] text-white/40 uppercase mt-0.5">Authorize custody/clearing ledger</div>
+                          <div className="text-[8px] text-white/70 uppercase mt-0.5 font-bold">Authorize custody/clearing ledger</div>
                         </div>
                       </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+                      <ChevronRight className="w-3.5 h-3.5 text-white/60" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalStep('success');
+                      }}
+                      className="w-full flex items-center justify-between p-3 bg-white/[0.02] hover:bg-white/5 border border-white/5 hover:border-white/10 rounded-lg text-left transition-all cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Smartphone className="w-4 h-4 text-indigo-400" />
+                        <div>
+                          <div className="font-bold text-white text-[10px]">MOBILE WALLET GATEWAY (M-PESA / AIRTEL / MTN)</div>
+                          <div className="text-[8px] text-white/70 uppercase mt-0.5 font-bold">Link instant mobile money operator line</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-white/60" />
                     </button>
                   </div>
 
@@ -1401,7 +1461,7 @@ export default function FundingDesk() {
                     <button
                       type="button"
                       onClick={() => setModalStep('view')}
-                      className="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 text-white/50 hover:text-white uppercase text-[9px] font-bold cursor-pointer"
+                      className="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 text-white/70 hover:text-white uppercase text-[9px] font-bold cursor-pointer"
                     >
                       Back
                     </button>
@@ -1416,7 +1476,7 @@ export default function FundingDesk() {
                   </div>
                   <div className="space-y-1">
                     <h4 className="text-sm font-black text-white uppercase">CONNECTION AUTHORIZED</h4>
-                    <p className="text-[9.5px] text-white/40 uppercase leading-normal">
+                    <p className="text-[9.5px] text-white/70 uppercase leading-normal font-bold">
                       The new fiduciary settlement gateway is now secure and authenticated.
                     </p>
                   </div>

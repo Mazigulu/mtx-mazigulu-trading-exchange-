@@ -126,7 +126,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                 <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-indigo-400" /> Stripe Card Gateway
                 </h3>
-                <p className="text-[9px] text-white/30 uppercase mt-0.5">PCI-DSS Compliant Secure Clearing</p>
+                <p className="text-[9px] text-white/70 uppercase mt-0.5 font-bold">PCI-DSS Compliant Secure Clearing</p>
               </div>
               {!stripePaying && (
                 <button
@@ -136,7 +136,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     setStripePaid(false);
                     setStripeProgress([]);
                   }}
-                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/50 hover:text-white uppercase cursor-pointer font-bold"
+                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/70 hover:text-white uppercase cursor-pointer font-bold"
                 >
                   Close
                 </button>
@@ -146,7 +146,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
             {!stripePaid ? (
               <div className="space-y-4">
                 <div className="bg-[#040405] border border-white/5 p-3 rounded-lg flex justify-between items-center">
-                  <span className="text-[10px] text-white/40 uppercase">Deposit Amount</span>
+                  <span className="text-[10px] text-white/70 uppercase font-bold">Deposit Amount</span>
                   <span className="text-sm font-black text-white">${parseFloat(transferAmount).toLocaleString()} USD</span>
                 </div>
 
@@ -160,7 +160,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     </div>
                     <div className="border-t border-white/5 pt-2 space-y-1.5">
                       {stripeProgress.map((prog, idx) => (
-                        <div key={idx} className="text-[9px] text-white/50 flex items-center gap-1.5">
+                        <div key={idx} className="text-[9px] text-white/80 flex items-center gap-1.5 font-bold">
                           <span className="text-emerald-400">✔</span> {prog}
                         </div>
                       ))}
@@ -221,9 +221,9 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     className="space-y-3 text-[10px]"
                   >
                     <div className="space-y-1">
-                      <label className="text-[9px] text-white/40 uppercase">Card Number</label>
+                      <label className="text-[9px] text-white/70 uppercase font-bold">Card Number</label>
                       <div className="relative">
-                        <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                        <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
                         <input
                           type="text"
                           value={stripeCardNum}
@@ -236,7 +236,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-[9px] text-white/40 uppercase">Expiration</label>
+                        <label className="text-[9px] text-white/70 uppercase font-bold">Expiration</label>
                         <input
                           type="text"
                           value={stripeCardExpiry}
@@ -246,7 +246,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[9px] text-white/40 uppercase">CVC / CVV</label>
+                        <label className="text-[9px] text-white/70 uppercase font-bold">CVC / CVV</label>
                         <input
                           type="password"
                           value={stripeCardCvc}
@@ -258,7 +258,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[9px] text-white/40 uppercase">Cardholder Full Name</label>
+                      <label className="text-[9px] text-white/70 uppercase font-bold">Cardholder Full Name</label>
                       <input
                         type="text"
                         defaultValue="Principal Investor Account"
@@ -276,7 +276,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                       </button>
                     </div>
 
-                    <div className="text-center text-[8px] text-white/30 uppercase flex items-center justify-center gap-1">
+                    <div className="text-center text-[8px] text-white/70 uppercase flex items-center justify-center gap-1 font-bold">
                       <ShieldCheck className="w-3 h-3 text-emerald-400" /> Fully Encrypted SSL Security Handshake
                     </div>
                   </form>
@@ -289,7 +289,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                 </div>
                 <div className="space-y-1.5 font-mono">
                   <h4 className="text-sm font-black text-white uppercase tracking-wider">CLEARING SUCCESSFUL</h4>
-                  <p className="text-[10px] text-white/40 uppercase leading-normal">
+                  <p className="text-[10px] text-white/70 uppercase leading-normal font-bold">
                     Stripe PaymentIntent <span className="text-indigo-400 select-all font-bold">{stripeIntentId}</span> settled.
                     Fiduciary balances updated.
                   </p>

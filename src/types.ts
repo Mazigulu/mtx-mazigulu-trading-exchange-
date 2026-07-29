@@ -26,10 +26,27 @@ export type MarketSymbol =
   | 'NAS100' 
   | 'GER40' 
   | 'SPX500'
+  | 'UK100'
+  | 'JPN225'
   | 'AAPL'
   | 'MSFT'
   | 'NVDA'
-  | 'TSLA';
+  | 'TSLA'
+  | 'AMZN'
+  | 'META'
+  | 'GOOGL'
+  | 'NFLX'
+  | 'AMD'
+  | 'BTC/USDT'
+  | 'ETH/USDT'
+  | 'SOL/USDT'
+  | 'EUR/USD'
+  | 'GBP/USD'
+  | 'USD/JPY'
+  | 'AUD/USD'
+  | 'GOLD/USD'
+  | 'SILVER/USD'
+  | 'BRENT';
 
 export interface Trade {
   id: string;
@@ -167,6 +184,45 @@ export function getSymbolCorrelations(symbol: MarketSymbol): CorrelationData[] {
     case 'TSLA':
       list.push({ sym: 'NAS100', coef: 0.72, desc: 'High-volatility growth vehicle benchmark' });
       list.push({ sym: 'SPX500', coef: 0.60, desc: 'Broad-market index inclusion volatility' });
+      break;
+    case 'AMZN':
+      list.push({ sym: 'NAS100', coef: 0.89, desc: 'E-commerce & cloud computing index weighting' });
+      list.push({ sym: 'MSFT', coef: 0.81, desc: 'Hyperscale enterprise cloud co-exposure' });
+      list.push({ sym: 'SPX500', coef: 0.85, desc: 'Broad market retail & cloud titan' });
+      break;
+    case 'META':
+      list.push({ sym: 'NAS100', coef: 0.86, desc: 'Digital ad market & social ecosystem leader' });
+      list.push({ sym: 'GOOGL', coef: 0.82, desc: 'Digital advertising sector co-drift' });
+      list.push({ sym: 'SPX500', coef: 0.80, desc: 'Mega-cap communication services anchor' });
+      break;
+    case 'GOOGL':
+      list.push({ sym: 'NAS100', coef: 0.88, desc: 'Search engine & AI infrastructure leader' });
+      list.push({ sym: 'META', coef: 0.82, desc: 'Digital ad ad-tech co-exposure' });
+      list.push({ sym: 'MSFT', coef: 0.79, desc: 'Enterprise cloud & AI rivalry' });
+      break;
+    case 'NFLX':
+      list.push({ sym: 'NAS100', coef: 0.76, desc: 'Streaming media pioneer index component' });
+      list.push({ sym: 'AMZN', coef: 0.68, desc: 'Consumer digital entertainment overlap' });
+      break;
+    case 'AMD':
+      list.push({ sym: 'NVDA', coef: 0.88, desc: 'Semiconductor GPU & AI accelerator co-drift' });
+      list.push({ sym: 'NAS100', coef: 0.85, desc: 'High-beta tech growth index weighting' });
+      break;
+    case 'BTC/USDT':
+      list.push({ sym: 'ETH/USDT', coef: 0.87, desc: 'Digital asset market systemic baseline' });
+      list.push({ sym: 'SOL/USDT', coef: 0.78, desc: 'Layer-1 crypto asset co-flow' });
+      break;
+    case 'ETH/USDT':
+      list.push({ sym: 'BTC/USDT', coef: 0.87, desc: 'Layer-1 smart contract platform benchmark' });
+      list.push({ sym: 'SOL/USDT', coef: 0.84, desc: 'DeFi & smart contract network competitor' });
+      break;
+    case 'EUR/USD':
+      list.push({ sym: 'GBP/USD', coef: 0.89, desc: 'European fiat currency basket co-variance' });
+      list.push({ sym: 'GOLD/USD', coef: 0.65, desc: 'Inverse US Dollar liquidity proxy' });
+      break;
+    case 'GOLD/USD':
+      list.push({ sym: 'SILVER/USD', coef: 0.92, desc: 'Precious metal monetary hedge lockstep' });
+      list.push({ sym: 'EUR/USD', coef: 0.65, desc: 'USD dollar strength inverse correlation' });
       break;
     default:
       list.push({ sym: 'SPX500', coef: 0.30, desc: 'Market benchmark reference' });

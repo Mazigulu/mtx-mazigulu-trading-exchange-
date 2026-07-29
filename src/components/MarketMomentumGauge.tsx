@@ -163,7 +163,7 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
       <div className="flex flex-col items-center justify-center py-5 relative">
         <svg 
           viewBox="0 0 120 120" 
-          className="w-36 h-36 drop-shadow-[0_0_15px_rgba(99,102,241,0.03)]"
+          className="w-36 h-36"
         >
           {/* Definitions for gradient */}
           <defs>
@@ -173,14 +173,7 @@ export default function MarketMomentumGauge({ symbol, candles, metrics }: Market
               <stop offset="75%" stopColor="#fbbf24" />    {/* amber-400 */}
               <stop offset="100%" stopColor="#f43f5e" />   {/* rose-500 */}
             </linearGradient>
-            <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor={strokeColor} stopOpacity="0.15" />
-              <stop offset="100%" stopColor={strokeColor} stopOpacity="0" />
-            </radialGradient>
           </defs>
-
-          {/* Underlay glow shadow */}
-          <circle cx="60" cy="60" r="38" fill="url(#glow)" />
 
           {/* Background track arc */}
           <circle

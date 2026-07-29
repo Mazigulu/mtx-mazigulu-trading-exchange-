@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { MarketSymbol, Trade, MarketMetrics, LiquiditySweep, OrderBook } from '../types';
+import OrderConfirmationModal, { OrderDetails } from './OrderConfirmationModal';
 import { ShieldCheck, ArrowRightLeft, Landmark, Calculator, AlertTriangle, Play, CheckCircle2, History, XCircle, AlertOctagon, Percent, TrendingUp, Activity, Download, Gauge, CheckSquare, Square, Award, Fingerprint, Lock, Unlock, Cpu, RefreshCw, Sparkles, Eye, Check, X, Key, ShieldAlert, Clock, TrendingDown, HelpCircle, Layers } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 
@@ -251,6 +252,53 @@ export default function TradeTerminal({
   const [scanStatusLog, setScanStatusLog] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [aiTradeSuccessAlert, setAiTradeSuccessAlert] = useState<string | null>(null);
+
+  // Order Confirmation Dialog State
+  const [showOrderConfirmModal, setShowOrderConfirmModal] = useState<boolean>(false);
+  const [pendingOrderDetails, setPendingOrderDetails] = useState<OrderDetails | null>(null);
+
+  const handleOpenConfirmation = () => {
+    setErrorMsg(null);
+
+    if (isBrokerBridgePaused) {
+      setErrorMsg('Broker Execution Bridge is currently PAUSED by the Safety Guard drawdown circuit breaker. Trading is restricted.');
+      playTradeSound('fail');
+      return;
+    }
+
+    if (side === 'BUY' && stopLoss >= entryPrice) {
+      setErrorMsg('For BUY trades, Stop Loss must be lower than the Entry Price.');
+      playTradeSound('fail');
+      return;
+    }
+    if (side === 'SELL' && stopLoss <= entryPrice) {
+      setErrorMsg('For SELL trades, Stop Loss must be higher than the Entry Price.');
+      playTradeSound('fail');
+      return;
+    }
+
+    const slDistance = Math.abs(entryPrice - stopLoss);
+    const estDollarRisk = accountBalance * (riskPct / 100);
+
+    setPendingOrderDetails({
+      symbol: symbol,
+      name: `${symbol} Institutional Position`,
+      side: side,
+      orderType: 'MARKET',
+      dollarAmount: estDollarRisk,
+      sharesOrUnits: calculatedPositionSize,
+      unitLabel: 'Lots',
+      executionPrice: entryPrice,
+      useBracketProtection: true,
+      stopLossPrice: stopLoss,
+      takeProfitPrice: takeProfit,
+      currentBalance: accountBalance,
+      reason: reason,
+      confluences: selectedConfluences
+    });
+
+    setShowOrderConfirmModal(true);
+  };
 
   // Navigation for layout tab between Order & Risk Calculator and Live Trade Ledger
   const [activeTab, setActiveTab] = useState<'calculator' | 'ledger'>('calculator');
@@ -1007,7 +1055,7 @@ export default function TradeTerminal({
     let curPrice = metrics.currentPrice;
     if (t.symbol !== symbol) {
       if (t.symbol === 'US30') curPrice = 39500;
-      else if (t.symbol === 'NAS100') curPrice = 18500;
+      else if (t.symbol === 'NAS100') curPrice = 27192;
       else if (t.symbol === 'GER40') curPrice = 18000;
       else if (t.symbol === 'SPX500') curPrice = 5200;
       else if (t.symbol === 'AAPL') curPrice = 175;
@@ -1334,7 +1382,7 @@ export default function TradeTerminal({
           </div>
 
           {/* COMBINED AI AUTOMATION & CONTROL DESK */}
-          <div id="ai-automation-control-desk" className="mt-4 p-3.5 bg-gradient-to-r from-indigo-950/20 via-black/10 to-indigo-900/10 border border-indigo-500/20 rounded-lg flex flex-col space-y-3 shadow-md">
+          <div id="ai-automation-control-desk" className="mt-4 p-3.5 bg-[#0a0a0e] border border-indigo-500/20 rounded-lg flex flex-col space-y-3 shadow-md">
             {/* Title Bar */}
             <div className="flex items-center space-x-1.5 pb-2 border-b border-white/5 shrink-0">
               <Cpu className="w-3.5 h-3.5 text-indigo-400" />
@@ -1509,7 +1557,7 @@ export default function TradeTerminal({
             <button
               id="side-toggle-buy"
               onClick={() => setSide('BUY')}
-              className={`py-2 text-xs font-mono rounded font-bold uppercase transition-all tracking-wider flex items-center justify-center space-x-1.5 border ${
+              className={`py-2 text-xs font-mono rounded font-bold uppercase transition-all tracking-wider flex items-center justify-center space-x-1.5 border focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 outline-none select-none ${
                 side === 'BUY'
                   ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/50 shadow-lg shadow-emerald-500/5'
                   : 'bg-[#050505] text-white/40 border-transparent hover:text-white/80'
@@ -1521,7 +1569,7 @@ export default function TradeTerminal({
             <button
               id="side-toggle-sell"
               onClick={() => setSide('SELL')}
-              className={`py-2 text-xs font-mono rounded font-bold uppercase transition-all tracking-wider flex items-center justify-center space-x-1.5 border ${
+              className={`py-2 text-xs font-mono rounded font-bold uppercase transition-all tracking-wider flex items-center justify-center space-x-1.5 border focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 outline-none select-none ${
                 side === 'SELL'
                   ? 'bg-rose-600/20 text-rose-300 border-rose-500/50 shadow-lg shadow-rose-500/5'
                   : 'bg-[#050505] text-white/40 border-transparent hover:text-white/80'
@@ -2149,7 +2197,7 @@ export default function TradeTerminal({
         <button
           id="execute-trade-btn"
           disabled={executing}
-          onClick={handlePlaceTrade}
+          onClick={handleOpenConfirmation}
           className="mt-5 w-full py-2.5 bg-white hover:bg-white/90 disabled:bg-white/10 disabled:text-white/30 text-black font-mono font-bold text-xs uppercase tracking-widest rounded transition-colors flex items-center justify-center space-x-2 cursor-pointer"
         >
           <Play className="w-4 h-4 shrink-0 text-black" />
@@ -2285,7 +2333,7 @@ export default function TradeTerminal({
             </div>
 
             {/* Real-time Broker Bridge Trade Efficiency Ratio Widget - Stretched horizontally */}
-            <div id="trade-efficiency-ratio-widget" className="p-4 bg-gradient-to-r from-[#0c0c0e] to-[#070709] border border-white/5 rounded-lg flex flex-col justify-between">
+            <div id="trade-efficiency-ratio-widget" className="p-4 bg-[#09090c] border border-white/5 rounded-lg flex flex-col justify-between">
               <div className="flex items-center justify-between pb-2 border-b border-white/5 mb-3 shrink-0">
                 <h5 className="text-[10px] uppercase font-bold text-white/40 font-mono tracking-wider flex items-center font-sans">
                   <Cpu className="w-3.5 h-3.5 mr-1.5 text-[#34d399] animate-pulse" />
@@ -2425,20 +2473,22 @@ export default function TradeTerminal({
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
                           <XAxis 
                             dataKey="tradeNum" 
-                            stroke="rgba(255,255,255,0.25)" 
-                            fontSize={8} 
+                            stroke="#ffffff" 
+                            fontSize={8.5} 
                             fontFamily="monospace"
                             tickLine={false}
-                            axisLine={false}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                             dy={4}
+                            tick={{ fill: '#ffffff' }}
                           />
                           <YAxis 
-                            stroke="rgba(255,255,255,0.25)" 
-                            fontSize={8} 
+                            stroke="#ffffff" 
+                            fontSize={8.5} 
                             fontFamily="monospace"
                             tickLine={false}
-                            axisLine={false}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                             dx={-2}
+                            tick={{ fill: '#ffffff' }}
                             tickFormatter={(v) => `${v >= 0 ? '+' : ''}$${v}`}
                           />
                           <Tooltip
@@ -2507,21 +2557,23 @@ export default function TradeTerminal({
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
                           <XAxis 
                             dataKey="day" 
-                            stroke="rgba(255,255,255,0.25)" 
-                            fontSize={8} 
+                            stroke="#ffffff" 
+                            fontSize={8.5} 
                             fontFamily="monospace"
                             tickLine={false}
-                            axisLine={false}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                             dy={4}
+                            tick={{ fill: '#ffffff' }}
                             tickFormatter={(v) => v.substring(0, 3).toUpperCase()}
                           />
                           <YAxis 
-                            stroke="rgba(255,255,255,0.25)" 
-                            fontSize={8} 
+                            stroke="#ffffff" 
+                            fontSize={8.5} 
                             fontFamily="monospace"
                             tickLine={false}
-                            axisLine={false}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                             dx={-2}
+                            tick={{ fill: '#ffffff' }}
                             tickFormatter={(v) => `${v >= 0 ? '+' : ''}$${v}`}
                           />
                           <Tooltip
@@ -3131,6 +3183,17 @@ export default function TradeTerminal({
           </div>
         </div>
       )}
+      {/* Order Confirmation Modal */}
+      <OrderConfirmationModal
+        isOpen={showOrderConfirmModal}
+        orderDetails={pendingOrderDetails}
+        isRouting={executing}
+        onConfirm={async () => {
+          setShowOrderConfirmModal(false);
+          await handlePlaceTrade();
+        }}
+        onClose={() => setShowOrderConfirmModal(false)}
+      />
     </div>
   );
 }

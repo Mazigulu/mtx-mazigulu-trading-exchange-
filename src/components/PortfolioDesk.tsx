@@ -17,9 +17,12 @@ import {
   Search,
   Filter,
   Info,
-  X
+  X,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { motion, AnimatePresence } from 'motion/react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
 
 interface Holding {
   symbol: string;
@@ -96,7 +99,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
         }
       }
     } catch (e) {
-      console.error('Error loading holdings from localStorage:', e);
+      console.warn('Error loading holdings from localStorage (using default map):', e);
     }
     
     return Object.entries(holdingsMap).map(([symbol, qty]) => {
@@ -129,6 +132,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
   const [tradeQuantity, setTradeQuantity] = useState<string>('');
   const [tradeStatusMsg, setTradeStatusMsg] = useState<string>('');
   const [selectedHistoryAsset, setSelectedHistoryAsset] = useState<Holding | null>(null);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   // Wealth Projection Calculator states
   const [wealthInitialInvestment, setWealthInitialInvestment] = useState<number>(10000);
@@ -148,10 +152,10 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
         body: JSON.stringify({ clientBalance: newBalance })
       });
       if (!res.ok) {
-        console.error('Failed to sync cash balance with server ledger');
+        console.warn('Failed to sync cash balance with server ledger (using local cache)');
       }
     } catch (e) {
-      console.error('Error syncing cash balance:', e);
+      console.warn('Error syncing cash balance:', e);
     }
   };
 
@@ -182,7 +186,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           }
         }
       } catch (e) {
-        console.error('Failed to fetch funding state on load:', e);
+        console.warn('Failed to fetch funding state on load (handled fallback):', e);
       }
     };
     fetchServerState();
@@ -244,7 +248,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           })
         );
       } catch (err) {
-        console.error('Error fetching live market data in PortfolioDesk:', err);
+        console.warn('Error fetching live market data in PortfolioDesk:', err);
       }
     };
 
@@ -280,7 +284,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             });
           }
         } catch (e) {
-          console.error(e);
+          console.warn('Failed to parse broker holdings local storage:', e);
         }
       }
       const savedApy = localStorage.getItem('wealth_selected_apy');
@@ -630,13 +634,17 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
     <div className="space-y-6 text-white">
 
       {/* ──────────────────── TOP SUMMARY SECTION ──────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Card 1: Portfolio Value */}
-        <div id="portfolio-val-card" className="bg-[#09090c] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute right-0 top-0 bottom-0 w-24 bg-indigo-500/5 blur-2xl pointer-events-none" />
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          id="portfolio-val-card" 
+          className="bg-[#050505] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
+        >
           <div className="flex justify-between items-start">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black">Portfolio Value</span>
+            <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider font-bold block">Portfolio Value</span>
             <div className="p-1 text-indigo-400">
               <Briefcase className="w-3.5 h-3.5" />
             </div>
@@ -651,13 +659,17 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
               <span className="text-emerald-500/80">({todayReturnPercent >= 0 ? '+' : ''}{todayReturnPercent.toFixed(2)}%)</span>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 2: Invested Assets */}
-        <div id="portfolio-invested-card" className="bg-[#09090c] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute right-0 top-0 bottom-0 w-24 bg-emerald-500/5 blur-2xl pointer-events-none" />
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          id="portfolio-invested-card" 
+          className="bg-[#050505] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
+        >
           <div className="flex justify-between items-start">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black">Invested Assets</span>
+            <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider font-bold block">Invested Assets</span>
             <div className="p-1 text-emerald-400">
               <Zap className="w-3.5 h-3.5" />
             </div>
@@ -666,17 +678,21 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             <h3 className="text-2xl font-black font-mono tracking-tight text-white">
               ${assetValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
-            <span className="text-[10px] text-white/40 font-mono block mt-1">
+            <span className="text-[10px] text-white/70 font-mono block mt-1">
               {((assetValue / totalValue) * 100).toFixed(0)}% of Portfolio
             </span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 3: Available Cash */}
-        <div id="portfolio-cash-card" className="bg-[#09090c] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute right-0 top-0 bottom-0 w-24 bg-amber-500/5 blur-2xl pointer-events-none" />
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          id="portfolio-cash-card" 
+          className="bg-[#050505] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
+        >
           <div className="flex justify-between items-start">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black">Available Cash</span>
+            <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider font-bold block">Available Cash</span>
             <div className="p-1 text-amber-400">
               <Coins className="w-3.5 h-3.5" />
             </div>
@@ -685,17 +701,21 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             <h3 className="text-2xl font-black font-mono tracking-tight text-white">
               ${cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
-            <span className="text-[10px] text-white/40 font-mono block mt-1">
+            <span className="text-[10px] text-white/70 font-mono block mt-1">
               {((cashBalance / totalValue) * 100).toFixed(0)}% Cash Allocation
             </span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 4: Lifetime Return */}
-        <div id="portfolio-lifetime-card" className="bg-[#09090c] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute right-0 top-0 bottom-0 w-24 bg-purple-500/5 blur-2xl pointer-events-none" />
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          id="portfolio-lifetime-card" 
+          className="bg-[#050505] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
+        >
           <div className="flex justify-between items-start">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black">Lifetime Return</span>
+            <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider font-bold block">Lifetime Return</span>
             <div className={`p-1 ${lifetimeReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {lifetimeReturnAmount >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
             </div>
@@ -704,11 +724,11 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             <h3 className={`text-2xl font-black font-mono tracking-tight ${lifetimeReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {lifetimeReturnAmount >= 0 ? '+' : ''}${lifetimeReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
-            <span className="text-[10px] text-white/40 font-mono block mt-1">
+            <span className="text-[10px] text-white/70 font-mono block mt-1">
               {lifetimeReturnPercent >= 0 ? '+' : ''}{lifetimeReturnPercent.toFixed(2)}% Since Inception
             </span>
           </div>
-        </div>
+        </motion.div>
 
       </div>
 
@@ -719,187 +739,212 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
         <div className="lg:col-span-8 space-y-6">
           
           {/* Main Performance Chart Card */}
-          <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 flex flex-col space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
-            <div className="flex items-center gap-2">
-              <ChartIcon className="w-4 h-4 text-indigo-400" />
-              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Portfolio Performance Chart</h4>
+          <div className="bg-[#050505] border border-white/5 rounded-xl p-5 flex flex-col space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
+              <div className="flex items-center gap-2">
+                <ChartIcon className="w-4 h-4 text-indigo-400" />
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Portfolio Performance Chart</h4>
+              </div>
+              
+              {/* Timeframes Selector */}
+              <div className="flex items-center bg-[#050505] border border-white/10 rounded-lg p-0.5 font-mono text-[9.5px]">
+                {['1D', '1W', '1M', '3M', 'YTD', '1Y', 'ALL'].map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setTimeframe(tf)}
+                    className={`px-2 py-1 rounded font-bold transition-all cursor-pointer ${
+                      timeframe === tf 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-white/45 hover:text-white/95'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
             </div>
             
-            {/* Timeframes Selector */}
-            <div className="flex bg-black border border-white/10 rounded p-0.5 self-start sm:self-auto">
-              {['1D', '1W', '1M', '3M', 'YTD', '1Y', 'ALL'].map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  className={`px-2.5 py-1 text-[9px] font-mono font-black rounded transition-all cursor-pointer ${timeframe === tf ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/10' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
-                >
-                  {tf}
-                </button>
-              ))}
+            {/* Main Visual Anchor Chart */}
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={getPerformanceData()} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="#ffffff" 
+                    strokeOpacity={0.3} 
+                    tick={{ fill: '#ffffff', fontSize: 9.5, fontFamily: 'monospace' }}
+                    dy={6}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.2)' }}
+                    tickLine={false} 
+                  />
+                  <YAxis 
+                    stroke="#ffffff" 
+                    strokeOpacity={0.3} 
+                    tick={{ fill: '#ffffff', fontSize: 9.5, fontFamily: 'monospace' }}
+                    dx={-6}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.2)' }}
+                    tickLine={false} 
+                    tickFormatter={(v) => `$${Math.round(v/1000)}k`} 
+                    domain={['dataMin - 5000', 'dataMax + 5000']} 
+                  />
+                  <Tooltip 
+                    cursor={{ stroke: 'rgba(255, 255, 255, 0.15)', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    contentStyle={{ backgroundColor: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                    labelStyle={{ color: 'rgba(255,255,255,0.8)', fontSize: '9.5px', fontFamily: 'monospace' }}
+                    itemStyle={{ color: '#fff', fontSize: '11px', fontFamily: 'monospace' }}
+                  />
+                  <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={2.5} fillOpacity={1} fill="url(#colorVal)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Under-chart metrics overview */}
+            <div className="grid grid-cols-3 gap-4 border-t border-white/5 pt-4">
+              <div className="font-mono">
+                <span className="text-[9px] text-white/70 uppercase tracking-wider block">Today's Return</span>
+                <span className="text-xs font-black text-emerald-400 mt-0.5 block">
+                  +${todayReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({todayReturnPercent.toFixed(2)}%)
+                </span>
+              </div>
+              <div className="font-mono border-l border-white/5 pl-4">
+                <span className="text-[9px] text-white/70 uppercase tracking-wider block">Total Return</span>
+                <span className={`text-xs font-black mt-0.5 block ${lifetimeReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {lifetimeReturnAmount >= 0 ? '+' : ''}${lifetimeReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({lifetimeReturnPercent.toFixed(2)}%)
+                </span>
+              </div>
+              <div className="font-mono border-l border-white/5 pl-4">
+                <span className="text-[9px] text-white/70 uppercase tracking-wider block">Net Contributions</span>
+                <span className="text-xs font-black text-white/85 mt-0.5 block">
+                  ${netContributions.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
             </div>
           </div>
-          
-          {/* Main Visual Anchor Chart */}
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={getPerformanceData()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="name" stroke="#ffffff" opacity={0.1} fontSize={9} fontFamily="monospace" tickLine={false} />
-                <YAxis stroke="#ffffff" opacity={0.1} fontSize={9} fontFamily="monospace" tickLine={false} tickFormatter={(v) => `$${Math.round(v/1000)}k`} domain={['dataMin - 5000', 'dataMax + 5000']} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#09090c', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px' }}
-                  labelStyle={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', fontFamily: 'monospace' }}
-                  itemStyle={{ color: '#fff', fontSize: '11px', fontFamily: 'monospace' }}
+
+          {/* CARD 2: COMPOUNDING WEALTH PROJECTION */}
+          <div id="portfolio-wealth-projection" className="bg-[#050505] border border-white/5 rounded-xl p-5 space-y-5">
+            <div className="pb-3 border-b border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Compounding Wealth Projection</h4>
+                <p className="text-[9.5px] text-white/70 font-mono uppercase tracking-wider mt-0.5">Asset Allocation model using selected APY ({wealthApy.toFixed(2)}%)</p>
+              </div>
+              <span className="px-2 py-0.5 bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 rounded text-[9.5px] font-mono font-bold tracking-tight uppercase">
+                Accumulation Engine
+              </span>
+            </div>
+
+            {/* Controller Sliders */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-white/70 text-[10px]">
+                  <span>Initial Deposit:</span>
+                  <span className="text-indigo-400 font-bold">${wealthInitialInvestment.toLocaleString()}</span>
+                </div>
+                <input
+                  type="range"
+                  min="1000"
+                  max="250000"
+                  step="1000"
+                  value={wealthInitialInvestment}
+                  onChange={(e) => setWealthInitialInvestment(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                 />
-                <Area type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={1.5} fillOpacity={1} fill="url(#colorVal)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Under-chart metrics overview */}
-          <div className="grid grid-cols-3 gap-4 border-t border-white/5 pt-4">
-            <div className="font-mono">
-              <span className="text-[9px] text-white/30 uppercase tracking-wider block">Today's Return</span>
-              <span className="text-xs font-black text-emerald-400 mt-0.5 block">
-                +${todayReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({todayReturnPercent.toFixed(2)}%)
-              </span>
-            </div>
-            <div className="font-mono border-l border-white/5 pl-4">
-              <span className="text-[9px] text-white/30 uppercase tracking-wider block">Total Return</span>
-              <span className={`text-xs font-black mt-0.5 block ${lifetimeReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {lifetimeReturnAmount >= 0 ? '+' : ''}${lifetimeReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({lifetimeReturnPercent.toFixed(2)}%)
-              </span>
-            </div>
-            <div className="font-mono border-l border-white/5 pl-4">
-              <span className="text-[9px] text-white/30 uppercase tracking-wider block">Net Contributions</span>
-              <span className="text-xs font-black text-white/85 mt-0.5 block">
-                ${netContributions.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* CARD 2: COMPOUNDING WEALTH PROJECTION */}
-        <div id="portfolio-wealth-projection" className="bg-[#09090c] border border-white/5 rounded-xl p-5 space-y-5">
-          <div className="pb-3 border-b border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Compounding Wealth Projection</h4>
-              <p className="text-[9.5px] text-white/30 font-mono uppercase tracking-wider mt-0.5">Asset Allocation model using selected APY ({wealthApy.toFixed(2)}%)</p>
-            </div>
-            <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded text-[9.5px] font-bold tracking-tight uppercase">
-              Accumulation Engine
-            </span>
-          </div>
-
-          {/* Controller Sliders */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-white/50 text-[10px]">
-                <span>Initial Deposit:</span>
-                <span className="text-indigo-400 font-bold">${wealthInitialInvestment.toLocaleString()}</span>
               </div>
-              <input
-                type="range"
-                min="1000"
-                max="250000"
-                step="1000"
-                value={wealthInitialInvestment}
-                onChange={(e) => setWealthInitialInvestment(parseInt(e.target.value))}
-                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-              />
-            </div>
 
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-white/50 text-[10px]">
-                <span>Monthly Addition:</span>
-                <span className="text-indigo-400 font-bold">${wealthMonthlyContribution.toLocaleString()}</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="5000"
-                step="50"
-                value={wealthMonthlyContribution}
-                onChange={(e) => setWealthMonthlyContribution(parseInt(e.target.value))}
-                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-white/50 text-[10px]">
-                <span>Accumulation Years:</span>
-                <span className="text-indigo-400 font-bold">{wealthYears} Years</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="30"
-                step="1"
-                value={wealthYears}
-                onChange={(e) => setWealthYears(parseInt(e.target.value))}
-                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Recharts Compound Chart representation */}
-          <div className="h-44 font-mono">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={wealthChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="portWealthGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="portPrincipalGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="year" stroke="#ffffff" opacity={0.15} fontSize={10} fontFamily="monospace" />
-                <YAxis stroke="#ffffff" opacity={0.15} fontSize={10} fontFamily="monospace" tickFormatter={(v) => `$${v/1000}k`} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#09090c', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                  labelStyle={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px', fontFamily: 'monospace' }}
-                  itemStyle={{ fontSize: '11px', fontFamily: 'monospace' }}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-white/70 text-[10px]">
+                  <span>Monthly Addition:</span>
+                  <span className="text-indigo-400 font-bold">${wealthMonthlyContribution.toLocaleString()}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="5000"
+                  step="50"
+                  value={wealthMonthlyContribution}
+                  onChange={(e) => setWealthMonthlyContribution(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                 />
-                <Area type="monotone" dataKey="Principal Invested" stroke="#6366f1" strokeWidth={1} fillOpacity={1} fill="url(#portPrincipalGrad)" />
-                <Area type="monotone" dataKey="Compounded Wealth" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#portWealthGrad)" />
-              </AreaChart>
-            </ResponsiveContainer>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-white/70 text-[10px]">
+                  <span>Accumulation Years:</span>
+                  <span className="text-indigo-400 font-bold">{wealthYears} Years</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={wealthYears}
+                  onChange={(e) => setWealthYears(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Recharts Compound Chart representation */}
+            <div className="h-44 font-mono">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={wealthChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="portWealthGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="portPrincipalGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15}/>
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="3 3" />
+                  <XAxis dataKey="year" stroke="#ffffff" fontSize={9.5} fontFamily="monospace" dy={4} tickLine={false} tick={{ fill: '#ffffff' }} />
+                  <YAxis stroke="#ffffff" fontSize={9.5} fontFamily="monospace" dx={-4} tickLine={false} tick={{ fill: '#ffffff' }} tickFormatter={(v) => `$${v/1000}k`} />
+                  <Tooltip 
+                    cursor={{ stroke: 'rgba(255, 255, 255, 0.15)', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    contentStyle={{ backgroundColor: '#0a0a0f', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                    labelStyle={{ color: 'rgba(255,255,255,0.7)', fontSize: '9.5px', fontFamily: 'monospace' }}
+                    itemStyle={{ fontSize: '11px', fontFamily: 'monospace' }}
+                  />
+                  <Area type="monotone" dataKey="Principal Invested" stroke="#4f46e5" strokeWidth={1.5} fillOpacity={1} fill="url(#portPrincipalGrad)" />
+                  <Area type="monotone" dataKey="Compounded Wealth" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#portWealthGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Calculation Readout Summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#050505] border border-white/5 p-4 rounded-xl text-center font-mono text-xs">
+              <div>
+                <span className="text-[9px] text-white/70 uppercase tracking-wider block">Total Sourced Principal</span>
+                <span className="text-base font-bold text-white block mt-1">${wealthFinalPrincipal.toLocaleString()}</span>
+              </div>
+              <div className="border-t sm:border-t-0 sm:border-x border-white/5 py-3 sm:py-0">
+                <span className="text-[9px] text-white/70 uppercase tracking-wider block">Est. Interest Compounded</span>
+                <span className="text-base font-bold text-emerald-400 block mt-1">+${wealthAccruedProfit.toLocaleString()}</span>
+              </div>
+              <div>
+                <span className="text-[9px] text-white/70 uppercase tracking-wider block">Projected Total Wealth</span>
+                <span className="text-base font-black text-indigo-400 block mt-1">${wealthFinalBalance.toLocaleString()}</span>
+              </div>
+            </div>
           </div>
 
-          {/* Calculation Readout Summary */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white/[0.02] border border-white/5 p-4 rounded-xl text-center font-mono text-xs">
-            <div>
-              <span className="text-[9px] text-white/30 uppercase tracking-wider block">Total Sourced Principal</span>
-              <span className="text-base font-bold text-white block mt-1">${wealthFinalPrincipal.toLocaleString()}</span>
-            </div>
-            <div className="border-t sm:border-t-0 sm:border-x border-white/5 py-3 sm:py-0">
-              <span className="text-[9px] text-white/30 uppercase tracking-wider block">Est. Interest Compounded</span>
-              <span className="text-base font-bold text-emerald-400 block mt-1">+${wealthAccruedProfit.toLocaleString()}</span>
-            </div>
-            <div>
-              <span className="text-[9px] text-white/30 uppercase tracking-wider block">Projected Total Wealth</span>
-              <span className="text-base font-black text-indigo-400 block mt-1">${wealthFinalBalance.toLocaleString()}</span>
-            </div>
-          </div>
         </div>
-
-      </div>
 
         {/* Right Sidebar Column */}
         <div className="lg:col-span-4 space-y-6 flex flex-col justify-between">
           
           {/* Card 1: Asset Allocation */}
-          <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 flex flex-col relative">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black mb-3">Asset Allocation</span>
+          <div className="bg-[#050505] border border-white/5 rounded-xl p-5 flex flex-col relative">
+            <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black mb-3">Asset Allocation</span>
             
             <div className="h-44 flex items-center justify-center relative my-1">
               <ResponsiveContainer width="100%" height="100%" key={`pie-container-${allocationPieData.length}-${Math.round(totalValue)}`}>
@@ -915,7 +960,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                     nameKey="name"
                   >
                     {allocationPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#09090c" strokeWidth={2} />
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#080808" strokeWidth={2} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -923,14 +968,14 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                       const amount = (Number(value) / 100) * totalValue;
                       return [`$${Math.round(amount).toLocaleString()} (${Number(value).toFixed(1)}%)`, name];
                     }}
-                    contentStyle={{ backgroundColor: '#09090c', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px' }}
+                    contentStyle={{ backgroundColor: '#0a0a0f', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px' }}
                     itemStyle={{ color: '#fff', fontSize: '10px', fontFamily: 'monospace' }}
                     labelStyle={{ display: 'none' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute text-center flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-[8px] text-white/30 uppercase tracking-wider font-mono">Portfolio</span>
+                <span className="text-[8px] text-white/60 uppercase tracking-wider font-mono">Portfolio</span>
                 <span className="text-[12px] font-black text-white font-mono mt-0.5">
                   ${Math.round(totalValue).toLocaleString()}
                 </span>
@@ -942,10 +987,10 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                 const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899'];
                 const values = [weights.stocks, weights.etfs, weights.crypto, weights.cash];
                 return (
-                  <div key={cat} className="flex items-center justify-between p-1.5 bg-[#040405] border border-white/5 rounded font-mono text-[9px]">
+                  <div key={cat} className="flex items-center justify-between p-1.5 bg-[#050505] border border-white/5 rounded font-mono text-[9px]">
                     <div className="flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colors[idx] }} />
-                      <span className="text-white/50">{cat}</span>
+                      <span className="text-white/70">{cat}</span>
                     </div>
                     <span className="text-white font-bold">{Math.round(values[idx])}%</span>
                   </div>
@@ -955,77 +1000,182 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           </div>
 
           {/* Card 2: Portfolio Insights */}
-          <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 font-mono text-[10px] space-y-3.5">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black block">Portfolio Insights</span>
+          <div className="bg-[#050505] border border-white/5 rounded-xl p-5 font-mono text-[10px] space-y-3.5">
+            <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black block">Portfolio Insights</span>
             
-            <div className="space-y-2 bg-[#040405] p-3 rounded-lg border border-white/5">
+            <div className="space-y-2 bg-[#050505] p-3 rounded-lg border border-white/5">
               <div className="flex justify-between items-center py-1 border-b border-white/5">
-                <span className="text-white/40">Largest Position</span>
+                <span className="text-white/70">Largest Position</span>
                 <span className="text-white font-black">{largestPosition}</span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-white/5">
-                <span className="text-white/40">Best Performer</span>
+                <span className="text-white/70">Best Performer</span>
                 <span className="text-emerald-400 font-bold flex items-center gap-1">
                   {bestPerformer} <ArrowUpRight className="w-3 h-3 text-emerald-400" />
                 </span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-white/5">
-                <span className="text-white/40">Worst Performer</span>
+                <span className="text-white/70">Worst Performer</span>
                 <span className="text-rose-400 font-bold flex items-center gap-1">
                   {worstPerformer} <ArrowDownRight className="w-3 h-3 text-rose-400" />
                 </span>
               </div>
               <div className="flex justify-between items-center py-1">
-                <span className="text-white/40">Cash Position</span>
+                <span className="text-white/70">Cash Position</span>
                 <span className="text-amber-400 font-bold">{weights.cash.toFixed(1)}%</span>
               </div>
             </div>
           </div>
 
           {/* Card 3: Exposure Breakdown */}
-          <div className="bg-[#09090c] border border-white/5 rounded-xl p-5 font-mono text-[10px] space-y-3.5">
-            <span className="text-[10px] text-white/40 font-mono uppercase tracking-widest font-black block">Exposure Breakdown</span>
+          <div className="bg-[#050505] border border-white/5 rounded-xl p-5 font-mono text-[10px] space-y-3.5">
+            <div className="flex justify-between items-center border-b border-white/5 pb-2">
+              <div>
+                <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black block">Asset Exposure Weightings</span>
+                <span className="text-[8px] text-white/60 font-sans block mt-0.5">Click category to audit contributing assets</span>
+              </div>
+              <Layers className="w-3.5 h-3.5 text-white/60" />
+            </div>
             
-            <div className="space-y-2.5">
-              <div>
-                <div className="flex justify-between text-[9px] mb-1">
-                  <span className="text-white/50">Technology sector</span>
-                  <span className="text-white/80 font-bold">{techPct.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-[#040405] h-1 rounded overflow-hidden">
-                  <div className="bg-indigo-500 h-full" style={{ width: `${techPct}%` }} />
-                </div>
-              </div>
+            <div className="space-y-3">
+              {[
+                {
+                  id: 'technology',
+                  label: 'Technology sector',
+                  pct: techPct,
+                  barColor: 'bg-indigo-500',
+                  colorTheme: 'text-indigo-400',
+                  assets: holdingsWithLivePrices.filter(item => TICKER_META[item.symbol]?.sector === 'technology')
+                },
+                {
+                  id: 'large-cap',
+                  label: 'Large Cap assets',
+                  pct: largeCapPct,
+                  barColor: 'bg-emerald-500',
+                  colorTheme: 'text-emerald-400',
+                  assets: holdingsWithLivePrices.filter(item => TICKER_META[item.symbol]?.sector === 'large-cap')
+                },
+                {
+                  id: 'dividend',
+                  label: 'Dividend Assets',
+                  pct: dividendPct,
+                  barColor: 'bg-amber-500',
+                  colorTheme: 'text-amber-400',
+                  assets: holdingsWithLivePrices.filter(item => ['AAPL', 'MSFT', 'SPY'].includes(item.symbol))
+                },
+                {
+                  id: 'cash',
+                  label: 'Cash Position',
+                  pct: weights.cash,
+                  barColor: 'bg-pink-500',
+                  colorTheme: 'text-pink-400',
+                  assets: [
+                    {
+                      symbol: 'USD',
+                      name: 'Unallocated Collateral Cash',
+                      qty: 1,
+                      currentPrice: cashBalance,
+                      avgCost: 1.0,
+                      isin: 'US-CASH-COLLATERAL'
+                    }
+                  ]
+                }
+              ].map((category) => {
+                const isExpanded = expandedCategory === category.id;
+                return (
+                  <div key={category.id} className="border border-white/5 rounded-lg p-2 hover:border-white/10 transition-colors">
+                    {/* Header */}
+                    <div 
+                      onClick={() => setExpandedCategory(isExpanded ? null : category.id)}
+                      className="flex justify-between items-center cursor-pointer select-none py-1 group"
+                    >
+                      <div className="flex-1">
+                        <div className="flex justify-between text-[9px] mb-1 pr-2">
+                          <span className="text-white/60 group-hover:text-white transition-colors flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${category.barColor}`} />
+                            {category.label}
+                          </span>
+                          <span className="text-white/80 font-bold group-hover:text-white transition-colors">
+                            {category.pct.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-[#040405] h-1 rounded overflow-hidden">
+                          <div className={`${category.barColor} h-full transition-all duration-500`} style={{ width: `${category.pct}%` }} />
+                        </div>
+                      </div>
+                      <div className="pl-2 text-neutral-500 group-hover:text-white/80 transition-colors">
+                        {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </div>
+                    </div>
 
-              <div>
-                <div className="flex justify-between text-[9px] mb-1">
-                  <span className="text-white/50">Large Cap assets</span>
-                  <span className="text-white/80 font-bold">{largeCapPct.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-[#040405] h-1 rounded overflow-hidden">
-                  <div className="bg-emerald-500 h-full" style={{ width: `${largeCapPct}%` }} />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-[9px] mb-1">
-                  <span className="text-white/50">Dividend Assets</span>
-                  <span className="text-white/80 font-bold">{dividendPct.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-[#040405] h-1 rounded overflow-hidden">
-                  <div className="bg-amber-500 h-full" style={{ width: `${dividendPct}%` }} />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-[9px] mb-1">
-                  <span className="text-white/50">Cash Position</span>
-                  <span className="text-white/80 font-bold">{weights.cash.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-[#040405] h-1 rounded overflow-hidden">
-                  <div className="bg-pink-500 h-full" style={{ width: `${weights.cash}%` }} />
-                </div>
-              </div>
+                    {/* Expandable Asset Table */}
+                    <AnimatePresence initial={false}>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ 
+                            height: { type: 'spring', stiffness: 240, damping: 26 },
+                            opacity: { duration: 0.15 }
+                          }}
+                          className="overflow-hidden"
+                        >
+                          <div className="pt-2">
+                            <div className="p-2 bg-[#040405] border border-white/5 rounded-md overflow-x-auto">
+                            <table className="w-full text-left font-mono text-[8px] text-neutral-400 border-collapse">
+                              <thead>
+                                <tr className="border-b border-white/10 text-white/80">
+                                  <th className="py-1 px-1 font-bold uppercase tracking-wider">Asset</th>
+                                  <th className="py-1 px-1 text-right font-bold uppercase tracking-wider">Qty</th>
+                                  <th className="py-1 px-1 text-right font-bold uppercase tracking-wider">Price</th>
+                                  <th className="py-1 px-1 text-right font-bold uppercase tracking-wider">Value</th>
+                                  <th className="py-1 px-1 text-right font-bold uppercase tracking-wider">Weight</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {category.assets.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={5} className="py-2 text-center text-white/50 italic">No assets active in this category</td>
+                                  </tr>
+                                ) : (
+                                  category.assets.map((asset) => {
+                                    const value = asset.qty * asset.currentPrice;
+                                    const weight = totalValue > 0 ? (value / totalValue) * 100 : 0;
+                                    return (
+                                      <tr key={asset.symbol} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
+                                        <td className="py-1.5 px-1 font-bold text-white flex flex-col">
+                                          <span>{asset.symbol}</span>
+                                          <span className="text-[7px] text-white/60 font-normal truncate max-w-[85px]" title={asset.name}>
+                                            {asset.name}
+                                          </span>
+                                        </td>
+                                        <td className="py-1.5 px-1 text-right font-mono">
+                                          {asset.qty >= 1 ? asset.qty.toLocaleString() : asset.qty.toFixed(4)}
+                                        </td>
+                                        <td className="py-1.5 px-1 text-right font-mono">
+                                          ${asset.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="py-1.5 px-1 text-right font-bold text-amber-400">
+                                          ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className={`py-1.5 px-1 text-right font-bold ${category.colorTheme}`}>
+                                          {weight.toFixed(1)}%
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -1034,38 +1184,38 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       </div>
 
       {/* ──────────────────── PORTFOLIO METRICS SECTION ──────────────────── */}
-      <div className="bg-[#09090c] border border-white/5 rounded-xl p-4">
+      <div className="bg-[#050505] border border-white/5 rounded-xl p-4">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 font-mono text-[10px]">
-          <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg flex flex-col justify-between">
-            <span className="text-white/30 uppercase tracking-wider text-[8px]">Day P/L</span>
+          <div className="p-2.5 bg-[#050505] border border-white/5 rounded-lg flex flex-col justify-between">
+            <span className="text-white/70 uppercase tracking-wider text-[8px]">Day P/L</span>
             <span className="text-xs font-black text-emerald-400 mt-1">
               +${todayReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 
-          <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg flex flex-col justify-between">
-            <span className="text-white/30 uppercase tracking-wider text-[8px]">Total P/L</span>
+          <div className="p-2.5 bg-[#050505] border border-white/5 rounded-lg flex flex-col justify-between">
+            <span className="text-white/70 uppercase tracking-wider text-[8px]">Total P/L</span>
             <span className={`text-xs font-black mt-1 ${lifetimeReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {lifetimeReturnAmount >= 0 ? '+' : ''}${lifetimeReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 
-          <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg flex flex-col justify-between col-span-2 md:col-span-1">
-            <span className="text-white/30 uppercase tracking-wider text-[8px]">Annualized Return</span>
+          <div className="p-2.5 bg-[#050505] border border-white/5 rounded-lg flex flex-col justify-between col-span-2 md:col-span-1">
+            <span className="text-white/70 uppercase tracking-wider text-[8px]">Annualized Return</span>
             <span className="text-xs font-black text-indigo-400 mt-1">
               +13.4%
             </span>
           </div>
 
-          <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg flex flex-col justify-between">
-            <span className="text-white/30 uppercase tracking-wider text-[8px]">Net Contributions</span>
+          <div className="p-2.5 bg-[#050505] border border-white/5 rounded-lg flex flex-col justify-between">
+            <span className="text-white/70 uppercase tracking-wider text-[8px]">Net Contributions</span>
             <span className="text-xs font-black text-white/80 mt-1">
               ${netContributions.toLocaleString()}
             </span>
           </div>
 
-          <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg flex flex-col justify-between">
-            <span className="text-white/30 uppercase tracking-wider text-[8px]">Buying Power</span>
+          <div className="p-2.5 bg-[#050505] border border-white/5 rounded-lg flex flex-col justify-between">
+            <span className="text-white/70 uppercase tracking-wider text-[8px]">Buying Power</span>
             <span className="text-xs font-black text-amber-400 mt-1">
               ${cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
@@ -1074,13 +1224,13 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       </div>
 
       {/* ──────────────────── HOLDINGS TABLE ──────────────────── */}
-      <div className="bg-[#09090c] border border-white/5 rounded-xl overflow-hidden flex flex-col">
+      <div className="bg-[#050505] border border-white/5 rounded-xl overflow-hidden flex flex-col">
         <div className="p-5 border-b border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-indigo-400" />
             <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Institutional Portfolio Holdings</h4>
           </div>
-          <span className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-[8px] font-mono text-indigo-300 rounded font-black tracking-widest uppercase">
+          <span className="px-2 py-0.5 bg-indigo-500/15 border border-indigo-500/35 text-[8px] font-mono text-indigo-300 rounded font-black tracking-widest uppercase">
             ACTIVE REAL-TIME SETTLEMENT
           </span>
         </div>
@@ -1088,7 +1238,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-white/5 bg-[#040405] font-mono text-[9px] text-white/40 uppercase tracking-wider">
+              <tr className="border-b border-white/5 bg-[#050505] font-mono text-[9px] text-white/80 uppercase tracking-wider">
                 <th className="py-3 px-5 font-bold">Symbol</th>
                 <th className="py-3 px-5 font-bold">Asset Name</th>
                 <th className="py-3 px-5 font-bold text-right">Quantity</th>
@@ -1116,11 +1266,11 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                     title="Click row to view detailed historical performance"
                   >
                     <td className="py-3.5 px-5 font-black text-white">{item.symbol}</td>
-                    <td className="py-3.5 px-5 text-white/50">{item.name}</td>
+                    <td className="py-3.5 px-5 text-white/70">{item.name}</td>
                     <td className="py-3.5 px-5 text-right font-bold text-white/95">
                       {item.qty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                     </td>
-                    <td className="py-3.5 px-5 text-right text-white/60">
+                    <td className="py-3.5 px-5 text-right text-white/80">
                       ${item.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td className="py-3.5 px-5 text-right font-bold text-indigo-300">
@@ -1135,7 +1285,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                     <td className={`py-3.5 px-5 text-right font-bold ${retTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {retTotal >= 0 ? '+' : ''}{retTotal.toFixed(2)}%
                     </td>
-                    <td className="py-3.5 px-5 text-right text-white/40">{weightPct.toFixed(1)}%</td>
+                    <td className="py-3.5 px-5 text-right text-white/70">{weightPct.toFixed(1)}%</td>
                     <td className="py-3.5 px-5">
                       <div className="flex items-center justify-center gap-1.5 opacity-80 group-hover:opacity-100 transition-all">
                         <button
@@ -1164,14 +1314,14 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
         {/* Optional Section: Dividend summary indicators */}
         <div className="p-4 bg-gradient-to-r from-[#040405] to-transparent border-t border-white/5 flex items-center justify-between text-[10px] font-mono">
           <div className="flex items-center gap-3">
-            <Info className="w-3.5 h-3.5 text-white/30" />
-            <span className="text-white/40">Portfolio Dividend Estimate:</span>
+            <Info className="w-3.5 h-3.5 text-white/60" />
+            <span className="text-white/70">Portfolio Dividend Estimate:</span>
             <span className="text-white font-bold">$612.00 Annual</span>
-            <span className="text-white/20">|</span>
-            <span className="text-white/40">Weighted Yield:</span>
+            <span className="text-white/40">|</span>
+            <span className="text-white/70">Weighted Yield:</span>
             <span className="text-emerald-400 font-bold">1.8%</span>
           </div>
-          <span className="text-white/20 font-light text-[9px]">MTX Portfolio Analyst v3.0</span>
+          <span className="text-white/50 font-light text-[9px]">MTX Portfolio Analyst v3.0</span>
         </div>
       </div>
 
@@ -1190,7 +1340,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
               </div>
               <button 
                 onClick={() => setTradeModal({ isOpen: false, holding: null, type: 'BUY' })}
-                className="p-1 hover:bg-white/5 rounded text-white/40 hover:text-white transition-all"
+                className="p-1 hover:bg-white/5 rounded text-white/60 hover:text-white transition-all"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1199,15 +1349,15 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             {/* Price Readout */}
             <div className="bg-[#040405] p-3 rounded border border-white/5 space-y-1.5 text-[11px]">
               <div className="flex justify-between">
-                <span className="text-white/40">Instrument:</span>
+                <span className="text-white/70">Instrument:</span>
                 <span className="text-white font-bold">{tradeModal.holding.name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-white/40">Settlement Price:</span>
+                <span className="text-white/70">Settlement Price:</span>
                 <span className="text-indigo-300 font-bold">${tradeModal.holding.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-white/40">Current Position:</span>
+                <span className="text-white/70">Current Position:</span>
                 <span className="text-white font-bold">{tradeModal.holding.qty} shares</span>
               </div>
               <div className="flex justify-between border-t border-white/5 pt-1.5 mt-1.5 text-amber-400">
@@ -1218,12 +1368,12 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
 
             {/* Input Form */}
             <div className="space-y-2">
-              <label className="text-[9px] text-white/40 uppercase tracking-wider block">
+              <label className="text-[9px] text-white/70 uppercase tracking-wider block">
                 {tradeModal.type === 'BUY' ? 'Dollar Amount to Buy ($)' : 'Dollar Amount to Sell ($)'} {tradeModal.type === 'BUY' && <span className="text-emerald-400 font-bold">(MIN $50)</span>}
               </label>
               <div className="relative flex gap-2">
                 <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 font-bold font-mono">$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 font-bold font-mono">$</span>
                   <input
                     type="number"
                     step="any"
@@ -1267,7 +1417,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                     {(parseFloat(tradeQuantity) / (tradeModal.holding?.currentPrice || 1)).toFixed(6)} shares
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-[9px] text-white/40">
+                <div className="flex justify-between items-center text-[9px] text-white/70">
                   <span>Fractional Settlement:</span>
                   <span className="uppercase text-emerald-400 font-bold">Guaranteed Match</span>
                 </div>
@@ -1306,13 +1456,13 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                     HISTORICAL METRICS
                   </span>
                   <span className="text-xs font-bold text-white">{selectedHistoryAsset.symbol}</span>
-                  <span className="text-[10px] text-white/30 font-normal">| {getAssetStats(selectedHistoryAsset.symbol, selectedHistoryAsset.currentPrice).isin}</span>
+                  <span className="text-[10px] text-white/60 font-normal">| {getAssetStats(selectedHistoryAsset.symbol, selectedHistoryAsset.currentPrice).isin}</span>
                 </div>
                 <h3 className="text-base font-black text-white mt-1.5">{selectedHistoryAsset.name}</h3>
               </div>
               <button 
                 onClick={() => setSelectedHistoryAsset(null)}
-                className="p-1.5 hover:bg-white/5 rounded-lg text-white/40 hover:text-white transition-all cursor-pointer"
+                className="p-1.5 hover:bg-white/5 rounded-lg text-white/60 hover:text-white transition-all cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1321,25 +1471,25 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             {/* Price Performance Metrics Header */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-[#040405] p-4 rounded-xl border border-white/5">
               <div>
-                <span className="text-[8px] text-white/40 uppercase tracking-wider block">Current Price</span>
+                <span className="text-[8px] text-white/70 uppercase tracking-wider block">Current Price</span>
                 <span className="text-base font-black text-white block mt-1">
                   ${selectedHistoryAsset.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
               <div>
-                <span className="text-[8px] text-white/40 uppercase tracking-wider block">Your Position</span>
+                <span className="text-[8px] text-white/70 uppercase tracking-wider block">Your Position</span>
                 <span className="text-base font-bold text-indigo-300 block mt-1">
                   {selectedHistoryAsset.qty.toLocaleString()} shares
                 </span>
               </div>
               <div>
-                <span className="text-[8px] text-white/40 uppercase tracking-wider block">Total Value</span>
+                <span className="text-[8px] text-white/70 uppercase tracking-wider block">Total Value</span>
                 <span className="text-base font-black text-white block mt-1">
                   ${(selectedHistoryAsset.qty * selectedHistoryAsset.currentPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
               <div>
-                <span className="text-[8px] text-white/40 uppercase tracking-wider block">Overall Return</span>
+                <span className="text-[8px] text-white/70 uppercase tracking-wider block">Overall Return</span>
                 <span className={`text-base font-black mt-1 block ${(TOTAL_RETURNS[selectedHistoryAsset.symbol] || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {(TOTAL_RETURNS[selectedHistoryAsset.symbol] || 0) >= 0 ? '+' : ''}{(TOTAL_RETURNS[selectedHistoryAsset.symbol] || 0).toFixed(2)}%
                 </span>
@@ -1348,7 +1498,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
 
             {/* Performance Chart Title */}
             <div className="flex items-center justify-between pt-2">
-              <span className="text-[10px] text-white/50 uppercase tracking-wider font-bold block">12-Month Historical Price Trend</span>
+              <span className="text-[10px] text-white/70 uppercase tracking-wider font-bold block">12-Month Historical Price Trend</span>
               <span className="text-[9px] text-emerald-400 bg-emerald-400/5 px-2 py-0.5 rounded border border-emerald-500/10 font-bold">
                 Daily Updated Settlement
               </span>
@@ -1364,11 +1514,11 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="date" stroke="#ffffff" opacity={0.15} fontSize={9} fontFamily="monospace" tickLine={false} />
-                  <YAxis stroke="#ffffff" opacity={0.15} fontSize={9} fontFamily="monospace" tickLine={false} tickFormatter={(v) => `$${v}`} domain={['dataMin - 10', 'dataMax + 10']} />
+                  <XAxis dataKey="date" stroke="#ffffff" fontSize={9} fontFamily="monospace" tickLine={false} tick={{ fill: '#ffffff' }} />
+                  <YAxis stroke="#ffffff" fontSize={9} fontFamily="monospace" tickLine={false} tick={{ fill: '#ffffff' }} tickFormatter={(v) => `$${v}`} domain={['dataMin - 10', 'dataMax + 10']} />
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#09090c', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                    labelStyle={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px', fontFamily: 'monospace' }}
+                    labelStyle={{ color: 'rgba(255,255,255,0.7)', fontSize: '10px', fontFamily: 'monospace' }}
                     itemStyle={{ color: '#fff', fontSize: '11px', fontFamily: 'monospace' }}
                     formatter={(value: any) => [`$${value}`, 'Price']}
                   />
@@ -1379,46 +1529,46 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
 
             {/* Detailed Asset Statistics Bento Grid */}
             <div className="border-t border-white/5 pt-4 space-y-3">
-              <span className="text-[10px] text-white/50 uppercase tracking-wider font-bold block">Key Quantitative Indicators</span>
+              <span className="text-[10px] text-white/70 uppercase tracking-wider font-bold block">Key Quantitative Indicators</span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[10px]">
                 <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg">
-                  <span className="text-white/30 text-[8px] uppercase tracking-wider block">52-Week High</span>
+                  <span className="text-white/70 text-[8px] uppercase tracking-wider block">52-Week High</span>
                   <span className="text-white font-bold mt-1 block">
                     {getAssetStats(selectedHistoryAsset.symbol, selectedHistoryAsset.currentPrice).high52}
                   </span>
                 </div>
                 <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg">
-                  <span className="text-white/30 text-[8px] uppercase tracking-wider block">52-Week Low</span>
+                  <span className="text-white/70 text-[8px] uppercase tracking-wider block">52-Week Low</span>
                   <span className="text-white font-bold mt-1 block">
                     {getAssetStats(selectedHistoryAsset.symbol, selectedHistoryAsset.currentPrice).low52}
                   </span>
                 </div>
                 <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg">
-                  <span className="text-white/30 text-[8px] uppercase tracking-wider block">24h Volumics</span>
+                  <span className="text-white/70 text-[8px] uppercase tracking-wider block">24h Volumics</span>
                   <span className="text-white font-bold mt-1 block">
                     {getAssetStats(selectedHistoryAsset.symbol, selectedHistoryAsset.currentPrice).volume24h}
                   </span>
                 </div>
                 <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg">
-                  <span className="text-white/30 text-[8px] uppercase tracking-wider block">Est. Market Cap</span>
+                  <span className="text-white/70 text-[8px] uppercase tracking-wider block">Est. Market Cap</span>
                   <span className="text-white font-bold mt-1 block">
                     {getAssetStats(selectedHistoryAsset.symbol, selectedHistoryAsset.currentPrice).marketCap}
                   </span>
                 </div>
                 <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg">
-                  <span className="text-white/30 text-[8px] uppercase tracking-wider block">Annualized Vol</span>
+                  <span className="text-white/70 text-[8px] uppercase tracking-wider block">Annualized Vol</span>
                   <span className="text-indigo-400 font-bold mt-1 block">
                     {getAssetStats(selectedHistoryAsset.symbol, selectedHistoryAsset.currentPrice).volatility}
                   </span>
                 </div>
                 <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg">
-                  <span className="text-white/30 text-[8px] uppercase tracking-wider block">Systemic Beta</span>
+                  <span className="text-white/70 text-[8px] uppercase tracking-wider block">Systemic Beta</span>
                   <span className="text-emerald-400 font-bold mt-1 block">
                     {getAssetStats(selectedHistoryAsset.symbol, selectedHistoryAsset.currentPrice).beta}
                   </span>
                 </div>
                 <div className="p-2.5 bg-[#040405] border border-white/5 rounded-lg col-span-2">
-                  <span className="text-white/30 text-[8px] uppercase tracking-wider block">Sharpe Ratio / Quality Grade</span>
+                  <span className="text-white/70 text-[8px] uppercase tracking-wider block">Sharpe Ratio / Quality Grade</span>
                   <span className="text-white font-bold mt-1 block">
                     {getAssetStats(selectedHistoryAsset.symbol, selectedHistoryAsset.currentPrice).sharpe} (Institutional AA+)
                   </span>

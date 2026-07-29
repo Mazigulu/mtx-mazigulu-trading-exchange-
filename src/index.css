@@ -18,6 +18,27 @@
       transform: translateY(0);
     }
   }
+
+  @keyframes tickerScrollSmooth {
+    0% {
+      transform: translate3d(0, 0, 0);
+    }
+    100% {
+      transform: translate3d(-25%, 0, 0);
+    }
+  }
+}
+
+.animate-ticker-smooth {
+  animation: tickerScrollSmooth 100s linear infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  contain: content;
+}
+
+.animate-ticker-smooth:hover {
+  animation-play-state: paused !important;
 }
 
 /* Custom scrollbar utility */
@@ -321,5 +342,31 @@ svg:focus {
   -webkit-tap-highlight-color: transparent !important;
   -webkit-focus-ring-color: transparent !important;
 }
+
+/* Prevent browser-induced focus outline rings on interactive components */
+button:focus,
+button:active,
+button:focus-visible,
+button:focus-within,
+input:focus,
+input:focus-visible,
+select:focus,
+select:focus-visible,
+a:focus,
+a:focus-visible,
+div:focus,
+div:focus-visible,
+[role="button"]:focus,
+[role="button"]:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  box-shadow: none !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-width: 0px !important;
+  --tw-ring-offset-width: 0px !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-focus-ring-color: transparent !important;
+}
+
 
 

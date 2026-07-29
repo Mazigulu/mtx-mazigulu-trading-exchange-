@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
+import { isMarketOpenForSymbol, getMarketSessionInfo } from '../utils/marketHours';
 
 interface TopStock {
   symbol: string;
@@ -10,10 +11,23 @@ interface TopStock {
   changePercent: number;
 }
 
+const DEFAULT_TOP_STOCKS: TopStock[] = [
+  { symbol: 'NVDA', name: 'NVIDIA Corp', prevClose: 125.20, current: 128.45, change: 3.25, changePercent: 2.60 },
+  { symbol: 'AAPL', name: 'Apple Inc', prevClose: 224.30, current: 226.10, change: 1.80, changePercent: 0.80 },
+  { symbol: 'MSFT', name: 'Microsoft Corp', prevClose: 440.50, current: 443.20, change: 2.70, changePercent: 0.61 },
+  { symbol: 'TSLA', name: 'Tesla Inc', prevClose: 248.80, current: 252.30, change: 3.50, changePercent: 1.41 },
+  { symbol: 'AMZN', name: 'Amazon.com Inc', prevClose: 185.10, current: 187.40, change: 2.30, changePercent: 1.24 },
+  { symbol: 'META', name: 'Meta Platforms', prevClose: 512.00, current: 518.60, change: 6.60, changePercent: 1.29 },
+  { symbol: 'GOOGL', name: 'Alphabet Inc', prevClose: 178.40, current: 180.20, change: 1.80, changePercent: 1.01 },
+  { symbol: 'BRK-B', name: 'Berkshire Hathaway', prevClose: 445.10, current: 446.80, change: 1.70, changePercent: 0.38 },
+  { symbol: 'AVGO', name: 'Broadcom Inc', prevClose: 168.20, current: 171.50, change: 3.30, changePercent: 1.96 },
+  { symbol: 'JNJ', name: 'Johnson & Johnson', prevClose: 154.60, current: 155.40, change: 0.80, changePercent: 0.52 },
+];
+
 export default function SistineFinancialCeiling() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [stocks, setStocks] = useState<TopStock[]>([]);
-  const stocksRef = useRef<TopStock[]>([]);
+  const [stocks, setStocks] = useState<TopStock[]>(DEFAULT_TOP_STOCKS);
+  const stocksRef = useRef<TopStock[]>(DEFAULT_TOP_STOCKS);
 
   useEffect(() => {
     stocksRef.current = stocks;
@@ -21,6 +35,7 @@ export default function SistineFinancialCeiling() {
 
   useEffect(() => {
     const fetchStocksData = async () => {
+      if (document.hidden) return;
       try {
         const cacheKey = 'sistine_top_stocks';
         const cacheTimeKey = 'sistine_top_stocks_time';
@@ -28,13 +43,12 @@ export default function SistineFinancialCeiling() {
         const cachedTime = localStorage.getItem(cacheTimeKey);
         const now = Date.now();
 
-        // 24 hours caching on client
-        if (cachedData && cachedTime && (now - parseInt(cachedTime)) < 24 * 60 * 60 * 1000) {
+        // 30 seconds caching on client for fast initial render
+        if (cachedData && cachedTime && (now - parseInt(cachedTime)) < 30 * 1000) {
           try {
             const parsed = JSON.parse(cachedData);
             if (Array.isArray(parsed) && parsed.length > 0) {
               setStocks(parsed);
-              return;
             }
           } catch (e) {
             console.warn('Error parsing cached stocks, refetching...');
@@ -44,8 +58,25 @@ export default function SistineFinancialCeiling() {
         const response = await fetch('/api/top-stocks');
         if (response.ok) {
           const data = await response.json();
-          if (data && Array.isArray(data.stocks)) {
-            setStocks(data.stocks);
+          if (data && Array.isArray(data.stocks) && data.stocks.length > 0) {
+            setStocks(prev => {
+              // Merge live server prices into existing stock objects preserving micro-ticks
+              return data.stocks.map((s: TopStock) => {
+                const existing = prev.find(p => p.symbol === s.symbol);
+                const prevClose = Number.isFinite(s.prevClose) ? s.prevClose : (existing?.prevClose || 100);
+                const current = Number.isFinite(s.current) && s.current > 0 ? s.current : (existing?.current || prevClose);
+                const change = Number.isFinite(s.change) ? s.change : (current - prevClose);
+                const changePercent = Number.isFinite(s.changePercent) ? s.changePercent : (prevClose > 0 ? (change / prevClose) * 100 : 0);
+                return {
+                  symbol: s.symbol || 'STK',
+                  name: s.name || s.symbol || 'Equity',
+                  prevClose,
+                  current,
+                  change: parseFloat(change.toFixed(2)),
+                  changePercent: parseFloat(changePercent.toFixed(2)),
+                };
+              });
+            });
             localStorage.setItem(cacheKey, JSON.stringify(data.stocks));
             localStorage.setItem(cacheTimeKey, now.toString());
           }
@@ -56,6 +87,47 @@ export default function SistineFinancialCeiling() {
     };
 
     fetchStocksData();
+    // Poll every 10 seconds for updated prices
+    const pollInterval = setInterval(fetchStocksData, 10000);
+
+    // Live micro-tick simulation every 1.5 seconds for active rotational background stocks
+    const tickInterval = setInterval(() => {
+      if (document.hidden) return;
+      setStocks(prevStocks => {
+        if (!prevStocks || prevStocks.length === 0) return prevStocks;
+        return prevStocks.map(stock => {
+          // If market is closed for this symbol (e.g. weekend for stocks/equities), do NOT simulate live ticks!
+          if (!isMarketOpenForSymbol(stock.symbol)) {
+            return stock;
+          }
+
+          // 40% chance of a micro tick on each interval when market is open
+          if (Math.random() > 0.4) {
+            const baseClose = Number.isFinite(stock.prevClose) && stock.prevClose > 0 ? stock.prevClose : 100;
+            const currentPrice = Number.isFinite(stock.current) && stock.current > 0 ? stock.current : baseClose;
+            // random delta between -0.15% and +0.15%
+            const deltaPercent = (Math.random() - 0.48) * 0.003;
+            let newPrice = currentPrice * (1 + deltaPercent);
+            // Clamp drift to within +/- 15% of prevClose to avoid unrealistic runaway prices
+            newPrice = Math.max(baseClose * 0.85, Math.min(baseClose * 1.15, newPrice));
+            const newChange = newPrice - baseClose;
+            const newChangePercent = baseClose > 0 ? (newChange / baseClose) * 100 : 0;
+            return {
+              ...stock,
+              current: parseFloat(newPrice.toFixed(2)),
+              change: parseFloat(newChange.toFixed(2)),
+              changePercent: parseFloat(newChangePercent.toFixed(2)),
+            };
+          }
+          return stock;
+        });
+      });
+    }, 1500);
+
+    return () => {
+      clearInterval(pollInterval);
+      clearInterval(tickInterval);
+    };
   }, []);
 
   // Michelangelo-inspired Vaulted Arches structural settings (SVG overlay)
@@ -230,6 +302,11 @@ export default function SistineFinancialCeiling() {
     let time = 0;
 
     const render = () => {
+      if (document.hidden) {
+        animationId = requestAnimationFrame(draw);
+        return;
+      }
+
       time += 1;
       ctx.clearRect(0, 0, width, height);
 
@@ -254,28 +331,26 @@ export default function SistineFinancialCeiling() {
       }
 
       // --- LAYER 1: MASTER AMBIENT CATHEDRAL GOLD LIGHTS ---
-      const centralFlicker = 1.0 + Math.sin(time * 0.06) * 0.04 + Math.sin(time * 0.2) * 0.015;
+      // Clean, clear ambient space with subtle central focus
+      const centralFlicker = 1.0 + Math.sin(time * 0.06) * 0.04;
       
-      // Subtle 3D parallax drift on ambient light center
       let centralLightX = width / 2;
       let centralLightY = height * 0.35;
       if (mouseX !== -1000) {
-        centralLightX += (mouseX - width / 2) * 0.12;
-        centralLightY += (mouseY - height * 0.35) * 0.12;
+        centralLightX += (mouseX - width / 2) * 0.05;
+        centralLightY += (mouseY - height * 0.35) * 0.05;
       }
 
       const radialDivineGlow = ctx.createRadialGradient(
         centralLightX,
         centralLightY,
-        5,
+        2,
         centralLightX,
         centralLightY,
-        Math.min(width, height) * 0.5
+        Math.min(width, height) * 0.35
       );
-      radialDivineGlow.addColorStop(0, `rgba(217, 119, 6, ${0.22 * centralFlicker})`); // increased contrast
-      radialDivineGlow.addColorStop(0.4, `rgba(180, 83, 9, ${0.08 * centralFlicker})`); // increased contrast
-      radialDivineGlow.addColorStop(0.8, 'rgba(4, 4, 6, 0.02)');
-      radialDivineGlow.addColorStop(1, 'rgba(4, 4, 6, 0)');
+      radialDivineGlow.addColorStop(0, `rgba(217, 119, 6, ${0.06 * centralFlicker})`);
+      radialDivineGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
       
       ctx.fillStyle = radialDivineGlow;
       ctx.fillRect(0, 0, width, height);
@@ -346,23 +421,11 @@ export default function SistineFinancialCeiling() {
 
         const cHeight = candle.height * currentPulse * scaleMultiplier;
         const cWidth = candle.width * scaleMultiplier;
-        const glowSize = (candle.glowSize + extraGlow) * scaleMultiplier;
 
-        // Draw candlestick shadow glow
-        const glowRad = ctx.createRadialGradient(xPos, yPos, 1, xPos, yPos, glowSize);
-        const colorBase = candle.isBullish ? '16, 185, 129' : '239, 68, 68'; // Green vs Red
-        glowRad.addColorStop(0, `rgba(${colorBase}, ${Math.min(1.0, candle.opacity * 0.65 * opacityMultiplier)})`);
-        glowRad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        
-        ctx.fillStyle = glowRad;
-        ctx.beginPath();
-        ctx.arc(xPos, yPos, glowSize, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Draw the wick line (financial high/low)
+        // Draw the wick line (financial high/low) with sharp vector precision
         ctx.strokeStyle = candle.isBullish 
-          ? `rgba(16, 185, 129, ${Math.min(1.0, 0.4 * opacityMultiplier)})` 
-          : `rgba(239, 68, 68, ${Math.min(1.0, 0.4 * opacityMultiplier)})`;
+          ? `rgba(16, 185, 129, ${Math.min(1.0, 0.7 * opacityMultiplier)})` 
+          : `rgba(239, 68, 68, ${Math.min(1.0, 0.7 * opacityMultiplier)})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(xPos, yPos - cHeight * 0.75);
@@ -389,7 +452,7 @@ export default function SistineFinancialCeiling() {
       const spiralCenterY = height * 0.35;
 
       // Draw the actual golden mathematical logarithmic spiral lines to show divine architecture
-      ctx.strokeStyle = 'rgba(245, 158, 11, 0.25)'; // increased from 0.15 to 0.25 for contrast
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.38)'; // increased from 0.25 to 0.38 for contrast
       ctx.lineWidth = 1.0;
       ctx.beginPath();
       const numTurns = 8;
@@ -485,7 +548,8 @@ export default function SistineFinancialCeiling() {
             ctx.globalAlpha = fadeFactor * 0.85; // increased from 0.7 to 0.85
             
             // Neon glowing nodes for each stock
-            const isBullish = stock.changePercent >= 0;
+            const changePct = Number.isFinite(stock.changePercent) ? stock.changePercent : 0;
+            const isBullish = changePct >= 0;
             const glowColor = isBullish ? '#10b981' : '#ef4444';
             
             ctx.shadowBlur = 8; // increased from 6 to 8 for sharper neon highlights
@@ -507,20 +571,23 @@ export default function SistineFinancialCeiling() {
             ctx.fill();
             ctx.shadowBlur = 0; // reset shadow
             
-            // Write stock ticker & previous close elegantly
+            // Write stock ticker & live current price elegantly
             ctx.font = "bold 9px monospace";
             ctx.fillStyle = "#ffffff";
-            ctx.fillText(stock.symbol, sx + 8, sy - 2);
+            ctx.fillText(stock.symbol || 'STK', sx + 8, sy - 2);
             
             ctx.font = "8px monospace";
-            ctx.fillStyle = "rgba(255, 255, 255, 0.65)"; // increased from 0.45 for readability
-            ctx.fillText(`$${stock.prevClose.toFixed(1)}`, sx + 8, sy + 7);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+            const livePrice = Number.isFinite(stock.current) && stock.current > 0 
+              ? stock.current 
+              : (Number.isFinite(stock.prevClose) ? stock.prevClose : 0);
+            ctx.fillText(`$${livePrice.toFixed(1)}`, sx + 8, sy + 7);
             
             // Draw arrow and change percent
             const arrow = isBullish ? '▲' : '▼';
             ctx.fillStyle = glowColor;
             ctx.font = "8px monospace";
-            ctx.fillText(`${arrow}${Math.abs(stock.changePercent).toFixed(1)}%`, sx + 10 + (stock.symbol.length * 5), sy - 2);
+            ctx.fillText(`${arrow}${Math.abs(changePct).toFixed(1)}%`, sx + 10 + ((stock.symbol || 'STK').length * 5), sy - 2);
             
             // Draw a delicate tracing line to the next stock node in the constellation to create a "Celestial Ring of Wealth"
             const nextIdx = (i + 1) % activeStocks.length;
@@ -530,7 +597,7 @@ export default function SistineFinancialCeiling() {
             const nsx = spiralCenterX + Math.cos(nextAngle) * nextRadius;
             const nsy = spiralCenterY + Math.sin(nextAngle) * nextRadius;
             
-            ctx.strokeStyle = 'rgba(245, 158, 11, 0.12)'; // increased from 0.06 to 0.12 for visibility
+            ctx.strokeStyle = 'rgba(245, 158, 11, 0.22)'; // increased from 0.12 to 0.22 for visibility
             ctx.lineWidth = 0.5;
             ctx.beginPath();
             ctx.moveTo(sx, sy);
@@ -547,7 +614,7 @@ export default function SistineFinancialCeiling() {
       const spiralRightY = height * 0.55;
 
       // Draw right side blue complimentary spiral lines
-      ctx.strokeStyle = 'rgba(6, 182, 212, 0.18)'; // increased from 0.1 to 0.18 for visibility
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.28)'; // increased from 0.18 to 0.28 for visibility
       ctx.lineWidth = 0.8;
       ctx.beginPath();
       const rightSpinSpeed = -time * 0.0012;
@@ -697,21 +764,13 @@ export default function SistineFinancialCeiling() {
   }, []);
 
   return (
-    <div className="fixed inset-0 w-full h-screen overflow-hidden pointer-events-none z-0 bg-[#040406]">
+    <div className="fixed inset-0 w-full h-screen overflow-hidden pointer-events-none z-0 bg-[#000000]">
       {/* 2D Canvas Layer drawing glowing financial wicks, candlesticks and Golden spirals */}
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full mix-blend-screen opacity-100 z-[1]" />
-
-      {/* Absolute master vignette overlay to retain deep focal contrast and highlight the center */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,#040406_85%)] z-[2]" />
-      
-      {/* Fresco crackled plaster texture simulation */}
-      <svg className="absolute inset-0 w-full h-full opacity-[0.04] mix-blend-overlay z-[1]">
-        <filter id="fresco-noise">
-          <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="4" stitchTiles="stitch" />
-          <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.25 0" />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#fresco-noise)" />
-      </svg>
+      <canvas 
+        ref={canvasRef} 
+        className="absolute inset-0 w-full h-full mix-blend-screen opacity-100 z-[1]" 
+        style={{ imageRendering: '-webkit-optimize-contrast', WebkitFontSmoothing: 'antialiased' }}
+      />
 
       {/* The Sacred Vaulted Arches of the Financial Dome (Sistine Chapel ceiling arches) */}
       <svg className="absolute inset-0 w-full h-full opacity-50 z-[1]" xmlns="http://www.w3.org/2000/svg">
@@ -837,37 +896,44 @@ export default function SistineFinancialCeiling() {
 
       {/* Neoclassical Financial Ledger Ticker Ribbon */}
       {stocks.length > 0 && (
-        <div className="absolute bottom-4 left-0 w-full py-2 z-[3] overflow-hidden flex items-center bg-[#040406]/75 border-y border-white/5 backdrop-blur-md">
-          <motion.div
-            className="flex whitespace-nowrap"
-            style={{ willChange: "transform", transform: "translate3d(0,0,0)" }}
-            animate={{ x: ["0%", "-25%"] }}
-            transition={{
-              ease: "linear",
-              duration: 120,
-              repeat: Infinity,
-              repeatType: "loop"
-            }}
-          >
-            {/* Repeat the list exactly 4 times and animate by -25% for a pixel-perfect, seamless infinite loop regardless of screen size or data length */}
+        <div 
+          className="absolute bottom-4 left-0 w-full py-2 z-[10] overflow-hidden flex items-center bg-[#000000]/90 border-y border-white/10 backdrop-blur-md pointer-events-auto group select-none"
+          title="Hover to pause rotation"
+        >
+          <div className="flex whitespace-nowrap animate-ticker-smooth group-hover:[animation-play-state:paused] transform-gpu">
+            {/* Repeat the list 4 times for a seamless infinite loop */}
             {[...stocks, ...stocks, ...stocks, ...stocks].map((stock, i) => {
-              const isBullish = stock.changePercent >= 0;
+              const changePct = Number.isFinite(stock.changePercent) ? stock.changePercent : 0;
+              const isBullish = changePct >= 0;
+              const livePrice = Number.isFinite(stock.current) && stock.current > 0 
+                ? stock.current 
+                : (Number.isFinite(stock.prevClose) ? stock.prevClose : 0);
+              const marketOpen = isMarketOpenForSymbol(stock.symbol);
+
               return (
-                <div key={i} className="inline-flex items-center mx-8 font-mono text-[11px] tracking-tight shrink-0">
-                  <span className="text-amber-500/50 font-bold mr-2">♦</span>
-                  <span className="text-neutral-200 font-bold mr-2.5">{stock.symbol}</span>
-                  <span className="text-neutral-200 font-medium mr-2.5">${stock.prevClose.toFixed(2)}</span>
-                  <span className={`inline-flex items-center font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                <div 
+                  key={i} 
+                  className="inline-flex items-center mx-3 font-mono text-[11px] tracking-tight shrink-0 px-3 py-1 rounded-md transition-colors duration-150 hover:bg-white/10 hover:border hover:border-amber-500/30 cursor-pointer min-w-[195px]"
+                >
+                  <span className="text-amber-500/60 font-bold mr-2 text-[10px]">♦</span>
+                  <span className="text-neutral-200 font-bold mr-2">{stock.symbol || 'STK'}</span>
+                  <span className="text-neutral-100 font-semibold mr-2 tabular-nums">${livePrice.toFixed(2)}</span>
+                  <span className={`inline-flex items-center font-bold text-[10px] tabular-nums shrink-0 ${
                     isBullish 
-                      ? 'text-emerald-400 bg-emerald-500/10' 
-                      : 'text-rose-400 bg-rose-500/10'
+                      ? 'text-emerald-400' 
+                      : 'text-rose-400'
                   }`}>
-                    {isBullish ? '▲' : '▼'} {Math.abs(stock.changePercent).toFixed(2)}%
+                    {isBullish ? '▲' : '▼'} {Math.abs(changePct).toFixed(2)}%
                   </span>
+                  {!marketOpen && (
+                    <span className="ml-1.5 text-[8px] font-bold text-amber-400/90 tracking-wider uppercase">
+                      CLOSED
+                    </span>
+                  )}
                 </div>
               );
             })}
-          </motion.div>
+          </div>
         </div>
       )}
     </div>

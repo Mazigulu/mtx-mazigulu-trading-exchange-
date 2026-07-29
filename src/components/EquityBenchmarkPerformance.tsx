@@ -420,10 +420,6 @@ export default function EquityBenchmarkPerformance({ trades }: EquityBenchmarkPe
   return (
     <div id="equity-benchmark-panel" className="bg-[#0a0a0c] border border-white/5 rounded-xl p-5 font-mono select-none overflow-hidden relative">
       
-      {/* Absolute Decorative Glow lines in background */}
-      <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none" />
-
       {/* Header Panel */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/5 pb-5 mb-5 relative z-10">
         <div>

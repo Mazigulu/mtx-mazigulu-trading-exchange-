@@ -43,9 +43,10 @@ interface AssetMeta {
 }
 
 const SUPPORTED_ASSETS: AssetMeta[] = [
+  { symbol: 'SPCX', name: 'SpaceX / Space Innovation', sector: 'Technology', exchange: 'NASDAQ', min52w: 82.50, max52w: 165.00, marketCap: '$210B', divYield: '0.00%', defaultPrice: 142.80, logoColor: 'bg-cyan-600' },
   { symbol: 'AAPL', name: 'Apple Inc.', sector: 'Technology', exchange: 'NASDAQ', min52w: 164.08, max52w: 220.20, marketCap: '$3.25T', divYield: '0.52%', defaultPrice: 188.30, logoColor: 'bg-zinc-500' },
   { symbol: 'MSFT', name: 'Microsoft Corp.', sector: 'Technology', exchange: 'NASDAQ', min52w: 315.18, max52w: 430.82, marketCap: '$3.15T', divYield: '0.71%', defaultPrice: 415.50, logoColor: 'bg-blue-600' },
-  { symbol: 'NVDA', name: 'NVIDIA Corp.', sector: 'Technology', exchange: 'NASDAQ', min52w: 39.23, max52w: 140.76, marketCap: '$3.01T', divYield: '0.03%', defaultPrice: 125.40, logoColor: 'bg-emerald-600' },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.', sector: 'Technology', exchange: 'NASDAQ', min52w: 118.02, max52w: 212.00, marketCap: '$3.01T', divYield: '0.03%', defaultPrice: 206.84, logoColor: 'bg-emerald-600' },
   { symbol: 'TSLA', name: 'Tesla Inc.', sector: 'Technology', exchange: 'NASDAQ', min52w: 138.80, max52w: 299.29, marketCap: '$550B', divYield: '0.00%', defaultPrice: 175.50, logoColor: 'bg-red-600' },
   { symbol: 'GOOG', name: 'Alphabet Inc.', sector: 'Technology', exchange: 'NASDAQ', min52w: 115.35, max52w: 191.75, marketCap: '$2.12T', divYield: '0.47%', defaultPrice: 172.50, logoColor: 'bg-amber-500' },
   { symbol: 'AMZN', name: 'Amazon.com Inc.', sector: 'Technology', exchange: 'NASDAQ', min52w: 110.20, max52w: 190.50, marketCap: '$1.92T', divYield: '0.00%', defaultPrice: 180.20, logoColor: 'bg-orange-500' },
@@ -454,8 +455,19 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
     fetchWatchlistPrices();
   }, [watchlist]);
 
-  const fetchWatchlistPrices = async () => {
-    setLoadingPrices(true);
+  useEffect(() => {
+    // Poll for real-time prices silently every 3.5 seconds
+    const interval = setInterval(() => {
+      fetchWatchlistPrices(true);
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [watchlist]);
+
+  const fetchWatchlistPrices = async (isSilent: boolean = false) => {
+    if (!isSilent) {
+      setLoadingPrices(true);
+    }
     const newPrices: Record<string, { price: number; change: number }> = {};
 
     try {
@@ -497,7 +509,9 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
     } catch (e) {
       console.error(e);
     } finally {
-      setLoadingPrices(false);
+      if (!isSilent) {
+        setLoadingPrices(false);
+      }
     }
   };
 
@@ -768,98 +782,77 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
   };
 
   return (
-    <div id="watchlist-page-viewport" className="w-full text-[#e5e5e5] animate-fadeIn max-w-[1400px] mx-auto pb-10">
+    <div id="watchlist-page-viewport" className="w-full text-[#e5e5e5] animate-fadeIn pb-10">
       
-      {/* 1. Header block */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 mb-8">
-        <div>
-          <div className="flex items-center space-x-2.5">
-            <span className="p-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-lg">
-              <Star className="w-5 h-5 fill-indigo-400" />
-            </span>
-            <h1 className="text-xl md:text-2xl font-black font-sans uppercase tracking-tight text-white">Watchlist</h1>
-          </div>
-          <p className="text-xs text-white/50 font-sans mt-2 max-w-xl">
-            Track the companies you're interested in and invest when the time is right.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => onSelectTab('MARKETS')}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold uppercase tracking-wider rounded transition-all cursor-pointer shadow-lg shadow-indigo-600/10 flex items-center gap-2"
-          >
-            <Search className="w-3.5 h-3.5" />
-            <span>Discover Assets</span>
-          </button>
-          <button
-            onClick={fetchWatchlistPrices}
-            disabled={loadingPrices}
-            className="p-2 hover:bg-white/5 border border-white/10 rounded text-white/60 hover:text-white transition-colors h-9 w-9 flex items-center justify-center cursor-pointer shrink-0"
-            title="Refresh Quotes"
-          >
-            <RefreshCw className={`w-4 h-4 ${loadingPrices ? 'animate-spin text-indigo-400' : ''}`} />
-          </button>
-        </div>
-      </div>
+
 
       {/* 2. Portfolio Snapshot summary widget */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         
         {/* Metric 1 */}
-        <div className="p-4 bg-[#0a0a0c] border border-white/10 rounded-xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/5 blur-2xl rounded-full" />
-          <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest block">Monitored Assets</span>
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          className="p-4 bg-[#080808] border border-white/5 rounded-xl relative overflow-hidden group transition-colors duration-200"
+        >
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block">Monitored Assets</span>
           <div className="flex items-baseline space-x-2 mt-2">
             <span className="text-2xl font-black font-mono text-white">{snapshotMetrics.count}</span>
-            <span className="text-[10px] font-mono text-white/30">Securities watching</span>
+            <span className="text-[10px] font-mono text-white/60">Securities watching</span>
           </div>
-          <p className="text-[10.5px] text-white/35 mt-2 font-sans">
+          <p className="text-[10.5px] text-white/70 mt-2 font-sans">
             Ready exposure points for capital allocation.
           </p>
-        </div>
+        </motion.div>
 
         {/* Metric 2 */}
-        <div className="p-4 bg-[#0a0a0c] border border-white/10 rounded-xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/5 blur-2xl rounded-full" />
-          <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest block">Average Daily Change</span>
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          className="p-4 bg-[#080808] border border-white/5 rounded-xl relative overflow-hidden group transition-colors duration-200"
+        >
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block">Average Daily Change</span>
           <div className="flex items-baseline space-x-2 mt-2">
             <span className={`text-2xl font-black font-mono ${snapshotMetrics.avgChange >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {snapshotMetrics.avgChange >= 0 ? '+' : ''}{snapshotMetrics.avgChange.toFixed(2)}%
             </span>
-            <span className="text-[10px] font-mono text-white/30">Weighted index</span>
+            <span className="text-[10px] font-mono text-white/60">Weighted index</span>
           </div>
-          <p className="text-[10.5px] text-white/35 mt-2 font-sans">
+          <p className="text-[10.5px] text-white/70 mt-2 font-sans">
             Intraday momentum drift of watched portfolio.
           </p>
-        </div>
+        </motion.div>
 
         {/* Metric 3 */}
-        <div className="p-4 bg-[#0a0a0c] border border-white/10 rounded-xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-500/5 blur-2xl rounded-full" />
-          <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest block">Average Dividend Yield</span>
+        <motion.div 
+          whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          className="p-4 bg-[#080808] border border-white/5 rounded-xl relative overflow-hidden group transition-colors duration-200"
+        >
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block">Average Dividend Yield</span>
           <div className="flex items-baseline space-x-2 mt-2">
             <span className="text-2xl font-black font-mono text-white">{snapshotMetrics.avgYield}</span>
-            <span className="text-[10px] font-mono text-white/30">Yield payout</span>
+            <span className="text-[10px] font-mono text-white/60">Yield payout</span>
           </div>
-          <p className="text-[10.5px] text-white/35 mt-2 font-sans">
+          <p className="text-[10.5px] text-white/70 mt-2 font-sans">
             Passive organic yield accumulation capacity.
           </p>
-        </div>
+        </motion.div>
 
       </div>
 
       {/* 3. Search, Sort, and Filtering toolbar */}
-      <div className="p-4 bg-[#0a0a0c] border border-white/5 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="p-4 bg-[#080808] border border-white/5 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
         
         {/* Search input */}
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-white/30 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-white/60 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search watched companies..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 hover:border-white/25 focus:border-indigo-500/50 rounded-lg pl-9 pr-4 py-2 text-xs text-white focus:outline-none transition-all font-mono"
+            className="w-full bg-[#0d0d12] border border-white/10 hover:border-white/25 focus:border-indigo-500/50 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-white/40 focus:outline-none transition-all font-mono"
           />
         </div>
 
@@ -868,40 +861,40 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
           
           {/* Sector filter */}
           <div className="flex items-center space-x-1">
-            <span className="text-[10px] font-mono text-white/30 uppercase mr-1">Sector:</span>
+            <span className="text-[10px] font-mono text-white/70 uppercase mr-1">Sector:</span>
             <div className="relative">
               <select
                 value={selectedSector}
                 onChange={(e) => setSelectedSector(e.target.value)}
-                className="bg-[#121216] border border-white/10 rounded-lg text-xs font-mono py-1.5 px-3 pr-8 focus:outline-none focus:border-indigo-500/40 text-white cursor-pointer appearance-none"
+                className="bg-[#0d0d12] border border-white/10 rounded-lg text-xs font-mono py-1.5 px-3 pr-8 focus:outline-none focus:border-indigo-500/40 text-white cursor-pointer appearance-none"
               >
-                <option value="All" className="bg-[#121216] text-white">All Sectors</option>
-                <option value="Technology" className="bg-[#121216] text-white">Technology</option>
-                <option value="Finance" className="bg-[#121216] text-white">Finance</option>
-                <option value="Healthcare" className="bg-[#121216] text-white">Healthcare</option>
-                <option value="ETFs" className="bg-[#121216] text-white">ETFs</option>
-                <option value="Crypto" className="bg-[#121216] text-white">Crypto</option>
-                <option value="Real Estate" className="bg-[#121216] text-white">Real Estate</option>
+                <option value="All" className="bg-[#0d0d12] text-white">All Sectors</option>
+                <option value="Technology" className="bg-[#0d0d12] text-white">Technology</option>
+                <option value="Finance" className="bg-[#0d0d12] text-white">Finance</option>
+                <option value="Healthcare" className="bg-[#0d0d12] text-white">Healthcare</option>
+                <option value="ETFs" className="bg-[#0d0d12] text-white">ETFs</option>
+                <option value="Crypto" className="bg-[#0d0d12] text-white">Crypto</option>
+                <option value="Real Estate" className="bg-[#0d0d12] text-white">Real Estate</option>
               </select>
-              <ChevronDown className="w-3.5 h-3.5 text-white/45 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-white/70 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
           </div>
 
           {/* Sort trigger */}
           <div className="flex items-center space-x-1">
-            <span className="text-[10px] font-mono text-white/30 uppercase mr-1">Sort:</span>
+            <span className="text-[10px] font-mono text-white/70 uppercase mr-1">Sort:</span>
             <div className="relative">
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-[#121216] border border-white/10 rounded-lg text-xs font-mono py-1.5 px-3 pr-8 focus:outline-none focus:border-indigo-500/40 text-white cursor-pointer appearance-none"
+                className="bg-[#0d0d12] border border-white/10 rounded-lg text-xs font-mono py-1.5 px-3 pr-8 focus:outline-none focus:border-indigo-500/40 text-white cursor-pointer appearance-none"
               >
-                <option value="custom" className="bg-[#121216] text-white">Custom Priority</option>
-                <option value="recently_added" className="bg-[#121216] text-white">Recently Added</option>
-                <option value="name" className="bg-[#121216] text-white">Alphabetical</option>
-                <option value="gain" className="bg-[#121216] text-white">Highest Daily Gain</option>
-                <option value="loss" className="bg-[#121216] text-white">Lowest Daily Gain</option>
-                <option value="cap" className="bg-[#121216] text-white">Market Cap</option>
+                <option value="custom" className="bg-[#0d0d12] text-white">Custom Priority</option>
+                <option value="recently_added" className="bg-[#0d0d12] text-white">Recently Added</option>
+                <option value="name" className="bg-[#0d0d12] text-white">Alphabetical</option>
+                <option value="gain" className="bg-[#0d0d12] text-white">Highest Daily Gain</option>
+                <option value="loss" className="bg-[#0d0d12] text-white">Lowest Daily Gain</option>
+                <option value="cap" className="bg-[#0d0d12] text-white">Market Cap</option>
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-white/45 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
@@ -1015,12 +1008,12 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                   onDragLeave={(e) => handleDragLeave(e, index)}
                   onDragEnd={handleDragEnd}
                   onDrop={(e) => handleDrop(e, index)}
-                  className={`relative bg-[#0a0a0c] border rounded-xl hover:scale-[1.01] hover:-translate-y-1 hover:shadow-[0_12px_24px_-8px_rgba(99,102,241,0.15)] transition-all duration-300 ease-out overflow-hidden flex flex-col justify-between ${
+                  className={`relative bg-[#080808] border rounded-xl hover:scale-[1.01] hover:-translate-y-1 hover:shadow-[0_12px_24px_-8px_rgba(99,102,241,0.15)] transition-all duration-300 ease-out overflow-hidden flex flex-col justify-between ${
                     draggedIndex === index 
                       ? 'border-indigo-500 bg-indigo-500/10 opacity-40 scale-95' 
                       : dragOverIndex === index
                       ? 'border-indigo-500/80 bg-[#0c0c14] scale-[1.015] shadow-[0_0_20px_rgba(99,102,241,0.2)] z-10'
-                      : 'border-white/10 hover:border-indigo-500/30'
+                      : 'border-white/5 hover:border-indigo-500/30'
                   } ${
                     sortBy === 'custom' ? 'cursor-grab active:cursor-grabbing' : ''
                   }`}
@@ -1214,7 +1207,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                     {/* Buy */}
                     <button
                       onClick={(e) => handleOpenBuy(asset.symbol, e)}
-                      className="px-3.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer hover:scale-[1.02]"
+                      className="px-3.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer hover:scale-[1.02] focus:outline-none focus-visible:outline-none"
                     >
                       Buy
                     </button>
@@ -1493,7 +1486,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                             setIsCompareOpen(false);
                             handleOpenBuy(asset.symbol, e);
                           }}
-                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-mono uppercase font-bold transition-all cursor-pointer"
+                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-mono uppercase font-bold transition-all cursor-pointer focus:outline-none focus-visible:outline-none"
                         >
                           Buy Asset
                         </button>

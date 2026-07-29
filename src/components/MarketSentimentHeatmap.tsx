@@ -80,14 +80,18 @@ export default function MarketSentimentHeatmap() {
   }, []);
 
   const symbols: MarketSymbol[] = [
-    'US30', 'NAS100', 'GER40', 'SPX500',
-    'AAPL', 'MSFT', 'NVDA', 'TSLA'
+    'US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225',
+    'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'
   ];
 
   const CATEGORIES = [
     { id: 'ALL', name: 'All Instruments' },
     { id: 'INDICES', name: 'Indices' },
     { id: 'EQUITIES', name: 'Equities' },
+    { id: 'CRYPTO', name: 'Digital Assets' },
+    { id: 'FX_COMM', name: 'FX & Commodities' },
   ];
 
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -95,9 +99,13 @@ export default function MarketSentimentHeatmap() {
   const getFilteredSymbols = () => {
     switch (selectedCategory) {
       case 'INDICES':
-        return ['US30', 'NAS100', 'GER40', 'SPX500'];
+        return ['US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225'];
       case 'EQUITIES':
-        return ['AAPL', 'MSFT', 'NVDA', 'TSLA'];
+        return ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD'];
+      case 'CRYPTO':
+        return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
+      case 'FX_COMM':
+        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'];
       default:
         return symbols;
     }

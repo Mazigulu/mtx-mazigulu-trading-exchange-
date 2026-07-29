@@ -361,9 +361,6 @@ export default function DcfValuationSandbox() {
           {/* Main Valuation Summary Card */}
           <div className="bg-[#0b0b10] border border-white/10 rounded-lg p-4 flex flex-col justify-between flex-1 relative overflow-hidden">
             
-            {/* Background watermarks or visual shapes */}
-            <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
-
             <div>
               <div className="text-[10px] text-white/35 uppercase tracking-widest font-bold font-mono">Valuation Output</div>
               <h5 className="text-base font-extrabold text-white mt-1 leading-tight">{preset.name} ({preset.ticker})</h5>
@@ -431,8 +428,8 @@ export default function DcfValuationSandbox() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dcfResults.projectedFcfs} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                  <XAxis dataKey="year" stroke="#444" tickFormatter={(v) => `Yr ${v}`} style={{ fontSize: '8px', fontFamily: 'monospace' }} />
-                  <YAxis stroke="#444" style={{ fontSize: '8px', fontFamily: 'monospace' }} />
+                  <XAxis dataKey="year" stroke="#ffffff" tickFormatter={(v) => `Yr ${v}`} style={{ fontSize: '8px', fontFamily: 'monospace' }} tick={{ fill: '#ffffff' }} />
+                  <YAxis stroke="#ffffff" style={{ fontSize: '8px', fontFamily: 'monospace' }} tick={{ fill: '#ffffff' }} />
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#050505', borderColor: '#333', fontSize: '10px', fontFamily: 'monospace', borderRadius: '4px' }}
                     labelFormatter={(v) => `Year ${v} Projection`}

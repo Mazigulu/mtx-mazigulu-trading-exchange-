@@ -701,8 +701,10 @@ export default function RiskDashboard({
 
   // Net Symbol Exposure aggregation (For summary block)
   const symbolsList: MarketSymbol[] = [
-    'US30', 'NAS100', 'GER40', 'SPX500',
-    'AAPL', 'MSFT', 'NVDA', 'TSLA'
+    'US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225',
+    'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'
   ];
   
   const netSymbolExposure = useMemo(() => {
@@ -1572,10 +1574,7 @@ export default function RiskDashboard({
 
         {/* --- DYNAMIC BREACH ALARM BANNER ZONE --- */}
         {riskMetrics.portfolioRiskPercent > alertThreshold && !dismissedActiveAlert ? (
-          <div className="mt-4 p-4 bg-gradient-to-r from-[#170508] via-[#0d0d10] to-[#0a0a0c] border border-rose-500/50 rounded-lg animate-pulse relative overflow-hidden">
-            {/* Linear abstract backdrop highlight */}
-            <div className="absolute top-0 right-0 h-full w-24 bg-gradient-to-l from-rose-500/5 to-transparent pointer-events-none"></div>
-            
+          <div className="mt-4 p-4 bg-[#120709] border border-rose-500/50 rounded-lg animate-pulse relative overflow-hidden">
             <div className="flex flex-col md:flex-row items-start justify-between gap-4">
               <div className="flex items-start gap-3">
                 <div className="p-2 bg-rose-500/20 text-rose-400 rounded-lg shrink-0 mt-0.5">
@@ -1867,9 +1866,6 @@ export default function RiskDashboard({
       {/* Dynamic Safeguard HUD when target is reached and open positions exist */}
       {dailyProfitToday >= dailyProfitTarget && dailyProfitTarget > 0 && openTrades.length > 0 && !dismissedProfitAlert && (
         <div id="discipline-safeguard-hud" className="bg-[#05110d] border border-emerald-500/30 rounded-lg p-5 mt-4 relative overflow-hidden animate-fadeIn select-none">
-          {/* Subtle green ambient backing glow */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-          
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 relative z-10">
             <div className="space-y-1">
               <span className="text-[9px] uppercase tracking-wider font-mono font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 w-fit">
@@ -3212,8 +3208,8 @@ export default function RiskDashboard({
                     margin={{ top: 5, right: 10, left: -25, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" />
-                    <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={9} fontFamily="monospace" tickLine={false} />
-                    <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} fontFamily="monospace" tickLine={false} tickFormatter={(val) => `${val}%`} />
+                    <XAxis dataKey="name" stroke="#ffffff" fontSize={9} fontFamily="monospace" tickLine={false} tick={{ fill: '#ffffff' }} />
+                    <YAxis stroke="#ffffff" fontSize={9} fontFamily="monospace" tickLine={false} tick={{ fill: '#ffffff' }} tickFormatter={(val) => `${val}%`} />
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: '#0c0c0e', 

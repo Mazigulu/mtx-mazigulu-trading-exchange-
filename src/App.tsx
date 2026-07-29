@@ -17,14 +17,18 @@ import PortfolioDesk from './components/PortfolioDesk';
 import FundingDesk from './components/FundingDesk';
 import ActivityDesk from './components/ActivityDesk';
 import AccountControlCenter from './components/AccountControlCenter';
+import { playNotificationSound, NotificationSoundType } from './utils/audioNotifier';
 import MarketAnalysisDashboard from './components/MarketAnalysisDashboard';
 import WatchlistPage from './components/WatchlistPage';
 import SupportModal from './components/SupportModal';
 import LegalModal from './components/LegalModal';
+import { InteractiveSitemapModal } from './components/InteractiveSitemapModal';
+import { useSeoMetadata, WorkspaceSeoKey } from './hooks/useSeoMetadata';
 
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
 import { 
+  Compass,
   HelpCircle, 
   Calendar,
   Layers, 
@@ -163,6 +167,50 @@ export default function App() {
       return false;
     }
   });
+
+  // Centralized Navigation Route State
+  const [activeTab, setActiveTab] = useState<'MARKETS' | 'DISCOVER' | 'PORTFOLIO' | 'WATCHLIST' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(() => {
+    try {
+      const saved = localStorage.getItem('apex_active_tab');
+      if (saved === 'MARKETS' || saved === 'DISCOVER' || saved === 'PORTFOLIO' || saved === 'WATCHLIST' || saved === 'FUNDING' || saved === 'ACTIVITY' || saved === 'ANALYSIS') {
+        return saved;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    return 'MARKETS';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('apex_active_tab', activeTab);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [activeTab]);
+
+  // Dynamically inject JSON-LD schema & update document SEO tags based on active workspace
+  const currentSeoWorkspace: WorkspaceSeoKey = isLoggedIn ? (activeTab as WorkspaceSeoKey) : 'HOMEPAGE';
+  useSeoMetadata(currentSeoWorkspace);
+
+  // --- CENTRALIZED ROUTE GUARD PATTERN ---
+  // Enforces that every successful login transition immediately routes the user to the 'MARKETS' view,
+  // regardless of which tab they were on when they previously logged out.
+  const prevIsLoggedInRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    // If the user was logged out (or initial setup) and is now logged in, enforce redirection to Markets
+    if (isLoggedIn && (prevIsLoggedInRef.current === false || prevIsLoggedInRef.current === null)) {
+      setActiveTab('MARKETS');
+      try {
+        localStorage.setItem('apex_active_tab', 'MARKETS');
+      } catch (err) {
+        console.error('Route Guard failed to update active tab:', err);
+      }
+    }
+    prevIsLoggedInRef.current = isLoggedIn;
+  }, [isLoggedIn]);
+
   const [showLoginPanel, setShowLoginPanel] = useState<boolean>(false);
   const [loginInitialTab, setLoginInitialTab] = useState<'signin' | 'register'>('signin');
   const [traderEmail, setTraderEmail] = useState<string>(() => {
@@ -201,15 +249,21 @@ export default function App() {
     const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       try {
         const user = auth.currentUser;
+        init = init || {};
+        const headers = new Headers(init.headers || {});
         if (user) {
           const token = await user.getIdToken();
-          init = init || {};
-          const headers = new Headers(init.headers || {});
           if (!headers.has('Authorization')) {
             headers.set('Authorization', `Bearer ${token}`);
           }
-          init.headers = headers;
+        } else {
+          // Check if we have a locally logged in trader email
+          const localEmail = localStorage.getItem('apex_trader_email');
+          if (localEmail && !headers.has('Authorization')) {
+            headers.set('Authorization', `Bearer sandbox:${localEmail}`);
+          }
         }
+        init.headers = headers;
       } catch (err) {
         console.error('Error attaching identity token to request:', err);
       }
@@ -290,15 +344,22 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setIsLoggedIn(true);
+        setActiveTab('MARKETS');
         setTraderEmail(user.email || 'demo@gmail.com');
         setIsProfileMenuOpen(false);
         try {
           localStorage.setItem('apex_is_logged_in', 'true');
+          localStorage.setItem('apex_active_tab', 'MARKETS');
           if (user.email) {
             localStorage.setItem('apex_trader_email', user.email);
           }
         } catch (err) {
           console.error(err);
+        }
+      } else {
+        // If not logged in via local storage demo session, reflect signed out state
+        if (!localStorage.getItem('apex_is_logged_in')) {
+          setIsLoggedIn(false);
         }
       }
     });
@@ -309,11 +370,13 @@ export default function App() {
     try {
       localStorage.setItem('apex_is_logged_in', 'true');
       localStorage.setItem('apex_trader_email', email);
+      localStorage.setItem('apex_active_tab', 'MARKETS');
     } catch (err) {
       console.error(err);
     }
     setTraderEmail(email);
     setIsLoggedIn(true);
+    setActiveTab('MARKETS');
     setIsProfileMenuOpen(false);
   };
 
@@ -450,31 +513,54 @@ export default function App() {
     }
   }, [theme]);
 
+  const [backgroundUrl, setBackgroundUrl] = useState<string>('');
+  const [backgroundOpacity, setBackgroundOpacity] = useState<number>(20);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setBackgroundUrl('');
+      return;
+    }
+
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/user/settings');
+        if (response.ok) {
+          const data = await response.json();
+          if (data) {
+            setBackgroundUrl(data.backgroundUrl || '');
+            setBackgroundOpacity(data.backgroundOpacity ?? 20);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch user settings:', err);
+      }
+    };
+
+    fetchSettings();
+  }, [isLoggedIn]);
+
+  const handleSaveBackgroundSettings = async (url: string, opacity: number) => {
+    setBackgroundUrl(url);
+    setBackgroundOpacity(opacity);
+    if (!isLoggedIn) return;
+
+    try {
+      await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backgroundUrl: url, backgroundOpacity: opacity })
+      });
+    } catch (err) {
+      console.error('Failed to save background settings:', err);
+    }
+  };
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [activeTab, setActiveTab] = useState<'MARKETS' | 'PORTFOLIO' | 'WATCHLIST' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(() => {
-    try {
-      const saved = localStorage.getItem('apex_active_tab');
-      if (saved === 'MARKETS' || saved === 'PORTFOLIO' || saved === 'WATCHLIST' || saved === 'FUNDING' || saved === 'ACTIVITY' || saved === 'ANALYSIS') {
-        return saved;
-      }
-    } catch (err) {
-      console.error(err);
-    }
-    return 'MARKETS';
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('apex_active_tab', activeTab);
-    } catch (err) {
-      console.error(err);
-    }
-  }, [activeTab]);
-
-  const [prevTab, setPrevTab] = useState<'MARKETS' | 'PORTFOLIO' | 'WATCHLIST' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(activeTab);
+  const [prevTab, setPrevTab] = useState<'MARKETS' | 'DISCOVER' | 'PORTFOLIO' | 'WATCHLIST' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(activeTab);
 
   useEffect(() => {
     if (activeTab !== prevTab) {
@@ -482,7 +568,7 @@ export default function App() {
     }
   }, [activeTab, prevTab]);
 
-  const TABS_ORDER = ['MARKETS', 'PORTFOLIO', 'WATCHLIST', 'FUNDING', 'ACTIVITY', 'ANALYSIS'];
+  const TABS_ORDER = ['MARKETS', 'DISCOVER', 'PORTFOLIO', 'WATCHLIST', 'FUNDING', 'ACTIVITY', 'ANALYSIS'];
   const tabIndex = TABS_ORDER.indexOf(activeTab);
   const prevTabIndex = TABS_ORDER.indexOf(prevTab);
   const slideDirection = tabIndex >= prevTabIndex ? 1 : -1;
@@ -494,7 +580,12 @@ export default function App() {
   const [symbol, setSymbol] = useState<MarketSymbol>(() => {
     try {
       const saved = localStorage.getItem('apex_selected_symbol') as MarketSymbol;
-      const validSymbols: MarketSymbol[] = ['US30', 'NAS100', 'GER40', 'SPX500', 'AAPL', 'MSFT', 'NVDA', 'TSLA'];
+      const validSymbols: MarketSymbol[] = [
+        'US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225',
+        'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD',
+        'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+        'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'
+      ];
       if (validSymbols.includes(saved)) {
         return saved;
       }
@@ -643,6 +734,38 @@ export default function App() {
   // Support & Legal Modal States
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [isSitemapModalOpen, setIsSitemapModalOpen] = useState(false);
+
+  const handleSitemapNavigate = (path: string) => {
+    setIsSitemapModalOpen(false);
+    const hash = path.includes('#') ? path.split('#')[1] : '';
+    if (hash) {
+      const wsNames = ['markets', 'portfolio', 'screener', 'watchlist', 'funding', 'activity', 'analysis'];
+      const matchingWs = wsNames.find(w => hash.toLowerCase().startsWith(w));
+      if (matchingWs && isLoggedIn) {
+        setActiveTab(matchingWs);
+      }
+      setTimeout(() => {
+        const el = document.getElementById(hash);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          window.location.hash = hash;
+        }
+      }, 100);
+    }
+  };
+
+  useEffect(() => {
+    const handleHashCheck = () => {
+      if (window.location.hash === '#sitemap') {
+        setIsSitemapModalOpen(true);
+      }
+    };
+    handleHashCheck();
+    window.addEventListener('hashchange', handleHashCheck);
+    return () => window.removeEventListener('hashchange', handleHashCheck);
+  }, []);
 
   // Adaptive Polling States (Tab Visibility and User Activity)
   const [isTabVisible, setIsTabVisible] = useState(true);
@@ -734,6 +857,18 @@ export default function App() {
     } catch {}
     return true;
   });
+  const [notificationSound, setNotificationSound] = useState<NotificationSoundType>(() => {
+    try {
+      const raw = localStorage.getItem('apex_institutional_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && parsed.notificationSound) {
+          return parsed.notificationSound as NotificationSoundType;
+        }
+      }
+    } catch {}
+    return 'chime';
+  });
   const [copiedTokenState, setCopiedTokenState] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -746,6 +881,9 @@ export default function App() {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === 'object') {
             setSoundAlertsEnabled(parsed.soundAlerts !== false);
+            if (parsed.notificationSound) {
+              setNotificationSound(parsed.notificationSound);
+            }
           }
         }
       } catch {}
@@ -755,6 +893,25 @@ export default function App() {
       window.removeEventListener('storage', handleStorageChangeLocal);
     };
   }, []);
+
+  const updateNotificationSound = (sound: NotificationSoundType) => {
+    try {
+      const raw = localStorage.getItem('apex_institutional_settings');
+      let settings: any = {};
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          settings = parsed;
+        }
+      }
+      settings.notificationSound = sound;
+      localStorage.setItem('apex_institutional_settings', JSON.stringify(settings));
+      setNotificationSound(sound);
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error('Error saving notification sound setting:', err);
+    }
+  };
 
   // Listen to outer clicks to close the dropdown menu
   useEffect(() => {
@@ -1156,6 +1313,9 @@ export default function App() {
             if (isTriggered) {
               triggeredAny = true;
               
+              // Play custom notification sound
+              playNotificationSound(notificationSound, soundAlertsEnabled);
+
               // 1. Play subtle UI standard push if supported
               if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                 try {
@@ -1284,6 +1444,9 @@ export default function App() {
         // Find if this trade was OPEN in the last tick
         const wasOpen = prevTrades.find((t) => t.id === currentTrade.id && t.status === 'OPEN');
         if (wasOpen && currentTrade.status === 'CLOSED') {
+          // Play custom notification sound for order status update
+          playNotificationSound(notificationSound, soundAlertsEnabled);
+
           // Check if transition reason is due to hit stop-loss or take-profit
           const reason = currentTrade.reason || '';
           const isSL = reason.toLowerCase().includes('sl hit') || reason.toLowerCase().includes('stop-loss') || reason.toLowerCase().includes('stop loss');
@@ -2430,13 +2593,30 @@ export default function App() {
   // Simulated live prices for ticker blocks
   const tickerStats: Record<MarketSymbol, { name: string; price: number; pChange: number }> = {
     'US30': { name: 'US30', price: symbol === 'US30' ? (candles[candles.length - 1]?.close || 38850.0) : 38850.0, pChange: +0.35 },
-    'NAS100': { name: 'NAS100', price: symbol === 'NAS100' ? (candles[candles.length - 1]?.close || 18550.0) : 18550.0, pChange: +0.52 },
+    'NAS100': { name: 'NAS100', price: symbol === 'NAS100' ? (candles[candles.length - 1]?.close || 27192.30) : 27192.30, pChange: -2.06 },
     'GER40': { name: 'GER40', price: symbol === 'GER40' ? (candles[candles.length - 1]?.close || 18200.0) : 18200.0, pChange: -0.15 },
     'SPX500': { name: 'SPX500', price: symbol === 'SPX500' ? (candles[candles.length - 1]?.close || 5300.0) : 5300.0, pChange: +0.28 },
+    'UK100': { name: 'UK100', price: symbol === 'UK100' ? (candles[candles.length - 1]?.close || 8220.0) : 8220.0, pChange: +0.12 },
+    'JPN225': { name: 'JPN225', price: symbol === 'JPN225' ? (candles[candles.length - 1]?.close || 38650.0) : 38650.0, pChange: +0.45 },
     'AAPL': { name: 'AAPL', price: symbol === 'AAPL' ? (candles[candles.length - 1]?.close || 188.30) : 188.30, pChange: +0.88 },
     'MSFT': { name: 'MSFT', price: symbol === 'MSFT' ? (candles[candles.length - 1]?.close || 415.50) : 415.50, pChange: +0.55 },
     'NVDA': { name: 'NVDA', price: symbol === 'NVDA' ? (candles[candles.length - 1]?.close || 945.00) : 945.00, pChange: +3.20 },
     'TSLA': { name: 'TSLA', price: symbol === 'TSLA' ? (candles[candles.length - 1]?.close || 175.50) : 175.50, pChange: -1.50 },
+    'AMZN': { name: 'AMZN', price: symbol === 'AMZN' ? (candles[candles.length - 1]?.close || 186.40) : 186.40, pChange: +1.25 },
+    'META': { name: 'META', price: symbol === 'META' ? (candles[candles.length - 1]?.close || 492.10) : 492.10, pChange: +2.10 },
+    'GOOGL': { name: 'GOOGL', price: symbol === 'GOOGL' ? (candles[candles.length - 1]?.close || 176.80) : 176.80, pChange: +0.75 },
+    'NFLX': { name: 'NFLX', price: symbol === 'NFLX' ? (candles[candles.length - 1]?.close || 624.50) : 624.50, pChange: +1.80 },
+    'AMD': { name: 'AMD', price: symbol === 'AMD' ? (candles[candles.length - 1]?.close || 162.30) : 162.30, pChange: +1.45 },
+    'BTC/USDT': { name: 'BTC/USDT', price: symbol === 'BTC/USDT' ? (candles[candles.length - 1]?.close || 65200.0) : 65200.0, pChange: +2.85 },
+    'ETH/USDT': { name: 'ETH/USDT', price: symbol === 'ETH/USDT' ? (candles[candles.length - 1]?.close || 3420.0) : 3420.0, pChange: +1.95 },
+    'SOL/USDT': { name: 'SOL/USDT', price: symbol === 'SOL/USDT' ? (candles[candles.length - 1]?.close || 148.50) : 148.50, pChange: +4.10 },
+    'EUR/USD': { name: 'EUR/USD', price: symbol === 'EUR/USD' ? (candles[candles.length - 1]?.close || 1.0865) : 1.0865, pChange: +0.08 },
+    'GBP/USD': { name: 'GBP/USD', price: symbol === 'GBP/USD' ? (candles[candles.length - 1]?.close || 1.2720) : 1.2720, pChange: -0.05 },
+    'USD/JPY': { name: 'USD/JPY', price: symbol === 'USD/JPY' ? (candles[candles.length - 1]?.close || 155.40) : 155.40, pChange: +0.22 },
+    'AUD/USD': { name: 'AUD/USD', price: symbol === 'AUD/USD' ? (candles[candles.length - 1]?.close || 0.6670) : 0.6670, pChange: +0.15 },
+    'GOLD/USD': { name: 'GOLD/USD', price: symbol === 'GOLD/USD' ? (candles[candles.length - 1]?.close || 2362.0) : 2362.0, pChange: +0.65 },
+    'SILVER/USD': { name: 'SILVER/USD', price: symbol === 'SILVER/USD' ? (candles[candles.length - 1]?.close || 29.80) : 29.80, pChange: +1.10 },
+    'BRENT': { name: 'BRENT', price: symbol === 'BRENT' ? (candles[candles.length - 1]?.close || 84.50) : 84.50, pChange: -0.40 },
   };
 
   if (!isLoggedIn) {
@@ -2465,13 +2645,25 @@ export default function App() {
   }
 
   return (
-    <div id="mtxquant-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div id="mtxquant-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex selection:bg-indigo-500/30 selection:text-indigo-200 relative overflow-x-hidden">
+      
+      {/* Dynamic Background Image Overlay synced with Backend settings */}
+      {backgroundUrl && (
+        <div 
+          className="fixed inset-0 z-0 pointer-events-none transition-all duration-1000 bg-cover bg-center bg-no-repeat"
+          style={{ 
+            backgroundImage: `url(${backgroundUrl})`,
+            opacity: backgroundOpacity / 100,
+            filter: 'blur(3px)'
+          }}
+        />
+      )}
       
       {/* Retractable Left-Hand Side Menu Navigation - Hidden on mobile screens */}
       <aside
         id="reproducible-side-nav"
-        className={`fixed inset-y-0 left-0 z-[300] bg-[#080808] border-r border-white/10 flex-col justify-between transition-all duration-300 ease-in-out hidden md:flex ${
-          isSidebarExpanded ? 'w-52 shadow-[10px_0_35px_rgba(0,0,0,0.7)]' : 'w-16 shadow-none'
+        className={`fixed inset-y-0 left-0 z-[300] bg-[#080808]/85 backdrop-blur-xl border-r border-white/10 flex-col justify-between transition-all duration-300 ease-in-out hidden md:flex ${
+          isSidebarExpanded ? 'w-52 shadow-[10px_0_35px_rgba(0,0,0,0.8)]' : 'w-16 shadow-none'
         }`}
         onMouseEnter={() => setIsSidebarExpanded(true)}
         onMouseLeave={() => setIsSidebarExpanded(false)}
@@ -2481,8 +2673,11 @@ export default function App() {
             {/* Top section: Brand Identity Logo */}
             <button
               id="desktop-logo-home-button"
-              onClick={() => setActiveTab('MARKETS')}
-              className="w-full text-left px-3 mb-8 flex items-center min-h-[40px] hover:opacity-80 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent"
+              onClick={() => {
+                setActiveTab('MARKETS');
+                window.dispatchEvent(new CustomEvent('mtx_nav_markets'));
+              }}
+              className="w-full text-left px-3 mb-8 flex items-center min-h-[40px] hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent"
               title="Return to Markets"
             >
               {!isSidebarExpanded ? (
@@ -2497,11 +2692,8 @@ export default function App() {
                     <span className="text-base font-black tracking-tight text-white lowercase">
                       mtxquant
                     </span>
-                    <span className="px-1 py-0.2 rounded bg-white/5 border border-white/10 text-[7px] font-mono uppercase tracking-wide text-[#e5e5e5]/60 font-bold">
-                      v2.0
-                    </span>
                   </div>
-                  <p className="text-[8.5px] text-white/40 font-serif italic font-light tracking-wide leading-none mt-1">
+                  <p className="text-[8.5px] text-white/70 font-serif italic font-medium tracking-wide leading-none mt-1">
                     Prime Brokerage
                   </p>
                 </div>
@@ -2512,6 +2704,7 @@ export default function App() {
             <nav className="space-y-2 px-2.5">
               {[
                 { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
+                { id: 'DISCOVER', label: 'Discover', icon: Compass },
                 { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
                 { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
                 { id: 'FUNDING', label: 'Wallet', icon: Wallet },
@@ -2525,14 +2718,14 @@ export default function App() {
                     key={item.id}
                     id={`side-nav-tab-${item.id.toLowerCase()}`}
                     onClick={() => setActiveTab(item.id as any)}
-                    className={`w-full py-3 rounded-lg text-xs font-mono font-bold uppercase transition-all duration-150 flex items-center gap-3 cursor-pointer ${
+                    className={`w-full py-3 rounded-lg text-xs font-mono font-black uppercase transition-all duration-150 flex items-center gap-3 cursor-pointer ${
                       active
-                        ? 'bg-indigo-600/15 text-white border border-indigo-500/40 shadow-[0_0_12px_rgba(99,102,241,0.15)] font-black'
-                        : 'text-[#e5e5e5]/50 hover:text-white hover:bg-white/[0.03] border border-transparent'
+                        ? 'bg-indigo-600/30 text-white border border-indigo-400/80 shadow-[0_0_16px_rgba(99,102,241,0.3)] font-black'
+                        : 'text-white/80 hover:text-white hover:bg-white/10 border border-transparent font-bold'
                     } ${isSidebarExpanded ? 'px-4' : 'justify-center px-0'}`}
                     title={item.label}
                   >
-                    <Icon className={`w-5 h-5 shrink-0 transition-colors ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
+                    <Icon className={`w-5 h-5 shrink-0 transition-colors ${active ? 'text-indigo-300 stroke-[2.5px]' : 'text-white/75'}`} />
                     {isSidebarExpanded && (
                       <span className="whitespace-nowrap animate-fadeIn">
                         {item.label}
@@ -2584,7 +2777,10 @@ export default function App() {
               {/* Logo block rendered exclusively on mobile devices */}
               <button
                 id="mobile-logo-home-button"
-                onClick={() => setActiveTab('MARKETS')}
+                onClick={() => {
+                  setActiveTab('MARKETS');
+                  window.dispatchEvent(new CustomEvent('mtx_nav_markets'));
+                }}
                 className="flex md:hidden items-center gap-1.5 shrink-0 hover:opacity-80 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent"
                 title="Return to Markets"
               >
@@ -2598,6 +2794,7 @@ export default function App() {
                 <span className="hidden lg:inline text-white/30 uppercase tracking-wider font-bold">Workspace:</span>
                 <span className="px-2 py-0.5 lg:px-2.5 lg:py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold uppercase tracking-wider text-[9px] lg:text-[10px]">
                   {activeTab === 'MARKETS' && 'Markets'}
+                  {activeTab === 'DISCOVER' && 'Discover'}
                   {activeTab === 'PORTFOLIO' && 'Portfolio'}
                   {activeTab === 'WATCHLIST' && 'Watchlist'}
                   {activeTab === 'FUNDING' && 'Wallet'}
@@ -2660,6 +2857,11 @@ export default function App() {
                   onToggleTrendProjection={() => setTrendProjectionEnabled(!trendProjectionEnabled)}
                   isBrokerBridgePaused={isBrokerBridgePaused}
                   onToggleBrokerBridge={toggleBrokerBridge}
+                  backgroundUrl={backgroundUrl}
+                  backgroundOpacity={backgroundOpacity}
+                  onSaveBackgroundSettings={handleSaveBackgroundSettings}
+                  notificationSound={notificationSound}
+                  onSelectNotificationSound={updateNotificationSound}
                 />
               </div>
             </div>
@@ -2683,11 +2885,8 @@ export default function App() {
             {volatilityAlertEnabled && volatilityStats.isExceeded && dismissedVolatilityAlertSymbol !== symbol && (
               <div 
                 id="persistent-volatility-breach-notification"
-                className="mb-6 bg-gradient-to-r from-[#170508] via-[#0c0c0e] to-[#0a0a0c] border border-rose-500/50 rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xl animate-fadeIn relative overflow-hidden"
+                className="mb-6 bg-[#120709] border border-rose-500/50 rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xl animate-fadeIn relative overflow-hidden"
               >
-                {/* Background ambient accent animation */}
-                <div className="absolute right-0 top-0 bottom-0 w-24 bg-rose-500/5 blur-2xl pointer-events-none" />
-                
                 <div className="flex items-start gap-3.5">
                   <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-500 shrink-0 mt-0.5 animate-pulse">
                     <AlertTriangle className="w-5 h-5" />
@@ -2744,7 +2943,23 @@ export default function App() {
                   id="markets-workspace"
                   className="flex-1 flex flex-col w-full"
                 >
-                  <MarketsTerminal initialTicker={symbol} />
+                  <MarketsTerminal initialTicker={symbol} initialSubTab="ANALYSIS" />
+                </motion.div>
+              )}
+
+              {activeTab === 'DISCOVER' && (
+                <motion.div
+                  key="DISCOVER"
+                  custom={slideDirection}
+                  variants={marketsWorkspaceVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  id="discover-workspace"
+                  className="flex-1 flex flex-col w-full"
+                >
+                  <MarketsTerminal initialTicker={symbol} initialSubTab="SCREENER" />
                 </motion.div>
               )}
 
@@ -2819,7 +3034,7 @@ export default function App() {
                   exit="exit"
                   transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                   id="analysis-workspace"
-                  className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 w-full"
+                  className="w-full"
                 >
                   <MarketAnalysisDashboard trades={trades} />
                 </motion.div>
@@ -2862,6 +3077,7 @@ export default function App() {
       <nav id="mobile-floating-tabbar" className="fixed bottom-0 left-0 right-0 z-[290] md:hidden bg-[#08080c]/90 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 px-2 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
         {[
           { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
+          { id: 'DISCOVER', label: 'Discover', icon: Compass },
           { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
           { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
           { id: 'FUNDING', label: 'Wallet', icon: Wallet }
@@ -3043,12 +3259,14 @@ export default function App() {
                                     {trade.size.toLocaleString(undefined, { maximumFractionDigits: 3 })}
                                   </td>
                                   <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
-                                      isClosed 
-                                        ? 'bg-white/5 border border-white/10 text-white/40' 
-                                        : 'bg-indigo-500/15 border border-indigo-500/35 text-indigo-300 animate-pulse'
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wide transition-all duration-500 ease-in-out ${
+                                      trade.status === 'Filled' || trade.status === 'FILLED' || trade.status === 'CLOSED'
+                                        ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400' 
+                                        : trade.status === 'Cancelled' || trade.status === 'CANCELLED' || trade.status === 'Failed'
+                                        ? 'bg-rose-500/10 border border-rose-500/25 text-rose-400'
+                                        : 'bg-amber-500/10 border border-amber-500/25 text-amber-400 animate-pulse'
                                     }`}>
-                                      {trade.status}
+                                      {trade.status === 'CLOSED' ? 'Filled' : trade.status}
                                     </span>
                                   </td>
                                   <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${
@@ -3174,16 +3392,17 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-64 max-w-xs h-full bg-[#0a0a0d] border-r border-white/10 flex flex-col justify-between py-6 px-4 z-10"
+              className="relative w-64 max-w-xs h-full bg-[#080808]/85 backdrop-blur-xl border-r border-white/10 flex flex-col justify-between py-6 px-4 z-10"
             >
               <div>
                 {/* Brand Ident and close trigger */}
-                <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+                <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/10">
                   <button
                     id="mobile-drawer-logo-home-button"
                     onClick={() => {
                       setActiveTab('MARKETS');
                       setIsMobileMenuOpen(false);
+                      window.dispatchEvent(new CustomEvent('mtx_nav_markets'));
                     }}
                     className="flex items-center space-x-1.5 hover:opacity-80 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent text-left"
                     title="Return to Markets Desk"
@@ -3191,23 +3410,21 @@ export default function App() {
                     <span className="text-sm font-black tracking-tight text-white lowercase">
                       mtxquant
                     </span>
-                    <span className="px-1 py-0.2 rounded bg-white/5 border border-white/10 text-[7px] font-mono uppercase tracking-wide text-[#e5e5e5]/60 font-bold">
-                      v2.0
-                    </span>
                   </button>
 
                   <button
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="p-1 text-white/40 hover:text-white hover:bg-white/5 rounded transition-colors cursor-pointer"
+                    className="p-1 text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
                 {/* Mobile Drawer Navigation Links */}
-                <nav className="space-y-1.5">
+                <nav className="space-y-2">
                   {[
                     { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
+                    { id: 'DISCOVER', label: 'Discover', icon: Compass },
                     { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
                     { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
                     { id: 'FUNDING', label: 'Wallet', icon: Wallet },
@@ -3223,13 +3440,13 @@ export default function App() {
                           setActiveTab(item.id as any);
                           setIsMobileMenuOpen(false);
                         }}
-                        className={`w-full py-2.5 px-3.5 rounded-lg text-xs font-mono font-bold uppercase transition-all flex items-center gap-3 cursor-pointer ${
+                        className={`w-full py-3 px-3.5 rounded-lg text-xs font-mono font-black uppercase transition-all flex items-center gap-3 cursor-pointer ${
                           active
-                            ? 'bg-indigo-600/15 text-white border border-indigo-500/40 shadow-[0_0_12px_rgba(99,102,241,0.15)]'
-                            : 'text-[#e5e5e5]/50 hover:text-white hover:bg-white/[0.03] border border-transparent'
+                            ? 'bg-indigo-600/30 text-white border border-indigo-400/80 shadow-[0_0_16px_rgba(99,102,241,0.3)] font-black'
+                            : 'text-white/80 hover:text-white hover:bg-white/10 border border-transparent font-bold'
                         }`}
                       >
-                        <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-indigo-400 stroke-[2.5px]' : 'text-white/40'}`} />
+                        <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-indigo-300 stroke-[2.5px]' : 'text-white/75'}`} />
                         <span>{item.label}</span>
                       </button>
                     );
@@ -3269,6 +3486,12 @@ export default function App() {
       <LegalModal
         isOpen={isLegalModalOpen}
         onClose={() => setIsLegalModalOpen(false)}
+      />
+
+      <InteractiveSitemapModal
+        isOpen={isSitemapModalOpen}
+        onClose={() => setIsSitemapModalOpen(false)}
+        onNavigate={handleSitemapNavigate}
       />
 
       {/* Bank-Grade Inactivity Warning Modal */}

@@ -398,14 +398,14 @@ export default function StrategyPerformanceChart() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
                   <XAxis 
                     dataKey="name" 
-                    stroke="rgba(255,255,255,0.15)"
-                    tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
+                    stroke="rgba(255,255,255,0.3)"
+                    tick={{ fontSize: 8.5, fill: '#ffffff', fontFamily: 'monospace' }}
                   />
                   <YAxis 
-                    stroke="rgba(255,255,255,0.15)"
+                    stroke="rgba(255,255,255,0.3)"
                     domain={comparisonMetric === 'WIN_RATE' ? [40, 75] : [1.0, 3.0]}
                     tickFormatter={(v) => comparisonMetric === 'WIN_RATE' ? `${v}%` : `${v}:1`}
-                    tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
+                    tick={{ fontSize: 8.5, fill: '#ffffff', fontFamily: 'monospace' }}
                   />
                   <Tooltip 
                     contentStyle={{ 
@@ -450,8 +450,8 @@ export default function StrategyPerformanceChart() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
                   <XAxis 
                     dataKey="name" 
-                    stroke="rgba(255,255,255,0.15)"
-                    tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
+                    stroke="rgba(255,255,255,0.3)"
+                    tick={{ fontSize: 8.5, fill: '#ffffff', fontFamily: 'monospace' }}
                   />
                   
                   {/* Left Axis - Win Rate */}
@@ -461,7 +461,7 @@ export default function StrategyPerformanceChart() {
                     stroke={getStrategyColor(selectedStrategy)}
                     domain={['dataMin - 5', 'dataMax + 5']}
                     tickFormatter={(v) => `${v}%`}
-                    tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
+                    tick={{ fontSize: 8.5, fill: '#ffffff', fontFamily: 'monospace' }}
                   />
 
                   {/* Right Axis - Risk Reward */}
@@ -471,7 +471,7 @@ export default function StrategyPerformanceChart() {
                     stroke="#f59e0b"
                     domain={['dataMin - 0.2', 'dataMax + 0.2']}
                     tickFormatter={(v) => `${v}:1`}
-                    tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
+                    tick={{ fontSize: 8.5, fill: '#ffffff', fontFamily: 'monospace' }}
                   />
 
                   <Tooltip 

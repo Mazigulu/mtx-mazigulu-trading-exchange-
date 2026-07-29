@@ -32,14 +32,18 @@ export default function CorrelationMatrix() {
   const [hoveredCell, setHoveredCell] = useState<{ s1: string; s2: string } | null>(null);
 
   const ALL_SYMBOLS: MarketSymbol[] = [
-    'US30', 'NAS100', 'GER40', 'SPX500',
-    'AAPL', 'MSFT', 'NVDA', 'TSLA'
+    'US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225',
+    'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+    'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'
   ];
 
   const CATEGORIES = [
     { id: 'ALL', name: 'All Instruments' },
     { id: 'INDICES', name: 'Indices' },
     { id: 'EQUITIES', name: 'Equities' },
+    { id: 'CRYPTO', name: 'Digital Assets' },
+    { id: 'FX_COMM', name: 'FX & Commodities' },
   ];
 
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -49,9 +53,13 @@ export default function CorrelationMatrix() {
       case 'ALL':
         return ALL_SYMBOLS;
       case 'INDICES':
-        return ['US30', 'NAS100', 'GER40', 'SPX500'] as MarketSymbol[];
+        return ['US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225'] as MarketSymbol[];
       case 'EQUITIES':
-        return ['AAPL', 'MSFT', 'NVDA', 'TSLA'] as MarketSymbol[];
+        return ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD'] as MarketSymbol[];
+      case 'CRYPTO':
+        return ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'] as MarketSymbol[];
+      case 'FX_COMM':
+        return ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'] as MarketSymbol[];
       default:
         return ALL_SYMBOLS;
     }
