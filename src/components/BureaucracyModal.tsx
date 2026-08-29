@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
@@ -38,11 +38,19 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
   const [faqSearchQuery, setFaqSearchQuery] = useState('');
   const [selectedFaqCategory, setSelectedFaqCategory] = useState<'all' | 'clearing' | 'technology' | 'risk'>('all');
   const [expandedFaqs, setExpandedFaqs] = useState<Record<number, boolean>>({});
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // Sync state if initialTab changes
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
+
+  // Reset scroll to top on tab change or modal open
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [activeTab, isOpen]);
 
   // Prevent background scrolling when fullscreen overlay is active
   useEffect(() => {
@@ -66,19 +74,19 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
   const faqs = [
     // Homepage Questions
     {
-      q: "Does MTXquant support multi-asset clearing and unified collateral sweeps?",
+      q: "Does MTXcapital support multi-asset clearing and unified collateral sweeps?",
       a: "Yes. Our clearing framework aggregates multi-venue liquidity to provide tight execution margins and unified collateral sweeping across standard, synthetically formulated, and tax-advantaged instruments.",
       tag: "clearing",
       tagLabel: "Clearing & Brokerage"
     },
     {
-      q: "What clearing models does MTXquant support?",
-      a: "MTXquant operates under a fully segregated custody model. We offer both standard Regulation T clearing and advanced Portfolio Margining based on real-time Value-at-Risk (VaR) analysis. This optimizes capital efficiency for multi-legged options strategies and highly correlated equity books.",
+      q: "What clearing models does MTXcapital support?",
+      a: "MTXcapital operates under a fully segregated custody model. We offer both standard Regulation T clearing and advanced Portfolio Margining based on real-time Value-at-Risk (VaR) analysis. This optimizes capital efficiency for multi-legged options strategies and highly correlated equity books.",
       tag: "clearing",
       tagLabel: "Clearing & Brokerage"
     },
     {
-      q: "Who is eligible for an MTXquant prime account?",
+      q: "Who is eligible for an MTXcapital prime account?",
       a: "Our brokerage services are tailored for systematic proprietary trading groups, family offices, high-net-worth individuals, and emerging hedge fund managers. Standard registration requires completion of standard KYC/AML onboarding guidelines.",
       tag: "clearing",
       tagLabel: "Clearing & Brokerage"
@@ -97,20 +105,20 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
     },
     {
       q: "What are the cross-border clearing and multi-currency settlement protocols?",
-      a: "MTXquant implements an advanced, highly resilient cross-border clearing system, utilizing dynamic multi-currency collateral sweeps across global Tier-1 custody banks including BNY Mellon, JP Morgan Chase, and Euroclear. We facilitate direct bilateral and central clearing under the European Market Infrastructure Regulation (EMIR) and Dodd-Frank Act guidelines, minimizing systemic risk. Multi-currency settlements are executed using Real-Time Gross Settlement (RTGS) platforms (such as TARGET2, Fedwire, and CHIPS) as well as accredited tri-party clearing agents. This framework supports instant margin optimization and automatic currency conversions across USD, EUR, GBP, JPY, and SGD with automated collateral rehypothecation shielding for global macro derivative portfolios.",
+      a: "MTXcapital implements an advanced, highly resilient cross-border clearing system, utilizing dynamic multi-currency collateral sweeps across global Tier-1 custody banks including BNY Mellon, JP Morgan Chase, and Euroclear. We facilitate direct bilateral and central clearing under the European Market Infrastructure Regulation (EMIR) and Dodd-Frank Act guidelines, minimizing systemic risk. Multi-currency settlements are executed using Real-Time Gross Settlement (RTGS) platforms (such as TARGET2, Fedwire, and CHIPS) as well as accredited tri-party clearing agents. This framework supports instant margin optimization and automatic currency conversions across USD, EUR, GBP, JPY, and SGD with automated collateral rehypothecation shielding for global macro derivative portfolios.",
       tag: "clearing",
       tagLabel: "Clearing & Brokerage"
     },
     {
-      q: "What are the technical specifications and latency metrics of the MTXquant REST/WebSocket API?",
-      a: "The MTXquant API suite supports high-frequency algorithmic execution via REST and WebSocket protocols, designed for systematic trading desks. Our matching engines, co-located in Equinix NY4 (Secaucus), LD4 (Slough), and TY3 (Tokyo), utilize Kernel Bypass (Solarflare Onload technology) to bypass standard network stack overhead. The HTTP/2 REST API delivers an execution latency of less than 4 milliseconds, while the low-latency TCP WebSocket streams provide real-time Level 2 (L2) and Level 3 (L3) order book updates in under 500 microseconds. For maximum serialization efficiency, payloads are delivered in high-performance Protocol Buffers (Protobuf) or compressed JSON format. Authenticated requests are verified using asymmetric Ed25519 cryptographic signatures with rate-limiting configured up to 5,000 requests per minute per IP subnet, upgradable for institutional lease lines.",
+      q: "What are the technical specifications and latency metrics of the MTXcapital REST/WebSocket API?",
+      a: "The MTXcapital API suite supports high-frequency algorithmic execution via REST and WebSocket protocols, designed for systematic trading desks. Our matching engines, co-located in Equinix NY4 (Secaucus), LD4 (Slough), and TY3 (Tokyo), utilize Kernel Bypass (Solarflare Onload technology) to bypass standard network stack overhead. The HTTP/2 REST API delivers an execution latency of less than 4 milliseconds, while the low-latency TCP WebSocket streams provide real-time Level 2 (L2) and Level 3 (L3) order book updates in under 500 microseconds. For maximum serialization efficiency, payloads are delivered in high-performance Protocol Buffers (Protobuf) or compressed JSON format. Authenticated requests are verified using asymmetric Ed25519 cryptographic signatures with rate-limiting configured up to 5,000 requests per minute per IP subnet, upgradable for institutional lease lines.",
       tag: "technology",
       tagLabel: "Terminal Technology"
     },
     // Bureaucracy / Terminal Questions
     {
-      q: "What is MTX Securities / MTXquant Terminal?",
-      a: "MTXquant is an institutional-grade, high-fidelity quantitative analysis and trade execution terminal. It integrates real-time order-flow modeling, Depth of Market (DOM) pricing arrays, and advanced algorithmic execution engines with custom proprietary brokerage channels and cloud security guardrails.",
+      q: "What is MTX Capital / MTXcapital Terminal?",
+      a: "MTXcapital is an institutional-grade, high-fidelity quantitative analysis and trade execution terminal. It integrates real-time order-flow modeling, Depth of Market (DOM) pricing arrays, and advanced algorithmic execution engines with custom proprietary brokerage channels and cloud security guardrails.",
       tag: "technology",
       tagLabel: "Terminal Technology"
     },
@@ -140,7 +148,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
     },
     {
       q: "How do I secure my external system API Keys?",
-      a: "MTXquant relies entirely on high-security server-side proxy controls. Your API keys are strictly sandboxed inside your isolated secure environment, utilizing encrypted environmental injections. They are never exposed to the client-side browser context.",
+      a: "MTXcapital relies entirely on high-security server-side proxy controls. Your API keys are strictly sandboxed inside your isolated secure environment, utilizing encrypted environmental injections. They are never exposed to the client-side browser context.",
       tag: "technology",
       tagLabel: "Terminal Technology"
     }
@@ -159,7 +167,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
       {isOpen && (
         <div 
           id="bureaucracy-modal-overlay" 
-          className="fixed inset-0 z-[1000] flex flex-col bg-[#050608] text-neutral-200 overflow-hidden font-sans"
+          className="fixed inset-0 z-[10000] flex flex-col bg-[#050608] text-neutral-200 overflow-hidden font-sans"
         >
           {/* Main Full-page Layout */}
           <motion.div 
@@ -171,7 +179,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
             className="w-full h-full flex flex-col min-h-0 overflow-hidden bg-[#050608]"
           >
             {/* Redesigned Premium Full-width Header */}
-            <header className="px-6 py-5 bg-gradient-to-r from-neutral-950 via-[#0a0b10] to-neutral-950 border-b border-white/5 flex items-center justify-between shrink-0">
+            <header className="px-6 py-5 bg-[#09090d] border-b border-white/5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
                 <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-lg shadow-[0_0_15px_rgba(99,102,241,0.1)]">
                   <Terminal className="w-5 h-5 text-indigo-400" />
@@ -186,7 +194,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                     </span>
                   </div>
                   <h1 className="text-base sm:text-lg font-black tracking-wider text-white uppercase mt-1">
-                    MTXquant Regulatory Compliance &amp; Technical Documentation
+                    MTXcapital Regulatory Compliance &amp; Technical Documentation
                   </h1>
                 </div>
               </div>
@@ -333,7 +341,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
               </aside>
 
               {/* Right Column: Redesigned Spacious View Pane covering full viewport size */}
-              <main className="flex-1 p-6 md:p-10 overflow-y-auto min-h-0 bg-[#06070a]">
+              <main ref={contentRef} className="flex-1 p-6 md:p-10 overflow-y-auto min-h-0 bg-[#06070a]">
                 <AnimatePresence mode="wait">
                   
                   {/* TAB 1: Technical Guide */}
@@ -354,7 +362,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                           </h2>
                         </div>
                         <p className="text-xs text-white/50 font-mono mt-1 leading-relaxed">
-                          In-depth system blueprints, mathematical modeling equations, and server-side execution configurations for the MTXquant Terminal.
+                          In-depth system blueprints, mathematical modeling equations, and server-side execution configurations for the MTXcapital Terminal.
                         </p>
                       </div>
 
@@ -369,7 +377,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                             </h3>
                           </div>
                           <p className="text-[11px] text-white/70 leading-relaxed font-mono">
-                            MTXquant is structured as an immutable, stateless full-stack microservices container deployed onto containerized clusters. This architecture guarantees performance segregation and secure logical boundaries:
+                            MTXcapital is structured as an immutable, stateless full-stack microservices container deployed onto containerized clusters. This architecture guarantees performance segregation and secure logical boundaries:
                           </p>
                           <ul className="space-y-2 text-[10.5px] text-white/50 font-mono pl-1">
                             <li className="flex items-start gap-2">
@@ -419,7 +427,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                             </h3>
                           </div>
                           <p className="text-[11px] text-white/70 leading-relaxed font-mono">
-                            The MTXquant analytics suite uses three proprietary, high-frequency algorithms to map and display institutional order books, fair value structures, and support levels:
+                            The MTXcapital analytics suite uses three proprietary, high-frequency algorithms to map and display institutional order books, fair value structures, and support levels:
                           </p>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="p-3 bg-white/[0.01] border border-white/5 rounded-lg space-y-1.5 font-mono">
@@ -464,7 +472,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                           </h2>
                         </div>
                         <p className="text-xs text-white/50 font-mono mt-1 leading-relaxed">
-                          Regulatory frameworks, audit reporting parameters, and investor protection directives guiding MTXquant operations.
+                          Regulatory frameworks, audit reporting parameters, and investor protection directives guiding MTXcapital operations.
                         </p>
                       </div>
 
@@ -477,7 +485,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                             SEC, FINRA, &amp; Investor Protection Standards
                           </h3>
                           <p className="text-[11.5px] text-white/70 leading-relaxed font-mono">
-                            MTXquant complies with the most stringent financial standards globally. The platform has built-in features that enforce regulatory guidelines across digital interfaces:
+                            MTXcapital complies with the most stringent financial standards globally. The platform has built-in features that enforce regulatory guidelines across digital interfaces:
                           </p>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[10.5px] font-mono leading-relaxed text-white/50">
                             <div className="bg-white/[0.01] border border-white/5 p-3.5 rounded-lg space-y-2">
@@ -768,7 +776,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                       <div className="space-y-6">
                         <div className="text-[12px] font-mono text-white/70 space-y-4 leading-relaxed bg-[#06080c] p-6 border border-white/5 rounded-xl">
                           <p>
-                            MTXquant complies with international guidelines on digital tracking. We do not use third-party analytics scripts, marketing trackers, or cross-site behavioral targeting cookies. Only strictly essential operational parameters are stored in local storage to secure sessions and maintain UI continuity.
+                            MTXcapital complies with international guidelines on digital tracking. We do not use third-party analytics scripts, marketing trackers, or cross-site behavioral targeting cookies. Only strictly essential operational parameters are stored in local storage to secure sessions and maintain UI continuity.
                           </p>
 
                           <div className="bg-white/[0.01] border border-white/5 p-4 rounded-lg font-bold text-white flex items-center gap-2">
@@ -842,7 +850,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                             General Data Protection Regulation (GDPR) Alignment
                           </h3>
                           <p>
-                            MTXquant is fully aligned with the European Union GDPR and California Consumer Privacy Act (CCPA) guidelines. Our technical architecture ensures that you retain complete sovereignty over your trading files, system watchlists, and API authentication tokens:
+                            MTXcapital is fully aligned with the European Union GDPR and California Consumer Privacy Act (CCPA) guidelines. Our technical architecture ensures that you retain complete sovereignty over your trading files, system watchlists, and API authentication tokens:
                           </p>
                           <ul className="list-disc pl-5 space-y-2 text-white/50 text-[11.5px]">
                             <li>
@@ -892,7 +900,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                       <div className="space-y-6">
                         <div className="bg-neutral-950/80 border border-white/5 rounded-xl p-6 space-y-4 font-mono text-[12px] text-white/70 leading-relaxed">
                           <p>
-                            Welcome to the MTXquant terminal suite. By loading this software and executing algorithmic operations on the asset dashboards, you enter a binding contractual covenant with MTXcapital.
+                            Welcome to the MTXcapital terminal suite. By loading this software and executing algorithmic operations on the asset dashboards, you enter a binding contractual covenant with MTXcapital.
                           </p>
 
                           <div className="space-y-4 border-l-2 border-indigo-500/20 pl-4 text-white/50 text-[11px]">
@@ -903,7 +911,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
                               <strong>2. Prohibited Behaviors:</strong> You are strictly prohibited from utilizing this terminal interface to conduct wash trading, quote stuffing, order-book spoofing, latency arbitrage, or toxic high-frequency scraping campaigns against central clearing books.
                             </p>
                             <p>
-                              <strong>3. Proprietary Software License:</strong> MTXquant grants a non-transferable, single-node workstation license to utilize its analysis suite. Reverse engineering compiled models, indicator algorithms, or DOM price action projections is strictly forbidden.
+                              <strong>3. Proprietary Software License:</strong> MTXcapital grants a non-transferable, single-node workstation license to utilize its analysis suite. Reverse engineering compiled models, indicator algorithms, or DOM price action projections is strictly forbidden.
                             </p>
                           </div>
 
@@ -922,7 +930,7 @@ export const BureaucracyModal: React.FC<BureaucracyModalProps> = ({
             {/* Redesigned Full-screen Footer */}
             <footer className="px-6 py-3.5 bg-neutral-950 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-mono text-white/35 shrink-0">
               <div className="flex items-center gap-2">
-                <span>&copy; 2026 MTXquant Institutional Group</span>
+                <span>&copy; 2026 MTXcapital Institutional Group</span>
                 <span className="text-white/10">|</span>
                 <span>All client portfolios held in segregated escrow accounts</span>
               </div>

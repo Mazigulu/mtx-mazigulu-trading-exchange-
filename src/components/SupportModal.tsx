@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
@@ -37,6 +37,14 @@ export default function SupportModal({ isOpen, onClose, traderEmail }: SupportMo
   const [description, setDescription] = useState('');
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Reset scroll to top on tab change or modal open
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [activeTab, isOpen]);
 
   // Load existing tickets from local storage
   useEffect(() => {
@@ -109,17 +117,20 @@ export default function SupportModal({ isOpen, onClose, traderEmail }: SupportMo
   return (
     <AnimatePresence>
       {isOpen && (
-        <div id="support-modal-backdrop" className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div 
+          id="support-modal-backdrop" 
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-black/85 backdrop-blur-md"
+        >
           <motion.div
             id="support-modal-container"
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="w-full max-w-2xl bg-[#08080c] border border-white/10 rounded-xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] max-h-[90vh] flex flex-col font-mono text-white text-xs text-left"
+            className="w-full max-w-2xl bg-[#08080c] border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-[85vh] flex flex-col font-mono text-white text-xs text-left my-auto relative z-10"
           >
             {/* Header */}
-            <div className="p-4 bg-gradient-to-r from-indigo-950/40 via-transparent to-transparent border-b border-white/10 flex items-center justify-between">
+            <div className="p-4 bg-[#0c0c10] border-b border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="p-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded">
                   <HelpCircle className="w-4 h-4 text-indigo-400" />
@@ -172,7 +183,7 @@ export default function SupportModal({ isOpen, onClose, traderEmail }: SupportMo
             </div>
 
             {/* Body Area */}
-            <div className="p-5 overflow-y-auto flex-1 space-y-4">
+            <div ref={contentRef} className="p-5 overflow-y-auto flex-1 space-y-4">
               {activeTab === 'ticket' && (
                 <>
                   {submittedId ? (
@@ -366,7 +377,7 @@ export default function SupportModal({ isOpen, onClose, traderEmail }: SupportMo
                   </div>
 
                   {/* Hotlines */}
-                  <div className="p-4 bg-gradient-to-r from-indigo-950/20 to-transparent border border-indigo-500/20 rounded-lg text-left space-y-2">
+                  <div className="p-4 bg-indigo-950/15 border border-indigo-500/20 rounded-lg text-left space-y-2">
                     <div className="flex items-center gap-1.5">
                       <ShieldAlert className="w-4 h-4 text-indigo-400" />
                       <span className="font-black text-[10px] text-white uppercase tracking-wider">Apex Brokerage Emergency Line</span>
@@ -379,7 +390,7 @@ export default function SupportModal({ isOpen, onClose, traderEmail }: SupportMo
                         TEL: +1-800-APEX-DMA (2739)
                       </span>
                       <span className="px-2 py-1 bg-[#040405] border border-white/10 rounded font-mono text-neutral-200 select-all">
-                        SECURE_IRC: mtxquant-otc-line
+                        SECURE_IRC: mtxcapital-otc-line
                       </span>
                     </div>
                   </div>

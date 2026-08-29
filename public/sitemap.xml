@@ -1,123 +1,288 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://mtxquant.com/</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.00</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#markets</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#markets</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>always</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#portfolio</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#portfolio</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>always</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#screener</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#screener</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>always</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#watchlist</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#discover</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>always</changefreq>
-    <priority>0.88</priority>
+    <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#funding</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#wallet</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>always</changefreq>
-    <priority>0.88</priority>
+    <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#activity</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>always</changefreq>
-    <priority>0.88</priority>
-  </url>
-  <url>
-    <loc>https://mtxquant.com/#analysis</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>always</changefreq>
-    <priority>0.88</priority>
-  </url>
-  <url>
-    <loc>https://mtxquant.com/#feature-markets</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>always</changefreq>
-    <priority>0.90</priority>
-  </url>
-  <url>
-    <loc>https://mtxquant.com/#feature-portfolio</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>always</changefreq>
-    <priority>0.90</priority>
-  </url>
-  <url>
-    <loc>https://mtxquant.com/#feature-screener</loc>
-    <lastmod>2026-07-28</lastmod>
-    <changefreq>always</changefreq>
-    <priority>0.90</priority>
-  </url>
-  <url>
-    <loc>https://mtxquant.com/#markets-spy</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#watchlist</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>always</changefreq>
     <priority>0.92</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#markets-nvda</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#activity</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.92</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#analysis</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.92</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#backtest</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.92</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#sentiment</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.92</priority>
+  </url>
+
+  <!-- Feature-specific Dedicated Landing Pages -->
+  <url>
+    <loc>https://mtxcapital.ai.studio/#feature-markets</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#feature-discover</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#feature-portfolio</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#feature-watchlist</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#feature-funding</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#feature-activity</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#feature-analysis</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#feature-backtest</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#feature-sentiment</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <!-- Popular Fractional Asset Direct Tickers -->
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-nvda</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>always</changefreq>
     <priority>0.90</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#markets-btc</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#markets-spy</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>always</changefreq>
     <priority>0.90</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#instruments</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#markets-aapl</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-msft</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-tsla</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-qqq</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-us10y</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-us03m</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-amzn</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-googl</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-meta</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-btc</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-eth</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.86</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#markets-sol</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.86</priority>
+  </url>
+
+  <!-- Key Architecture & Structural Sections -->
+  <url>
+    <loc>https://mtxcapital.ai.studio/#about</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#services</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#portal</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#instruments</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.88</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#pricing</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#calculator</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#onboarding</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#faq</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#faq</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.75</priority>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- AI Manifest & Regulatory Endpoints -->
+  <url>
+    <loc>https://mtxcapital.ai.studio/#llms</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.88</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#terms</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#compliance</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.60</priority>
+    <priority>0.80</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#privacy</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#terms</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.60</priority>
+    <priority>0.70</priority>
   </url>
   <url>
-    <loc>https://mtxquant.com/#disclosures</loc>
-    <lastmod>2026-07-28</lastmod>
+    <loc>https://mtxcapital.ai.studio/#privacy</loc>
+    <lastmod>2026-08-28</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.60</priority>
+    <priority>0.70</priority>
+  </url>
+  <url>
+    <loc>https://mtxcapital.ai.studio/#disclosures</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
   </url>
 </urlset>

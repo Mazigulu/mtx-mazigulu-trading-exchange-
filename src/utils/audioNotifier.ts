@@ -30,6 +30,15 @@ export function playNotificationSound(soundType: NotificationSoundType = 'chime'
       ctx.resume().catch(() => {});
     }
 
+    // Auto-close context after audio plays to clean up resources
+    setTimeout(() => {
+      try {
+        if (ctx.state !== 'closed') {
+          ctx.close().catch(() => {});
+        }
+      } catch (e) {}
+    }, 1200);
+
     const now = ctx.currentTime;
 
     switch (soundType) {

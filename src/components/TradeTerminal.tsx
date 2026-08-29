@@ -3000,11 +3000,11 @@ export default function TradeTerminal({
 
       {/* INSTITUTIONAL SECURITY ACCESS GATEWAY MODAL */}
       {isAuthModalOpen && (
-        <div id="security-gateway-modal" className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 transition-all duration-300">
+        <div id="security-gateway-modal" className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[10000] overflow-y-auto transition-all duration-300">
           <div className="bg-[#0c0c0e] border border-indigo-500/30 rounded-xl p-6 max-w-sm w-full shadow-[0_20px_50px_rgba(99,102,241,0.15)] relative overflow-hidden font-sans">
             
-            {/* Top decorative lock glow indicator */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent"></div>
+            {/* Top decorative lock indicator */}
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-indigo-500/50"></div>
             
             <div className="flex items-center justify-between pb-3.5 mb-5 border-b border-white/10">
               <div className="flex items-center space-x-2.5">

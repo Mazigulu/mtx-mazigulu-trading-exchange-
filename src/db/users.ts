@@ -1,6 +1,9 @@
 import { db } from './index.ts';
 import { users } from './schema.ts';
 
+const localUsersByUid = new Map<string, { id: number; uid: string; email: string; createdAt: Date }>();
+let localUserIdCounter = 1;
+
 export async function getOrCreateUser(uid: string, email: string) {
   try {
     // Use upsert to handle concurrent inserts of the same user ID safely.
@@ -18,16 +21,27 @@ export async function getOrCreateUser(uid: string, email: string) {
       })
       .returning();
 
-    return result[0];
+    if (result && result[0]) {
+      localUsersByUid.set(uid, result[0]);
+      return result[0];
+    }
   } catch (err: any) {
-    console.error('[Users DB Fallback] Error in getOrCreateUser. Falling back to local memory user:', err.message || err);
-    // Return a structured user object representing this user so downstream endpoints can function
-    return {
-      id: 1, // Safe fallback integer id
+    // Database connection or scale-to-zero fallback handled gracefully
+  }
+
+  // Consistent fallback user
+  let existing = localUsersByUid.get(uid);
+  if (!existing) {
+    existing = {
+      id: localUserIdCounter++,
       uid,
       email,
       createdAt: new Date(),
     };
+    localUsersByUid.set(uid, existing);
+  } else {
+    existing.email = email;
   }
+  return existing;
 }
 

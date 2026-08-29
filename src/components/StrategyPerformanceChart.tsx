@@ -54,7 +54,7 @@ const STRATEGIES: Record<StrategyId, StrategyDetail> = {
     id: 'ALL',
     name: 'All Integrated Systems',
     description: 'Aggregated view comparing Mean Reversion, Trend Following, Breakout Momentum and Combo algorithm metrics.',
-    creator: 'MTX Securities Core',
+    creator: 'MTX Capital Core',
     timeframe: 'Multi-Timeframe',
     winRate: 61.2,
     avgRR: 1.95,
@@ -63,9 +63,9 @@ const STRATEGIES: Record<StrategyId, StrategyDetail> = {
   },
   APEX_COMBO: {
     id: 'APEX_COMBO',
-    name: 'MTX Securities Confluence Multi-Heuristic',
+    name: 'MTX Capital Confluence Multi-Heuristic',
     description: 'Ensemble algorithm combining multiple structural confirmation signals to trade under high confidence conditions.',
-    creator: 'MTX Securities Labs',
+    creator: 'MTX Capital Labs',
     timeframe: 'H1 / H4',
     winRate: 68.5,
     avgRR: 2.30,
@@ -156,11 +156,11 @@ export default function StrategyPerformanceChart() {
         'Mean Reversion': d.FVG_win,
         'Trend Following': d.OB_win,
         'Breakout Momentum': d.SWEEP_win,
-        'MTX Securities Combo': d.APEX_win,
+        'MTX Capital Combo': d.APEX_win,
         'Mean Reversion R:R': d.FVG_rr,
         'Trend Following R:R': d.OB_rr,
         'Breakout Momentum R:R': d.SWEEP_rr,
-        'MTX Securities Combo R:R': d.APEX_rr,
+        'MTX Capital Combo R:R': d.APEX_rr,
       };
     });
   }, [selectedStrategy]);
@@ -207,7 +207,7 @@ export default function StrategyPerformanceChart() {
             className="bg-[#121214] border border-white/10 text-xs text-white/90 px-2.5 py-1.5 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
           >
             <option value="ALL">Compare All Strategies</option>
-            <option value="APEX_COMBO">MTX Securities Confluence (68.5%)</option>
+            <option value="APEX_COMBO">MTX Capital Confluence (68.5%)</option>
             <option value="FVG">Intraday Mean Reversion (58.0%)</option>
             <option value="OB">Institutional Trend Following (60.5%)</option>
             <option value="SWEEP">Breakout Momentum Index (54.2%)</option>
@@ -321,7 +321,7 @@ export default function StrategyPerformanceChart() {
                 </span>
                 {selectedStrategy === 'ALL' ? (
                   <span>
-                    Comparative mode displays epochs E1 to E15 showing performance iterations. The ensemble <strong>MTX Securities Multi-Heuristic</strong> algorithm outperforms individual modules by combining trend indicators with volatility filtering.
+                    Comparative mode displays epochs E1 to E15 showing performance iterations. The ensemble <strong>MTX Capital Multi-Heuristic</strong> algorithm outperforms individual modules by combining trend indicators with volatility filtering.
                   </span>
                 ) : selectedStrategy === 'APEX_COMBO' ? (
                   <span>
@@ -431,14 +431,14 @@ export default function StrategyPerformanceChart() {
                       <Line type="monotone" dataKey="Mean Reversion" stroke={getStrategyColor('FVG')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
                       <Line type="monotone" dataKey="Trend Following" stroke={getStrategyColor('OB')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
                       <Line type="monotone" dataKey="Breakout Momentum" stroke={getStrategyColor('SWEEP')} strokeWidth={1.5} dot={{ r: 1.5 }} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="MTX Securities Combo" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="MTX Capital Combo" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
                     </>
                   ) : (
                     <>
                       <Line type="monotone" dataKey="Mean Reversion R:R" name="Mean Reversion R:R" stroke={getStrategyColor('FVG')} strokeWidth={1.5} dot={{ r: 1.5 }} />
                       <Line type="monotone" dataKey="Trend Following R:R" name="Trend Following R:R" stroke={getStrategyColor('OB')} strokeWidth={1.5} dot={{ r: 1.5 }} />
                       <Line type="monotone" dataKey="Breakout Momentum R:R" name="Breakout Momentum R:R" stroke={getStrategyColor('SWEEP')} strokeWidth={1.5} dot={{ r: 1.5 }} />
-                      <Line type="monotone" dataKey="MTX Securities Combo R:R" name="MTX Securities Combo R:R" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} />
+                      <Line type="monotone" dataKey="MTX Capital Combo R:R" name="MTX Capital Combo R:R" stroke={getStrategyColor('APEX_COMBO')} strokeWidth={2.5} dot={{ r: 2.5 }} />
                     </>
                   )}
                 </LineChart>

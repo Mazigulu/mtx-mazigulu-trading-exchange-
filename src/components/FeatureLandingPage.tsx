@@ -30,6 +30,7 @@ import {
   PieChart,
   Search,
   Filter,
+  Compass,
   Menu,
   X,
   Apple,
@@ -38,6 +39,7 @@ import {
 
 export type FeatureId = 
   | 'markets' 
+  | 'discover'
   | 'portfolio' 
   | 'watchlist' 
   | 'funding' 
@@ -78,7 +80,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
     name: 'Markets View & Execution Engine',
     badge: 'Core Match Engine',
     category: 'High-Frequency Trading Terminal',
-    seoTitle: 'Quantitative Trading Terminal & Multi-Asset Execution Engine | MTXquant',
+    seoTitle: 'Quantitative Trading Terminal & Multi-Asset Execution Engine | MTXcapital',
     metaDescription: 'Experience sub-millisecond order routing, Level 2 multi-asset order books, interactive technical charts, and volatility-adjusted ATR position sizing calculators.',
     heroHeadline: 'Sub-Millisecond Execution Engine & Advanced Quantitative Terminal',
     heroSubheadline: 'Engineered for high-frequency proprietary desks and systematic traders requiring direct market access, depth-of-market order books, and real-time ATR risk calculators.',
@@ -90,7 +92,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
       { label: 'Data Serialization', value: 'Protobuf / WSS', desc: 'Sub-500μs WebSocket L2/L3 order streams' }
     ],
     problemStatement: 'Retail trading interfaces introduce order execution slippage, opaque fill latency, and static lot sizing that ignores intraday volatility shifts. When market volatility surges, static position sizing causes catastrophic account drawdowns.',
-    solutionNarrative: 'The MTXquant Markets Terminal solves this by embedding an ATR Volatility Calculator directly into the order ticket. Every trade is dynamically sized based on current market noise, automatically protecting your capital with real-time risk parameters before the order hits the matching engine.',
+    solutionNarrative: 'The MTXcapital Markets Terminal solves this by embedding an ATR Volatility Calculator directly into the order ticket. Every trade is dynamically sized based on current market noise, automatically protecting your capital with real-time risk parameters before the order hits the matching engine.',
     architectureHighlights: [
       {
         title: 'Kernel-Bypass Matching',
@@ -114,21 +116,67 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
       { step: '03', title: 'Smart Order Routing', desc: 'Orders pass pre-trade risk checks and are executed across co-located liquidity pools within 1.2ms.' }
     ],
     faqs: [
-      { q: 'What order types are supported in the Markets View?', a: 'MTXquant supports Market, Limit, Stop-Market, Stop-Limit, Bracket Orders (TP/SL), Iceberg, and OCO (One-Cancels-the-Other) orders.' },
+      { q: 'What order types are supported in the Markets View?', a: 'MTXcapital supports Market, Limit, Stop-Market, Stop-Limit, Bracket Orders (TP/SL), Iceberg, and OCO (One-Cancels-the-Other) orders.' },
       { q: 'How does the ATR Position Sizing Calculator work?', a: 'The calculator reads the current 14-period Average True Range (ATR). Based on your maximum account risk percentage (e.g. 1%), it calculates the exact share or contract count needed so your stop loss matches your risk threshold.' },
       { q: 'Can I stream Level 2 market depth over WebSockets?', a: 'Yes. Our WebSocket API streams full L2 order book depth with sub-500 microsecond updates formatted in JSON or Protocol Buffers.' }
     ],
     keywords: ['Quantitative Trading Terminal', 'Multi-Asset Order Book', 'ATR Position Sizing Calculator', 'Level 2 Depth Stream', 'Sub-millisecond Execution']
+  },
+  discover: {
+    id: 'discover',
+    name: 'Market Discovery & Systematic Equity Screener',
+    badge: 'Factor Radar',
+    category: 'Multi-Factor Quantitative Screener',
+    seoTitle: 'Market Discovery & Systematic Equity Screener | MTXcapital',
+    metaDescription: 'Isolate high-momentum assets, intraday relative volume (RVOL) anomalies, cross-asset valuation dislocations, and quantitative alpha factor rankings in real time.',
+    heroHeadline: 'Multi-Factor Quantitative Discovery & Volatility Anomaly Screener',
+    heroSubheadline: 'Scan thousands of equity and digital asset pairs using quantitative factor scores, intraday relative volume (RVOL) spikes, and institutional valuation metrics.',
+    icon: <Compass className="w-5 h-5 text-amber-400" />,
+    specs: [
+      { label: 'Screening Factors', value: 'Valuation & Momentum', desc: 'P/E, P/B, EV/EBITDA, RVOL, Beta, Relative Performance' },
+      { label: 'Update Frequency', value: 'Tick-by-Tick', desc: 'Real-time liquidity and volume spike notifications' },
+      { label: 'Asset Coverage', value: 'Equities & Crypto', desc: 'US Equities, Global Indexes, and Major Digital Asset Pairs' },
+      { label: 'Signal Engine', value: 'Multi-Factor Score', desc: 'Composite ranking based on momentum and value metrics' }
+    ],
+    problemStatement: 'Manual stock scanning misses intraday volume anomalies and fails to quantify factor exposure across multiple assets simultaneously, leading to late trade entries.',
+    solutionNarrative: 'The MTXcapital Systematic Screener dynamically evaluates real-time volume anomalies (RVOL) and multi-factor score dislocations, instantly flagging actionable trading setups.',
+    architectureHighlights: [
+      {
+        title: 'Intraday RVOL Spike Detection',
+        desc: 'Continuously monitors relative volume against 20-day baseline averages to flag institutional accumulation.',
+        icon: <Zap className="w-4 h-4 text-amber-400" />
+      },
+      {
+        title: 'Multi-Factor Valuation Matrix',
+        desc: 'Ranks assets based on value, growth, quality, and momentum composite scores.',
+        icon: <Sliders className="w-4 h-4 text-amber-400" />
+      },
+      {
+        title: 'Seamless Order Ticket Integration',
+        desc: 'One-click transition from discovery signal directly into execution chart with pre-populated parameters.',
+        icon: <Layers className="w-4 h-4 text-amber-400" />
+      }
+    ],
+    workflowSteps: [
+      { step: '01', title: 'Define Factor Parameters', desc: 'Select market cap filters, valuation thresholds, and minimum intraday RVOL requirements.' },
+      { step: '02', title: 'Run Multi-Factor Rank', desc: 'The quantitative engine calculates factor scores and ranks matching assets in under 50ms.' },
+      { step: '03', title: 'Execute From Signal', desc: 'Select top anomaly assets to launch directly into the high-performance Markets Execution Terminal.' }
+    ],
+    faqs: [
+      { q: 'What is Relative Volume (RVOL)?', a: 'RVOL compares current intraday trading volume to average volume for the same time of day over a 20-day window, highlighting unusual institutional participation.' },
+      { q: 'Can I filter by fundamental metrics like P/E or Debt/Equity?', a: 'Yes. You can combine technical momentum indicators with fundamental balance sheet filters such as Price-to-Earnings, Return on Equity, and Debt-to-Equity ratios.' }
+    ],
+    keywords: ['Market Discovery', 'Systematic Equity Screener', 'Relative Volume RVOL', 'Quantitative Screener', 'Multi-Factor Analysis']
   },
   portfolio: {
     id: 'portfolio',
     name: 'Portfolio Risk Desk & Compounding Engine',
     badge: 'Risk/Analytics',
     category: 'Institutional Risk Engine',
-    seoTitle: 'Real-Time Portfolio Value-at-Risk (VaR) & Compounding Engine | MTXquant',
+    seoTitle: 'Real-Time Portfolio Value-at-Risk (VaR) & Compounding Engine | MTXcapital',
     metaDescription: 'Monitor real-time Value-at-Risk (VaR), Sharpe ratios, asset allocation weightings, leverage exposure safety gates, and multi-year wealth accumulation projections.',
     heroHeadline: 'Dynamic Value-at-Risk Monitoring & Wealth Compounding Engine',
-    heroSubheadline: 'Real-time capital custody analytics that measure multi-asset portfolio heat, enforce portfolio margin rulesets, and model multi-year wealth compounding trajectories.',
+    heroSubheadline: 'Real-time portfolio risk analytics that measure multi-asset portfolio heat, enforce portfolio margin rulesets, and model multi-year wealth compounding trajectories.',
     icon: <Briefcase className="w-5 h-5 text-amber-400" />,
     specs: [
       { label: 'Risk Ruleset', value: 'TIMS VaR Model', desc: 'Calculates non-linear portfolio risk' },
@@ -137,7 +185,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
       { label: 'Rebalance Engine', value: 'Automated Drift', desc: 'Alerts when asset weight deviates > 2%' }
     ],
     problemStatement: 'Most portfolio trackers only show historical profit and loss, ignoring directional risk concentration, leverage exposure, and tail-risk volatility correlations. Traders unknowingly over-concentrate in correlated assets.',
-    solutionNarrative: 'MTXquant provides continuous, real-time Value-at-Risk (VaR) calculations and asset weight breakdowns. The system continuously stress-tests your net asset value (NAV) against market shocks, ensuring your portfolio remains resilient.',
+    solutionNarrative: 'MTXcapital provides continuous, real-time Value-at-Risk (VaR) calculations and asset weight breakdowns. The system continuously stress-tests your net asset value (NAV) against market shocks, ensuring your portfolio remains resilient.',
     architectureHighlights: [
       {
         title: 'Non-Linear VaR Engine',
@@ -161,7 +209,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
       { step: '03', title: 'Compounding Projection', desc: 'Adjust allocation sliders to project multi-year NAV growth and evaluate rebalancing strategies.' }
     ],
     faqs: [
-      { q: 'How is Portfolio Value-at-Risk (VaR) calculated?', a: 'MTXquant uses historical simulation and parametric covariance matrices based on 252 days of tick data, evaluating multi-asset correlations to measure potential loss at a 99% confidence interval.' },
+      { q: 'How is Portfolio Value-at-Risk (VaR) calculated?', a: 'MTXcapital uses historical simulation and parametric covariance matrices based on 252 days of tick data, evaluating multi-asset correlations to measure potential loss at a 99% confidence interval.' },
       { q: 'What happens if my portfolio exceeds my VaR risk limit?', a: 'The VaR Guard displays visual risk alerts and can automatically prevent new leverage-increasing orders from executing until collateral is rebalanced.' },
       { q: 'Can I project multi-year compound interest on my capital?', a: 'Yes. The built-in Compound Wealth Simulator projects NAV growth over 1 to 30 years based on customizable expected yield and monthly deposit inputs.' }
     ],
@@ -172,7 +220,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
     name: 'Dynamic Watchlist & Volatility Screener',
     badge: 'Execution Filters',
     category: 'Market Intelligence Radar',
-    seoTitle: 'Dynamic Stock Watchlist & Market Volatility Screener | MTXquant',
+    seoTitle: 'Dynamic Stock Watchlist & Market Volatility Screener | MTXcapital',
     metaDescription: 'Filter high-frequency symbol data, monitor multi-asset index tickers, calculate saliency scores, and jump instantly into active trading charts.',
     heroHeadline: 'High-Frequency Market Watchlist & Saliency Radar',
     heroSubheadline: 'Scan thousands of instruments in real-time with automated saliency scoring, continuous volatility monitoring, and instantaneous symbol switching.',
@@ -215,13 +263,13 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
   },
   funding: {
     id: 'funding',
-    name: 'Institutional Wallet & Custody Desk',
-    badge: 'Capital Custody',
+    name: 'Institutional Wallet & Treasury Desk',
+    badge: 'Treasury Gateway',
     category: 'Segregated Treasury Infrastructure',
-    seoTitle: 'Institutional Wallet Desk & Capital Custody Infrastructure | MTXquant',
+    seoTitle: 'Institutional Wallet Desk & Treasury Infrastructure | MTXcapital',
     metaDescription: 'Manage segregated client capital, direct ledger settlements, instant bank wire transfers, credit line applications, and FDIC cash sweep allocations.',
-    heroHeadline: 'Direct Capital Custody & Treasury Management Gateway',
-    heroSubheadline: 'Bank-grade custody infrastructure providing segregated ledger settlements, institutional cash sweep networks, and instant wire funding.',
+    heroHeadline: 'Direct Treasury Management & Cash Sweep Gateway',
+    heroSubheadline: 'Bank-grade institutional infrastructure providing segregated ledger settlements, institutional cash sweep networks, and instant wire funding.',
     icon: <DollarSign className="w-5 h-5 text-amber-400" />,
     specs: [
       { label: 'Custody Structure', value: 'Segregated Trust', desc: 'Bankruptcy-remote Tier-1 banking partners' },
@@ -230,7 +278,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
       { label: 'Wire Gateways', value: 'Fedwire / SWIFT', desc: 'Direct corporate treasury connectivity' }
     ],
     problemStatement: 'Traditional brokerage funding involves multi-day hold times, uncompensated idle cash, and opaque pooled accounts where client funds lack bankruptcy isolation.',
-    solutionNarrative: 'MTXquant offers segregated custody architecture. Unallocated capital is automatically swept into FDIC-insured partner bank accounts earning optimized yields, while remaining instantly available for trading collateral.',
+    solutionNarrative: 'MTXcapital offers segregated custody architecture. Unallocated capital is automatically swept into FDIC-insured partner bank accounts earning optimized yields, while remaining instantly available for trading collateral.',
     architectureHighlights: [
       {
         title: 'FDIC Multi-Bank Sweep',
@@ -264,7 +312,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
     name: 'Transaction Audit Logs & Quantitative Ledgers',
     badge: 'Certified Audits',
     category: 'Regulatory Compliance Engine',
-    seoTitle: 'Compliant Transaction Audit Logs & Quantitative Trade Ledgers | MTXquant',
+    seoTitle: 'Compliant Transaction Audit Logs & Quantitative Trade Ledgers | MTXcapital',
     metaDescription: 'Inspect time-stamped execution receipts, audit clearing fees, verify cryptographic execution hashes, and download certified PDF/CSV reports.',
     heroHeadline: 'Cryptographic Audit Trail & Certified Execution Ledgers',
     heroSubheadline: 'Regulatory-compliant reporting infrastructure generating millisecond time-stamped transaction receipts, fee diagnostics, and exportable audit matrices.',
@@ -300,7 +348,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
       { step: '03', title: 'Export Certified Reports', desc: 'Download PDF tax reports or raw JSON audit payloads for internal reporting.' }
     ],
     faqs: [
-      { q: 'Are trade confirmation receipts legally binding?', a: 'Yes. Official trade confirmation receipts generated by MTXquant meet FINRA Rule 2232 standards.' },
+      { q: 'Are trade confirmation receipts legally binding?', a: 'Yes. Official trade confirmation receipts generated by MTXcapital meet FINRA Rule 2232 standards.' },
       { q: 'How long are historical transaction records stored?', a: 'All execution logs and account ledgers are stored indefinitely in secure, read-only cloud archives.' }
     ],
     keywords: ['Transaction Audit Logs', 'Execution Receipts', 'Tax Loss Export', 'SOC2 Compliance', 'Clearing Fee Transparency']
@@ -310,7 +358,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
     name: 'Market Analysis & Correlation Intelligence',
     badge: 'Intelligence',
     category: 'Quantitative Market Analytics',
-    seoTitle: 'Mathematical Asset Correlation & Intelligence Center | MTXquant',
+    seoTitle: 'Mathematical Asset Correlation & Intelligence Center | MTXcapital',
     metaDescription: 'Explore Pearson asset correlation heatmaps, macro trend indices, benchmark models, and statistical correlation matrices for systematic strategies.',
     heroHeadline: 'Mathematical Correlation Matrix & Cross-Asset Intelligence',
     heroSubheadline: 'Uncover hidden systemic risk correlations, sector rotation trends, and statistical arbitrage opportunities with live Pearson correlation heatmaps.',
@@ -356,7 +404,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
     name: 'Algorithmic Strategy Backtest Simulator',
     badge: 'Quant Sandbox',
     category: 'Quantitative Backtesting Engine',
-    seoTitle: 'Algorithmic Backtest Simulator & Monte Carlo Risk Analytics | MTXquant',
+    seoTitle: 'Algorithmic Backtest Simulator & Monte Carlo Risk Analytics | MTXcapital',
     metaDescription: 'Run historical strategy backtests, simulate Monte Carlo drawdown distributions, account for realistic slippage, and compute Sharpe/Sortino ratios.',
     heroHeadline: 'Algorithmic Backtest Sandbox & Monte Carlo Simulator',
     heroSubheadline: 'Validate systematic trading algorithms against years of tick-by-tick historical market data with realistic slippage, commission modeling, and drawdown distributions.',
@@ -402,7 +450,7 @@ export const FEATURE_SPECS: Record<FeatureId, FeatureDetailSpec> = {
     name: 'Institutional Sentiment & Flow Intelligence',
     badge: 'Flow Radar',
     category: 'Institutional Order Analytics',
-    seoTitle: 'Institutional Sentiment Radar & Dark Pool Flow Intelligence | MTXquant',
+    seoTitle: 'Institutional Sentiment Radar & Dark Pool Flow Intelligence | MTXcapital',
     metaDescription: 'Track dark pool sweep transactions, institutional order flow divergence, options gamma exposure, and smart money positioning alerts.',
     heroHeadline: 'Institutional Order Flow Radar & Dark Pool Intelligence',
     heroSubheadline: 'Uncover hidden institutional accumulation, dark pool sweeps, option delta surges, and smart-money-vs-retail sentiment divergences in real-time.',
@@ -623,6 +671,84 @@ function InteractiveFeatureWidget({ featureId }: { featureId: FeatureId }) {
         </div>
       )}
 
+      {/* DISCOVER / MARKET SCREENER WIDGET */}
+      {featureId === 'discover' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-neutral-950/60 p-3 rounded-lg border border-neutral-900">
+            <div className="flex items-center space-x-2">
+              <Compass className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Multi-Factor Factor Radar & RVOL Screener</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {(['ALL', 'HIGH RVOL', 'VALUE ALPHA', 'MOMENTUM'] as const).map(filter => (
+                <button
+                  key={filter}
+                  onClick={() => setSelectedCategory(filter === 'ALL' ? 'ALL' : filter === 'HIGH RVOL' ? 'TECH' : filter === 'VALUE ALPHA' ? 'FINANCE' : 'CRYPTO')}
+                  className={`px-2.5 py-1 text-[9px] font-bold rounded cursor-pointer transition-colors ${
+                    (filter === 'ALL' && selectedCategory === 'ALL') ||
+                    (filter === 'HIGH RVOL' && selectedCategory === 'TECH') ||
+                    (filter === 'VALUE ALPHA' && selectedCategory === 'FINANCE') ||
+                    (filter === 'MOMENTUM' && selectedCategory === 'CRYPTO')
+                      ? 'bg-amber-500 text-black' 
+                      : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto bg-neutral-950/80 rounded-lg border border-neutral-900 p-2">
+            <table className="w-full text-left text-xs font-mono">
+              <thead>
+                <tr className="border-b border-neutral-800 text-neutral-500 text-[10px] uppercase">
+                  <th className="py-2 px-3">Symbol</th>
+                  <th className="py-2 px-3">Sector</th>
+                  <th className="py-2 px-3">Factor Score</th>
+                  <th className="py-2 px-3">Intraday RVOL</th>
+                  <th className="py-2 px-3">P/E Ratio</th>
+                  <th className="py-2 px-3 text-right">24h Momentum</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-900">
+                {[
+                  { sym: 'NVDA', name: 'NVIDIA Corp', sector: 'Semiconductors', score: 96, rvol: '3.4x', pe: '32.1x', change: '+4.85%', isUp: true },
+                  { sym: 'AAPL', name: 'Apple Inc', sector: 'Consumer Tech', score: 91, rvol: '2.1x', pe: '28.4x', change: '+1.42%', isUp: true },
+                  { sym: 'BTC/USDT', name: 'Bitcoin Spot', sector: 'Digital Assets', score: 88, rvol: '4.2x', pe: 'N/A', change: '+5.30%', isUp: true },
+                  { sym: 'MSFT', name: 'Microsoft Corp', sector: 'Enterprise Software', score: 85, rvol: '1.8x', pe: '31.0x', change: '-0.35%', isUp: false },
+                  { sym: 'TSLA', name: 'Tesla Inc', sector: 'Automotive / EV', score: 82, rvol: '2.9x', pe: '48.2x', change: '+2.15%', isUp: true },
+                ].map((item, idx) => (
+                  <tr key={idx} className="hover:bg-neutral-900/60 transition-colors">
+                    <td className="py-2.5 px-3">
+                      <span className="font-bold text-white block">{item.sym}</span>
+                      <span className="text-[9px] text-neutral-500">{item.name}</span>
+                    </td>
+                    <td className="py-2.5 px-3 text-neutral-400 text-[11px]">{item.sector}</td>
+                    <td className="py-2.5 px-3">
+                      <span className="bg-amber-400/10 text-amber-400 border border-amber-400/20 px-1.5 py-0.5 rounded font-bold text-[10px]">
+                        Alpha {item.score}/100
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded text-[10px]">
+                        ⚡ {item.rvol}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-neutral-300 font-bold">{item.pe}</td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span className={`font-bold ${item.isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {item.change}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* PORTFOLIO WIDGET */}
       {featureId === 'portfolio' && (
         <div className="space-y-5">
@@ -809,19 +935,19 @@ function InteractiveFeatureWidget({ featureId }: { featureId: FeatureId }) {
               Multi-Bank Sweep Distribution Protocol
             </span>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
-              <div className="p-2 bg-neutral-900 rounded border border-neutral-850">
+              <div className="p-2 bg-neutral-900 rounded border border-neutral-800/80">
                 <span className="text-neutral-500 block">BNY Mellon</span>
                 <span className="text-white font-bold">$1,250,000</span>
               </div>
-              <div className="p-2 bg-neutral-900 rounded border border-neutral-850">
+              <div className="p-2 bg-neutral-900 rounded border border-neutral-800/80">
                 <span className="text-neutral-500 block">JP Morgan Chase</span>
                 <span className="text-white font-bold">$1,250,000</span>
               </div>
-              <div className="p-2 bg-neutral-900 rounded border border-neutral-850">
+              <div className="p-2 bg-neutral-900 rounded border border-neutral-800/80">
                 <span className="text-neutral-500 block">Citigroup</span>
                 <span className="text-white font-bold">$1,250,000</span>
               </div>
-              <div className="p-2 bg-neutral-900 rounded border border-neutral-850">
+              <div className="p-2 bg-neutral-900 rounded border border-neutral-800/80">
                 <span className="text-neutral-500 block">Goldman Sachs</span>
                 <span className="text-white font-bold">$1,250,000</span>
               </div>
@@ -1033,14 +1159,14 @@ export default function FeatureLandingPage({
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:5rem_5rem] pointer-events-none z-0 opacity-40" />
 
       {/* Header Sticky Navigation (Homepage Header) */}
-      <header className="sticky top-0 z-50 bg-[#000000]/85 backdrop-blur-md border-b border-neutral-900/80 px-6 lg:px-12 py-4 flex flex-col justify-center relative z-10">
+      <header className="sticky top-0 z-[500] bg-[#000000]/90 backdrop-blur-md border-b border-neutral-900/80 px-6 lg:px-12 py-4 flex flex-col justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center">
             <button 
               onClick={onClose}
               className="text-base font-black tracking-tight text-white block lowercase hover:opacity-80 transition-opacity cursor-pointer text-left"
             >
-              mtxquant
+              mtxcapital
             </button>
           </div>
 
@@ -1116,7 +1242,7 @@ export default function FeatureLandingPage({
             {/* Mobile Menu Toggle Button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 text-neutral-200 hover:text-white transition-colors cursor-pointer rounded border border-neutral-850 bg-neutral-950/80"
+              className="lg:hidden p-2 text-neutral-200 hover:text-white transition-colors cursor-pointer rounded border border-neutral-800/80 bg-neutral-950/80"
               aria-label="Toggle navigation menu"
             >
               {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -1263,7 +1389,7 @@ export default function FeatureLandingPage({
 
           <div className="space-y-3 border-t md:border-t-0 md:border-l border-neutral-900 pt-6 md:pt-0 md:pl-8">
             <span className="text-[10px] font-mono text-emerald-400 uppercase font-bold tracking-widest block">
-              The MTXquant Advantage
+              The MTXcapital Advantage
             </span>
             <h3 className="text-lg font-bold text-white">Engineered for Precision & Speed</h3>
             <p className="text-xs text-neutral-300 leading-relaxed font-light">
@@ -1423,7 +1549,7 @@ export default function FeatureLandingPage({
                 onClick={onClose}
                 className="text-base font-black tracking-tight text-white block lowercase hover:opacity-80 transition-opacity cursor-pointer text-left"
               >
-                mtxquant
+                mtxcapital
               </button>
             </div>
             <p className="text-[10px] text-neutral-300 leading-relaxed font-light">
@@ -1485,14 +1611,14 @@ export default function FeatureLandingPage({
           <div className="space-y-3">
             <span className="font-mono text-[9px] uppercase font-bold tracking-widest text-neutral-200 block">Regulatory Compliance</span>
             <p className="text-[9px] text-neutral-300 leading-relaxed font-light">
-              Disclaimer: MTX Securities is a registered trademark. Stock investing, options leveraging, and margin allocations carry significant capital risk. Customer accounts are strictly segregated under SEC and FINRA protocols.
+              Disclaimer: MTX Capital is a registered trademark of MTXcapital Ltd. Stock investing, options leveraging, and margin allocations carry significant capital risk. Customer accounts are strictly segregated under SEC and FINRA protocols.
             </p>
           </div>
 
         </div>
 
         <div className="max-w-6xl mx-auto border-t border-neutral-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-300 text-[10px] font-mono uppercase tracking-wider">
-          <span>MTX Securities Brokerage Terminal &copy; 2026. MTX Securities is a registered trademark of MTXcapital.</span>
+          <span>MTX Capital Brokerage Terminal &copy; 2026. MTX Capital is a registered trademark of MTXcapital Ltd.</span>
           <div className="flex space-x-6">
             <span className="hover:text-white transition-colors cursor-help">Terms of service</span>
             <span className="hover:text-white transition-colors cursor-help">Privacy policy</span>

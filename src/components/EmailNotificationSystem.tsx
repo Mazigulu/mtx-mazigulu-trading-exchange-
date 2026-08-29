@@ -45,7 +45,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
     activationCode: 'MTX-8492-QL',
     inviteMethod: 'Direct Institutional Invitation',
     temporaryPasscode: '********',
-    supportDesk: 'vip-desk@mtxquant.com',
+    supportDesk: 'vip-desk@mtxcapital.ai.studio',
     timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
   });
 
@@ -190,7 +190,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
   const getSubjectLine = (type: EmailItem['type'], vars: any) => {
     switch (type) {
       case 'welcome_signup':
-        return `[WELCOME] Welcome to MTXquant: Institutional Account Activation Required`;
+        return `[WELCOME] Welcome to MTXcapital: Institutional Account Activation Required`;
       case 'kyc_status':
         return `[COMPLIANCE] Regulatory Status Updated: Approved SEC Level 3 for ${vars.traderName}`;
       case 'api_key_created':
@@ -198,7 +198,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
       case 'capital_settlement':
         return `[CREDIT] Direct Wire Settlement Receipt: +$${vars.netCredit} USD Cleared`;
       case 'order_fill':
-        return `[CONFIRMATION] MTXquant Trade Execution Advice: ${vars.action} ${vars.qty} ${vars.symbol}`;
+        return `[CONFIRMATION] MTXcapital Trade Execution Advice: ${vars.action} ${vars.qty} ${vars.symbol}`;
       case 'margin_alert':
         return `[ALERT] URGENT: Critical Margin Coverage Deficiency on ${vars.accountId} (${vars.marginRatio})`;
       case 'capital_outflow':
@@ -235,7 +235,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
       `;
       emailContentBody = `
         <p style="margin-top: 0; line-height: 1.6; color: ${textCol};">Dear ${vars.traderName},</p>
-        <p style="line-height: 1.6; color: ${textCol};">Welcome to MTXquant. An institutional-grade, highly specialized systematic trading allocation account has been successfully provisioned for your entity under modern regulatory compliance charters.</p>
+        <p style="line-height: 1.6; color: ${textCol};">Welcome to MTXcapital. An institutional-grade, highly specialized systematic trading allocation account has been successfully provisioned for your entity under modern regulatory compliance charters.</p>
         <p style="line-height: 1.6; color: ${textCol};">Please complete your secure terminal onboarding sequence to finalize authentication whitelisting and activate programmatic trading gateways.</p>
         
         <table style="width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
@@ -320,7 +320,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
         </div>
       `;
       emailContentBody = `
-        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};"><strong>DEVELOPER WATCHDOG SUMMARY:</strong> A brand new high-performance cryptographic API access token was successfully compiled and linked to your MTXquant algorithmic trading container.</p>
+        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};"><strong>DEVELOPER WATCHDOG SUMMARY:</strong> A brand new high-performance cryptographic API access token was successfully compiled and linked to your MTXcapital algorithmic trading container.</p>
         
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
           <tr style="border-bottom: 1px solid ${borderCol};">
@@ -350,7 +350,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
         </table>
 
         <div style="background-color: #0c121e; border-left: 3px solid #00e5ff; padding: 12px; margin: 20px 0; font-size: 11px; color: #e0f2fe; line-height: 1.5;">
-          <strong>SECURITY WARNING:</strong> Ensure that your private keys are stored within secure hardware environments. MTXquant compliance never stores raw private keys; they cannot be retrieved if misplaced.
+          <strong>SECURITY WARNING:</strong> Ensure that your private keys are stored within secure hardware environments. MTXcapital compliance never stores raw private keys; they cannot be retrieved if misplaced.
         </div>
 
         <div style="text-align: center; margin: 24px 0 10px 0;">
@@ -366,7 +366,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
         </div>
       `;
       emailContentBody = `
-        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};">We are pleased to advise you that a direct capital funding settlement has successfully cleared into your MTXquant prime custody brokerage allocation.</p>
+        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};">We are pleased to advise you that a direct capital funding settlement has successfully cleared into your MTXcapital prime custody brokerage allocation.</p>
         
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
           <tr style="border-bottom: 1px solid ${borderCol};">
@@ -411,7 +411,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
         </div>
       `;
       emailContentBody = `
-        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};">We are pleased to advise you of the execution details for the transaction requested on your MTXquant institutional account.</p>
+        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};">We are pleased to advise you of the execution details for the transaction requested on your MTXcapital institutional account.</p>
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
           <tr style="border-bottom: 1px solid ${borderCol};">
             <td style="padding: 10px 0; color: ${textMuted}; text-transform: uppercase;">Transaction ID</td>
@@ -512,7 +512,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
         </div>
       `;
       emailContentBody = `
-        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};">We are writing to confirm that an authorized capital withdrawal settlement has cleared through MTXquant custody channels and has been securely dispatched to your designated institution destination.</p>
+        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};">We are writing to confirm that an authorized capital withdrawal settlement has cleared through MTXcapital treasury settlement channels and has been securely dispatched to your designated institution destination.</p>
         
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
           <tr style="border-bottom: 1px solid ${borderCol};">
@@ -603,7 +603,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
         </div>
       `;
       emailContentBody = `
-        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};">We are writing to advise you that a FIDO2 WebAuthn cryptographic hardware security key has been successfully modified on your MTXquant master trader account.</p>
+        <p style="margin-top: 0; line-height: 1.6; color: ${textCol};">We are writing to advise you that a FIDO2 WebAuthn cryptographic hardware security key has been successfully modified on your MTXcapital master trader account.</p>
         
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
           <tr style="border-bottom: 1px solid ${borderCol};">
@@ -678,7 +678,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
           </tr>
         </table>
         
-        <p style="line-height: 1.6; color: ${textCol};">Should you wish to establish a new systemic trading relationship with MTXquant in the future, please reach out to our institutional onboarding division.</p>
+        <p style="line-height: 1.6; color: ${textCol};">Should you wish to establish a new systemic trading relationship with MTXcapital in the future, please reach out to our institutional onboarding division.</p>
       `;
     }
 
@@ -709,7 +709,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
         <body style="margin: 0; padding: 24px 0; background-color: ${darkBg}; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
           <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: ${innerBg}; border: 1px solid ${borderCol}; border-radius: 8px; overflow: hidden; border-top: 4px solid ${accentBarColor}; border-collapse: collapse;">
             
-            <!-- MTXquant Header Banner -->
+            <!-- MTXcapital Header Banner -->
             <tr>
               <td style="padding: 20px 32px; border-bottom: 1px solid ${borderCol}; text-align: left; background: linear-gradient(135deg, #0f1016 0%, #050608 100%);">
                 <table border="0" cellpadding="0" cellspacing="0" width="100%">
@@ -720,7 +720,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
                         <tr>
                           <td style="vertical-align: middle;">
                             <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 19px; font-weight: 900; letter-spacing: -0.8px; color: #ffffff; text-transform: lowercase; line-height: 1; display: inline-block;">
-                              mtxquant
+                              mtxcapital
                             </span>
                           </td>
                         </tr>
@@ -763,7 +763,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
                   </tr>
                   <tr>
                     <td style="border-top: 1px solid ${borderCol}; padding-top: 12px; font-family: 'Inter', sans-serif; font-size: 8px; color: rgba(156, 163, 175, 0.5); line-height: 1.4;">
-                      DISCLAIMER: This document is confidential. It contains proprietary information intended solely for the registered trader client. If you have received this transmission in error, please contact the MTX compliance desk immediately and destroy all physical or virtual copies. MTXquant prime brokerage is regulated under authorized securities frameworks.
+                      DISCLAIMER: This document is confidential. It contains proprietary information intended solely for the registered trader client. If you have received this transmission in error, please contact the MTX compliance desk immediately and destroy all physical or virtual copies. MTXcapital prime brokerage is regulated under authorized securities frameworks.
                     </td>
                   </tr>
                 </table>
@@ -805,7 +805,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
         subject: '[COMPLIANCE] Regulatory Status Updated: Approved SEC Level 3 for Mazi Guluj',
         type: 'kyc_status',
         timestamp: '1 Day ago',
-        sender: 'compliance@mtxquant.com',
+        sender: 'compliance@mtxcapital.ai.studio',
         htmlContent: '', // dynamically built on request
         isUnread: true,
         variables: initialVars
@@ -847,24 +847,24 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
     const htmlBody = buildEmailHTML(activeTemplateType, vars);
 
     const logLines = [
-      `Connecting to mail.mtxquant.com [197.234.18.91] on port 587...`,
-      `S: 220 mail.mtxquant.com ESMTP Postfix (Ubuntu/MTXSecure)`,
-      `C: EHLO terminal.mtxquant.local`,
-      `S: 250-mail.mtxquant.com, PIPELINING, SIZE 31457280, 8BITMIME, STARTTLS`,
+      `Connecting to mail.mtxcapital.ai.studio [197.234.18.91] on port 587...`,
+      `S: 220 mail.mtxcapital.ai.studio ESMTP Postfix (Ubuntu/MTXSecure)`,
+      `C: EHLO terminal.mtxcapital.local`,
+      `S: 250-mail.mtxcapital.ai.studio, PIPELINING, SIZE 31457280, 8BITMIME, STARTTLS`,
       `C: STARTTLS`,
       `S: 220 2.0.0 Ready to start TLS handshake`,
       `>> Cryptographic TLS v1.3 handshake negotiation established: Cipher=TLS_AES_256_GCM_SHA384`,
-      `C: EHLO terminal.mtxquant.local`,
-      `S: 250-mail.mtxquant.com, PIPELINING, SIZE 31457280, AUTH PLAIN LOGIN`,
+      `C: EHLO terminal.mtxcapital.local`,
+      `S: 250-mail.mtxcapital.ai.studio, PIPELINING, SIZE 31457280, AUTH PLAIN LOGIN`,
       `C: AUTH PLAIN MTBYX0F1dGg4OTMyOGNjOTEyMmI=`,
       `S: 235 2.7.0 Authentication successful`,
-      `C: MAIL FROM: <alerts@mtxquant.com>`,
+      `C: MAIL FROM: <alerts@mtxcapital.ai.studio>`,
       `S: 250 2.1.0 Ok`,
       `C: RCPT TO: <${traderEmail}>`,
       `S: 250 2.1.5 Ok - recipient validated`,
       `C: DATA`,
       `S: 354 End data with <CR><LF>.<CR><LF>`,
-      `C: From: MTXquant Security Dispatch <alerts@mtxquant.com>`,
+      `C: From: MTXcapital Security Dispatch <alerts@mtxcapital.ai.studio>`,
       `C: To: Trader <${traderEmail}>`,
       `C: Subject: ${currentSubject}`,
       `C: Content-Type: text/html; charset=UTF-8`,
@@ -887,7 +887,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
       subject: currentSubject,
       type: activeTemplateType,
       timestamp: 'Just now',
-      sender: 'alerts@mtxquant.com',
+      sender: 'alerts@mtxcapital.ai.studio',
       htmlContent: htmlBody,
       isUnread: true,
       variables: { ...vars }
@@ -1330,7 +1330,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
                 <button
                   onClick={triggerSmtpDispatch}
                   disabled={isSending}
-                  className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-extrabold uppercase rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer text-[10px] tracking-wide disabled:opacity-50"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold uppercase rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer text-[10px] tracking-wide disabled:opacity-50"
                 >
                   <Send className={`w-3.5 h-3.5 ${isSending ? 'animate-bounce' : ''}`} />
                   {isSending ? 'TRANSMITTING VIA SMTP...' : 'SEND LIVE TEST EMAIL'}
@@ -1508,7 +1508,7 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
               </div>
               <div className="flex items-center gap-1.5 text-neutral-200 font-mono text-[9px]">
                 <span className="uppercase">From:</span>
-                <span className="text-white">MTXquant Dispatch Service &lt;{selectedInboxEmail ? selectedInboxEmail.sender : 'alerts@mtxquant.com'}&gt;</span>
+                <span className="text-white">MTXcapital Dispatch Service &lt;{selectedInboxEmail ? selectedInboxEmail.sender : 'alerts@mtxcapital.ai.studio'}&gt;</span>
               </div>
             </div>
 

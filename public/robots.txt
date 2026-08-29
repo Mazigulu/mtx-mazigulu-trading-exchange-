@@ -1,5 +1,5 @@
-# robots.txt for mtx Securities and mtxquant
-# Optimized for Googlebot, Bingbot, GPTBot, ClaudeBot, PerplexityBot and AI Search Crawlers
+# robots.txt for MTXcapital - Institutional Multi-Asset Fractional Trading Platform
+# Optimized for Googlebot, Bingbot, Applebot, GPTBot, ClaudeBot, PerplexityBot, DeepSeek, Mistral, and all AI Search Systems
 
 User-agent: *
 Allow: /
@@ -8,21 +8,87 @@ Disallow: /private/
 Disallow: /auth/
 Disallow: /admin/
 
+# OpenAI Crawlers & Search Engine Agents
 User-agent: GPTBot
 Allow: /
 
 User-agent: ChatGPT-User
 Allow: /
 
+User-agent: OAI-SearchBot
+Allow: /
+
+# Anthropic Claude Crawlers
 User-agent: ClaudeBot
 Allow: /
 
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+# Perplexity AI Search Engine
 User-agent: PerplexityBot
+Allow: /
+
+# Google Search & Gemini Retrieval
+User-agent: Googlebot
 Allow: /
 
 User-agent: Google-Extended
 Allow: /
 
-# Sitemap references
-Sitemap: https://mtxquant.com/sitemap.xml
-Sitemap: https://mtx.brokerage/sitemap.xml
+User-agent: GoogleOther
+Allow: /
+
+# Apple Intelligence & Siri Knowledge Graph
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Microsoft Bing & Copilot
+User-agent: Bingbot
+Allow: /
+
+# DeepSeek & Mistral AI Crawlers
+User-agent: DeepSeekBot
+Allow: /
+
+User-agent: MistralBot
+Allow: /
+
+# Meta AI & Specialized Reasoning Crawlers
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: Meta-ExternalFetcher
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: Diffbot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: DuckAssistBot
+Allow: /
+
+User-agent: YouBot
+Allow: /
+
+# Sitemaps & Machine-Readable AI Knowledge Graph References
+Sitemap: https://mtxcapital.ai.studio/sitemap.xml
+# LLMs.txt for AI Search Engines & Autonomous Agents
+# Reference: https://mtxcapital.ai.studio/llms.txt
+# Comprehensive Reference: https://mtxcapital.ai.studio/llms-full.txt
+
+

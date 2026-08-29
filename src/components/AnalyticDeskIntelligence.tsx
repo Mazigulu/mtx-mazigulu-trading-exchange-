@@ -219,7 +219,7 @@ export default function AnalyticDeskIntelligence({
                 LIVE HEURISTICS
               </span>
             </div>
-            <p className="text-[10px] text-white/35 mt-0.5">Four-tiered securities analytical engine. Aligned to the MTX Securities blueprint.</p>
+            <p className="text-[10px] text-white/35 mt-0.5">Four-tiered securities analytical engine. Aligned to the MTX Capital blueprint.</p>
           </div>
         </div>
 
@@ -277,7 +277,7 @@ export default function AnalyticDeskIntelligence({
         <div className="mb-5 p-4 bg-indigo-950/20 border border-indigo-500/20 rounded-md font-mono text-[10.5px] text-indigo-200 leading-relaxed select-none animate-fadeIn">
           <div className="flex items-center space-x-2 text-indigo-300 font-bold uppercase text-[11px] mb-2">
             <Sparkles className="w-4 h-4 animate-pulse" />
-            <span>MTX SECURITIES RULE BLUEPRINT: INTERNAL HEURISTICS</span>
+            <span>MTX CAPITAL RULE BLUEPRINT: INTERNAL HEURISTICS</span>
           </div>
           <p className="mb-2">
             The Desk Intelligence tracks four core mathematical layers to locate market trends and safety parameters:

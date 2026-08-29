@@ -256,7 +256,7 @@ export default function DailyBriefing() {
             <div className="bg-[#121008] border border-amber-500/40 rounded-md p-3 text-[11px] font-mono flex items-start space-x-2.5 text-amber-300">
               <Zap className="w-4 h-4 text-amber-500 shrink-0 mt-0.5 animate-pulse" />
               <div>
-                <p className="font-bold tracking-tight text-amber-400">MTXQUANT HIGH-FIDELITY SIMULATION MODE</p>
+                <p className="font-bold tracking-tight text-amber-400">MTXCAPITAL HIGH-FIDELITY SIMULATION MODE</p>
                 <p className="text-neutral-200 font-sans mt-1 leading-relaxed text-[11px]">
                   The live AI service is currently resolving standard public quota constraints (20 requests per day limit). The platform has seamlessly loaded the high-fidelity SMC institutional confluence matrix so your active sessions continue without delay.
                 </p>

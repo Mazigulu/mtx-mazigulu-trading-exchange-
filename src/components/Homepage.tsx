@@ -40,7 +40,11 @@ import {
   Menu,
   X,
   BarChart2,
-  Radio
+  Radio,
+  Compass,
+  Zap,
+  Building2,
+  CheckCircle2
 } from 'lucide-react';
 
 export interface WorkspaceSpec {
@@ -68,6 +72,17 @@ export const workspacesData: WorkspaceSpec[] = [
     roleExplanation: "The central execution engine of the platform, combining low-latency multi-asset order books, custom technical analysis charts, and a dynamic order routing calculator with volatility-adjusted position sizing models."
   },
   {
+    id: 'discover',
+    name: 'Market Screener',
+    files: 'MarketsTerminal.tsx (Screener Mode)',
+    badge: 'Factor Radar',
+    desc: 'Scan global equities and crypto assets using quantitative valuation ratios, multi-factor momentum filters, and real-time relative volume anomaly alerts.',
+    features: ['Multi-factor market cap & valuation filters', 'Intraday relative volume (RVOL) spike alerts', 'Cross-asset sector weight distribution matrices', 'Grounded multi-engine search financial news'],
+    icon: <Compass className="w-4 h-4" />,
+    seoTitle: "Market Discovery & Systematic Equity Screener (Market Screener)",
+    roleExplanation: "Multi-factor quantitative screening engine designed to isolate high-momentum assets, intraday volume anomalies, and cross-asset relative value dislocations."
+  },
+  {
     id: 'portfolio',
     name: 'Portfolio Desk',
     files: 'PortfolioDesk.tsx',
@@ -88,17 +103,6 @@ export const workspacesData: WorkspaceSpec[] = [
     icon: <List className="w-4 h-4" />,
     seoTitle: "Dynamic Stock Watchlist & Market Volatility Filters (Watchlist Dashboard)",
     roleExplanation: "An execution filter that monitors high-frequency symbol data, offering immediate asset switching and calculating dynamic asset saliency metrics for priority execution."
-  },
-  {
-    id: 'funding',
-    name: 'Wallet Desk',
-    files: 'FundingDesk.tsx',
-    badge: 'Capital Custody',
-    desc: 'Manage direct capital custody allocations, ledger settlements, instant wire transfers, and credit lines.',
-    features: ['Direct ledger clearing', 'Secured institutional bank gateways', 'Credit line application engine', 'Segregated balance logs'],
-    icon: <DollarSign className="w-4 h-4" />,
-    seoTitle: "Institutional Wallet & Direct Capital Custody Desk (Wallet Desk)",
-    roleExplanation: "The core liquidity desk supporting bank wire ledgers, segregated balance structures, institutional clearing controls, and credit line applications."
   },
   {
     id: 'activity',
@@ -632,11 +636,6 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
     };
   }, []);
 
-  // --- Funding view states ---
-  const [fundingAmount, setFundingAmount] = useState<string>('50000');
-  const [fundingBank, setFundingBank] = useState<string>('J.P. Morgan');
-  const [fundingSuccess, setFundingSuccess] = useState<string | null>(null);
-
   // --- Settings view states ---
   const [panicKeyEnabled, setPanicKeyEnabled] = useState<boolean>(true);
   const [alertThreshold, setAlertThreshold] = useState<number>(320);
@@ -1048,7 +1047,7 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                     className="fixed inset-0 z-40" 
                     onClick={() => setIsSymbolDropdownOpen(false)} 
                   />
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-neutral-950 border border-neutral-850 rounded shadow-2xl z-50 overflow-hidden py-1">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-neutral-950 border border-neutral-800/50 rounded shadow-2xl z-50 overflow-hidden py-1">
                     {[
                       { val: 'AAPL', label: 'AAPL (Apple Inc.)' },
                       { val: 'TSLA', label: 'TSLA (Tesla Inc.)' },
@@ -1082,10 +1081,10 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
                   key={tf}
                   id={`homepage-tf-btn-${tf}`}
                   onClick={() => setActiveTimeframe(tf)}
-                  className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${
+                  className={`px-2 py-0.5 text-[9px] font-mono font-bold rounded transition-all cursor-pointer select-none ${
                     activeTimeframe === tf 
-                      ? 'bg-neutral-800 text-white' 
-                      : 'text-neutral-300 hover:text-white'
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'text-neutral-300 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   {tf}
@@ -1535,6 +1534,111 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
         </motion.div>
       )}
 
+        {/* 1.5. MARKET SCREENER (DISCOVER) SIMULATOR */}
+        {activeWorkspace === 'discover' && (
+          <motion.div
+            key="discover"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-4 text-xs font-mono text-neutral-300"
+          >
+            <div className="border-b border-neutral-900 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] text-white uppercase font-bold block">Market Discovery & Systematic Equity Screener</span>
+                  <span className="text-[8px] bg-amber-400 text-neutral-950 px-1.5 py-0.5 rounded font-black uppercase shadow-sm">
+                    Factor Radar Active
+                  </span>
+                </div>
+                <span className="text-[8px] text-neutral-400 block mt-0.5">
+                  Multi-factor quantitative screening engine isolating high-momentum assets and intraday RVOL anomalies
+                </span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[9px] px-2 py-0.5 bg-emerald-500 text-neutral-950 font-black rounded shadow-sm">
+                  5000+ Assets Screened
+                </span>
+              </div>
+            </div>
+
+            {/* Screener Controls / Filter Radar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+              <div className="bg-neutral-950/80 p-2.5 rounded border border-neutral-800/50 space-y-1">
+                <span className="text-neutral-500 uppercase font-bold block text-[8.5px]">Intraday RVOL Filter</span>
+                <span className="text-amber-400 font-bold block text-xs">Spikes &gt; 2.5x</span>
+                <span className="text-[8px] text-neutral-400">Institutional Accumulation</span>
+              </div>
+              <div className="bg-neutral-950/80 p-2.5 rounded border border-neutral-800/50 space-y-1">
+                <span className="text-neutral-500 uppercase font-bold block text-[8.5px]">Valuation Dislocation</span>
+                <span className="text-emerald-400 font-bold block text-xs">P/E &lt; 20.0x / Alpha</span>
+                <span className="text-[8px] text-neutral-400">Undervalued Value Factor</span>
+              </div>
+              <div className="bg-neutral-950/80 p-2.5 rounded border border-neutral-800/50 space-y-1">
+                <span className="text-neutral-500 uppercase font-bold block text-[8.5px]">Momentum Vector</span>
+                <span className="text-white font-bold block text-xs">24h Alpha &gt; +3.0%</span>
+                <span className="text-[8px] text-neutral-400">Relative Strength Index</span>
+              </div>
+              <div className="bg-neutral-950/80 p-2.5 rounded border border-neutral-800/50 space-y-1">
+                <span className="text-neutral-500 uppercase font-bold block text-[8.5px]">Multi-Asset Scope</span>
+                <span className="text-indigo-400 font-bold block text-xs">Equities + Crypto</span>
+                <span className="text-[8px] text-neutral-400">Cross-Asset Arbitrage</span>
+              </div>
+            </div>
+
+            {/* Real-time screened results table */}
+            <div className="overflow-x-auto bg-neutral-950/90 rounded border border-neutral-800/50 p-2">
+              <table className="w-full text-left text-[11px] border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-900 bg-neutral-950/40 text-neutral-400 uppercase text-[9px] tracking-wider">
+                    <th className="p-2">Asset / Symbol</th>
+                    <th className="p-2">Sector</th>
+                    <th className="p-2">Alpha Rank</th>
+                    <th className="p-2">RVOL Anomaly</th>
+                    <th className="p-2">P/E Ratio</th>
+                    <th className="p-2 text-right">24h Return</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-900 font-mono">
+                  {[
+                    { sym: 'NVDA', name: 'NVIDIA Corp', sector: 'Semiconductors', alpha: '96 / 100', rvol: '3.4x', pe: '32.1x', ret: '+4.85%', up: true },
+                    { sym: 'AAPL', name: 'Apple Inc', sector: 'Consumer Tech', alpha: '91 / 100', rvol: '2.1x', pe: '28.4x', ret: '+1.42%', up: true },
+                    { sym: 'BTCUSD', name: 'Bitcoin Spot', sector: 'Digital Assets', alpha: '88 / 100', rvol: '4.2x', pe: 'N/A', ret: '+5.30%', up: true },
+                    { sym: 'TSLA', name: 'Tesla Inc', sector: 'Automotive / EV', alpha: '82 / 100', rvol: '2.9x', pe: '48.2x', ret: '+2.15%', up: true },
+                  ].map((row, idx) => (
+                    <tr key={idx} className="hover:bg-neutral-900/40 transition-colors">
+                      <td className="p-2">
+                        <span className="text-white font-bold block">{row.sym}</span>
+                        <span className="text-[8.5px] text-neutral-400">{row.name}</span>
+                      </td>
+                      <td className="p-2 text-neutral-300 text-[10px]">{row.sector}</td>
+                      <td className="p-2">
+                        <span className="text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded text-[9.5px]">
+                          {row.alpha}
+                        </span>
+                      </td>
+                      <td className="p-2">
+                        <span className="text-emerald-400 font-bold flex items-center gap-1 text-[9.5px]">
+                          <Zap className="w-3 h-3" /> {row.rvol}
+                        </span>
+                      </td>
+                      <td className="p-2 text-neutral-300 font-bold text-[10px]">{row.pe}</td>
+                      <td className="p-2 text-right">
+                        <span className={`font-bold ${row.up ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {row.ret}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+
+          </motion.div>
+        )}
+
         {/* 2. PORTFOLIO DESK SIMULATOR */}
         {activeWorkspace === 'portfolio' && (
           <motion.div
@@ -1722,9 +1826,9 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
               <tbody className="divide-y divide-neutral-900">
                 {watchlistRows
                   .filter(item => item.sym.toLowerCase().includes(watchlistQuery.toLowerCase()) || item.name.toLowerCase().includes(watchlistQuery.toLowerCase()))
-                  .map(ticker => (
+                  .map((ticker, idx) => (
                     <tr
-                      key={ticker.sym}
+                      key={`watch-${ticker.sym}-${idx}`}
                       onMouseEnter={() => setHighlightedRow(ticker.sym)}
                       onMouseLeave={() => setHighlightedRow(null)}
                       className={`hover:bg-neutral-900/30 transition-colors cursor-pointer ${
@@ -1756,111 +1860,6 @@ function WorkspaceVisualSimulator({ activeWorkspace, onLaunchTerminal }: Workspa
             </table>
           </div>
 
-        </motion.div>
-      )}
-
-        {/* 4. FUNDING DESK SIMULATOR */}
-        {activeWorkspace === 'funding' && (
-          <motion.div
-            key="funding"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="space-y-4 text-xs font-mono text-neutral-300"
-          >
-          <div className="border-b border-neutral-900 pb-3 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] text-white uppercase font-bold block">Instant Collateral Wire Gate</span>
-              <span className="text-[8px] text-neutral-300">Fast margin settlement logs</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Transfer Form */}
-            <div className="bg-transparent border border-neutral-800/50 p-3.5 rounded space-y-3 hover:bg-neutral-900/10 transition-colors">
-              <span className="text-[9px] text-neutral-300 uppercase tracking-wider font-bold block">Initiate Bank Wire Deposit</span>
-              
-              <div className="space-y-1.5">
-                <label className="text-[8px] text-neutral-300 uppercase">Select Custodian Bank:</label>
-                <select
-                  value={fundingBank}
-                  onChange={(e) => setFundingBank(e.target.value)}
-                  className="w-full bg-neutral-900/10 border border-neutral-800/40 rounded px-2.5 py-1 text-white focus:outline-none focus:border-amber-500/40 text-[10px]"
-                >
-                  <option value="J.P. Morgan">J.P. Morgan Chase & Co.</option>
-                  <option value="Goldman Sachs">Goldman Sachs Group Inc.</option>
-                  <option value="Citi">Citibank N.A.</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[8px] text-neutral-300 uppercase">Deposit Amount (USD):</label>
-                <div className="relative">
-                  <span className="absolute left-2.5 top-1.5 text-neutral-300">$</span>
-                  <input
-                    type="number"
-                    value={fundingAmount}
-                    onChange={(e) => setFundingAmount(e.target.value)}
-                    className="w-full bg-neutral-900/10 border border-neutral-800/40 rounded pl-5 pr-2 py-1 text-white font-bold focus:outline-none focus:border-amber-500/40 text-[10px]"
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  setFundingSuccess(`WIRE TRANSFER INITIATED: Received transfer request of $${parseFloat(fundingAmount || "0").toLocaleString()} via ${fundingBank} clearing network.`);
-                  setTimeout(() => setFundingSuccess(null), 5000);
-                }}
-                className="w-full py-2 bg-white text-black hover:bg-neutral-200 rounded font-bold uppercase text-[9px] tracking-wider transition-all cursor-pointer"
-              >
-                Initiate Bank Wire
-              </button>
-            </div>
-
-            {/* Simulated Balance Logs */}
-            <div className="bg-transparent border border-neutral-800/50 p-3.5 rounded space-y-3 flex flex-col justify-between hover:bg-neutral-900/10 transition-colors">
-              <div>
-                <span className="text-[9px] text-neutral-300 uppercase tracking-wider font-bold block mb-1">Segregated Balance Ledgers</span>
-                
-                <div className="space-y-2 text-[10px]">
-                  <div className="flex justify-between border-b border-neutral-900 pb-1">
-                    <span className="text-neutral-300">Clearing Pool Balance:</span>
-                    <span className="text-white font-bold">$1,000,000.00</span>
-                  </div>
-                  <div className="flex justify-between border-b border-neutral-900 pb-1">
-                    <span className="text-neutral-300">Secured Margin Cushion:</span>
-                    <span className="text-neutral-300 font-bold">$248,500.00</span>
-                  </div>
-                  <div className="flex justify-between border-b border-neutral-900 pb-1">
-                    <span className="text-neutral-300">Direct Credit Line:</span>
-                    <span className="text-neutral-300 font-bold">$5,000,000.00</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-neutral-900/10 rounded p-2 text-[8px] text-neutral-300 leading-normal border border-neutral-800/40 font-sans font-light">
-                ⚠️ Wire settlements require manual clearance from our regulatory compliance desk. Typically processed inside 10 minutes.
-              </div>
-            </div>
-          </div>
-
-          <AnimatePresence>
-            {fundingSuccess && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="bg-emerald-950/25 border border-emerald-500/20 text-emerald-400 p-2.5 rounded text-[10px] leading-normal flex items-start gap-2"
-              >
-                <Check className="w-3.5 h-3.5 shrink-0 text-emerald-400 mt-0.5" />
-                <div>
-                  <span className="font-bold">TRANSFER NOTIFICATION: </span>
-                  {fundingSuccess}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </motion.div>
       )}
 
@@ -2007,16 +2006,15 @@ function useMetaTagManager(activeWorkspaceId: string) {
     const workspace = workspacesData.find(w => w.id === activeWorkspaceId);
     if (!workspace) return;
 
-    const baseTitle = "mtx Securities | Engineered for Systematic Capital";
+    const baseTitle = "mtxcapital | Engineered for Systematic Capital";
     const title = `${workspace.seoTitle || workspace.name} | ${baseTitle}`;
-    const description = `Access the MTX Securities ${workspace.name} (${workspace.seoTitle}) engineered for systematic capital. ${workspace.roleExplanation || workspace.desc} Optimize stock, bond, treasury & option trading with real-time portfolio margin and high-yield cash sweeps.`;
+    const description = `Access the MTX Capital ${workspace.name} (${workspace.seoTitle}) engineered for systematic capital. ${workspace.roleExplanation || workspace.desc} Optimize stock, bond, treasury & option trading with real-time portfolio margin and high-yield cash sweeps.`;
     
     // Dynamic workspace-based keywords to prevent stale index headers
     const workspaceKeywords: Record<string, string> = {
       markets: "fractional shares buying, live order book analysis, candlestick charts, stock trading platform, real-time stock tickers, market depth",
       portfolio: "Value-at-Risk calculations, portfolio asset distribution, compound interest estimator, brokerage balance desk",
       watchlist: "custom stock watchlist, asset tracker, rapid symbol switching, continuous volatility filters, market level score",
-      funding: "bank wire deposit ledger, capital custody solution, institutional clearance, credit line application, balance logs, wallet",
       activity: "audited execution logs, trading ledger history, regulatory compliance reporting, brokerage receipt",
       analysis: "pearson correlation heatmap, trend indices, systematic benchmarking, statistical co-movement matrix, asset analysis"
     };
@@ -2114,10 +2112,10 @@ function useMetaTagManager(activeWorkspaceId: string) {
         {
           "@type": "FinancialService",
           "@id": `${window.location.origin}/#organization`,
-          "name": "mtxquant",
+          "name": "mtxcapital",
           "url": window.location.origin,
           "logo": `${window.location.origin}/assets/logo.png`,
-          "description": "mtxquant is an institutional prime brokerage engineered for systematic capital. We support high-performance capital custody, real-time risk analytics, and multi-asset routing for stocks, bonds, and treasuries.",
+          "description": "mtxcapital is an institutional prime brokerage engineered for systematic capital. We support fractionalized trading infrastructure, real-time risk analytics, and multi-asset routing for stocks, bonds, and treasuries.",
           "category": "Investment Brokerage",
           "feesAndCommissionsSpecification": `${window.location.origin}/#portal`,
           "knowsAbout": [
@@ -2135,7 +2133,7 @@ function useMetaTagManager(activeWorkspaceId: string) {
         {
           "@type": "SoftwareApplication",
           "@id": `${window.location.origin}/#application`,
-          "name": `mtxquant Suite - ${workspace.name}`,
+          "name": `mtxcapital Suite - ${workspace.name}`,
           "applicationCategory": "BusinessApplication",
           "operatingSystem": "All",
           "browserRequirements": "Requires HTML5 compatible web browser",
@@ -2143,7 +2141,7 @@ function useMetaTagManager(activeWorkspaceId: string) {
           "softwareVersion": "1.0.0",
           "author": {
             "@type": "Organization",
-            "name": "mtxquant"
+            "name": "mtxcapital"
           },
           "featureList": workspace.features,
           "screenshot": `${window.location.origin}/assets/hero-screenshot.png`
@@ -2160,7 +2158,7 @@ function useMetaTagManager(activeWorkspaceId: string) {
           },
           "provider": {
             "@type": "Organization",
-            "name": "mtxquant"
+            "name": "mtxcapital"
           }
         },
         {
@@ -2170,7 +2168,7 @@ function useMetaTagManager(activeWorkspaceId: string) {
           "description": "Yield-optimized active fixed income bond portfolio programmatically balanced to capture high interest rate premiums.",
           "provider": {
             "@type": "Organization",
-            "name": "mtxquant"
+            "name": "mtxcapital"
           }
         },
         {
@@ -2180,7 +2178,7 @@ function useMetaTagManager(activeWorkspaceId: string) {
           "description": "Traditional and Roth IRAs with an accelerator match program providing a complementary 1% capital boost.",
           "provider": {
             "@type": "Organization",
-            "name": "mtxquant"
+            "name": "mtxcapital"
           }
         },
         {
@@ -2190,7 +2188,7 @@ function useMetaTagManager(activeWorkspaceId: string) {
           "description": "Tax-optimized benchmark replication with fractional share allocations, supporting automated loss-harvesting.",
           "provider": {
             "@type": "Organization",
-            "name": "mtxquant"
+            "name": "mtxcapital"
           }
         },
         {
@@ -2200,7 +2198,7 @@ function useMetaTagManager(activeWorkspaceId: string) {
           "description": "Quantitative trading algorithms running continuous volatility-based position resizing and automated risk management.",
           "provider": {
             "@type": "Organization",
-            "name": "mtxquant"
+            "name": "mtxcapital"
           }
         }
       ]
@@ -2250,7 +2248,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
       const hash = window.location.hash;
       if (hash.startsWith('#feature-')) {
         const featureId = hash.replace('#feature-', '') as FeatureId;
-        const validIds: FeatureId[] = ['markets', 'portfolio', 'watchlist', 'funding', 'activity', 'analysis', 'backtest', 'sentiment'];
+        const validIds: FeatureId[] = ['markets', 'discover', 'portfolio', 'watchlist', 'activity', 'analysis', 'backtest', 'sentiment'];
         if (validIds.includes(featureId)) {
           setActiveSeoFeature(featureId);
         }
@@ -2317,7 +2315,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
 
   // SEO Optimization: Inject meta description, page title, and structured schema JSON-LD
   useEffect(() => {
-    document.title = "MTXquant | Modern Prime Brokerage for Systematic Capital";
+    document.title = "MTXcapital | Modern Prime Brokerage for Systematic Capital";
 
     let metaDescription = document.querySelector('meta[name="description"]');
     if (!metaDescription) {
@@ -2327,7 +2325,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
     }
     metaDescription.setAttribute(
       'content',
-      'MTXquant is a premium institutional prime brokerage and quantitative platform built for modern global investors. We support systematic desks and sophisticated portfolios with advanced clearing and real-time risk analytics.'
+      'MTXcapital is a premium institutional prime brokerage and quantitative platform built for modern global investors. We support systematic desks and sophisticated portfolios with advanced clearing and real-time risk analytics.'
     );
 
     let metaKeywords = document.querySelector('meta[name="keywords"]');
@@ -2338,7 +2336,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
     }
     metaKeywords.setAttribute(
       'content',
-      'MTXquant, quantitative brokerage, prime broker, portfolio margin, systematic clearing, direct market access, risk management, equities clearing, professional trader account'
+      'MTXcapital, quantitative brokerage, prime broker, portfolio margin, systematic clearing, direct market access, risk management, equities clearing, professional trader account'
     );
 
     const schemaData = {
@@ -2347,7 +2345,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
         {
           "@type": "BrokerageBusiness",
           "@id": `${window.location.origin}/#brokerage`,
-          "name": "MTXquant Prime Services",
+          "name": "MTXcapital Prime Services",
           "description": "Premium quantitative prime brokerage and clearing platform for systematic proprietary trading desks and professional investment firms.",
           "url": window.location.origin,
           "address": {
@@ -2360,7 +2358,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
         {
           "@type": "SoftwareApplication",
           "@id": `${window.location.origin}/#software`,
-          "name": "MTXquant Institutional Trading Terminal",
+          "name": "MTXcapital Institutional Trading Terminal",
           "description": "An advanced, high-performance web-based trading terminal with multi-asset index charts, live order books, and real-time risk analytics.",
           "applicationCategory": "BusinessApplication",
           "operatingSystem": "All",
@@ -2378,15 +2376,15 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
           "mainEntity": [
             {
               "@type": "Question",
-              "name": "What clearing models does MTXquant support?",
+              "name": "What clearing models does MTXcapital support?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "MTXquant operates under a fully segregated custody model. We offer both standard Regulation T clearing and advanced Portfolio Margining based on real-time Value-at-Risk (VaR) analysis. This optimizes capital efficiency for multi-legged options strategies and highly correlated equity books."
+                "text": "MTXcapital operates under a fully segregated custody model. We offer both standard Regulation T clearing and advanced Portfolio Margining based on real-time Value-at-Risk (VaR) analysis. This optimizes capital efficiency for multi-legged options strategies and highly correlated equity books."
               }
             },
             {
               "@type": "Question",
-              "name": "Who is eligible for an MTXquant prime account?",
+              "name": "Who is eligible for an MTXcapital prime account?",
               "acceptedAnswer": {
                 "@type": "Answer",
                 "text": "Our brokerage services are tailored for systematic proprietary trading groups, family offices, high-net-worth individuals, and emerging hedge fund managers. Standard registration requires completion of standard KYC/AML onboarding guidelines."
@@ -2413,15 +2411,15 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
               "name": "What are the cross-border clearing and multi-currency settlement protocols?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "MTXquant implements an advanced, highly resilient cross-border clearing system, utilizing dynamic multi-currency collateral sweeps across global Tier-1 custody banks including BNY Mellon, JP Morgan Chase, and Euroclear. We facilitate direct bilateral and central clearing under the European Market Infrastructure Regulation (EMIR) and Dodd-Frank Act guidelines, minimizing systemic risk. Multi-currency settlements are executed using Real-Time Gross Settlement (RTGS) platforms (such as TARGET2, Fedwire, and CHIPS) as well as accredited tri-party clearing agents. This framework supports instant margin optimization and automatic currency conversions across USD, EUR, GBP, JPY, and SGD with automated collateral rehypothecation shielding for global macro derivative portfolios."
+                "text": "MTXcapital implements an advanced, highly resilient cross-border clearing system, utilizing dynamic multi-currency collateral sweeps across global Tier-1 custody banks including BNY Mellon, JP Morgan Chase, and Euroclear. We facilitate direct bilateral and central clearing under the European Market Infrastructure Regulation (EMIR) and Dodd-Frank Act guidelines, minimizing systemic risk. Multi-currency settlements are executed using Real-Time Gross Settlement (RTGS) platforms (such as TARGET2, Fedwire, and CHIPS) as well as accredited tri-party clearing agents. This framework supports instant margin optimization and automatic currency conversions across USD, EUR, GBP, JPY, and SGD with automated collateral rehypothecation shielding for global macro derivative portfolios."
               }
             },
             {
               "@type": "Question",
-              "name": "What are the technical specifications and latency metrics of the MTXquant REST/WebSocket API?",
+              "name": "What are the technical specifications and latency metrics of the MTXcapital REST/WebSocket API?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "The MTXquant API suite supports high-frequency algorithmic execution via REST and WebSocket protocols, designed for systematic trading desks. Our matching engines, co-located in Equinix NY4 (Secaucus), LD4 (Slough), and TY3 (Tokyo), utilize Kernel Bypass (Solarflare Onload technology) to bypass standard network stack overhead. The HTTP/2 REST API delivers an execution latency of less than 4 milliseconds, while the low-latency TCP WebSocket streams provide real-time Level 2 (L2) and Level 3 (L3) order book updates in under 500 microseconds. For maximum serialization efficiency, payloads are delivered in high-performance Protocol Buffers (Protobuf) or compressed JSON format. Authenticated requests are verified using asymmetric Ed25519 cryptographic signatures with rate-limiting configured up to 5,000 requests per minute per IP subnet, upgradable for institutional lease lines."
+                "text": "The MTXcapital API suite supports high-frequency algorithmic execution via REST and WebSocket protocols, designed for systematic trading desks. Our matching engines, co-located in Equinix NY4 (Secaucus), LD4 (Slough), and TY3 (Tokyo), utilize Kernel Bypass (Solarflare Onload technology) to bypass standard network stack overhead. The HTTP/2 REST API delivers an execution latency of less than 4 milliseconds, while the low-latency TCP WebSocket streams provide real-time Level 2 (L2) and Level 3 (L3) order book updates in under 500 microseconds. For maximum serialization efficiency, payloads are delivered in high-performance Protocol Buffers (Protobuf) or compressed JSON format. Authenticated requests are verified using asymmetric Ed25519 cryptographic signatures with rate-limiting configured up to 5,000 requests per minute per IP subnet, upgradable for institutional lease lines."
               }
             }
           ]
@@ -2449,15 +2447,15 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
 
   const faqs = [
     {
-      q: "Does MTXquant support multi-asset clearing and unified collateral sweeps?",
+      q: "Does MTXcapital support multi-asset clearing and unified collateral sweeps?",
       a: "Yes. Our clearing framework aggregates multi-venue liquidity to provide tight execution margins and unified collateral sweeping across standard, synthetically formulated, and tax-advantaged instruments."
     },
     {
-      q: "What clearing models does MTXquant support?",
-      a: "MTXquant operates under a fully segregated custody model. We offer both standard Regulation T clearing and advanced Portfolio Margining based on real-time Value-at-Risk (VaR) analysis. This optimizes capital efficiency for multi-legged options strategies and highly correlated equity books."
+      q: "What clearing models does MTXcapital support?",
+      a: "MTXcapital operates under a fully segregated custody model. We offer both standard Regulation T clearing and advanced Portfolio Margining based on real-time Value-at-Risk (VaR) analysis. This optimizes capital efficiency for multi-legged options strategies and highly correlated equity books."
     },
     {
-      q: "Who is eligible for an MTXquant prime account?",
+      q: "Who is eligible for an MTXcapital prime account?",
       a: "Our brokerage services are tailored for systematic proprietary trading groups, family offices, high-net-worth individuals, and emerging hedge fund managers. Standard registration requires completion of standard KYC/AML onboarding guidelines."
     },
     {
@@ -2470,11 +2468,11 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
     },
     {
       q: "What are the cross-border clearing and multi-currency settlement protocols?",
-      a: "MTXquant implements an advanced, highly resilient cross-border clearing system, utilizing dynamic multi-currency collateral sweeps across global Tier-1 custody banks including BNY Mellon, JP Morgan Chase, and Euroclear. We facilitate direct bilateral and central clearing under the European Market Infrastructure Regulation (EMIR) and Dodd-Frank Act guidelines, minimizing systemic risk. Multi-currency settlements are executed using Real-Time Gross Settlement (RTGS) platforms (such as TARGET2, Fedwire, and CHIPS) as well as accredited tri-party clearing agents. This framework supports instant margin optimization and automatic currency conversions across USD, EUR, GBP, JPY, and SGD with automated collateral rehypothecation shielding for global macro derivative portfolios."
+      a: "MTXcapital implements an advanced, highly resilient cross-border clearing system, utilizing dynamic multi-currency collateral sweeps across global Tier-1 custody banks including BNY Mellon, JP Morgan Chase, and Euroclear. We facilitate direct bilateral and central clearing under the European Market Infrastructure Regulation (EMIR) and Dodd-Frank Act guidelines, minimizing systemic risk. Multi-currency settlements are executed using Real-Time Gross Settlement (RTGS) platforms (such as TARGET2, Fedwire, and CHIPS) as well as accredited tri-party clearing agents. This framework supports instant margin optimization and automatic currency conversions across USD, EUR, GBP, JPY, and SGD with automated collateral rehypothecation shielding for global macro derivative portfolios."
     },
     {
-      q: "What are the technical specifications and latency metrics of the MTXquant REST/WebSocket API?",
-      a: "The MTXquant API suite supports high-frequency algorithmic execution via REST and WebSocket protocols, designed for systematic trading desks. Our matching engines, co-located in Equinix NY4 (Secaucus), LD4 (Slough), and TY3 (Tokyo), utilize Kernel Bypass (Solarflare Onload technology) to bypass standard network stack overhead. The HTTP/2 REST API delivers an execution latency of less than 4 milliseconds, while the low-latency TCP WebSocket streams provide real-time Level 2 (L2) and Level 3 (L3) order book updates in under 500 microseconds. For maximum serialization efficiency, payloads are delivered in high-performance Protocol Buffers (Protobuf) or compressed JSON format. Authenticated requests are verified using asymmetric Ed25519 cryptographic signatures with rate-limiting configured up to 5,000 requests per minute per IP subnet, upgradable for institutional lease lines."
+      q: "What are the technical specifications and latency metrics of the MTXcapital REST/WebSocket API?",
+      a: "The MTXcapital API suite supports high-frequency algorithmic execution via REST and WebSocket protocols, designed for systematic trading desks. Our matching engines, co-located in Equinix NY4 (Secaucus), LD4 (Slough), and TY3 (Tokyo), utilize Kernel Bypass (Solarflare Onload technology) to bypass standard network stack overhead. The HTTP/2 REST API delivers an execution latency of less than 4 milliseconds, while the low-latency TCP WebSocket streams provide real-time Level 2 (L2) and Level 3 (L3) order book updates in under 500 microseconds. For maximum serialization efficiency, payloads are delivered in high-performance Protocol Buffers (Protobuf) or compressed JSON format. Authenticated requests are verified using asymmetric Ed25519 cryptographic signatures with rate-limiting configured up to 5,000 requests per minute per IP subnet, upgradable for institutional lease lines."
     }
   ];
 
@@ -2508,11 +2506,11 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:6rem_6rem] pointer-events-none z-[1] opacity-60" />
       
       {/* Header Sticky Navigation */}
-      <header className="sticky top-0 z-50 bg-[#000000]/85 backdrop-blur-md border-b border-neutral-900/80 px-6 lg:px-12 py-4 flex flex-col justify-center relative z-10">
+      <header className="sticky top-0 z-[500] bg-[#000000]/90 backdrop-blur-md border-b border-neutral-900/80 px-6 lg:px-12 py-4 flex flex-col justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center">
             <div>
-              <span className="text-base font-black tracking-tight text-white block lowercase">mtxquant</span>
+              <span className="text-base font-black tracking-tight text-white block lowercase">mtxcapital</span>
             </div>
           </div>
 
@@ -2536,7 +2534,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
             {/* Mobile Menu Toggle Button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 text-neutral-200 hover:text-white transition-colors cursor-pointer rounded border border-neutral-850 bg-neutral-950/80"
+              className="lg:hidden p-2 text-neutral-200 hover:text-white transition-colors cursor-pointer rounded border border-neutral-800/50 bg-neutral-950/80"
               aria-label="Toggle navigation menu"
             >
               {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -2595,7 +2593,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
         {/* Editorial Hero Section */}
         <section className="min-h-[calc(100vh-200px)] flex flex-col justify-center pb-20 sm:pb-28 space-y-8 text-left max-w-4xl relative -top-8 sm:-top-12 z-10">
           <span className="text-[10px] font-mono uppercase tracking-widest text-white font-bold block">
-            Institutional Prime Brokerage & Quant Suite
+            Institutional Prime Brokerage &amp; Quant Suite
           </span>
           
           <h1 className="text-4xl sm:text-6xl font-sans tracking-tight text-white leading-[1.05] font-light">
@@ -2604,7 +2602,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
           </h1>
           
           <p className="text-sm sm:text-base text-neutral-200 leading-relaxed max-w-2xl font-light">
-            MTXquant equips quantitative proprietary desks, family offices, and sophisticated global investors with optimized clearing channels, institutional margin leverage, and real-time risk analytics.
+            <strong>MTXcapital</strong> equips quantitative proprietary desks, family offices, and sophisticated global investors with optimized clearing channels, institutional margin leverage, multi-asset execution, and real-time risk analytics.
           </p>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-4">
@@ -2627,7 +2625,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
             <div className="flex flex-col gap-8 w-full justify-center items-center">
               {instrumentRows.map((row, rIndex) => (
                 <div 
-                  key={rIndex} 
+                  key={`r-mob-${rIndex}`} 
                   className="w-full flex flex-wrap items-center justify-center gap-x-4 gap-y-5 px-3 text-center leading-snug"
                 >
                   {row.map((item, iIndex) => {
@@ -2637,7 +2635,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
                     const badgeText = item.badge || (spec && spec.badge);
 
                     return (
-                      <React.Fragment key={item.name}>
+                      <React.Fragment key={`mob-${item.name}-${rIndex}-${iIndex}`}>
                         <div
                           onClick={() => setSelectedInstrument(isSelected ? '' : item.name)}
                           className="group relative inline-flex items-center gap-2 py-1 px-0.5 transition-all duration-300 cursor-pointer text-center active:scale-95"
@@ -2687,7 +2685,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
 
             {/* SEO Metadata & Structured Schema (Hidden from visual layout, fully indexable by search engine crawlers) */}
             <div className="sr-only" aria-hidden="true">
-              <h2>MTX Securities Financial Products Spectrum Details</h2>
+              <h2>MTX Capital Financial Products Spectrum Details</h2>
               {Object.values(INSTRUMENT_SPECS).map((spec) => (
                 <article key={spec.name}>
                   <h3>{spec.name} ({spec.category})</h3>
@@ -2707,7 +2705,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
               {JSON.stringify({
                 "@context": "https://schema.org",
                 "@type": "ItemList",
-                "name": "MTX Securities Instruments Spectrum",
+                "name": "MTX Capital Instruments Spectrum",
                 "description": "Comprehensive list of dynamic financial instrument routing, fixed income ledgering, and sovereign debt custody specifications.",
                 "itemListElement": Object.values(INSTRUMENT_SPECS).map((spec, idx) => ({
                   "@type": "ListItem",
@@ -2740,14 +2738,14 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
               onMouseLeave={() => setSelectedInstrument('')}
             >
               {instrumentRows.map((row, rIndex) => (
-                <div key={rIndex} className="flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-6 gap-y-4 sm:gap-y-4 text-center leading-normal">
+                <div key={`r-desk-${rIndex}`} className="flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-6 gap-y-4 sm:gap-y-4 text-center leading-normal">
                   {row.map((item, iIndex) => {
                     const isAnyHovered = selectedInstrument !== '';
                     const isHovered = selectedInstrument === item.name;
                     const hasBadge = item.hasBadge;
                     
                     return (
-                      <React.Fragment key={item.name}>
+                      <React.Fragment key={`desk-${item.name}-${rIndex}-${iIndex}`}>
                         <div
                           onMouseEnter={() => setSelectedInstrument(item.name)}
                           onClick={() => setSelectedInstrument(selectedInstrument === item.name ? '' : item.name)}
@@ -2811,7 +2809,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
           </div>
           <div className="lg:col-span-8 space-y-6 text-neutral-200 font-light leading-relaxed text-sm">
             <p>
-              Traditional prime brokerages rely on outdated clearing processes and opaque capital distribution structures. At MTX Securities, we build software first. We focus on modern clearing architectures, real-time collateral pricing, and transparent transaction fees.
+              Traditional prime brokerages rely on outdated clearing processes and opaque capital distribution structures. At MTX Capital, we build software first. We focus on modern clearing architectures, real-time collateral pricing, and transparent transaction fees.
             </p>
             <p>
               By utilizing premium Tier-1 institutional custody relationships, we provide retail and professional traders with structural isolation, ensuring that client collateral remains strictly segregated.
@@ -2913,20 +2911,16 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
                         </p>
                       </div>
 
-                      {/* Sub Capabilities & SEO Feature Link */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[9px] text-neutral-300">
-                        <div className="flex items-center gap-1.5">
+                      {/* Sub Capabilities & SEO Feature Link on the same line symmetrically */}
+                      <div className="flex items-center justify-between gap-2 sm:gap-4 text-[9.5px] text-neutral-200 pt-1 font-mono">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <Check className="w-3 h-3 text-amber-500 shrink-0" />
-                          <span className="truncate font-sans font-light">Fully functional sandbox execution</span>
+                          <span className="font-sans font-medium whitespace-nowrap">Fully functional sandbox execution</span>
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <Check className="w-3 h-3 text-amber-500 shrink-0" />
-                          <span className="truncate font-sans font-light">Reactive state binding</span>
+                          <span className="font-sans font-medium whitespace-nowrap">Reactive state binding</span>
                         </div>
-                      </div>
-
-                      {/* Small Explore link on bottom right */}
-                      <div className="pt-2 flex items-center justify-end border-t border-neutral-900/60">
                         <button
                           type="button"
                           onClick={() => {
@@ -2934,7 +2928,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
                             setActiveSeoFeature(featId);
                             window.location.hash = `#feature-${featId}`;
                           }}
-                          className="text-[10px] text-amber-500/80 hover:text-amber-400 font-mono font-medium lowercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer hover:underline"
+                          className="text-[10px] text-amber-400 hover:text-amber-300 font-mono font-semibold lowercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer hover:underline shrink-0 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 shadow-sm"
                         >
                           <span>explore</span>
                           <ArrowRight className="w-3 h-3" />
@@ -3023,7 +3017,7 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
           
           <div className="space-y-4 col-span-1 md:col-span-1">
             <div className="flex items-center space-x-2">
-              <span className="text-base font-black tracking-tight text-white block lowercase">mtxquant</span>
+              <span className="text-base font-black tracking-tight text-white block lowercase">mtxcapital</span>
             </div>
             <p className="text-[10px] text-neutral-300 leading-relaxed font-light">
               Pioneering high-frequency visualizers and client-backed quantitative analysis tools.
@@ -3084,14 +3078,14 @@ export default function Homepage({ onLaunchTerminal, onSignIn }: HomepageProps) 
           <div className="space-y-3">
             <span className="font-mono text-[9px] uppercase font-bold tracking-widest text-neutral-200 block">Regulatory Compliance</span>
             <p className="text-[9px] text-neutral-300 leading-relaxed font-light">
-              Disclaimer: MTX Securities is a registered trademark. Stock investing, options leveraging, and margin allocations carry significant capital risk. Customer accounts are strictly segregated under SEC and FINRA protocols.
+              Disclaimer: MTX Capital is a registered trademark of MTXcapital Ltd. Stock investing, options leveraging, and margin allocations carry significant capital risk. Customer accounts are strictly segregated under SEC and FINRA protocols.
             </p>
           </div>
 
         </div>
 
         <div className="max-w-6xl mx-auto border-t border-neutral-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-300 text-[10px] font-mono uppercase tracking-wider">
-          <span>MTX Securities Brokerage Terminal &copy; 2026. MTX Securities is a registered trademark of MTXcapital.</span>
+          <span>MTX Capital Brokerage Terminal &copy; 2026. MTX Capital is a registered trademark of MTXcapital Ltd.</span>
           <div className="flex space-x-6">
             <span className="hover:text-white transition-colors cursor-help">Terms of service</span>
             <span className="hover:text-white transition-colors cursor-help">Privacy policy</span>

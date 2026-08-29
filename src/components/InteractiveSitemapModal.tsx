@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
@@ -8,22 +8,22 @@ import {
   Copy, 
   Check, 
   Search, 
-  ExternalLink,
-  Layers,
-  Sparkles,
-  ShieldCheck,
-  ArrowUpRight,
-  Filter,
-  ArrowUpDown,
-  Compass,
-  CheckCircle2,
-  Terminal
+  Layers, 
+  Sparkles, 
+  ShieldCheck, 
+  ArrowUpRight, 
+  Filter, 
+  ArrowUpDown, 
+  Compass, 
+  CheckCircle2, 
+  Terminal,
+  Cpu,
+  Bot
 } from 'lucide-react';
 import { 
   getRegisteredSitemapRoutes, 
   generateXmlSitemap, 
-  downloadSitemapXml, 
-  SitemapRoute 
+  downloadSitemapXml
 } from '../utils/sitemapGenerator';
 
 interface InteractiveSitemapModalProps {
@@ -34,25 +34,45 @@ interface InteractiveSitemapModalProps {
 
 export const InteractiveSitemapModal: React.FC<InteractiveSitemapModalProps> = ({ 
   isOpen, 
-  onClose,
+  onClose, 
   onNavigate 
 }) => {
-  const [activeTab, setActiveTab] = useState<'visual' | 'xml'>('visual');
+  const [activeTab, setActiveTab] = useState<'visual' | 'xml' | 'llms'>('visual');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'priority' | 'title' | 'category'>('priority');
   const [copied, setCopied] = useState(false);
+  const [copiedLlms, setCopiedLlms] = useState(false);
+  const [llmsContent, setLlmsContent] = useState<string>('');
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Reset scroll to top on tab change or modal open
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [activeTab, isOpen]);
 
   const currentOrigin = useMemo(() => {
     if (typeof window !== 'undefined') {
       return window.location.origin;
     }
-    return 'https://mtxquant.com';
+    return 'https://mtxcapital.ai.studio';
   }, []);
 
   const routes = useMemo(() => getRegisteredSitemapRoutes(currentOrigin), [currentOrigin]);
   const xmlOutput = useMemo(() => generateXmlSitemap(currentOrigin), [currentOrigin]);
   const xmlSizeKb = useMemo(() => (new Blob([xmlOutput]).size / 1024).toFixed(1), [xmlOutput]);
+
+  // Load llms.txt content
+  useEffect(() => {
+    fetch('/llms.txt')
+      .then(res => res.text())
+      .then(txt => setLlmsContent(txt))
+      .catch(() => {
+        setLlmsContent('# MTXcapital - World\'s #1 Fractionalized Trading Platform\nLoading manifest...');
+      });
+  }, []);
 
   // Categories list with counts
   const categoryCounts = useMemo(() => {
@@ -90,12 +110,29 @@ export const InteractiveSitemapModal: React.FC<InteractiveSitemapModalProps> = (
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCopyLlms = () => {
+    navigator.clipboard.writeText(llmsContent);
+    setCopiedLlms(true);
+    setTimeout(() => setCopiedLlms(false), 2000);
+  };
+
+  const handleDownloadLlms = () => {
+    const blob = new Blob([llmsContent], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'llms.txt');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleRouteClick = (path: string, loc: string) => {
     if (onNavigate) {
       onNavigate(path);
       onClose();
     } else {
-      // Fallback: update hash or navigate
       window.location.href = loc;
     }
   };
@@ -104,31 +141,31 @@ export const InteractiveSitemapModal: React.FC<InteractiveSitemapModalProps> = (
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.96, y: 10 }}
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-black/85 backdrop-blur-md">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 10 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          className="relative w-full max-w-5xl max-h-[90vh] bg-[#070709] border border-amber-500/20 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col text-neutral-200 font-sans"
+          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          transition={{ duration: 0.2 }}
+          className="relative w-full max-w-5xl h-[88vh] bg-[#070709] border border-neutral-800/90 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-neutral-200"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800 bg-[#0a0a0e]">
+          <div className="flex items-center justify-between px-5 py-4 bg-[#0c0c10] border-b border-neutral-800">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-inner">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
                 <Globe className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-base font-bold text-white tracking-wide font-mono uppercase">
-                    Institutional XML Sitemap & Indexing Register
+                    Institutional XML Sitemap &amp; AI LLMs Index
                   </h2>
                   <span className="px-2 py-0.5 text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded flex items-center gap-1 uppercase tracking-wider">
-                    <ShieldCheck className="w-3 h-3" /> W3C 0.9 COMPLIANT
+                    <ShieldCheck className="w-3 h-3" /> W3C 0.9 &amp; LLMS.TXT COMPLIANT
                   </span>
                 </div>
                 <p className="text-[11px] text-neutral-400 mt-0.5">
-                  Dynamic URL index automatically registering workspace routes, quantitative feature modules, and symbol terminals for search engines.
+                  Automated indexing register positioning MTXcapital as the Institutional Fractional Multi-Asset Platform for Google, Bing, OpenAI, Claude, and Perplexity.
                 </p>
               </div>
             </div>
@@ -157,10 +194,10 @@ export const InteractiveSitemapModal: React.FC<InteractiveSitemapModalProps> = (
               </div>
             </div>
             <div className="p-3 border-r border-neutral-800/60 flex items-center gap-2.5">
-              <Globe className="w-4 h-4 text-sky-400 shrink-0" />
+              <Bot className="w-4 h-4 text-purple-400 shrink-0" />
               <div>
-                <span className="text-[9px] text-neutral-400 uppercase tracking-widest block">CRAWLER STATUS</span>
-                <span className="text-sm font-bold text-sky-300">LIVE SYNCED</span>
+                <span className="text-[9px] text-neutral-400 uppercase tracking-widest block">AI SEARCH INDEX</span>
+                <span className="text-sm font-bold text-purple-300">/llms.txt READY</span>
               </div>
             </div>
             <div className="p-3 flex items-center gap-2.5">
@@ -195,28 +232,58 @@ export const InteractiveSitemapModal: React.FC<InteractiveSitemapModalProps> = (
               >
                 <FileCode className="w-3.5 h-3.5 text-emerald-400" /> RAW XML SCHEMA
               </button>
+              <button
+                onClick={() => setActiveTab('llms')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
+                  activeTab === 'llms'
+                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-sm'
+                    : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                <Cpu className="w-3.5 h-3.5 text-purple-400" /> AI / LLMS.TXT
+              </button>
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleCopyXml}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-xs text-neutral-200 font-mono font-bold border border-neutral-700 transition-colors cursor-pointer"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-400" />}
-                {copied ? 'COPIED XML' : 'COPY XML'}
-              </button>
-              <button
-                onClick={() => downloadSitemapXml(currentOrigin)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-xs text-black font-mono font-bold shadow-md hover:shadow-amber-500/20 transition-all cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" /> DOWNLOAD sitemap.xml
-              </button>
+              {activeTab === 'llms' ? (
+                <>
+                  <button
+                    onClick={handleCopyLlms}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-xs text-neutral-200 font-mono font-bold border border-neutral-700 transition-colors cursor-pointer"
+                  >
+                    {copiedLlms ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-purple-400" />}
+                    {copiedLlms ? 'COPIED LLMS.TXT' : 'COPY LLMS.TXT'}
+                  </button>
+                  <button
+                    onClick={handleDownloadLlms}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-xs text-white font-mono font-bold shadow-md hover:shadow-purple-500/20 transition-all cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" /> DOWNLOAD llms.txt
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleCopyXml}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-xs text-neutral-200 font-mono font-bold border border-neutral-700 transition-colors cursor-pointer"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-400" />}
+                    {copied ? 'COPIED XML' : 'COPY XML'}
+                  </button>
+                  <button
+                    onClick={() => downloadSitemapXml(currentOrigin)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-xs text-black font-mono font-bold shadow-md hover:shadow-amber-500/20 transition-all cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" /> DOWNLOAD sitemap.xml
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           {/* Main Content Area */}
-          {activeTab === 'visual' ? (
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-[#060608]">
+          {activeTab === 'visual' && (
+            <div ref={contentRef} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-[#060608]">
               {/* Filter & Sorting Controls */}
               <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
                 <div className="relative flex-1">
@@ -231,7 +298,7 @@ export const InteractiveSitemapModal: React.FC<InteractiveSitemapModalProps> = (
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-2.5 text-neutral-500 hover:text-white text-xs"
+                      className="absolute right-3 top-2.5 text-neutral-500 hover:text-white text-xs cursor-pointer"
                     >
                       ✕
                     </button>
@@ -244,19 +311,19 @@ export const InteractiveSitemapModal: React.FC<InteractiveSitemapModalProps> = (
                     <span className="text-neutral-500 text-[10px] uppercase">SORT:</span>
                     <button
                       onClick={() => setSortBy('priority')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${sortBy === 'priority' ? 'bg-amber-500/20 text-amber-400' : 'text-neutral-400'}`}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${sortBy === 'priority' ? 'bg-amber-500/20 text-amber-400' : 'text-neutral-400'}`}
                     >
                       PRIORITY
                     </button>
                     <button
                       onClick={() => setSortBy('title')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${sortBy === 'title' ? 'bg-amber-500/20 text-amber-400' : 'text-neutral-400'}`}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${sortBy === 'title' ? 'bg-amber-500/20 text-amber-400' : 'text-neutral-400'}`}
                     >
                       TITLE
                     </button>
                     <button
                       onClick={() => setSortBy('category')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${sortBy === 'category' ? 'bg-amber-500/20 text-amber-400' : 'text-neutral-400'}`}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${sortBy === 'category' ? 'bg-amber-500/20 text-amber-400' : 'text-neutral-400'}`}
                     >
                       CATEGORY
                     </button>
@@ -350,14 +417,16 @@ export const InteractiveSitemapModal: React.FC<InteractiveSitemapModalProps> = (
                   <p className="text-xs text-neutral-400 font-mono">No registered routes match your filter parameters.</p>
                   <button
                     onClick={() => { setSearchQuery(''); setSelectedCategory('ALL'); }}
-                    className="px-3 py-1.5 bg-neutral-800 text-white font-mono text-xs rounded hover:bg-neutral-700 transition-colors"
+                    className="px-3 py-1.5 bg-neutral-800 text-white font-mono text-xs rounded hover:bg-neutral-700 transition-colors cursor-pointer"
                   >
                     Reset All Filters
                   </button>
                 </div>
               )}
             </div>
-          ) : (
+          )}
+
+          {activeTab === 'xml' && (
             <div className="flex-1 overflow-y-auto p-4 bg-[#030304] font-mono text-[11px] text-emerald-400/90 leading-relaxed border-b border-neutral-800">
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-800 text-[10px] text-neutral-400">
                 <span>W3C Sitemap 0.9 XML Representation</span>
@@ -369,18 +438,30 @@ export const InteractiveSitemapModal: React.FC<InteractiveSitemapModalProps> = (
             </div>
           )}
 
+          {activeTab === 'llms' && (
+            <div className="flex-1 overflow-y-auto p-4 bg-[#030304] font-mono text-[11px] text-purple-300 leading-relaxed border-b border-neutral-800">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-800 text-[10px] text-neutral-400">
+                <span className="text-purple-400 font-bold">Standard LLMs.txt AI Manifest (/llms.txt)</span>
+                <span>Standardized for ChatGPT, Claude, Perplexity &amp; Gemini</span>
+              </div>
+              <pre className="whitespace-pre-wrap select-all text-neutral-300 font-mono text-xs bg-[#060608] p-4 rounded border border-neutral-800">
+                {llmsContent}
+              </pre>
+            </div>
+          )}
+
           {/* Footer Info */}
           <div className="flex flex-col sm:flex-row items-center justify-between p-3.5 bg-[#0a0a0d] border-t border-neutral-800 text-[11px] font-mono text-neutral-400 gap-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>
-                Served natively at <code className="text-amber-300 bg-black px-1.5 py-0.5 rounded border border-neutral-800">{currentOrigin}/sitemap.xml</code>
+                Served natively at <code className="text-amber-300 bg-black px-1.5 py-0.5 rounded border border-neutral-800">{currentOrigin}/sitemap.xml</code> and <code className="text-purple-300 bg-black px-1.5 py-0.5 rounded border border-neutral-800">{currentOrigin}/llms.txt</code>
               </span>
             </div>
             <div className="flex items-center gap-3 text-[10px]">
-              <span className="text-neutral-400">Auto-synced with workspace manifests</span>
+              <span className="text-neutral-400">#1 Fractionalized Platform Engine</span>
               <span className="text-neutral-600">|</span>
-              <span className="text-emerald-400 font-bold">SEC & Search Engine Compliant</span>
+              <span className="text-emerald-400 font-bold">Search &amp; AI Engine Grounded</span>
             </div>
           </div>
         </motion.div>

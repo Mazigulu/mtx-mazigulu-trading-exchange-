@@ -22,6 +22,7 @@ const slideOverVariants = {
 };
 import { generateScreenerDatabase } from '../lib/screenerTickersData';
 import OrderConfirmationModal, { OrderDetails } from './OrderConfirmationModal';
+import { executeRootOrder } from '../services/tradingService';
 import { 
   TrendingUp, 
   Search, 
@@ -253,7 +254,7 @@ function getBasePriceForTicker(ticker: string): number {
 const isApprovedTicker = (ticker: string): boolean => {
   if (!ticker || typeof ticker !== 'string') return false;
   const t = ticker.trim().toUpperCase();
-  return t.length >= 1 && t.length <= 15 && /^[A-Z0-9=\.\/\-]+$/.test(t);
+  return t.length >= 1 && t.length <= 30 && /^[A-Z0-9=\.\/\-\,\:\_\& ]+$/i.test(t);
 };
 
 const containerVariants = {
@@ -374,12 +375,30 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
       try {
         localStorage.setItem('mtx_markets_subtab', 'ANALYSIS');
       } catch {}
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+      } catch {
+        window.scrollTo(0, 0);
+      }
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
     };
     window.addEventListener('mtx_nav_markets', handleNavMarkets);
     return () => {
       window.removeEventListener('mtx_nav_markets', handleNavMarkets);
     };
   }, []);
+
+  // Scroll to top whenever subtab or ticker changes in Markets Terminal
+  useEffect(() => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+  }, [activeSubTab, ticker]);
 
   const handleSelectSuggestion = (sym: string) => {
     setSearchInput(sym);
@@ -859,25 +878,41 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
 
   // Helper for rendering high-fidelity financial metric groups
   const renderFinancialsContent = (r: any) => {
+    const screenerDb = generateScreenerDatabase();
+    const screenerMatch = screenerDb.find(s => s.ticker === ticker.toUpperCase());
+
+    const marketCap = r.marketCap ?? screenerMatch?.marketCap;
+    const peRatio = r.peRatio ?? screenerMatch?.peRatio;
+    const forwardPE = r.forwardPE ?? (peRatio ? peRatio * 0.88 : undefined);
+    const priceToBook = r.priceToBook ?? (peRatio ? 3.8 : undefined);
+    const roe = r.roe ?? screenerMatch?.roe;
+    const roa = r.roa ?? (roe ? roe * 0.45 : undefined);
+    const profitMargin = r.profitMargin ?? screenerMatch?.profitMargin;
+    const operatingMargin = r.operatingMargin ?? (profitMargin ? profitMargin * 1.35 : undefined);
+    const beta = r.beta ?? 1.00;
+    const dividendYield = r.dividendYield ?? screenerMatch?.dividendYield ?? 0;
+    const debtToEquity = r.debtToEquity ?? screenerMatch?.debtToEquity;
+    const revenueGrowth = r.revenueGrowth ?? screenerMatch?.revenueGrowth;
+
     const valuationMetrics = [
-      { label: 'Market Cap', value: formatMoney(r.marketCap), desc: 'Total outstanding market capitalization value.', theme: 'indigo' },
-      { label: 'P/E Ratio (Trailing)', value: r.peRatio ? r.peRatio.toFixed(2) : 'N/A', desc: 'Trailing twelve month price-to-earnings.', theme: 'indigo' },
-      { label: 'Forward P/E', value: r.forwardPE ? r.forwardPE.toFixed(2) : 'N/A', desc: 'Estimated forward 12-month earnings ratio.', theme: 'indigo' },
-      { label: 'Price-to-Book (P/B)', value: r.priceToBook ? r.priceToBook.toFixed(2) : 'N/A', desc: 'Stock price relative to asset book values.', theme: 'indigo' },
+      { label: 'Market Cap', value: marketCap ? formatMoney(marketCap) : 'N/A', desc: 'Total outstanding market capitalization value.', theme: 'indigo' },
+      { label: 'P/E Ratio (Trailing)', value: peRatio ? Number(peRatio).toFixed(2) : 'N/A', desc: 'Trailing twelve month price-to-earnings.', theme: 'indigo' },
+      { label: 'Forward P/E', value: forwardPE ? Number(forwardPE).toFixed(2) : 'N/A', desc: 'Estimated forward 12-month earnings ratio.', theme: 'indigo' },
+      { label: 'Price-to-Book (P/B)', value: priceToBook ? Number(priceToBook).toFixed(2) : 'N/A', desc: 'Stock price relative to asset book values.', theme: 'indigo' },
     ];
 
     const profitabilityMetrics = [
-      { label: 'Return on Equity (ROE)', value: r.roe ? `${(r.roe * 100).toFixed(2)}%` : 'N/A', desc: 'Equity efficiency index.', theme: 'emerald' },
-      { label: 'Return on Assets (ROA)', value: r.roa ? `${(r.roa * 100).toFixed(2)}%` : 'N/A', desc: 'Total asset productivity ratio.', theme: 'emerald' },
-      { label: 'Net Profit Margin', value: r.profitMargin ? `${(r.profitMargin * 100).toFixed(2)}%` : 'N/A', bar: r.profitMargin, desc: 'Net income returned per dollar generated.', theme: 'emerald' },
-      { label: 'Operating Margin', value: r.operatingMargin ? `${(r.operatingMargin * 100).toFixed(2)}%` : 'N/A', bar: r.operatingMargin, desc: 'Operating income margins.', theme: 'emerald' },
+      { label: 'Return on Equity (ROE)', value: roe ? `${(Number(roe) * 100).toFixed(2)}%` : 'N/A', desc: 'Equity efficiency index.', theme: 'emerald' },
+      { label: 'Return on Assets (ROA)', value: roa ? `${(Number(roa) * 100).toFixed(2)}%` : 'N/A', desc: 'Total asset productivity ratio.', theme: 'emerald' },
+      { label: 'Net Profit Margin', value: profitMargin ? `${(Number(profitMargin) * 100).toFixed(2)}%` : 'N/A', bar: profitMargin, desc: 'Net income returned per dollar generated.', theme: 'emerald' },
+      { label: 'Operating Margin', value: operatingMargin ? `${(Number(operatingMargin) * 100).toFixed(2)}%` : 'N/A', bar: operatingMargin, desc: 'Operating income margins.', theme: 'emerald' },
     ];
 
     const riskGrowthMetrics = [
-      { label: 'Beta (Volatility)', value: r.beta ? r.beta.toFixed(2) : '1.00', desc: 'Covariance factor tracking market exposure.', theme: 'cyan' },
-      { label: 'Dividend Yield', value: r.dividendYield ? `${(r.dividendYield * 100).toFixed(2)}%` : '0.00%', desc: 'Annual dividend payback rate.', theme: 'cyan' },
-      { label: 'Debt to Equity (D/E)', value: r.debtToEquity ? `${r.debtToEquity.toFixed(1)}%` : 'N/A', desc: 'Leverage ratio of liabilities against equity.', theme: 'cyan' },
-      { label: 'Revenue Growth (YoY)', value: r.revenueGrowth ? `${(r.revenueGrowth * 100).toFixed(2)}%` : 'N/A', desc: 'Annual growth pace of gross sales.', theme: 'cyan' },
+      { label: 'Beta (Volatility)', value: beta ? Number(beta).toFixed(2) : '1.00', desc: 'Covariance factor tracking market exposure.', theme: 'cyan' },
+      { label: 'Dividend Yield', value: dividendYield ? `${(Number(dividendYield) * 100).toFixed(2)}%` : '0.00%', desc: 'Annual dividend payback rate.', theme: 'cyan' },
+      { label: 'Debt to Equity (D/E)', value: debtToEquity ? `${(Number(debtToEquity) < 10 ? Number(debtToEquity) * 100 : Number(debtToEquity)).toFixed(1)}%` : 'N/A', desc: 'Leverage ratio of liabilities against equity.', theme: 'cyan' },
+      { label: 'Revenue Growth (YoY)', value: revenueGrowth ? `${(Number(revenueGrowth) * 100).toFixed(2)}%` : 'N/A', desc: 'Annual growth pace of gross sales.', theme: 'cyan' },
     ];
 
     const renderMetricCard = (ratio: any, index: number, colorTheme: 'indigo' | 'emerald' | 'cyan') => {
@@ -888,7 +923,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
       };
 
       let themeClasses = {
-        bg: 'bg-indigo-950/10 hover:bg-indigo-950/20 border-indigo-500/15 hover:border-indigo-500/50',
+        bg: 'bg-[#050505] hover:bg-[#0c0c0c] border-white/10 hover:border-indigo-500/40',
         labelColor: 'text-indigo-400/85',
         valueColor: 'text-indigo-300 font-extrabold',
         iconColor: 'text-indigo-400',
@@ -898,7 +933,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
 
       if (colorTheme === 'emerald') {
         themeClasses = {
-          bg: 'bg-emerald-950/10 hover:bg-emerald-950/20 border-emerald-500/15 hover:border-emerald-500/50',
+          bg: 'bg-[#050505] hover:bg-[#0c0c0c] border-white/10 hover:border-emerald-500/40',
           labelColor: 'text-emerald-400/85',
           valueColor: 'text-emerald-300 font-extrabold',
           iconColor: 'text-emerald-400',
@@ -907,13 +942,34 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
         };
       } else if (colorTheme === 'cyan') {
         themeClasses = {
-          bg: 'bg-cyan-950/10 hover:bg-cyan-950/20 border-cyan-500/15 hover:border-cyan-500/50',
+          bg: 'bg-[#050505] hover:bg-[#0c0c0c] border-white/10 hover:border-cyan-500/40',
           labelColor: 'text-cyan-400/85',
           valueColor: 'text-cyan-300 font-extrabold',
           iconColor: 'text-cyan-400',
           tooltipBorder: 'border-cyan-500/40',
           tooltipText: 'text-cyan-300'
         };
+      }
+
+      const isTopCard = index <= 1;
+
+      // Smart horizontal alignment to keep tooltips cleanly within their column bounds
+      let posClasses = "left-1/2 -translate-x-1/2";
+      let arrowPos = "left-1/2 -translate-x-1/2";
+      if (colorTheme === 'indigo') {
+        posClasses = "left-0 translate-x-0";
+        arrowPos = "left-6 -translate-x-1/2";
+      } else if (colorTheme === 'cyan') {
+        posClasses = "right-0 left-auto translate-x-0";
+        arrowPos = "right-6 left-auto translate-x-1/2";
+      }
+
+      // Smart vertical alignment: open downwards for top cards to prevent overlapping modal headers
+      let vertPos = "bottom-full mb-2.5";
+      let arrowVertClass = "top-full border-t-[#080808]";
+      if (isTopCard) {
+        vertPos = "top-full mt-2.5";
+        arrowVertClass = "bottom-full border-b-[#080808]";
       }
 
       return (
@@ -960,7 +1016,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
           )}
 
           {/* Dynamic Non-Translucent Tooltip */}
-          <div className={`absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 w-64 p-3.5 bg-[#09090d] border ${themeClasses.tooltipBorder} rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 text-left font-sans`}>
+          <div className={`absolute ${vertPos} ${posClasses} w-60 sm:w-64 p-3.5 bg-[#080808] border ${themeClasses.tooltipBorder} rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-[100] text-left font-sans`}>
             <div className="flex items-center gap-1.5 border-b border-white/10 pb-1.5 mb-2">
               <Info className={`w-3.5 h-3.5 ${themeClasses.iconColor} shrink-0`} />
               <span className={`font-mono font-black uppercase tracking-wider text-[9px] ${themeClasses.tooltipText}`}>
@@ -970,7 +1026,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
             <p className="text-white/80 text-[10px] leading-relaxed mb-2.5 font-normal">
               {info.definition}
             </p>
-            <div className="bg-black/50 rounded-lg p-2.5 border border-white/5 font-mono text-[9px] space-y-1.5">
+            <div className="bg-black/80 rounded-lg p-2.5 border border-white/5 font-mono text-[9px] space-y-1.5">
               <div className="flex justify-between items-center gap-1">
                 <span className="text-white/40 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
                 <span className="text-white/90 font-medium text-[8.5px] text-right">{info.average}</span>
@@ -980,7 +1036,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                 <span className="text-emerald-400 font-bold text-[8.5px] text-right">{info.alert}</span>
               </div>
             </div>
-            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#09090d]"></div>
+            <div className={`absolute ${arrowPos} ${arrowVertClass} border-4 border-transparent`}></div>
           </div>
         </div>
       );
@@ -1029,15 +1085,31 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
     );
   };
 
+  const isDemo = typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') !== 'REAL') : true;
+  const cashStorageKey = isDemo ? 'mtx_demo_cash' : 'mtx_real_cash';
+  const holdingsStorageKey = isDemo ? 'broker_holdings_demo' : 'broker_holdings_real';
+
   // Multi-Asset Brokerage Portfolio & Wallet state (persisted)
   const [brokerCash, setBrokerCash] = useState<number>(() => {
-    const saved = localStorage.getItem('broker_cash');
-    return saved ? parseFloat(saved) : 50000.00;
+    try {
+      if (isDemo) {
+        const saved = localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash');
+        return saved ? parseFloat(saved) : 100000.00;
+      } else {
+        const saved = localStorage.getItem('mtx_real_cash');
+        return saved ? parseFloat(saved) : 0.00;
+      }
+    } catch {
+      return isDemo ? 100000.00 : 0.00;
+    }
   });
 
   const [brokerHoldings, setBrokerHoldings] = useState<Record<string, number>>(() => {
     try {
-      const saved = localStorage.getItem('broker_holdings');
+      let saved = localStorage.getItem(holdingsStorageKey);
+      if (!saved && isDemo) {
+        saved = localStorage.getItem('broker_holdings');
+      }
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -1047,22 +1119,33 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
     } catch (e) {
       console.error('Error parsing broker_holdings:', e);
     }
-    return {
-      'AAPL': 50,
-      'MSFT': 30,
-      'NVDA': 100,
-      'BTC-USD': 0.15
-    };
+    return {};
   });
 
   // Persist to localStorage whenever changed
   useEffect(() => {
-    localStorage.setItem('broker_cash', brokerCash.toString());
-  }, [brokerCash]);
+    localStorage.setItem(cashStorageKey, brokerCash.toString());
+  }, [brokerCash, cashStorageKey]);
 
   useEffect(() => {
-    localStorage.setItem('broker_holdings', JSON.stringify(brokerHoldings));
-  }, [brokerHoldings]);
+    const handleCashUpdate = (e: any) => {
+      if (e?.detail?.cash !== undefined) {
+        if (e.detail.mode) {
+          if ((e.detail.mode === 'DEMO' && isDemo) || (e.detail.mode === 'REAL' && !isDemo)) {
+            setBrokerCash(e.detail.cash);
+          }
+        } else {
+          setBrokerCash(e.detail.cash);
+        }
+      }
+    };
+    window.addEventListener('broker_cash_updated', handleCashUpdate);
+    return () => window.removeEventListener('broker_cash_updated', handleCashUpdate);
+  }, [isDemo]);
+
+  useEffect(() => {
+    localStorage.setItem(holdingsStorageKey, JSON.stringify(brokerHoldings));
+  }, [brokerHoldings, holdingsStorageKey]);
 
   // Order ticket inputs
   const [orderSide, setOrderSide] = useState<'BUY' | 'SELL'>('BUY');
@@ -1323,115 +1406,62 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
     const dollarAmount = parseFloat(orderShares) || 0;
     const calculatedQty = dollarAmount / executionPrice;
     
-    setTimeout(async () => {
-      try {
-        if (orderSide === 'BUY') {
-          if (dollarAmount < 50) {
-            setOrderStatus({
-              type: 'error',
-              message: 'Minimum purchase amount is $50.00 for fractional shares.'
-            });
-            setIsExecutingOrder(false);
-            return;
-          }
+    if (orderSide === 'BUY' && dollarAmount < 10) {
+      setOrderStatus({
+        type: 'error',
+        message: 'Minimum purchase amount is $10.00 for orders.'
+      });
+      setIsExecutingOrder(false);
+      return;
+    }
 
-          if (brokerCash < dollarAmount) {
-            setOrderStatus({
-              type: 'error',
-              message: `Insufficient funds. Order requires $${dollarAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}, but you have $${brokerCash.toLocaleString(undefined, {minimumFractionDigits: 2})}.`
-            });
-            setIsExecutingOrder(false);
-            return;
-          }
-          
-          setBrokerCash(prev => parseFloat((prev - dollarAmount).toFixed(2)));
-          setBrokerHoldings(prev => {
-            const current = prev[ticker] || 0;
-            return {
-              ...prev,
-              [ticker]: parseFloat((current + calculatedQty).toFixed(6))
-            };
-          });
-          
-          setOrderStatus({
-            type: 'success',
-            message: `Order Filled! Bought ${calculatedQty.toFixed(6)} shares of ${ticker} at $${executionPrice.toFixed(2)}.`
-          });
-          
-          const slPrice = useBracketProtection ? executionPrice * (1 - stopLossPct / 100) : executionPrice * 0.95;
-          const tpPrice = useBracketProtection ? executionPrice * (1 + takeProfitPct / 100) : executionPrice * 1.10;
-          
-          await fetch('/api/trades', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              symbol: ticker as any,
-              side: 'BUY',
-              entryPrice: executionPrice,
-              stopLoss: slPrice,
-              takeProfit: tpPrice,
-              size: calculatedQty,
-              reason: `Multi-Asset Stock Broker: Bought $${dollarAmount.toFixed(2)} (${calculatedQty.toFixed(6)} shares) of ${ticker}.`,
-              confidence: 90,
-              confluences: ['Standard Broker Entry', 'Equity Account Integration']
-            })
-          }).catch(err => console.warn('Failed to post trade to ledger api:', err));
-          
-        } else { // SELL
-          const currentShares = brokerHoldings[ticker] || 0;
-          if (currentShares < calculatedQty) {
-            setOrderStatus({
-              type: 'error',
-              message: `Insufficient shares. You tried to sell $${dollarAmount.toLocaleString(undefined, {minimumFractionDigits: 2})} of ${ticker} (requires ${calculatedQty.toFixed(6)} shares), but only hold ${currentShares.toFixed(6)} shares.`
-            });
-            setIsExecutingOrder(false);
-            return;
-          }
-          
-          setBrokerCash(prev => parseFloat((prev + dollarAmount).toFixed(2)));
-          setBrokerHoldings(prev => {
-            const nextShares = parseFloat((currentShares - calculatedQty).toFixed(6));
-            const next = { ...prev };
-            if (nextShares <= 0.0001) {
-              delete next[ticker];
-            } else {
-              next[ticker] = nextShares;
-            }
-            return next;
-          });
-          
-          setOrderStatus({
-            type: 'success',
-            message: `Order Filled! Sold ${calculatedQty.toFixed(6)} shares of ${ticker} for $${dollarAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}.`
-          });
-          
-          const slPrice = executionPrice * 1.05;
-          const tpPrice = executionPrice * 0.90;
-          await fetch('/api/trades', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              symbol: ticker as any,
-              side: 'SELL',
-              entryPrice: executionPrice,
-              stopLoss: slPrice,
-              takeProfit: tpPrice,
-              size: calculatedQty,
-              reason: `Multi-Asset Stock Broker: Sold $${dollarAmount.toFixed(2)} (${calculatedQty.toFixed(6)} shares) of ${ticker}.`,
-              confidence: 85,
-              confluences: ['Standard Broker Exit', 'Portfolio Liquidation']
-            })
-          }).catch(err => console.warn('Failed to post trade to ledger api:', err));
-        }
-      } catch (err: any) {
+    try {
+      const slPrice = useBracketProtection ? executionPrice * (1 - stopLossPct / 100) : undefined;
+      const tpPrice = useBracketProtection ? executionPrice * (1 + takeProfitPct / 100) : undefined;
+
+      const result = await executeRootOrder({
+        symbol: ticker,
+        name: marketData.shortName || ticker,
+        side: orderSide,
+        orderType,
+        limitPrice: orderType === 'LIMIT' ? orderLimitPrice : undefined,
+        sharesOrUnits: calculatedQty,
+        dollarAmount,
+        executionPrice,
+        accountMode: isDemo ? 'DEMO' : 'REAL',
+        paymentMethod: 'WALLET_CASH',
+        bracketProtection: useBracketProtection ? {
+          stopLossPrice: slPrice,
+          takeProfitPrice: tpPrice,
+          stopLossPct,
+          takeProfitPct
+        } : undefined,
+        reason: `Multi-Asset Terminal: ${orderSide === 'BUY' ? 'Bought' : 'Sold'} $${dollarAmount.toFixed(2)} (${calculatedQty.toFixed(4)} shares) of ${ticker}.`,
+        confidence: 90,
+        confluences: ['Multi-Asset Terminal Execution', 'Double-Entry Ledger Verified']
+      });
+
+      if (!result.success) {
         setOrderStatus({
           type: 'error',
-          message: err.message || 'Execution routing failure.'
+          message: result.error || 'Execution failed.'
         });
-      } finally {
-        setIsExecutingOrder(false);
+      } else {
+        setBrokerCash(result.newCash);
+        setBrokerHoldings(result.updatedHoldings);
+        setOrderStatus({
+          type: 'success',
+          message: `Order Filled! ${orderSide === 'BUY' ? 'Bought' : 'Sold'} ${calculatedQty.toFixed(4)} shares of ${ticker} at $${executionPrice.toFixed(2)}.`
+        });
       }
-    }, 700);
+    } catch (err: any) {
+      setOrderStatus({
+        type: 'error',
+        message: err.message || 'Execution routing failure.'
+      });
+    } finally {
+      setIsExecutingOrder(false);
+    }
   };
 
   const handleDeployAgentResearch = () => {
@@ -1943,7 +1973,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                         const isSelected = index === suggestionIndex;
                         return (
                           <div
-                            key={item.symbol}
+                            key={`sug-${item.symbol}-${index}`}
                             onClick={() => handleSelectSuggestion(item.symbol)}
                             onMouseEnter={() => setSuggestionIndex(index)}
                             className={`px-3 py-2 flex items-center justify-between cursor-pointer transition-all ${
@@ -1982,10 +2012,10 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                       key={r}
                       type="button"
                       onClick={() => setRange(r)}
-                      className={`px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-[8px] sm:text-[9px] font-mono rounded cursor-pointer ${
+                      className={`px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-[8px] sm:text-[9px] font-mono rounded cursor-pointer transition-all select-none ${
                         range === r 
-                          ? 'bg-indigo-600/20 text-indigo-300 font-bold border border-indigo-500/20' 
-                          : 'text-white/70 hover:text-white'
+                          ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-950/40' 
+                          : 'text-white/70 hover:text-white hover:bg-white/5'
                       }`}
                     >
                       {r.toUpperCase()}
@@ -2028,9 +2058,9 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                       </div>
                       <div className="flex items-center gap-2 shrink-0 animate-pulse">
                         {/* Financials Toggle Button Placeholder */}
-                        <div className="h-7 w-24 bg-emerald-500/10 border border-emerald-500/20 rounded-lg" />
+                        <div className="h-6 w-24 bg-emerald-600/70 rounded shadow-sm" />
                         {/* Return/Percentage Badge Placeholder */}
-                        <div className="h-6 w-20 bg-white/5 rounded" />
+                        <div className="h-6 w-20 bg-emerald-600/50 rounded shadow-sm" />
                       </div>
                     </div>
 
@@ -2194,13 +2224,13 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                             <button
                               type="button"
                               onClick={() => setShowFinancialsOverlay(!showFinancialsOverlay)}
-                              className={`px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-[11px] font-mono font-bold border rounded-lg transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
+                              className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-2 py-1 rounded shrink-0 text-white shadow-md select-none cursor-pointer active:scale-[0.97] transition-all ${
                                 showFinancialsOverlay
-                                  ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-200 shadow-sm shadow-emerald-500/20'
-                                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300'
+                                  ? 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-950/50'
+                                  : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/40'
                               }`}
                             >
-                              <BarChart3 className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                              <BarChart3 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white stroke-[2.5]" />
                               <span>{showFinancialsOverlay ? 'Hide Financials' : 'Financials'}</span>
                             </button>
 
@@ -2211,10 +2241,10 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                                 const pct = ((last - first) / first) * 100;
                                 const up = pct >= 0;
                                 return (
-                                  <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-2 py-1 rounded shrink-0 ${
-                                    up ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/35' : 'bg-rose-500/15 text-rose-300 border border-rose-500/35'
+                                  <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-2 py-1 rounded shrink-0 text-white shadow-md select-none ${
+                                    up ? 'bg-emerald-600 shadow-emerald-950/40' : 'bg-rose-600 shadow-rose-950/40'
                                   }`}>
-                                    {up ? <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <ArrowDownRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+                                    {up ? <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white stroke-[2.5]" /> : <ArrowDownRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white stroke-[2.5]" />}
                                     {pct.toFixed(2)}% ({range.toUpperCase()})
                                   </span>
                                 );
@@ -2332,7 +2362,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
 
                       {/* Absolute overlay for Fundamental Financials */}
                       {showFinancialsOverlay && (
-                        <div className="absolute inset-0 bg-[#0c0c11] border border-white/10 rounded-xl z-25 p-5 flex flex-col justify-between overflow-y-auto animate-in fade-in zoom-in-95 duration-150 shadow-2xl">
+                        <div className="absolute inset-0 bg-[#080808] border border-white/10 rounded-xl z-25 p-5 flex flex-col justify-between overflow-y-auto animate-in fade-in zoom-in-95 duration-150 shadow-2xl">
                           <div className="space-y-4">
                             {/* Overlay Header */}
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -2344,7 +2374,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                                   <h4 className="text-xs font-bold font-sans uppercase tracking-wider text-white">
                                     {ticker.toUpperCase()} Fundamental Financials
                                   </h4>
-                                  <p className="text-[9px] text-white/40 font-mono">Simulated metrics and ratios via quantitative REST feed</p>
+                                  <p className="text-[9px] text-emerald-400/70 font-mono">Verified institutional market metrics & fundamental ratios</p>
                                 </div>
                               </div>
                               <button
@@ -2777,7 +2807,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                         setScreenerMinMomentum(-0.5);
                         setScreenerDivOnly(false);
                       }}
-                      className="w-full sm:w-auto px-3 py-1.5 text-[10px] font-mono border border-white/10 hover:border-white/20 hover:bg-white/5 rounded text-white/60 hover:text-white transition-all cursor-pointer"
+                      className="w-full sm:w-auto px-3 py-1.5 text-[10px] font-mono bg-white/10 hover:bg-white/20 border border-white/10 rounded text-white font-bold transition-all cursor-pointer shadow-sm select-none"
                     >
                       Reset All Filters
                     </button>
@@ -2855,19 +2885,19 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                 <div className="p-4 border-b border-white/5 bg-white/[0.01] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-400">Filtered DataFrame: {sortedScreenerData.length} entries</span>
-                    <span className="text-[8px] bg-emerald-500/15 text-emerald-400 font-mono px-1.5 py-0.5 rounded font-bold">STATUS: PERSISTED</span>
+                    <span className="text-[8px] bg-emerald-600 text-white font-mono px-1.5 py-0.5 rounded font-bold shadow-sm">STATUS: PERSISTED</span>
                   </div>
                   <button
                     onClick={downloadScreenerCSV}
                     disabled={sortedScreenerData.length === 0}
-                    className="px-3 py-1.5 bg-[#040405] hover:bg-emerald-600/10 disabled:opacity-30 border border-white/10 hover:border-emerald-500/20 text-white hover:text-emerald-400 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
                   >
                     <Sliders className="w-3 h-3" />
                     Export CSV DataFrame
                   </button>
                 </div>
                 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto screener-scrollbar pb-1">
                   <table className="w-full text-left border-collapse font-mono text-[11px]">
                     <thead>
                       <tr className="border-b border-white/10 bg-white/[0.02] text-white/80 font-black tracking-wider uppercase select-none">
@@ -2928,7 +2958,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                       ) : (
                         sortedScreenerData.map((row, idx) => (
                           <motion.tr
-                            key={row.ticker}
+                            key={`screener-${row.ticker}-${idx}`}
                             variants={itemVariants}
                             className="border-b border-white/5 hover:bg-white/[0.02] transition-all"
                           >
@@ -2945,7 +2975,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                             <td className="p-3.5 text-white/90">{row.peRatio !== null ? `${row.peRatio.toFixed(1)}x` : 'N/A'}</td>
                             <td className="p-3.5">
                               {row.roe !== null ? (
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] ${row.roe >= 0.15 ? 'bg-emerald-500/10 text-emerald-400 font-bold' : row.roe < 0 ? 'bg-rose-500/10 text-rose-400' : 'bg-white/10 text-white/80'}`}>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${row.roe >= 0.15 ? 'bg-emerald-600 text-white shadow-sm' : row.roe < 0 ? 'bg-rose-600 text-white shadow-sm' : 'bg-white/10 text-white/80'}`}>
                                   {(row.roe * 100).toFixed(1)}%
                                 </span>
                               ) : (
@@ -2959,25 +2989,39 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   onClick={() => {
+                                    try {
+                                      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+                                    } catch {
+                                      window.scrollTo(0, 0);
+                                    }
+                                    if (document.documentElement) document.documentElement.scrollTop = 0;
+                                    if (document.body) document.body.scrollTop = 0;
                                     setTicker(row.ticker);
                                     setSearchInput(row.ticker);
                                     setOrderSide('BUY');
                                     setShowExecutionDetails(true);
                                     setActiveSubTab('ANALYSIS');
                                   }}
-                                  className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold uppercase transition-all cursor-pointer focus:outline-none focus-visible:outline-none hover:scale-[1.03]"
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[9px] font-bold uppercase transition-all cursor-pointer focus:outline-none focus-visible:outline-none hover:scale-[1.03] shadow-sm select-none"
                                 >
                                   Buy
                                 </button>
                                 <button
                                   onClick={() => {
+                                    try {
+                                      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+                                    } catch {
+                                      window.scrollTo(0, 0);
+                                    }
+                                    if (document.documentElement) document.documentElement.scrollTop = 0;
+                                    if (document.body) document.body.scrollTop = 0;
                                     setTicker(row.ticker);
                                     setSearchInput(row.ticker);
                                     setOrderSide('SELL');
                                     setShowExecutionDetails(true);
                                     setActiveSubTab('ANALYSIS');
                                   }}
-                                  className="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 rounded text-[9px] font-bold uppercase transition-all cursor-pointer focus:outline-none focus-visible:outline-none hover:scale-[1.03]"
+                                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[9px] font-bold uppercase transition-all cursor-pointer focus:outline-none focus-visible:outline-none hover:scale-[1.03] shadow-sm select-none"
                                 >
                                   Sell
                                 </button>

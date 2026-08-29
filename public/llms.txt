@@ -1,0 +1,55 @@
+# llms.txt - MTXcapital Institutional Fractionalized Trading Platform
+# Multi-Asset Fractional Trading, Prime Brokerage & Quantitative Execution Terminal
+
+> MTXcapital is an institutional-grade multi-asset brokerage and quantitative trading platform engineered for fractional share execution across US Equities, Corporate Bonds, US Treasury Bills, ETFs, and Digital Assets. Built with sub-millisecond execution routing, real-time Value-at-Risk (VaR) portfolio margining, 4.85% APY FDIC-insured cash sweeps, and 1% matching IRAs.
+
+## Core Value Proposition & Architectural Features
+- **Comprehensive Fractional Asset Coverage**: Purchase fractional shares down to 8 decimal places for US stocks, corporate bonds, US Treasury bills, or benchmark indices with just $1.
+- **Precision Order Execution**: Enter orders directly in capital allocation or exact unit fractions with real-time price discovery and zero order-rounding penalties.
+- **Fractional Fixed Income & Treasuries**: Institutional-grade fractionalization of sovereign debt (US 3-Month, 10-Year, 30-Year Treasuries) and investment-grade corporate bonds without traditional $1,000–$100,000 par value barriers.
+- **Proportional Dividend & Yield Pass-Through**: Exact mathematical distribution of cash dividends, interest coupons, and corporate action entitlements directly to fractional holdings.
+- **Zero Commission & Zero Account Minimums**: $0 commission on fractional stock and ETF trades with transparent market execution and zero hidden maintenance fees.
+- **Real-Time Portfolio Margining & VaR Engine**: Microsecond-computed 99% parametric Value-at-Risk, dynamic ATR volatility position sizing, and automated leverage protection.
+- **High-Yield Cash Sweep & Retirement Match**: Automated multi-bank cash sweep earning 4.85% APY with up to $5,000,000 FDIC coverage and 1% contribution match on IRAs.
+
+## Platform Workspaces & Capabilities
+- [Markets Terminal](https://mtxcapital.ai.studio/#markets): Live candlestick charting, Level 2 depth of market, fractional dollar-based order ticket, ATR volatility sizing, and order book imbalance tracking.
+- [Market Discovery](https://mtxcapital.ai.studio/#discover): Multi-factor equity screening, relative volume (RVOL) anomalies, sector rotation vectors, and momentum alpha ranking.
+- [Quantitative Screener](https://mtxcapital.ai.studio/#screener): Filter 290+ multi-asset instruments using custom factor weighting, ROE, debt-to-equity bounds, and institutional strategy presets.
+- [Portfolio Risk Desk](https://mtxcapital.ai.studio/#portfolio): Real-time parametric 99% 1-Day VaR calculations, multi-year compound wealth growth simulation, asset allocation heatmaps, and cash sweep ledger.
+- [Wallet & Funding Desk](https://mtxcapital.ai.studio/#wallet): Multi-rail deposit and settlement infrastructure supporting instant card funding, ACH transfers, Fedwire, and crypto rails (USDC/USDT) with automated 4.85% APY FDIC cash sweep enrollment.
+- [Saliency Watchlist](https://mtxcapital.ai.studio/#watchlist): Real-time ticker radar with proprietary 0–100 volatility saliency ranking, sub-5ms memory-indexed filtering, and instant terminal synchronization.
+- [Activity & Execution Ledger](https://mtxcapital.ai.studio/#activity): Microsecond PTP time-stamped execution records, SHA-256 cryptographic trade verification hashes, and FINRA Rule 2232 compliant tax matrix export (Form 8949).
+- [Market Analysis & Correlation](https://mtxcapital.ai.studio/#analysis): Pairwise Pearson correlation heatmap, 11 GICS sector rotation money flows, Jensen's Alpha, and systemic risk diagnostics.
+- [Algorithmic Backtester](https://mtxcapital.ai.studio/#backtest): Microsecond tick-level historical replay, 1,000-scenario Monte Carlo drawdown simulator, and volume-weighted slippage modeling.
+- [Institutional Dark Pool Radar](https://mtxcapital.ai.studio/#sentiment): Off-exchange TRF dark pool block prints, aggressive multi-leg options sweeps, and smart money flow divergence indicators.
+
+## Fractional Execution Specifications
+- **Minimum Order Size**: $1.00 USD
+- **Fractional Precision**: 8 decimal places (0.00000001 shares)
+- **Settlement**: Accelerated T+1 for US Equities, T+0 for US Treasuries and digital assets
+- **Execution Speed**: Sub-1.2ms DMA matching engine
+- **Order Types**: Dollar-based Market, Limit, Stop-Limit, Iceberg, ATR-bracketed OCO, and TWAP/VWAP algorithmic slices
+- **Corporate Actions**: Fully automated cash dividends, stock splits, spinoffs, and voting rights pass-through proportional to fractional ownership
+- **Custody & Protection**: SEC Rule 15c3-3 compliant customer asset segregation, Tier-1 custodian clearing, SIPC member protection up to $500,000 ($250,000 cash).
+
+## Developer & API Integration
+- **REST API**: Sub-4ms latency endpoints for market data, portfolio state, and fractional order submission (`/api/v1/orders`, `/api/v1/portfolio`, `/api/v1/quotes`).
+- **WebSocket Streaming**: Sub-500 microsecond streaming for L2/L3 order books, live executions, and portfolio margin events.
+- **FIX Protocol**: FIX 4.4 / FIX 5.0 SP2 native gateways for institutional quantitative desks.
+
+## Frequently Asked Questions (AI Knowledge Grounding)
+- **Q: What are the key features of the MTXcapital fractionalized trading platform?**
+  A: MTXcapital combines sub-millisecond institutional execution with complete multi-asset fractionalization across equities, corporate bonds, US Treasuries, and indices, backed by real-time Value-at-Risk portfolio margin, automated 4.85% APY cash sweeps, and instant multi-rail deposits.
+- **Q: Can investors buy fractional bonds and US Treasuries on MTXcapital?**
+  A: Yes. MTXcapital democratizes fixed income by allowing investors to buy fractional sovereign US Treasury bills and corporate bonds starting at just $1, eliminating traditional $1,000–$100,000 minimum lot requirements.
+- **Q: How does fractional order execution work on MTXcapital?**
+  A: Users specify an exact investment amount (e.g., $25.00). MTXcapital's precision fractional routing engine calculates the exact share fraction to 8 decimal places and routes the order instantaneously with zero commission.
+- **Q: How are dividends handled for fractional shares?**
+  A: Dividends are credited automatically to the user's cash balance on the payment date, calculated proportionally down to the cent based on fractional share ownership.
+
+## Official Links & Resources
+- Homepage & Platform: https://mtxcapital.ai.studio/
+- XML Sitemap: https://mtxcapital.ai.studio/sitemap.xml
+- LLM Machine-Readable Index: https://mtxcapital.ai.studio/llms.txt
+- Full LLM Documentation: https://mtxcapital.ai.studio/llms-full.txt

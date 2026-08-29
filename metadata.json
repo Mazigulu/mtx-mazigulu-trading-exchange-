@@ -1,6 +1,6 @@
 {
   "name": "mtx",
-  "description": "Apex MTX is an institutional multi-asset securities brokerage and trading platform featuring zero-latency order routing, fractional shares, portfolio margin accounting, real-time risk protections, and dynamic market visualizations.",
+  "description": "Apex MTX institutional multi-asset brokerage and portfolio builder featuring available demo cash allocation, interactive asset picking across US tech giants, index ETFs, blue chips, and digital assets, fractional share settlement, and real-time portfolio analytics.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

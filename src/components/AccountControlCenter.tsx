@@ -61,10 +61,21 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+export interface TerminalActivityLog {
+  id: string;
+  type: 'LOGIN' | 'TRADE' | 'SETTINGS' | 'SECURITY' | 'ACCOUNT' | 'SYSTEM';
+  title: string;
+  description: string;
+  timestamp: string;
+  status: 'SUCCESS' | 'EXECUTED' | 'SAVED' | 'VERIFIED' | 'COMPLETED' | 'WARNING';
+  ipOrDevice?: string;
+}
+
 const menuCategories = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'account', label: 'Account', icon: Database },
   { id: 'security', label: 'Security', icon: Shield },
+  { id: 'activity', label: 'Activity Log', icon: Activity },
   { id: 'verification', label: 'Verification (KYC)', icon: FileCheck },
   { id: 'payment', label: 'Bank & Payments', icon: Wallet },
   { id: 'support', label: 'Support Center', icon: HelpCircle },
@@ -75,6 +86,7 @@ interface AccountControlCenterProps {
   isOpen: boolean;
   onClose: () => void;
   traderEmail: string;
+  userName?: string;
   sessionSeconds: number;
   brokerPing: number;
   soundAlertsEnabled: boolean;
@@ -106,12 +118,14 @@ interface AccountControlCenterProps {
   onSaveBackgroundSettings: (url: string, opacity: number) => void;
   notificationSound?: NotificationSoundType;
   onSelectNotificationSound?: (sound: NotificationSoundType) => void;
+  externalActivityLogs?: TerminalActivityLog[];
 }
 
 export default function AccountControlCenter({
   isOpen,
   onClose,
   traderEmail,
+  userName,
   sessionSeconds,
   brokerPing,
   soundAlertsEnabled,
@@ -149,15 +163,31 @@ export default function AccountControlCenter({
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<string>('profile');
 
+  // Compute clean initial display name for the user
+  const getInitialName = () => {
+    if (userName && userName.trim()) return userName;
+    if (traderEmail && traderEmail.includes('@')) {
+      const prefix = traderEmail.split('@')[0];
+      if (prefix.toLowerCase() === 'demo') return 'Institutional Demo Trader';
+      return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+    }
+    return 'Institutional Trader';
+  };
+
   // Interactive local states
   // 1. Profile State
-  const [profileName, setProfileName] = useState('Maximilian G. Vance');
-  const [profilePhone, setProfilePhone] = useState('+1 (555) 392-1082');
+  const [profileName, setProfileName] = useState<string>(getInitialName);
+  const [profilePhone, setProfilePhone] = useState('+1 (Institutional Direct)');
   const [profileCountry, setProfileCountry] = useState('United States');
   const [profileLanguage, setProfileLanguage] = useState('English (US)');
   const [profileTimeZone, setProfileTimeZone] = useState('UTC-5 (EST)');
   const [profilePhotoPreset, setProfilePhotoPreset] = useState<number>(0);
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
+
+  // Sync profile name whenever active user changes
+  useEffect(() => {
+    setProfileName(getInitialName());
+  }, [userName, traderEmail]);
 
   const avatarPresets = [
     'bg-gradient-to-tr from-indigo-600 to-violet-500',
@@ -182,23 +212,21 @@ export default function AccountControlCenter({
   const [totpVerified, setTotpVerified] = useState(true);
   const [totpCopied, setTotpCopied] = useState(false);
   const [showTotpSetup, setShowTotpSetup] = useState(false);
-  const [smsNumber, setSmsNumber] = useState('+254 712 345678');
+  const [smsNumber, setSmsNumber] = useState('+1 (555) 019-2834');
   const [smsCodeInput, setSmsCodeInput] = useState('');
   const [smsCodeSent, setSmsCodeSent] = useState(false);
   const [smsVerified, setSmsVerified] = useState(true);
   const [securityToast, setSecurityToast] = useState<string | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([
     'RC_9918_FF_CLEAR',
-    'RC_4412_AA_VANCE',
+    'RC_4412_AA_DESK',
     'RC_1082_ZX_CLEAR',
     'RC_8820_QM_DESK',
     'RC_5033_OB_PROJ',
     'RC_4958_FG_GATE'
   ]);
   const [activeSessions, setActiveSessions] = useState([
-    { id: 'sess-1', device: 'Apple MacBook Pro (San Francisco, CA)', ip: '198.51.100.41', client: 'Web Terminal Interface', isCurrent: true, time: 'Active Now' },
-    { id: 'sess-2', device: 'iPhone 15 Pro Max (Eldoret, Kenya)', ip: '102.168.1.108', client: 'Mobile Application Hub', isCurrent: false, time: '2 hrs ago' },
-    { id: 'sess-3', device: 'Linux Quant Workstation (Frankfurt, DE)', ip: '185.220.101.5', client: 'FIX/DMA API Gateway', isCurrent: false, time: '1 day ago' }
+    { id: 'sess-1', device: 'Institutional Terminal (Active Session)', ip: 'Current Device IP', client: 'Web Terminal Interface', isCurrent: true, time: 'Active Now' }
   ]);
   const [passwordOld, setPasswordOld] = useState('');
   const [passwordNew, setPasswordNew] = useState('');
@@ -208,11 +236,11 @@ export default function AccountControlCenter({
 
   // 4. Verification KYC State
   const [kycStatus, setKycStatus] = useState<'VERIFIED' | 'PENDING' | 'UNVERIFIED'>('VERIFIED');
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>('government_id_vance.pdf');
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>('institutional_id_document.pdf');
   const [isUploading, setIsUploading] = useState(false);
   const [taxResidency, setTaxResidency] = useState('US-W8BEN');
   const [sourceOfFunds, setSourceOfFunds] = useState('Algorithmic Arbitrage Accumulation');
-  const [addressDocName, setAddressDocName] = useState<string | null>('utility_statement_june.pdf');
+  const [addressDocName, setAddressDocName] = useState<string | null>('utility_statement_recent.pdf');
 
   // 5. Payment Methods State
   const [linkedBanks, setLinkedBanks] = useState([
@@ -224,7 +252,7 @@ export default function AccountControlCenter({
   ]);
   const [wallets, setWallets] = useState([
     { id: 'wallet-1', type: 'Polygon ERC-20 (USDC/USDT)', address: '0x71C83e3F1082df943A1AA918FF0920' },
-    { id: 'wallet-2', type: 'Solana SPL (USDC)', address: 'HN7c639mPq18AA8820ZXVance8203' }
+    { id: 'wallet-2', type: 'Solana SPL (USDC)', address: 'HN7c639mPq18AA8820ZX9918Desk8203' }
   ]);
   const [mpesaNo, setMpesaNo] = useState('+254 712 345678');
   const [airtelNo, setAirtelNo] = useState('+254 733 987654');
@@ -254,6 +282,93 @@ export default function AccountControlCenter({
     { id: 'TKT-4410', subject: 'Polygon wallet gas fee reconciliation', status: 'Completed', date: '2026-07-09' }
   ]);
   const [faqOpenIdx, setFaqOpenIdx] = useState<number | null>(null);
+
+  // 6.5 Terminal Activity Log State (Last 5 Interactions)
+  const initialActivityLogs: TerminalActivityLog[] = [
+    {
+      id: 'act-1',
+      type: 'LOGIN',
+      title: 'Terminal Session Authenticated',
+      description: 'Institutional OAuth RSA Bearer Session Established',
+      timestamp: '2 mins ago',
+      status: 'SUCCESS',
+      ipOrDevice: 'San Francisco, CA (198.51.100.41)'
+    },
+    {
+      id: 'act-2',
+      type: 'TRADE',
+      title: 'Limit Buy Executed - AAPL',
+      description: 'Bought 10.0 Lots @ $234.50 via J.P. Morgan Clearing',
+      timestamp: '14 mins ago',
+      status: 'EXECUTED',
+      ipOrDevice: 'Web Terminal Interface'
+    },
+    {
+      id: 'act-3',
+      type: 'SETTINGS',
+      title: 'Slippage & PnL Alerts Updated',
+      description: 'Max execution slippage set to 0.1%, Daily PnL Goal $5,000',
+      timestamp: '1 hour ago',
+      status: 'SAVED',
+      ipOrDevice: 'Account Control Center'
+    },
+    {
+      id: 'act-4',
+      type: 'SECURITY',
+      title: '2FA Verification Challenge Passed',
+      description: 'TOTP Authenticator paired for high-value operations',
+      timestamp: '3 hours ago',
+      status: 'VERIFIED',
+      ipOrDevice: 'Hardware HSM Module'
+    },
+    {
+      id: 'act-5',
+      type: 'TRADE',
+      title: 'Stop Loss Executed - NVDA',
+      description: 'Sold 5.0 Lots @ $128.20 via FIX Engine Gateway',
+      timestamp: '5 hours ago',
+      status: 'COMPLETED',
+      ipOrDevice: 'Automated FIX Engine'
+    }
+  ];
+
+  const [activityLogs, setActivityLogs] = useState<TerminalActivityLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('mtx_terminal_activity_logs');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 5);
+      }
+    } catch (_) {}
+    return initialActivityLogs;
+  });
+
+  const [activityFilter, setActivityFilter] = useState<'ALL' | 'LOGIN' | 'TRADE' | 'SETTINGS' | 'SECURITY'>('ALL');
+
+  const addActivityLog = (
+    type: TerminalActivityLog['type'],
+    title: string,
+    description: string,
+    status: TerminalActivityLog['status'] = 'SUCCESS',
+    ipOrDevice: string = 'Terminal Interface'
+  ) => {
+    const newLog: TerminalActivityLog = {
+      id: `act-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      type,
+      title,
+      description,
+      timestamp: 'Just now',
+      status,
+      ipOrDevice
+    };
+    setActivityLogs(prev => {
+      const updated = [newLog, ...prev].slice(0, 5); // Strictly maintain last 5 interactions!
+      try {
+        localStorage.setItem('mtx_terminal_activity_logs', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+  };
 
   // Live Chat Simulator States
   const [chatInput, setChatInput] = useState('');
@@ -371,11 +486,11 @@ export default function AccountControlCenter({
   };
 
   const handleDownloadBackupCodes = () => {
-    const textContent = `MTXQUANT BROKERAGE ACCOUNT - EMERGENCY 2FA BACKUP RECOVERY CODES\nGenerated: ${new Date().toISOString()}\nAccount Holder: ${traderEmail}\n\nSINGLE-USE RECOVERY CODES:\n${recoveryCodes.map((code, idx) => `${idx + 1}. ${code}`).join('\n')}\n\nKeep this document in an offline physical safe or encrypted password manager vault.`;
+    const textContent = `MTXCAPITAL BROKERAGE ACCOUNT - EMERGENCY 2FA BACKUP RECOVERY CODES\nGenerated: ${new Date().toISOString()}\nAccount Holder: ${traderEmail}\n\nSINGLE-USE RECOVERY CODES:\n${recoveryCodes.map((code, idx) => `${idx + 1}. ${code}`).join('\n')}\n\nKeep this document in an offline physical safe or encrypted password manager vault.`;
     const element = document.createElement('a');
     const file = new Blob([textContent], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = `MTXquant_2FA_Backup_Codes_${traderEmail.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+    element.download = `MTXcapital_2FA_Backup_Codes_${traderEmail.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -564,10 +679,10 @@ export default function AccountControlCenter({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.96 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
-              className="w-80 sm:w-84 max-h-[85vh] overflow-y-auto no-scrollbar bg-[#060609]/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.9)] divide-y divide-white/5 font-mono text-[10px] text-white flex flex-col"
+              className="w-80 sm:w-84 overflow-hidden bg-[#060609]/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.9)] divide-y divide-white/5 font-mono text-[10px] text-white flex flex-col"
             >
               {/* Profile Brief Identity Header */}
-              <div className="p-3 bg-gradient-to-r from-indigo-500/10 via-transparent to-transparent text-left shrink-0">
+              <div className="p-3 bg-[#0a0a0f] border-b border-white/5 text-left shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-[12px] text-white border border-white/20 shadow-inner ${activeAvatarStyle}`}>
                     {profileName ? profileName.substring(0, 2).toUpperCase() : 'TR'}
@@ -584,7 +699,7 @@ export default function AccountControlCenter({
                 <button
                   type="button"
                   onClick={() => openWorkspaceTab('profile')}
-                  className="px-3 py-2.5 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
+                  className="px-3 py-2 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-500 transition-all">
@@ -601,7 +716,7 @@ export default function AccountControlCenter({
                 <button
                   type="button"
                   onClick={() => openWorkspaceTab('account')}
-                  className="px-3 py-2.5 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
+                  className="px-3 py-2 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-emerald-500 transition-all">
@@ -618,7 +733,7 @@ export default function AccountControlCenter({
                 <button
                   type="button"
                   onClick={() => openWorkspaceTab('security')}
-                  className="px-3 py-2.5 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
+                  className="px-3 py-2 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:bg-amber-600 group-hover:text-white group-hover:border-amber-500 transition-all">
@@ -634,8 +749,25 @@ export default function AccountControlCenter({
 
                 <button
                   type="button"
+                  onClick={() => openWorkspaceTab('activity')}
+                  className="px-3 py-2 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-500 transition-all">
+                      <Activity className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-white block">Activity Log</span>
+                      <span className="text-[7.5px] text-white/40 block">Last 5 interactions: logins, trades, settings</span>
+                    </div>
+                  </div>
+                  <div className="text-[8px] text-indigo-300 font-mono font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 group-hover:bg-indigo-500/20">5 LOGS</div>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => openWorkspaceTab('verification')}
-                  className="px-3 py-2.5 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
+                  className="px-3 py-2 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-600 group-hover:text-white group-hover:border-cyan-500 transition-all">
@@ -652,7 +784,7 @@ export default function AccountControlCenter({
                 <button
                   type="button"
                   onClick={() => openWorkspaceTab('payment')}
-                  className="px-3 py-2.5 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
+                  className="px-3 py-2 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 group-hover:bg-rose-600 group-hover:text-white group-hover:border-rose-500 transition-all">
@@ -669,7 +801,7 @@ export default function AccountControlCenter({
                 <button
                   type="button"
                   onClick={() => openWorkspaceTab('support')}
-                  className="px-3 py-2.5 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
+                  className="px-3 py-2 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:bg-purple-600 group-hover:text-white group-hover:border-purple-500 transition-all">
@@ -686,7 +818,7 @@ export default function AccountControlCenter({
                 <button
                   type="button"
                   onClick={() => openWorkspaceTab('settings')}
-                  className="px-3 py-2.5 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
+                  className="px-3 py-2 hover:bg-white/[0.03] transition-all flex items-center justify-between text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded bg-zinc-500/10 border border-zinc-500/20 flex items-center justify-center text-zinc-400 group-hover:bg-zinc-600 group-hover:text-white group-hover:border-zinc-500 transition-all">
@@ -922,7 +1054,7 @@ export default function AccountControlCenter({
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {/* Summary Widget */}
-                        <div className="p-4 bg-gradient-to-br from-indigo-950/15 to-transparent border border-indigo-500/25 rounded-lg space-y-3">
+                        <div className="p-4 bg-indigo-950/10 border border-indigo-500/20 rounded-lg space-y-3">
                           <span className="text-[7.5px] text-indigo-400 font-black uppercase tracking-wider">CLEARING ACCOUNT CREDENTIALS</span>
                           <div className="space-y-2">
                             <div className="flex justify-between">
@@ -1063,7 +1195,7 @@ export default function AccountControlCenter({
                       )}
 
                       {/* MASTER TWO-FACTOR AUTHENTICATION TOGGLE CARD */}
-                      <div className="p-4 bg-gradient-to-r from-indigo-950/30 to-black/60 border border-indigo-500/20 rounded-xl space-y-3">
+                      <div className="p-4 bg-indigo-950/15 border border-indigo-500/20 rounded-xl space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${is2FaEnabled ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-white/5 border-white/10 text-white/40'}`}>
@@ -1519,6 +1651,221 @@ export default function AccountControlCenter({
                             </div>
                           ))}
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ACTIVITY LOG TAB PAGE */}
+                  {activeWorkspaceTab === 'activity' && (
+                    <div className="space-y-6 max-w-3xl animate-fadeIn">
+                      <div>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                              <Activity className="w-4 h-4 text-indigo-400" />
+                              TERMINAL INTERACTION ACTIVITY LOG (LAST 5)
+                            </h2>
+                            <p className="text-white/50 text-[9px] mt-1 leading-relaxed">
+                              Immutable record capturing the last 5 user interactions within the terminal, including logins, order placements, security challenges, and configuration shifts.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                addActivityLog('TRADE', 'Manual Market Order Placed', 'Submitted 1.0 Lot Market Buy @ Current Bid', 'EXECUTED', 'Manual UI Interaction');
+                              }}
+                              className="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 rounded text-indigo-300 hover:text-white font-bold text-[8.5px] uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Log Test Interaction
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const resetLogs: TerminalActivityLog[] = [
+                                  {
+                                    id: `act-${Date.now()}-1`,
+                                    type: 'LOGIN',
+                                    title: 'Terminal Session Authenticated',
+                                    description: 'Institutional OAuth RSA Session Established',
+                                    timestamp: 'Just now',
+                                    status: 'SUCCESS',
+                                    ipOrDevice: 'San Francisco, CA (198.51.100.41)'
+                                  },
+                                  {
+                                    id: `act-${Date.now()}-2`,
+                                    type: 'TRADE',
+                                    title: 'Limit Order Executed - AAPL',
+                                    description: 'Bought 10.0 Lots @ $234.50 via J.P. Morgan Clearing',
+                                    timestamp: '5 mins ago',
+                                    status: 'EXECUTED',
+                                    ipOrDevice: 'Web Terminal Interface'
+                                  },
+                                  {
+                                    id: `act-${Date.now()}-3`,
+                                    type: 'SETTINGS',
+                                    title: 'Slippage & PnL Alerts Updated',
+                                    description: 'Max execution slippage threshold set to 0.1%',
+                                    timestamp: '20 mins ago',
+                                    status: 'SAVED',
+                                    ipOrDevice: 'Account Control Center'
+                                  },
+                                  {
+                                    id: `act-${Date.now()}-4`,
+                                    type: 'SECURITY',
+                                    title: '2FA Verification Challenge Passed',
+                                    description: 'TOTP Authenticator paired for high-value operations',
+                                    timestamp: '1 hour ago',
+                                    status: 'VERIFIED',
+                                    ipOrDevice: 'Hardware HSM Module'
+                                  },
+                                  {
+                                    id: `act-${Date.now()}-5`,
+                                    type: 'TRADE',
+                                    title: 'Stop Loss Executed - NVDA',
+                                    description: 'Sold 5.0 Lots @ $128.20 via FIX Engine Gateway',
+                                    timestamp: '3 hours ago',
+                                    status: 'COMPLETED',
+                                    ipOrDevice: 'Automated FIX Engine'
+                                  }
+                                ];
+                                setActivityLogs(resetLogs);
+                                try {
+                                  localStorage.setItem('mtx_terminal_activity_logs', JSON.stringify(resetLogs));
+                                } catch (_) {}
+                              }}
+                              className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-white/60 hover:text-white font-bold text-[8.5px] uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              Reset Stream
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Metrics Summary Row */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                            <Clock className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-[7.5px] text-white/40 font-bold block uppercase">TOTAL INTERACTIONS</span>
+                            <span className="text-sm font-black text-white font-mono">{activityLogs.length} / 5 Logged</span>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                            <ShieldCheck className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-[7.5px] text-white/40 font-bold block uppercase">FIDUCIARY INTEGRITY</span>
+                            <span className="text-sm font-black text-emerald-400 font-mono">100% VERIFIED</span>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                            <Key className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-[7.5px] text-white/40 font-bold block uppercase">CRYPTOGRAPHIC SEAL</span>
+                            <span className="text-sm font-black text-indigo-300 font-mono">RSA-HSM-256</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Filter Pills */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar border-b border-white/10">
+                        {(['ALL', 'LOGIN', 'TRADE', 'SETTINGS', 'SECURITY'] as const).map((filter) => (
+                          <button
+                            key={filter}
+                            type="button"
+                            onClick={() => setActivityFilter(filter)}
+                            className={`px-3 py-1 rounded text-[8.5px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
+                              activityFilter === filter
+                                ? 'bg-indigo-600 text-white shadow-[0_0_12px_rgba(99,102,241,0.3)]'
+                                : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'
+                            }`}
+                          >
+                            {filter === 'ALL' ? 'All (Last 5)' : filter}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Activity List Stream (Showing Last 5 User Interactions) */}
+                      <div className="space-y-2.5 font-mono">
+                        {activityLogs
+                          .filter(log => activityFilter === 'ALL' || log.type === activityFilter)
+                          .map((log, index) => {
+                            const getBadgeStyle = (type: TerminalActivityLog['type']) => {
+                              switch (type) {
+                                case 'LOGIN':
+                                  return { bg: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300', icon: ShieldCheck, accent: 'border-l-indigo-500' };
+                                case 'TRADE':
+                                  return { bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400', icon: TrendingUp, accent: 'border-l-emerald-500' };
+                                case 'SETTINGS':
+                                  return { bg: 'bg-amber-500/10 border-amber-500/30 text-amber-300', icon: Sliders, accent: 'border-l-amber-500' };
+                                case 'SECURITY':
+                                  return { bg: 'bg-rose-500/10 border-rose-500/30 text-rose-400', icon: Lock, accent: 'border-l-rose-500' };
+                                case 'ACCOUNT':
+                                  return { bg: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300', icon: Database, accent: 'border-l-cyan-500' };
+                                default:
+                                  return { bg: 'bg-purple-500/10 border-purple-500/30 text-purple-300', icon: Cpu, accent: 'border-l-purple-500' };
+                              }
+                            };
+
+                            const style = getBadgeStyle(log.type);
+                            const IconComponent = style.icon;
+
+                            return (
+                              <div
+                                key={log.id}
+                                className={`p-3.5 bg-black/40 hover:bg-black/60 border border-white/10 border-l-4 ${style.accent} rounded-r-lg shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group`}
+                              >
+                                <div className="flex items-start gap-3 min-w-0 flex-1">
+                                  <div className={`w-8 h-8 rounded border flex items-center justify-center shrink-0 ${style.bg}`}>
+                                    <IconComponent className="w-4 h-4" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className={`text-[7.5px] font-black px-1.5 py-0.5 rounded border uppercase ${style.bg}`}>
+                                        {log.type}
+                                      </span>
+                                      <span className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">{log.title}</span>
+                                      <span className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-white/5 border border-white/10 text-white/60">
+                                        #{index + 1}
+                                      </span>
+                                    </div>
+                                    <p className="text-[9.5px] text-white/60 mt-1 font-sans leading-relaxed">{log.description}</p>
+                                    {log.ipOrDevice && (
+                                      <div className="flex items-center gap-1 text-[8px] text-white/30 mt-1.5">
+                                        <Laptop className="w-3 h-3" />
+                                        <span>Source / Channel: {log.ipOrDevice}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                                  <span className="text-[8px] font-bold text-white/40">{log.timestamp}</span>
+                                  <span className="text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                                    {log.status || 'EXECUTED'}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                        {activityLogs.filter(log => activityFilter === 'ALL' || log.type === activityFilter).length === 0 && (
+                          <div className="p-8 text-center bg-black/20 border border-white/5 rounded-lg">
+                            <Activity className="w-6 h-6 text-white/20 mx-auto mb-2" />
+                            <span className="text-white/40 font-bold block text-xs">No interactions found for filter "{activityFilter}"</span>
+                            <span className="text-white/20 text-[9px] block mt-1">Select "ALL" to inspect the last 5 terminal interactions.</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

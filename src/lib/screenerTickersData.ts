@@ -155,6 +155,7 @@ export function generateScreenerDatabase(): ScreenerRecord[] {
 
   // 4. CONSUMER (35 Real Tickers)
   const consumerList: ScreenerRecord[] = [
+    { ticker: 'RACE', name: 'Ferrari N.V.', sector: 'Consumer', marketCap: 82e9, peRatio: 44.5, roe: 0.42, profitMargin: 0.21, fiftyTwoWeekChange: 0.26, dividendYield: 0.007, debtToEquity: 0.85, revenueGrowth: 0.14 },
     { ticker: 'AMZN', name: 'Amazon.com Inc.', sector: 'Consumer', marketCap: 1950e9, peRatio: 41.5, roe: 0.21, profitMargin: 0.06, fiftyTwoWeekChange: 0.32, dividendYield: null, debtToEquity: 0.35, revenueGrowth: 0.13 },
     { ticker: 'TSLA', name: 'Tesla Inc.', sector: 'Consumer', marketCap: 620e9, peRatio: 54.2, roe: 0.18, profitMargin: 0.09, fiftyTwoWeekChange: -0.12, dividendYield: null, debtToEquity: 0.08, revenueGrowth: 0.08 },
     { ticker: 'HD', name: 'Home Depot Inc.', sector: 'Consumer', marketCap: 360e9, peRatio: 23.4, roe: 1.22, profitMargin: 0.10, fiftyTwoWeekChange: 0.08, dividendYield: 0.024, debtToEquity: 2.1, revenueGrowth: 0.02 },
@@ -210,15 +211,14 @@ export function generateScreenerDatabase(): ScreenerRecord[] {
     { ticker: 'HES', name: 'Hess Corp.', sector: 'Energy', marketCap: 48e9, peRatio: 22.0, roe: 0.22, profitMargin: 0.21, fiftyTwoWeekChange: 0.18, dividendYield: 0.012, debtToEquity: 0.62, revenueGrowth: 0.14 },
     { ticker: 'DVN', name: 'Devon Energy Corp.', sector: 'Energy', marketCap: 28e9, peRatio: 8.5, roe: 0.28, profitMargin: 0.22, fiftyTwoWeekChange: -0.08, dividendYield: 0.048, debtToEquity: 0.52, revenueGrowth: 0.01 },
     { ticker: 'FANG', name: 'Diamondback Energy', sector: 'Energy', marketCap: 36e9, peRatio: 10.2, roe: 0.21, profitMargin: 0.38, fiftyTwoWeekChange: 0.25, dividendYield: 0.042, debtToEquity: 0.38, revenueGrowth: 0.06 },
-    { ticker: 'PXD', name: 'Pioneer Natural Resources', sector: 'Energy', marketCap: 62e9, peRatio: 12.0, roe: 0.22, profitMargin: 0.25, fiftyTwoWeekChange: 0.18, dividendYield: 0.038, debtToEquity: 0.22, revenueGrowth: 0.05 },
+    { ticker: 'MRO', name: 'Marathon Oil Corporation', sector: 'Energy', marketCap: 17e9, peRatio: 11.2, roe: 0.16, profitMargin: 0.22, fiftyTwoWeekChange: 0.12, dividendYield: 0.018, debtToEquity: 0.45, revenueGrowth: 0.04 },
     { ticker: 'CTRA', name: 'Coterra Energy Inc.', sector: 'Energy', marketCap: 21e9, peRatio: 12.5, roe: 0.11, profitMargin: 0.22, fiftyTwoWeekChange: 0.05, dividendYield: 0.032, debtToEquity: 0.18, revenueGrowth: -0.02 },
     { ticker: 'TRGP', name: 'Targa Resources Corp.', sector: 'Energy', marketCap: 28e9, peRatio: 25.0, roe: 0.18, profitMargin: 0.06, fiftyTwoWeekChange: 0.52, dividendYield: 0.022, debtToEquity: 2.1, revenueGrowth: 0.08 },
     { ticker: 'EQNR', name: 'Equinor ASA', sector: 'Energy', marketCap: 82e9, peRatio: 7.8, roe: 0.28, profitMargin: 0.15, fiftyTwoWeekChange: -0.12, dividendYield: 0.085, debtToEquity: 0.32, revenueGrowth: -0.08 },
     { ticker: 'BP', name: 'BP plc', sector: 'Energy', marketCap: 98e9, peRatio: 11.2, roe: 0.14, profitMargin: 0.05, fiftyTwoWeekChange: -0.02, dividendYield: 0.052, debtToEquity: 0.72, revenueGrowth: -0.02 },
     { ticker: 'SHEL', name: 'Shell plc', sector: 'Energy', marketCap: 215e9, peRatio: 11.8, roe: 0.15, profitMargin: 0.06, fiftyTwoWeekChange: 0.12, dividendYield: 0.038, debtToEquity: 0.48, revenueGrowth: -0.01 },
     { ticker: 'TTE', name: 'TotalEnergies SE', sector: 'Energy', marketCap: 165e9, peRatio: 8.5, roe: 0.18, profitMargin: 0.09, fiftyTwoWeekChange: 0.08, dividendYield: 0.048, debtToEquity: 0.42, revenueGrowth: -0.02 },
-    { ticker: 'OKE', name: 'ONEAK Inc.', sector: 'Energy', marketCap: 48e9, peRatio: 18.0, roe: 0.18, profitMargin: 0.12, fiftyTwoWeekChange: 0.38, dividendYield: 0.045, debtToEquity: 1.5, revenueGrowth: 0.18 },
-    { ticker: 'MRO', name: 'Marathon Oil Corp.', sector: 'Energy', marketCap: 16e9, peRatio: 10.5, roe: 0.14, profitMargin: 0.22, fiftyTwoWeekChange: 0.12, dividendYield: 0.016, debtToEquity: 0.52, revenueGrowth: 0.03 }
+    { ticker: 'OKE', name: 'ONEAK Inc.', sector: 'Energy', marketCap: 48e9, peRatio: 18.0, roe: 0.18, profitMargin: 0.12, fiftyTwoWeekChange: 0.38, dividendYield: 0.045, debtToEquity: 1.5, revenueGrowth: 0.18 }
   ];
 
   // 6. INDUSTRIALS (25 Real Tickers)

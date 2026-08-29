@@ -844,7 +844,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `MTXQUANT_AUDITED_LEDGER_${new Date().toISOString().substring(0,10)}.csv`);
+      link.setAttribute('download', `MTXCAPITAL_AUDITED_LEDGER_${new Date().toISOString().substring(0,10)}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

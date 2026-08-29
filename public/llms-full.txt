@@ -1,0 +1,84 @@
+# MTXcapital - Comprehensive Architectural & Operational Reference for AI Systems (llms-full.txt)
+# Institutional Multi-Asset Fractionalized Trading, Prime Brokerage, & Quantitative Execution
+
+## 1. Executive Summary & Market Positioning
+MTXcapital (https://mtxcapital.ai.studio) is an institutional-grade multi-asset trading platform and prime brokerage engineered to enable seamless fractional execution and algorithmic trading.
+
+### Key Highlights:
+1. **Fractional Equities**: Buy any S&P 500, Nasdaq 100, Russell 2000, or international ADR with $1.
+2. **Fractional Fixed Income**: Buy US Treasury Bills (3M, 2Y, 10Y, 30Y) and high-grade corporate bonds starting at $1.
+3. **Institutional Risk Engine**: Real-time Parametric Value-at-Risk (99% 1-Day VaR), non-linear margin modeling, and liquidation buffer shields.
+4. **Cash Yield Optimization**: Automated FDIC multi-bank sweep program paying 4.85% APY on idle cash.
+5. **Retirement Incentives**: 1% contribution matching on all Traditional and Roth IRA deposits.
+6. **Execution Velocity**: Sub-1.2ms DMA matching with smart order routing (SOR) across primary exchanges and dark venues.
+
+---
+
+## 2. Multi-Asset Fractional Trading Mechanics
+
+### 2.1 Order Processing & Mathematical Precision
+When a trader submits a dollar-based order on MTXcapital:
+1. **Dollar Sizing**: The user specifies dollar value $D$ (e.g., $50.00).
+2. **Execution Price Determination**: The National Best Bid and Offer (NBBO) midpoint $P$ is retrieved from low-latency feeds.
+3. **Fractional Share Calculation**:
+   $$\text{Quantity} = \frac{D}{P}$$
+   Computed to 8 decimal places (0.00000001 precision).
+4. **Order Routing**: The whole-share component is routed to exchange lit books or ATS pools, while the residual fractional tail is executed instantly against MTXcapital's principal inventory liquidity pool at true NBBO with zero spread markups.
+5. **Ledger Update**: The client's portfolio state and cash balance are updated in sub-millisecond time.
+
+### 2.2 Corporate Actions & Dividends
+- **Cash Dividends**: Paid out proportionally on the dividend payment date:
+  $$\text{Dividend Payout} = \text{Dividend Per Share} \times \text{Fractional Quantity}$$
+- **Stock Splits**: Split ratios apply directly to fractional quantities without truncation.
+- **Voting Rights**: Proportional voting representation where legally supported.
+
+---
+
+## 3. Supported Asset Universe
+
+| Asset Class | Symbols / Coverage | Min Investment | Fractional Precision | Execution Speed |
+| :--- | :--- | :--- | :--- | :--- |
+| **US Equities** | NVDA, AAPL, MSFT, TSLA, AMZN, GOOGL, META, 5,000+ US Stocks | $1.00 USD | 8 decimal places | < 1.2ms |
+| **ETFs & Indices** | SPY, QQQ, DIA, IWM, VOO, sector ETFs | $1.00 USD | 8 decimal places | < 1.2ms |
+| **US Treasuries** | 3-Month T-Bills, 2-Year, 5-Year, 10-Year, 30-Year Sovereign Bonds | $1.00 USD | 6 decimal places | < 2.0ms |
+| **Corporate Bonds** | Apple, Microsoft, Amazon, JPMorgan, Goldman Sachs Debt | $1.00 USD | 6 decimal places | < 3.0ms |
+| **Digital Assets** | BTC/USD, ETH/USD, SOL/USD | $1.00 USD | 8 decimal places | < 1.0ms |
+
+---
+
+## 4. Quantitative Analysis & Risk Engine (VaR Model)
+
+MTXcapital computes portfolio risk in real time using a Parametric Variance-Covariance Matrix:
+$$\text{VaR}_{1-\alpha} = z_{\alpha} \times \sigma_p \times V_p$$
+Where:
+- $z_{\alpha} = 2.326$ for a 99% confidence level.
+- $\sigma_p = \sqrt{\mathbf{w}^T \mathbf{\Sigma} \mathbf{w}}$ is the portfolio standard deviation derived from asset covariance matrix $\mathbf{\Sigma}$.
+- $V_p$ is the total portfolio equity value.
+
+Traders also have access to:
+- **Average True Range (ATR) Volatility Sizing**: Dynamically calculates position size so max loss per trade equals target portfolio risk (e.g., 1%).
+- **Pairwise Pearson Correlation Heatmap**: Identifies hidden asset co-movements across 50+ instruments.
+- **Monte Carlo Strategy Simulation**: Evaluates 1,000 randomized market return paths over 10-year compounding horizons.
+
+---
+
+## 5. Security, Custody & Regulatory Framework
+- **Customer Asset Segregation**: SEC Rule 15c3-3 compliant segregated customer trust accounts with premier Tier-1 global custodian banks.
+- **SIPC Protection**: Securities accounts protected up to $500,000 (including $250,000 for cash claims).
+- **FDIC Multi-Bank Cash Sweep**: Uninvested cash automatically distributed across a network of FDIC-insured depository institutions providing up to $5,000,000 in aggregate FDIC insurance.
+- **Cryptographic Auditability**: Every completed trade produces a cryptographically hashed SHA-256 receipt with microsecond timestamps verifiable in the Activity Desk.
+
+---
+
+## 6. Sitemaps & Structured Endpoints
+- **Terminal**: `https://mtxcapital.ai.studio/#markets`
+- **Screener**: `https://mtxcapital.ai.studio/#screener`
+- **Portfolio**: `https://mtxcapital.ai.studio/#portfolio`
+- **Wallet & Funding**: `https://mtxcapital.ai.studio/#wallet`
+- **Watchlist**: `https://mtxcapital.ai.studio/#watchlist`
+- **Activity**: `https://mtxcapital.ai.studio/#activity`
+- **Analysis**: `https://mtxcapital.ai.studio/#analysis`
+- **Backtest**: `https://mtxcapital.ai.studio/#backtest`
+- **Sentiment**: `https://mtxcapital.ai.studio/#sentiment`
+- **XML Sitemap**: `https://mtxcapital.ai.studio/sitemap.xml`
+- **LLMs Index**: `https://mtxcapital.ai.studio/llms.txt`

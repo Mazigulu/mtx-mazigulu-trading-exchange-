@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
@@ -22,6 +22,14 @@ export default function LegalModal({ isOpen, onClose }: LegalModalProps) {
   const [activeSection, setActiveSection] = useState<'risk' | 'lease' | 'privacy' | 'regulation'>('risk');
   const [hasAccepted, setHasAccepted] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Reset scroll to top on section change or modal open
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [activeSection, isOpen]);
 
   const handlePrint = () => {
     try {
@@ -33,7 +41,7 @@ export default function LegalModal({ isOpen, onClose }: LegalModalProps) {
           printWindow.document.write(`
             <html>
               <head>
-                <title>MTXquant Institutional Legal Agreement</title>
+                <title>MTXcapital Institutional Legal Agreement</title>
                 <style>
                   body { font-family: monospace; padding: 40px; line-height: 1.6; color: #111; font-size: 11px; }
                   h1 { border-bottom: 2px solid #000; padding-bottom: 10px; font-size: 14px; text-transform: uppercase; }
@@ -42,7 +50,7 @@ export default function LegalModal({ isOpen, onClose }: LegalModalProps) {
                 </style>
               </head>
               <body>
-                <h1>MTXquant Terminal Compliance Documentation</h1>
+                <h1>MTXcapital Terminal Compliance Documentation</h1>
                 <pre>${content}</pre>
               </body>
             </html>
@@ -58,7 +66,7 @@ export default function LegalModal({ isOpen, onClose }: LegalModalProps) {
 
   const handleCopyLink = () => {
     try {
-      navigator.clipboard.writeText("https://mtxquant.mtxcapital.com/legal/institutional-agreement-2026");
+      navigator.clipboard.writeText("https://mtxcapital.ai.studio/legal/institutional-agreement-2026");
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     } catch (e) {
@@ -69,17 +77,20 @@ export default function LegalModal({ isOpen, onClose }: LegalModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div id="legal-modal-backdrop" className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+        <div 
+          id="legal-modal-backdrop" 
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-black/85 backdrop-blur-md"
+        >
           <motion.div
             id="legal-modal-container"
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="w-full max-w-3xl bg-[#08080c] border border-white/10 rounded-xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] max-h-[90vh] flex flex-col font-mono text-white text-xs text-left"
+            className="w-full max-w-3xl bg-[#08080c] border border-white/10 rounded-xl overflow-hidden shadow-2xl max-h-[85vh] flex flex-col font-mono text-white text-xs text-left my-auto relative z-10"
           >
             {/* Header */}
-            <div className="p-4 bg-gradient-to-r from-indigo-950/40 via-transparent to-transparent border-b border-white/10 flex items-center justify-between shrink-0">
+            <div className="p-4 bg-[#0c0c10] border-b border-white/10 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="p-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded">
                   <Scale className="w-4 h-4 text-indigo-400" />
@@ -172,6 +183,7 @@ export default function LegalModal({ isOpen, onClose }: LegalModalProps) {
 
               {/* Scrollable Document Content */}
               <div 
+                ref={contentRef}
                 id="legal-doc-content"
                 className="flex-1 p-5 overflow-y-auto space-y-4 bg-black/5 select-text leading-relaxed text-[10px] text-white/70"
               >
@@ -212,7 +224,7 @@ export default function LegalModal({ isOpen, onClose }: LegalModalProps) {
                     </p>
                     <div className="space-y-2 text-white/60">
                       <p>
-                        1. <strong>Licensing Bounds:</strong> MTX Securities grants a non-assignable, fully restricted license to active traders to utilize financial calculation tools, live stock order books, and portfolio simulators.
+                        1. <strong>Licensing Bounds:</strong> MTX Capital grants a non-assignable, fully restricted license to active traders to utilize financial calculation tools, live stock order books, and portfolio simulators.
                       </p>
                       <p>
                         2. <strong>Reverse Engineering Restriction:</strong> You are strictly forbidden from inspecting, reverse-compiling, or extracting the core execution pipeline scripts, AI logic parameters, or broker authentication tokens.

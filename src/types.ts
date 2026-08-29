@@ -244,3 +244,89 @@ export function getSymbolCorrelations(symbol: MarketSymbol): CorrelationData[] {
   });
 }
 
+export interface FundingTx {
+  id: string;
+  type: 'DEPOSIT' | 'WITHDRAWAL' | 'CONVERT';
+  method: string;
+  currency: string;
+  amount: number;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  auditHash?: string;
+  prevAuditHash?: string;
+  blockNumber?: number;
+  merkleRoot?: string;
+  clearingRail?: string;
+  idempotencyKey?: string;
+  status: 'Settled' | 'Pending' | 'Failed' | 'Processing' | 'Cancelled';
+  providerStatus: string;
+  date: string;
+  walletAddress?: string;
+  txHash?: string;
+  gasUsed?: number;
+  gasPriceGwei?: number;
+  referenceId?: string;
+  railMetadata?: {
+    imadOmad?: string;
+    arn?: string;
+    nachaTrace?: string;
+    stkReceipt?: string;
+    originatingBic?: string;
+    settlementExchange?: string;
+    networkFee?: number;
+    cardBrand?: string;
+    cardLast4?: string;
+  };
+}
+
+export type NotificationCategory = 'TRADES' | 'RISK' | 'MARKET' | 'ALERTS';
+export type NotificationSeverity = 'CRITICAL' | 'WARNING' | 'SUCCESS' | 'INFO';
+
+export interface SystemNotification {
+  id: string;
+  category: NotificationCategory;
+  severity: NotificationSeverity;
+  title: string;
+  message: string;
+  timestamp: string; // ISO string
+  read: boolean;
+  symbol?: MarketSymbol;
+  actionTab?: 'MARKETS' | 'DISCOVER' | 'SCREENER' | 'PORTFOLIO' | 'WALLET' | 'WATCHLIST' | 'ACTIVITY' | 'ANALYSIS';
+  actionLabel?: string;
+  metadata?: {
+    price?: number;
+    pnl?: number;
+    shares?: number;
+    amount?: number;
+    latencyMs?: number;
+    tradeId?: string;
+    threshold?: number;
+    tag?: string;
+  };
+}
+
+export type AccountMode = 'DEMO' | 'REAL';
+
+export type DemoCapitalTier = 50000 | 100000 | 200000 | number;
+
+export interface PortfolioHoldingItem {
+  symbol: string;
+  name: string;
+  isin: string;
+  qty: number;
+  avgCost: number;
+  currentPrice: number;
+}
+
+export interface PortfolioGroup {
+  id: string;
+  name: string;
+  description: string;
+  tag: 'GROWTH' | 'VALUE' | 'DIVIDEND' | 'CRYPTO' | 'MOMENTUM' | 'CUSTOM' | 'HEDGE';
+  color: string;
+  allocatedCash: number;
+  holdings: PortfolioHoldingItem[];
+  createdAt: string;
+  targetApy?: number;
+}
+

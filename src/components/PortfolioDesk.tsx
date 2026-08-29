@@ -19,10 +19,21 @@ import {
   Info,
   X,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Sparkles,
+  ShieldCheck,
+  CreditCard,
+  Building,
+  RefreshCw,
+  Sliders,
+  Trash2,
+  Lock,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
+import StockPickerModal, { CATALOG_ASSETS } from './StockPickerModal';
+import { executeRootOrder } from '../services/tradingService';
 
 interface Holding {
   symbol: string;
@@ -33,91 +44,182 @@ interface Holding {
   currentPrice: number;
 }
 
-const TICKER_META: Record<string, { name: string; isin: string; defaultPrice: number; type: 'stock' | 'etf' | 'crypto'; sector?: string }> = {
+const TICKER_META: Record<string, { name: string; isin: string; defaultPrice: number; type: 'stock' | 'etf' | 'crypto' | 'bluechip'; sector?: string }> = {
+  'NVDA': { name: 'NVIDIA Corp.', isin: 'US67066G1040', defaultPrice: 125.40, type: 'stock', sector: 'technology' },
   'AAPL': { name: 'Apple Inc.', isin: 'US0378331005', defaultPrice: 182.30, type: 'stock', sector: 'technology' },
   'MSFT': { name: 'Microsoft Corp.', isin: 'US5949181045', defaultPrice: 421.90, type: 'stock', sector: 'technology' },
-  'NVDA': { name: 'NVIDIA Corp.', isin: 'US67066G1040', defaultPrice: 125.40, type: 'stock', sector: 'technology' },
   'TSLA': { name: 'Tesla Inc.', isin: 'US88160R1014', defaultPrice: 178.60, type: 'stock', sector: 'large-cap' },
+  'AMZN': { name: 'Amazon.com Inc.', isin: 'US0231351067', defaultPrice: 186.50, type: 'stock', sector: 'technology' },
+  'GOOGL': { name: 'Alphabet Inc.', isin: 'US02079K3059', defaultPrice: 175.20, type: 'stock', sector: 'technology' },
+  'META': { name: 'Meta Platforms Inc.', isin: 'US30303M1027', defaultPrice: 502.80, type: 'stock', sector: 'technology' },
+  'AMD': { name: 'Advanced Micro Devices', isin: 'US0079031078', defaultPrice: 158.40, type: 'stock', sector: 'technology' },
+  'PLTR': { name: 'Palantir Technologies', isin: 'US69608A1088', defaultPrice: 28.50, type: 'stock', sector: 'technology' },
   'SPY': { name: 'SPDR S&P 500 ETF Trust', isin: 'US78462F1030', defaultPrice: 510.00, type: 'etf', sector: 'large-cap' },
   'QQQ': { name: 'Invesco QQQ Trust', isin: 'US46090E1038', defaultPrice: 440.00, type: 'etf', sector: 'technology' },
+  'VOO': { name: 'Vanguard S&P 500 ETF', isin: 'US9229083632', defaultPrice: 468.20, type: 'etf', sector: 'large-cap' },
+  'DIA': { name: 'SPDR Dow Jones Industrial', isin: 'US78467X1090', defaultPrice: 392.40, type: 'etf', sector: 'large-cap' },
+  'IWM': { name: 'iShares Russell 2000 ETF', isin: 'US4642876555', defaultPrice: 202.10, type: 'etf', sector: 'large-cap' },
   'BTC-USD': { name: 'Bitcoin (BTC)', isin: 'US09061G1013', defaultPrice: 67250.00, type: 'crypto', sector: 'crypto' },
   'ETH-USD': { name: 'Ethereum (ETH)', isin: 'US29760G1035', defaultPrice: 3450.00, type: 'crypto', sector: 'crypto' },
-  'SOL-USD': { name: 'Solana (SOL)', isin: 'US83410G1025', defaultPrice: 145.00, type: 'crypto', sector: 'crypto' }
+  'SOL-USD': { name: 'Solana (SOL)', isin: 'US83410G1025', defaultPrice: 145.00, type: 'crypto', sector: 'crypto' },
+  'JPM': { name: 'JPMorgan Chase & Co.', isin: 'US46625H1005', defaultPrice: 198.50, type: 'stock', sector: 'large-cap' },
+  'V': { name: 'Visa Inc.', isin: 'US92826C8394', defaultPrice: 275.60, type: 'stock', sector: 'large-cap' },
+  'UNH': { name: 'UnitedHealth Group', isin: 'US91324P1021', defaultPrice: 488.00, type: 'stock', sector: 'large-cap' },
+  'PG': { name: 'Procter & Gamble Co.', isin: 'US7427181091', defaultPrice: 165.20, type: 'stock', sector: 'large-cap' }
 };
 
 const DAILY_RETURNS: Record<string, number> = {
+  'NVDA': 3.40,
   'AAPL': 2.10,
   'MSFT': 1.80,
-  'NVDA': 3.40,
   'TSLA': -1.20,
+  'AMZN': 1.45,
+  'GOOGL': 0.90,
+  'META': 2.65,
+  'AMD': 2.80,
+  'PLTR': 4.15,
   'SPY': 0.85,
   'QQQ': 1.55,
-  'BTC-USD': -0.80,
+  'VOO': 0.82,
+  'DIA': 0.45,
+  'IWM': 1.10,
+  'BTC-USD': 2.40,
   'ETH-USD': 1.50,
-  'SOL-USD': 4.20
+  'SOL-USD': 4.20,
+  'JPM': 0.70,
+  'V': 0.50,
+  'UNH': -0.30,
+  'PG': 0.25
 };
 
 const TOTAL_RETURNS: Record<string, number> = {
+  'NVDA': 45.50,
   'AAPL': 18.00,
   'MSFT': 9.00,
-  'NVDA': 45.50,
   'TSLA': -4.80,
+  'AMZN': 22.10,
+  'GOOGL': 14.50,
+  'META': 36.20,
+  'AMD': 19.80,
+  'PLTR': 48.00,
   'SPY': 12.30,
   'QQQ': 15.10,
+  'VOO': 12.10,
+  'DIA': 8.60,
+  'IWM': 6.40,
   'BTC-USD': 62.40,
   'ETH-USD': 28.90,
-  'SOL-USD': 85.00
+  'SOL-USD': 85.00,
+  'JPM': 11.20,
+  'V': 9.80,
+  'UNH': 5.40,
+  'PG': 4.20
 };
 
 interface PortfolioDeskProps {
   traderEmail: string;
+  accountMode?: 'DEMO' | 'REAL';
 }
 
-export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
-  // Account cash balance state
+export default function PortfolioDesk({ traderEmail, accountMode: propAccountMode }: PortfolioDeskProps) {
+  const accountMode = propAccountMode || (
+    typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') === 'REAL' ? 'REAL' : 'DEMO') : 'DEMO'
+  );
+  const isDemo = accountMode === 'DEMO';
+  const cashStorageKey = isDemo ? 'mtx_demo_cash' : 'mtx_real_cash';
+  const holdingsStorageKey = isDemo ? 'broker_holdings_demo' : 'broker_holdings_real';
+
+  // Account cash balance state strictly isolated by mode
   const [cashBalance, setCashBalance] = useState<number>(() => {
-    const saved = localStorage.getItem('broker_cash');
-    return saved ? parseFloat(saved) : 58000.00;
-  });
-  
-  // Custom interactive holdings list connected to the Market Desk root (broker_holdings)
-  const [holdings, setHoldings] = useState<Holding[]>(() => {
-    let holdingsMap: Record<string, number> = {
-      'AAPL': 50,
-      'MSFT': 30,
-      'NVDA': 100,
-      'BTC-USD': 0.15,
-      'SPY': 25,
-      'QQQ': 20
-    };
     try {
-      const saved = localStorage.getItem('broker_holdings');
+      if (isDemo) {
+        const saved = localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash');
+        return saved ? parseFloat(saved) : 100000.00;
+      } else {
+        const saved = localStorage.getItem('mtx_real_cash');
+        return saved ? parseFloat(saved) : 0.00;
+      }
+    } catch {
+      return isDemo ? 100000.00 : 0.00;
+    }
+  });
+
+  // Stock Picker Modal state
+  const [isStockPickerOpen, setIsStockPickerOpen] = useState(false);
+
+  // Listen for global broker cash updates strictly matching active mode
+  useEffect(() => {
+    const handleCashUpdate = (e: any) => {
+      if (e?.detail?.cash !== undefined) {
+        if (e.detail.mode) {
+          if ((e.detail.mode === 'DEMO' && isDemo) || (e.detail.mode === 'REAL' && !isDemo)) {
+            setCashBalance(e.detail.cash);
+          }
+        } else {
+          setCashBalance(e.detail.cash);
+        }
+      }
+    };
+    window.addEventListener('broker_cash_updated', handleCashUpdate);
+    return () => window.removeEventListener('broker_cash_updated', handleCashUpdate);
+  }, [isDemo]);
+  
+  // Custom interactive holdings list connected to mode-specific holdings storage
+  const [holdings, setHoldings] = useState<Holding[]>(() => {
+    let holdingsMap: Record<string, number> = {};
+    try {
+      let saved = localStorage.getItem(holdingsStorageKey);
+      if (!saved && isDemo) {
+        saved = localStorage.getItem('broker_holdings');
+      }
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          holdingsMap = parsed;
+          // Detect legacy default mock portfolio (which pre-populated 6 mock stocks without user action)
+          const keys = Object.keys(parsed);
+          const isLegacyDefault = 
+            keys.length === 6 && 
+            parsed['AAPL'] === 50 && 
+            parsed['MSFT'] === 30 && 
+            parsed['NVDA'] === 100 && 
+            parsed['BTC-USD'] === 0.15 && 
+            parsed['SPY'] === 25 && 
+            parsed['QQQ'] === 20;
+          
+          if (!isLegacyDefault) {
+            holdingsMap = parsed;
+          } else {
+            localStorage.setItem(holdingsStorageKey, JSON.stringify({}));
+          }
         }
       }
     } catch (e) {
-      console.warn('Error loading holdings from localStorage (using default map):', e);
+      console.warn('Error loading holdings from localStorage:', e);
     }
     
-    return Object.entries(holdingsMap).map(([symbol, qty]) => {
-      const meta = TICKER_META[symbol] || { 
-        name: `${symbol} Security`, 
-        isin: 'US' + Math.random().toString(36).substring(2, 12).toUpperCase(), 
-        defaultPrice: 150.00,
-        type: 'stock'
-      };
-      return {
-        symbol,
-        name: meta.name,
-        isin: meta.isin,
-        qty,
-        avgCost: meta.defaultPrice / (1 + (TOTAL_RETURNS[symbol] || 10) / 100),
-        currentPrice: meta.defaultPrice
-      };
-    });
+    // For REAL accounts with 0 executions, start with empty table
+    if (!isDemo && Object.keys(holdingsMap).length === 0) {
+      return [];
+    }
+
+    return Object.entries(holdingsMap)
+      .filter(([_, qty]) => typeof qty === 'number' && qty > 0)
+      .map(([symbol, qty]) => {
+        const meta = TICKER_META[symbol] || { 
+          name: `${symbol} Security`, 
+          isin: 'US' + Math.random().toString(36).substring(2, 12).toUpperCase(), 
+          defaultPrice: 150.00,
+          type: 'stock' as const
+        };
+        return {
+          symbol,
+          name: meta.name,
+          isin: meta.isin,
+          qty,
+          avgCost: meta.defaultPrice,
+          currentPrice: meta.defaultPrice
+        };
+      });
   });
 
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
@@ -133,6 +235,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
   const [tradeStatusMsg, setTradeStatusMsg] = useState<string>('');
   const [selectedHistoryAsset, setSelectedHistoryAsset] = useState<Holding | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
 
   // Wealth Projection Calculator states
   const [wealthInitialInvestment, setWealthInitialInvestment] = useState<number>(10000);
@@ -143,7 +246,93 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
     return saved ? parseFloat(saved) : 5.12;
   });
 
-  // Helper to sync updated client cash balance with server ledger
+  // Handler for purchasing stocks via the Stock Picker
+  const handleAddStockFromPicker = async (
+    symbol: string,
+    name: string,
+    isin: string,
+    dollarAmount: number,
+    price: number
+  ) => {
+    if (dollarAmount > cashBalance) return;
+    
+    const acquiredShares = dollarAmount / price;
+    
+    const result = await executeRootOrder({
+      symbol,
+      name,
+      isin,
+      side: 'BUY',
+      orderType: 'MARKET',
+      sharesOrUnits: acquiredShares,
+      dollarAmount,
+      executionPrice: price,
+      accountMode,
+      paymentMethod: 'WALLET_CASH',
+      reason: `Portfolio Desk Picker: Acquired $${dollarAmount.toFixed(2)} (${acquiredShares.toFixed(4)} shares) of ${symbol}.`,
+      confidence: 95,
+      confluences: ['Portfolio Desk Allocation', 'Stock Catalog Picker']
+    });
+
+    if (result.success) {
+      setCashBalance(result.newCash);
+      setHoldings(prev => {
+        const existingIndex = prev.findIndex(h => h.symbol === symbol);
+        let updated: Holding[];
+        
+        if (existingIndex >= 0) {
+          const existing = prev[existingIndex];
+          const oldVal = existing.qty * existing.avgCost;
+          const totalVal = oldVal + dollarAmount;
+          const totalQty = existing.qty + acquiredShares;
+          const newAvg = totalQty > 0 ? totalVal / totalQty : price;
+          
+          updated = [...prev];
+          updated[existingIndex] = {
+            ...existing,
+            qty: totalQty,
+            avgCost: newAvg,
+            currentPrice: price
+          };
+        } else {
+          updated = [
+            ...prev,
+            {
+              symbol,
+              name,
+              isin,
+              qty: acquiredShares,
+              avgCost: price,
+              currentPrice: price
+            }
+          ];
+        }
+        return updated;
+      });
+    }
+  };
+
+  // Handler for liquidating all positions and resetting back to 100% demo/real cash
+  const handleResetToCash = () => {
+    const totalAssetsValue = holdingsWithLivePrices.reduce((sum, h) => sum + (h.qty * h.currentPrice), 0);
+    const newCash = parseFloat((cashBalance + totalAssetsValue).toFixed(2));
+    
+    setCashBalance(newCash);
+    localStorage.setItem(cashStorageKey, newCash.toString());
+    if (isDemo) {
+      localStorage.setItem('broker_cash', newCash.toString());
+    }
+    setHoldings([]);
+    localStorage.setItem(holdingsStorageKey, JSON.stringify({}));
+    if (!isDemo) {
+      syncCashWithServer(newCash);
+    }
+    
+    window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: newCash, mode: accountMode } }));
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  // Helper to sync updated client cash balance with server ledger (for REAL accounts)
   const syncCashWithServer = async (newBalance: number) => {
     try {
       const res = await fetch('/api/funding/sync', {
@@ -161,19 +350,23 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
 
   // Sync state changes to local storage to maintain absolute unity with Market Desk root
   useEffect(() => {
-    localStorage.setItem('broker_cash', cashBalance.toString());
-  }, [cashBalance]);
+    localStorage.setItem(cashStorageKey, cashBalance.toString());
+    if (isDemo) {
+      localStorage.setItem('broker_cash', cashBalance.toString());
+    }
+  }, [cashBalance, cashStorageKey, isDemo]);
 
   useEffect(() => {
     const holdingsMap: Record<string, number> = {};
     holdings.forEach(item => {
       holdingsMap[item.symbol] = item.qty;
     });
-    localStorage.setItem('broker_holdings', JSON.stringify(holdingsMap));
-  }, [holdings]);
+    localStorage.setItem(holdingsStorageKey, JSON.stringify(holdingsMap));
+  }, [holdings, holdingsStorageKey]);
 
-  // Sync cash state from SQL database funding ledger on mount and poll
+  // Sync cash state from SQL database funding ledger on mount and poll for REAL accounts
   useEffect(() => {
+    if (isDemo) return;
     let active = true;
     const fetchServerState = async () => {
       try {
@@ -182,7 +375,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           const data = await res.json();
           if (data && data.balance !== undefined) {
             setCashBalance(data.balance);
-            localStorage.setItem('broker_cash', data.balance.toString());
+            localStorage.setItem('mtx_real_cash', data.balance.toString());
           }
         }
       } catch (e) {
@@ -191,13 +384,13 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
     };
     fetchServerState();
     
-    // Poll every 4 seconds to grab real-time settled ledger updates (e.g., from closed terminal CFD trades)
+    // Poll every 4 seconds to grab real-time settled ledger updates for REAL accounts
     const interval = setInterval(fetchServerState, 4000);
     return () => {
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [isDemo]);
 
   // Fetch live market prices and returns dynamically from Yahoo Finance proxy
   useEffect(() => {
@@ -263,28 +456,47 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
   // Sync state with local storage updates & periodic checks
   useEffect(() => {
     const handleStorageChange = () => {
-      const savedCash = localStorage.getItem('broker_cash');
+      const savedCash = localStorage.getItem(cashStorageKey);
       if (savedCash) {
         setCashBalance(parseFloat(savedCash));
+      } else {
+        setCashBalance(isDemo ? 100000.00 : 0.00);
       }
-      const savedHoldings = localStorage.getItem('broker_holdings');
+      let savedHoldings = localStorage.getItem(holdingsStorageKey);
+      if (!savedHoldings && isDemo) {
+        savedHoldings = localStorage.getItem('broker_holdings');
+      }
       if (savedHoldings) {
         try {
           const parsed = JSON.parse(savedHoldings);
           if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
             const holdingsMap: Record<string, number> = parsed;
-            setHoldings(prevHoldings => {
-              return prevHoldings.map(item => {
-                const qty = holdingsMap[item.symbol] !== undefined ? holdingsMap[item.symbol] : item.qty;
+            const newHoldingsList: Holding[] = Object.entries(holdingsMap)
+              .filter(([_, qty]) => typeof qty === 'number' && qty > 0)
+              .map(([symbol, qty]) => {
+                const meta = TICKER_META[symbol] || {
+                  name: `${symbol} Security`,
+                  isin: 'US' + Math.random().toString(36).substring(2, 12).toUpperCase(),
+                  defaultPrice: 150.00,
+                  type: 'stock' as const
+                };
                 return {
-                  ...item,
-                  qty
+                  symbol,
+                  name: meta.name,
+                  isin: meta.isin,
+                  qty,
+                  avgCost: meta.defaultPrice,
+                  currentPrice: meta.defaultPrice
                 };
               });
-            });
+            setHoldings(newHoldingsList);
           }
         } catch (e) {
           console.warn('Failed to parse broker holdings local storage:', e);
+        }
+      } else {
+        if (!isDemo) {
+          setHoldings([]);
         }
       }
       const savedApy = localStorage.getItem('wealth_selected_apy');
@@ -293,12 +505,12 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       }
     };
     window.addEventListener('storage', handleStorageChange);
-    const interval = setInterval(handleStorageChange, 1000);
+    const interval = setInterval(handleStorageChange, 1500);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
     };
-  }, []);
+  }, [isDemo, cashStorageKey, holdingsStorageKey]);
 
   // Build holdings array enriched with real-time live prices
   const holdingsWithLivePrices = holdings.map(item => {
@@ -313,18 +525,19 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
   const assetValue = holdingsWithLivePrices.reduce((sum, item) => sum + (item.qty * item.currentPrice), 0);
   const totalValue = assetValue + cashBalance;
 
-  // Let's compute dynamic returns based on current holdings weights!
+  // Dynamic returns based on current active holdings
   const todayReturnAmount = holdingsWithLivePrices.reduce((sum, item) => {
     const retPercent = liveReturns[item.symbol] !== undefined ? liveReturns[item.symbol] : (DAILY_RETURNS[item.symbol] || 0);
     return sum + (item.qty * item.currentPrice * (retPercent / 100));
   }, 0);
   
-  const todayReturnPercent = assetValue > 0 ? (todayReturnAmount / totalValue) * 100 : 0;
+  const todayReturnPercent = totalValue > 0 ? (todayReturnAmount / totalValue) * 100 : 0;
 
-  // Lifetime return calculations
-  const netContributions = 85000.00;
-  const lifetimeReturnAmount = totalValue - netContributions;
-  const lifetimeReturnPercent = (lifetimeReturnAmount / netContributions) * 100;
+  // Lifetime return calculations from user-picked stock cost bases
+  const totalCostBasis = holdingsWithLivePrices.reduce((sum, item) => sum + (item.qty * item.avgCost), 0);
+  const netContributions = totalCostBasis + cashBalance;
+  const lifetimeReturnAmount = holdingsWithLivePrices.length > 0 ? (assetValue - totalCostBasis) : 0;
+  const lifetimeReturnPercent = totalCostBasis > 0 ? (lifetimeReturnAmount / totalCostBasis) * 100 : 0;
 
   // Asset class breakdown
   const getCategoryWeights = () => {
@@ -357,7 +570,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
     { name: 'Stocks', value: weights.stocks, color: '#6366f1' },
     { name: 'ETFs', value: weights.etfs, color: '#10b981' },
     { name: 'Crypto', value: weights.crypto, color: '#f59e0b' },
-    { name: 'Cash', value: weights.cash, color: '#ec4899' }
+    { name: 'Cash', value: weights.cash, color: '#06b6d4' }
   ].filter(item => item.value > 0.01);
 
   // Portfolio performance chart data
@@ -508,7 +721,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
   };
 
   // Execute Trade Order
-  const executeTrade = () => {
+  const executeTrade = async () => {
     if (!tradeModal.holding) return;
     const dollarAmt = parseFloat(tradeQuantity);
     if (isNaN(dollarAmt) || dollarAmt <= 0) {
@@ -516,26 +729,37 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       return;
     }
 
-    if (tradeModal.type === 'BUY' && dollarAmt < 50) {
-      setTradeStatusMsg('ERROR: Minimum purchase amount is $50.00 for fractional shares.');
+    if (tradeModal.type === 'BUY' && dollarAmt < 10) {
+      setTradeStatusMsg('ERROR: Minimum purchase amount is $10.00 for orders.');
       return;
     }
 
     const price = tradeModal.holding.currentPrice;
     const calculatedShares = dollarAmt / price;
 
-    if (tradeModal.type === 'BUY') {
-      if (dollarAmt > cashBalance) {
-        setTradeStatusMsg('ERROR: Insufficient buying power cash available.');
-        return;
-      }
-      // Update cash
-      const newCash = cashBalance - dollarAmt;
-      setCashBalance(newCash);
-      localStorage.setItem('broker_cash', newCash.toString());
-      syncCashWithServer(newCash);
+    const result = await executeRootOrder({
+      symbol: tradeModal.holding.symbol,
+      name: tradeModal.holding.name,
+      isin: tradeModal.holding.isin,
+      side: tradeModal.type,
+      orderType: 'MARKET',
+      sharesOrUnits: calculatedShares,
+      dollarAmount: dollarAmt,
+      executionPrice: price,
+      accountMode,
+      paymentMethod: 'WALLET_CASH',
+      reason: `Portfolio Desk Quick Order: ${tradeModal.type} $${dollarAmt.toFixed(2)} (${calculatedShares.toFixed(4)} shares) of ${tradeModal.holding.symbol}.`,
+      confidence: 90,
+      confluences: ['Portfolio Desk Execution', 'Direct Position Rebalance']
+    });
 
-      // Update holdings
+    if (!result.success) {
+      setTradeStatusMsg(`ERROR: ${result.error || 'Execution failed.'}`);
+      return;
+    }
+
+    setCashBalance(result.newCash);
+    if (tradeModal.type === 'BUY') {
       const updatedHoldings = holdings.map(item => {
         if (item.symbol === tradeModal.holding?.symbol) {
           return { ...item, qty: item.qty + calculatedShares };
@@ -545,29 +769,19 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
       setHoldings(updatedHoldings);
       setTradeStatusMsg(`SUCCESS: Purchase executed. Acquired ${calculatedShares.toFixed(4)} fractional shares.`);
     } else {
-      if (calculatedShares > tradeModal.holding.qty) {
-        setTradeStatusMsg('ERROR: Exceeds current available position quantity/value.');
-        return;
-      }
-      // Update cash
-      const newCash = cashBalance + dollarAmt;
-      setCashBalance(newCash);
-      localStorage.setItem('broker_cash', newCash.toString());
-      syncCashWithServer(newCash);
-
-      // Update holdings
       const updatedHoldings = holdings.map(item => {
         if (item.symbol === tradeModal.holding?.symbol) {
-          return { ...item, qty: item.qty - calculatedShares };
+          return { ...item, qty: Math.max(0, item.qty - calculatedShares) };
         }
         return item;
-      }).filter(item => item.qty > 0.0001); // Filter out tiny dust positions
+      }).filter(item => item.qty > 0.0001);
       setHoldings(updatedHoldings);
       setTradeStatusMsg(`SUCCESS: Sale executed. Disposed ${calculatedShares.toFixed(4)} fractional shares.`);
     }
 
     setTimeout(() => {
       setTradeModal({ isOpen: false, holding: null, type: 'BUY' });
+      setTradeStatusMsg('');
     }, 1500);
   };
 
@@ -641,7 +855,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           id="portfolio-val-card" 
-          className="bg-[#050505] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
+          className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
         >
           <div className="flex justify-between items-start">
             <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider font-bold block">Portfolio Value</span>
@@ -666,7 +880,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           id="portfolio-invested-card" 
-          className="bg-[#050505] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
+          className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
         >
           <div className="flex justify-between items-start">
             <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider font-bold block">Invested Assets</span>
@@ -689,7 +903,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           id="portfolio-cash-card" 
-          className="bg-[#050505] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
+          className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
         >
           <div className="flex justify-between items-start">
             <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider font-bold block">Available Cash</span>
@@ -712,7 +926,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           id="portfolio-lifetime-card" 
-          className="bg-[#050505] border border-white/5 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
+          className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-colors duration-200"
         >
           <div className="flex justify-between items-start">
             <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider font-bold block">Lifetime Return</span>
@@ -739,8 +953,8 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
         <div className="lg:col-span-8 space-y-6">
           
           {/* Main Performance Chart Card */}
-          <div className="bg-[#050505] border border-white/5 rounded-xl p-5 flex flex-col space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
+          <div className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 flex flex-col space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800/80 pb-4">
               <div className="flex items-center gap-2">
                 <ChartIcon className="w-4 h-4 text-indigo-400" />
                 <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Portfolio Performance Chart</h4>
@@ -752,10 +966,10 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                   <button
                     key={tf}
                     onClick={() => setTimeframe(tf)}
-                    className={`px-2 py-1 rounded font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded font-bold transition-all cursor-pointer select-none focus:outline-none focus-visible:outline-none ${
                       timeframe === tf 
-                        ? 'bg-indigo-600 text-white' 
-                        : 'text-white/45 hover:text-white/95'
+                        ? 'bg-indigo-600 text-white shadow-md' 
+                        : 'text-white/70 hover:text-white hover:bg-white/10'
                     }`}
                   >
                     {tf}
@@ -829,13 +1043,13 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           </div>
 
           {/* CARD 2: COMPOUNDING WEALTH PROJECTION */}
-          <div id="portfolio-wealth-projection" className="bg-[#050505] border border-white/5 rounded-xl p-5 space-y-5">
-            <div className="pb-3 border-b border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div id="portfolio-wealth-projection" className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 space-y-5">
+            <div className="pb-3 border-b border-neutral-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
                 <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Compounding Wealth Projection</h4>
                 <p className="text-[9.5px] text-white/70 font-mono uppercase tracking-wider mt-0.5">Asset Allocation model using selected APY ({wealthApy.toFixed(2)}%)</p>
               </div>
-              <span className="px-2 py-0.5 bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 rounded text-[9.5px] font-mono font-bold tracking-tight uppercase">
+              <span className="px-2.5 py-1 bg-emerald-600 text-white rounded text-[9.5px] font-mono font-bold tracking-tight uppercase shadow-sm">
                 Accumulation Engine
               </span>
             </div>
@@ -943,54 +1157,125 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
         <div className="lg:col-span-4 space-y-6 flex flex-col justify-between">
           
           {/* Card 1: Asset Allocation */}
-          <div className="bg-[#050505] border border-white/5 rounded-xl p-5 flex flex-col relative">
+          <div className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 flex flex-col relative">
             <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black mb-3">Asset Allocation</span>
             
-            <div className="h-44 flex items-center justify-center relative my-1">
-              <ResponsiveContainer width="100%" height="100%" key={`pie-container-${allocationPieData.length}-${Math.round(totalValue)}`}>
-                <PieChart>
-                  <Pie
-                    data={allocationPieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={48}
-                    outerRadius={65}
-                    paddingAngle={3}
-                    dataKey="value"
-                    nameKey="name"
-                  >
-                    {allocationPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#080808" strokeWidth={2} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: any, name: any) => {
-                      const amount = (Number(value) / 100) * totalValue;
-                      return [`$${Math.round(amount).toLocaleString()} (${Number(value).toFixed(1)}%)`, name];
-                    }}
-                    contentStyle={{ backgroundColor: '#0a0a0f', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px' }}
-                    itemStyle={{ color: '#fff', fontSize: '10px', fontFamily: 'monospace' }}
-                    labelStyle={{ display: 'none' }}
+            <div className="h-44 flex items-center justify-center relative my-1 select-none">
+              <svg viewBox="0 0 200 200" className="w-full h-full max-w-[175px] max-h-[175px] overflow-visible">
+                {allocationPieData.length === 1 ? (
+                  <circle
+                    cx="100"
+                    cy="100"
+                    r="58"
+                    fill="none"
+                    stroke={allocationPieData[0].color}
+                    strokeWidth="18"
+                    className="transition-all duration-300"
+                    onMouseEnter={() => setHoveredSlice(allocationPieData[0].name)}
+                    onMouseLeave={() => setHoveredSlice(null)}
                   />
-                </PieChart>
-              </ResponsiveContainer>
+                ) : (
+                  (() => {
+                    const totalWeight = allocationPieData.reduce((acc, curr) => acc + curr.value, 0) || 100;
+                    let currentAngle = 0;
+                    return allocationPieData.map((slice) => {
+                      const angleSweep = (slice.value / totalWeight) * 360;
+                      const startAngle = currentAngle;
+                      const endAngle = currentAngle + angleSweep;
+                      currentAngle += angleSweep;
+
+                      const isHovered = hoveredSlice === slice.name;
+                      const innerR = isHovered ? 46 : 48;
+                      const outerR = isHovered ? 72 : 68;
+                      
+                      const gap = angleSweep > 5 ? 2.5 : 0;
+                      const pStart = startAngle + gap / 2;
+                      const pEnd = endAngle - gap / 2;
+
+                      // Helper for polar coords
+                      const rad = (deg: number) => ((deg - 90) * Math.PI) / 180.0;
+                      const sOuter = { x: 100 + outerR * Math.cos(rad(pEnd)), y: 100 + outerR * Math.sin(rad(pEnd)) };
+                      const eOuter = { x: 100 + outerR * Math.cos(rad(pStart)), y: 100 + outerR * Math.sin(rad(pStart)) };
+                      const sInner = { x: 100 + innerR * Math.cos(rad(pStart)), y: 100 + innerR * Math.sin(rad(pStart)) };
+                      const eInner = { x: 100 + innerR * Math.cos(rad(pEnd)), y: 100 + innerR * Math.sin(rad(pEnd)) };
+
+                      const largeArc = (pEnd - pStart) <= 180 ? '0' : '1';
+                      const pathData = `M ${sOuter.x} ${sOuter.y} A ${outerR} ${outerR} 0 ${largeArc} 0 ${eOuter.x} ${eOuter.y} L ${sInner.x} ${sInner.y} A ${innerR} ${innerR} 0 ${largeArc} 1 ${eInner.x} ${eInner.y} Z`;
+
+                      return (
+                        <path
+                          key={slice.name}
+                          d={pathData}
+                          fill={slice.color}
+                          stroke="#050505"
+                          strokeWidth="2"
+                          className="cursor-pointer transition-all duration-200 hover:brightness-115"
+                          style={{
+                            filter: isHovered ? `drop-shadow(0 0 6px ${slice.color}88)` : 'none'
+                          }}
+                          onMouseEnter={() => setHoveredSlice(slice.name)}
+                          onMouseLeave={() => setHoveredSlice(null)}
+                        />
+                      );
+                    });
+                  })()
+                )}
+              </svg>
+
+              {/* Central Dynamic Readout */}
               <div className="absolute text-center flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-[8px] text-white/60 uppercase tracking-wider font-mono">Portfolio</span>
-                <span className="text-[12px] font-black text-white font-mono mt-0.5">
-                  ${Math.round(totalValue).toLocaleString()}
-                </span>
+                {(() => {
+                  const activeHover = hoveredSlice ? allocationPieData.find(s => s.name === hoveredSlice) : null;
+                  if (activeHover) {
+                    const activeAmount = (activeHover.value / 100) * totalValue;
+                    return (
+                      <>
+                        <span className="text-[7.5px] uppercase tracking-wider font-mono font-bold" style={{ color: activeHover.color }}>
+                          {activeHover.name}
+                        </span>
+                        <span className="text-[11.5px] font-black text-white font-mono mt-0.5">
+                          ${Math.round(activeAmount).toLocaleString()}
+                        </span>
+                        <span className="text-[8px] text-white/50 font-mono">
+                          {activeHover.value.toFixed(1)}%
+                        </span>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <span className="text-[8px] text-white/60 uppercase tracking-wider font-mono">Portfolio</span>
+                      <span className="text-[12px] font-black text-white font-mono mt-0.5">
+                        ${Math.round(totalValue).toLocaleString()}
+                      </span>
+                      <span className="text-[7.5px] text-emerald-400 font-mono font-bold">
+                        100% ALLOCATED
+                      </span>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 mt-2">
               {['Stocks', 'ETFs', 'Crypto', 'Cash'].map((cat, idx) => {
-                const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899'];
+                const colors = ['#6366f1', '#10b981', '#f59e0b', '#06b6d4'];
                 const values = [weights.stocks, weights.etfs, weights.crypto, weights.cash];
+                const isHovered = hoveredSlice === cat;
                 return (
-                  <div key={cat} className="flex items-center justify-between p-1.5 bg-[#050505] border border-white/5 rounded font-mono text-[9px]">
+                  <div 
+                    key={cat} 
+                    onMouseEnter={() => setHoveredSlice(cat)}
+                    onMouseLeave={() => setHoveredSlice(null)}
+                    className={`flex items-center justify-between p-1.5 rounded font-mono text-[9px] cursor-pointer transition-all duration-150 border ${
+                      isHovered 
+                        ? 'bg-white/10 border-white/20 shadow-sm' 
+                        : 'bg-[#050505] border-white/5 hover:border-white/10'
+                    }`}
+                  >
                     <div className="flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colors[idx] }} />
-                      <span className="text-white/70">{cat}</span>
+                      <span className={isHovered ? 'text-white font-bold' : 'text-white/70'}>{cat}</span>
                     </div>
                     <span className="text-white font-bold">{Math.round(values[idx])}%</span>
                   </div>
@@ -1000,21 +1285,21 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           </div>
 
           {/* Card 2: Portfolio Insights */}
-          <div className="bg-[#050505] border border-white/5 rounded-xl p-5 font-mono text-[10px] space-y-3.5">
+          <div className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 font-mono text-[10px] space-y-3.5">
             <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black block">Portfolio Insights</span>
             
-            <div className="space-y-2 bg-[#050505] p-3 rounded-lg border border-white/5">
-              <div className="flex justify-between items-center py-1 border-b border-white/5">
+            <div className="space-y-2 bg-[#050505] p-3 rounded-lg border border-neutral-800/80">
+              <div className="flex justify-between items-center py-1 border-b border-neutral-800/80">
                 <span className="text-white/70">Largest Position</span>
                 <span className="text-white font-black">{largestPosition}</span>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-white/5">
+              <div className="flex justify-between items-center py-1 border-b border-neutral-800/80">
                 <span className="text-white/70">Best Performer</span>
                 <span className="text-emerald-400 font-bold flex items-center gap-1">
                   {bestPerformer} <ArrowUpRight className="w-3 h-3 text-emerald-400" />
                 </span>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-white/5">
+              <div className="flex justify-between items-center py-1 border-b border-neutral-800/80">
                 <span className="text-white/70">Worst Performer</span>
                 <span className="text-rose-400 font-bold flex items-center gap-1">
                   {worstPerformer} <ArrowDownRight className="w-3 h-3 text-rose-400" />
@@ -1028,8 +1313,8 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           </div>
 
           {/* Card 3: Exposure Breakdown */}
-          <div className="bg-[#050505] border border-white/5 rounded-xl p-5 font-mono text-[10px] space-y-3.5">
-            <div className="flex justify-between items-center border-b border-white/5 pb-2">
+          <div className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 font-mono text-[10px] space-y-3.5">
+            <div className="flex justify-between items-center border-b border-neutral-800/80 pb-2">
               <div>
                 <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black block">Asset Exposure Weightings</span>
                 <span className="text-[8px] text-white/60 font-sans block mt-0.5">Click category to audit contributing assets</span>
@@ -1225,101 +1510,149 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
 
       {/* ──────────────────── HOLDINGS TABLE ──────────────────── */}
       <div className="bg-[#050505] border border-white/5 rounded-xl overflow-hidden flex flex-col">
-        <div className="p-5 border-b border-white/5 flex items-center justify-between">
+        <div className="p-5 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-indigo-400" />
-            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Institutional Portfolio Holdings</h4>
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Custom Portfolio Holdings</h4>
+            <span className="px-2 py-0.5 bg-white/5 text-white/70 rounded text-[9px] font-mono">
+              {holdingsWithLivePrices.length} {holdingsWithLivePrices.length === 1 ? 'Asset' : 'Assets'}
+            </span>
           </div>
-          <span className="px-2 py-0.5 bg-indigo-500/15 border border-indigo-500/35 text-[8px] font-mono text-indigo-300 rounded font-black tracking-widest uppercase">
-            ACTIVE REAL-TIME SETTLEMENT
-          </span>
+          
+          <div className="flex items-center gap-2">
+            {holdingsWithLivePrices.length > 0 && (
+              <button
+                onClick={handleResetToCash}
+                className="px-3 py-1.5 bg-white/5 hover:bg-rose-500/10 text-white/70 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 rounded-lg text-[10px] font-mono font-bold tracking-wider uppercase transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Liquidate all positions and return to 100% demo cash"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset to Cash
+              </button>
+            )}
+            
+            <button
+              onClick={() => setIsStockPickerOpen(true)}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-mono font-bold tracking-wider uppercase transition-all shadow-md flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Pick Stocks & Build Portfolio
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-white/5 bg-[#050505] font-mono text-[9px] text-white/80 uppercase tracking-wider">
-                <th className="py-3 px-5 font-bold">Symbol</th>
-                <th className="py-3 px-5 font-bold">Asset Name</th>
-                <th className="py-3 px-5 font-bold text-right">Quantity</th>
-                <th className="py-3 px-5 font-bold text-right">Average Cost</th>
-                <th className="py-3 px-5 font-bold text-right">Market Price</th>
-                <th className="py-3 px-5 font-bold text-right">Market Value</th>
-                <th className="py-3 px-5 font-bold text-right">Today's Return</th>
-                <th className="py-3 px-5 font-bold text-right">Total Return</th>
-                <th className="py-3 px-5 font-bold text-right">Allocation %</th>
-                <th className="py-3 px-5 font-bold text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 font-mono text-[11px]">
-              {holdingsWithLivePrices.map((item) => {
-                const mktVal = item.qty * item.currentPrice;
-                const weightPct = (mktVal / totalValue) * 100;
-                const retToday = liveReturns[item.symbol] !== undefined ? liveReturns[item.symbol] : (DAILY_RETURNS[item.symbol] || 0.00);
-                const retTotal = TOTAL_RETURNS[item.symbol] || 0.00;
+        {holdingsWithLivePrices.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+              <Layers className="w-7 h-7" />
+            </div>
+            <div className="max-w-md space-y-1">
+              <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
+                Portfolio is 100% Cash Ready
+              </h3>
+              <p className="text-xs text-white/60 font-mono leading-relaxed">
+                You currently have <span className="text-emerald-400 font-bold">${cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> in demo cash. Build your custom investment allocation by choosing from our tech giants, index ETFs, blue chips, or crypto assets.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsStockPickerOpen(true)}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-lg flex items-center gap-2 cursor-pointer hover:scale-[1.03]"
+            >
+              <Plus className="w-4 h-4" />
+              Pick Stocks Now
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-white/5 bg-[#050505] font-mono text-[9px] text-white/80 uppercase tracking-wider">
+                  <th className="py-3 px-5 font-bold">Symbol</th>
+                  <th className="py-3 px-5 font-bold">Asset Name</th>
+                  <th className="py-3 px-5 font-bold text-right">Quantity</th>
+                  <th className="py-3 px-5 font-bold text-right">Average Cost</th>
+                  <th className="py-3 px-5 font-bold text-right">Market Price</th>
+                  <th className="py-3 px-5 font-bold text-right">Market Value</th>
+                  <th className="py-3 px-5 font-bold text-right">Today's Return</th>
+                  <th className="py-3 px-5 font-bold text-right">Total Return</th>
+                  <th className="py-3 px-5 font-bold text-right">Allocation %</th>
+                  <th className="py-3 px-5 font-bold text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 font-mono text-[11px]">
+                {holdingsWithLivePrices.map((item) => {
+                  const mktVal = item.qty * item.currentPrice;
+                  const weightPct = totalValue > 0 ? (mktVal / totalValue) * 100 : 0;
+                  const retToday = liveReturns[item.symbol] !== undefined ? liveReturns[item.symbol] : (DAILY_RETURNS[item.symbol] || 0.00);
+                  const retTotal = TOTAL_RETURNS[item.symbol] || 0.00;
 
-                return (
-                  <tr 
-                    key={item.symbol} 
-                    onClick={() => setSelectedHistoryAsset(item)}
-                    className="hover:bg-white/[0.03] active:bg-white/[0.05] transition-all group cursor-pointer"
-                    title="Click row to view detailed historical performance"
-                  >
-                    <td className="py-3.5 px-5 font-black text-white">{item.symbol}</td>
-                    <td className="py-3.5 px-5 text-white/70">{item.name}</td>
-                    <td className="py-3.5 px-5 text-right font-bold text-white/95">
-                      {item.qty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                    </td>
-                    <td className="py-3.5 px-5 text-right text-white/80">
-                      ${item.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-3.5 px-5 text-right font-bold text-indigo-300">
-                      ${item.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-3.5 px-5 text-right font-bold text-white">
-                      ${mktVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td className={`py-3.5 px-5 text-right font-bold ${retToday >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {retToday >= 0 ? '+' : ''}{retToday.toFixed(2)}%
-                    </td>
-                    <td className={`py-3.5 px-5 text-right font-bold ${retTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {retTotal >= 0 ? '+' : ''}{retTotal.toFixed(2)}%
-                    </td>
-                    <td className="py-3.5 px-5 text-right text-white/70">{weightPct.toFixed(1)}%</td>
-                    <td className="py-3.5 px-5">
-                      <div className="flex items-center justify-center gap-1.5 opacity-80 group-hover:opacity-100 transition-all">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openTrade(item, 'BUY'); }}
-                          className="px-1.5 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded text-[9px] text-emerald-400 hover:text-emerald-300 transition-all font-black cursor-pointer"
-                          title="Instant Buy Order"
-                        >
-                          BUY
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openTrade(item, 'SELL'); }}
-                          className="px-1.5 py-0.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded text-[9px] text-rose-400 hover:text-rose-300 transition-all font-black cursor-pointer"
-                          title="Instant Sell Order"
-                        >
-                          SELL
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                  return (
+                    <tr 
+                      key={item.symbol} 
+                      onClick={() => setSelectedHistoryAsset(item)}
+                      className="hover:bg-white/[0.03] active:bg-white/[0.05] transition-all group cursor-pointer"
+                      title="Click row to view detailed historical performance"
+                    >
+                      <td className="py-3.5 px-5 font-black text-white">{item.symbol}</td>
+                      <td className="py-3.5 px-5 text-white/70">{item.name}</td>
+                      <td className="py-3.5 px-5 text-right font-bold text-white/95">
+                        {item.qty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      </td>
+                      <td className="py-3.5 px-5 text-right text-white/80">
+                        ${item.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3.5 px-5 text-right font-bold text-indigo-300">
+                        ${item.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3.5 px-5 text-right font-bold text-white">
+                        ${mktVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className={`py-3.5 px-5 text-right font-bold ${retToday >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {retToday >= 0 ? '+' : ''}{retToday.toFixed(2)}%
+                      </td>
+                      <td className={`py-3.5 px-5 text-right font-bold ${retTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {retTotal >= 0 ? '+' : ''}{retTotal.toFixed(2)}%
+                      </td>
+                      <td className="py-3.5 px-5 text-right text-white/70">{weightPct.toFixed(1)}%</td>
+                      <td className="py-3.5 px-5">
+                        <div className="flex items-center justify-center gap-1.5 opacity-80 group-hover:opacity-100 transition-all">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openTrade(item, 'BUY'); }}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[9px] font-bold uppercase transition-all cursor-pointer focus:outline-none focus-visible:outline-none hover:scale-[1.03] shadow-sm select-none"
+                            title="Instant Buy Order"
+                          >
+                            BUY
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openTrade(item, 'SELL'); }}
+                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[9px] font-bold uppercase transition-all cursor-pointer focus:outline-none focus-visible:outline-none hover:scale-[1.03] shadow-sm select-none"
+                            title="Instant Sell Order"
+                          >
+                            SELL
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Optional Section: Dividend summary indicators */}
         <div className="p-4 bg-gradient-to-r from-[#040405] to-transparent border-t border-white/5 flex items-center justify-between text-[10px] font-mono">
           <div className="flex items-center gap-3">
             <Info className="w-3.5 h-3.5 text-white/60" />
             <span className="text-white/70">Portfolio Dividend Estimate:</span>
-            <span className="text-white font-bold">$612.00 Annual</span>
+            <span className="text-white font-bold">
+              ${(holdingsWithLivePrices.length > 0 ? 612.00 : 0.00).toFixed(2)} Annual
+            </span>
             <span className="text-white/40">|</span>
             <span className="text-white/70">Weighted Yield:</span>
-            <span className="text-emerald-400 font-bold">1.8%</span>
+            <span className="text-emerald-400 font-bold">
+              {holdingsWithLivePrices.length > 0 ? '1.8%' : '0.0%'}
+            </span>
           </div>
           <span className="text-white/50 font-light text-[9px]">MTX Portfolio Analyst v3.0</span>
         </div>
@@ -1333,7 +1666,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
-                <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest ${tradeModal.type === 'BUY' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'}`}>
+                <span className={`px-2.5 py-1 rounded text-[9px] font-bold tracking-widest shadow-sm ${tradeModal.type === 'BUY' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
                   {tradeModal.type} ORDER
                 </span>
                 <span className="text-xs font-bold text-white">{tradeModal.holding.symbol}</span>
@@ -1401,7 +1734,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
                       setTradeQuantity(maxSellVal.toFixed(2));
                     }
                   }}
-                  className="px-3 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/30 rounded text-[10px] text-indigo-300 hover:text-white transition-all font-black"
+                  className="px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] transition-all font-bold shadow-sm select-none cursor-pointer focus:outline-none focus-visible:outline-none"
                 >
                   MAX
                 </button>
@@ -1434,7 +1767,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             {/* Execution CTA Action */}
             <button
               onClick={executeTrade}
-              className={`w-full py-2.5 rounded font-black tracking-widest text-xs transition-all uppercase ${tradeModal.type === 'BUY' ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/10' : 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/10'}`}
+              className={`w-full py-2.5 rounded font-bold tracking-widest text-xs transition-all uppercase shadow-md select-none cursor-pointer focus:outline-none focus-visible:outline-none ${tradeModal.type === 'BUY' ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40' : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/40'}`}
             >
               EXECUTE SECURE {tradeModal.type}
             </button>
@@ -1452,7 +1785,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             <div className="flex items-center justify-between border-b border-white/5 pb-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/30 rounded text-[9px] font-black tracking-widest text-indigo-400">
+                  <span className="px-2.5 py-1 bg-indigo-600 rounded text-[9px] font-bold tracking-widest text-white shadow-sm">
                     HISTORICAL METRICS
                   </span>
                   <span className="text-xs font-bold text-white">{selectedHistoryAsset.symbol}</span>
@@ -1499,7 +1832,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             {/* Performance Chart Title */}
             <div className="flex items-center justify-between pt-2">
               <span className="text-[10px] text-white/70 uppercase tracking-wider font-bold block">12-Month Historical Price Trend</span>
-              <span className="text-[9px] text-emerald-400 bg-emerald-400/5 px-2 py-0.5 rounded border border-emerald-500/10 font-bold">
+              <span className="text-[9px] text-white bg-emerald-600 px-2.5 py-1 rounded font-bold shadow-sm">
                 Daily Updated Settlement
               </span>
             </div>
@@ -1580,7 +1913,7 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
             <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
               <button
                 onClick={() => setSelectedHistoryAsset(null)}
-                className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/20 rounded-lg text-xs font-bold text-indigo-300 hover:text-white transition-all cursor-pointer"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-bold text-white transition-all cursor-pointer shadow-md select-none focus:outline-none focus-visible:outline-none"
               >
                 Close Analytical Review
               </button>
@@ -1589,6 +1922,15 @@ export default function PortfolioDesk({ traderEmail }: PortfolioDeskProps) {
           </div>
         </div>
       )}
+
+      {/* ──────────────────── STOCK PICKER MODAL ──────────────────── */}
+      <StockPickerModal
+        isOpen={isStockPickerOpen}
+        onClose={() => setIsStockPickerOpen(false)}
+        availableCash={cashBalance}
+        currentHoldings={holdings.reduce((acc, h) => { acc[h.symbol] = h.qty; return acc; }, {} as Record<string, number>)}
+        onAddStock={handleAddStockFromPicker}
+      />
 
     </div>
   );

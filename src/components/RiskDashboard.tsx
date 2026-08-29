@@ -1128,7 +1128,7 @@ export default function RiskDashboard({
 
   const downloadCSVReport = () => {
     const lines = [
-      'MTXQUANT RISK MANAGEMENT - COMPLIANCE REVIEW REPORT',
+      'MTXCAPITAL RISK MANAGEMENT - COMPLIANCE REVIEW REPORT',
       `Report Generated At,${new Date().toISOString()}`,
       `Risk Threshold Limit,${alertThreshold.toFixed(2)}%`,
       `Current Portfolio Risk,${riskMetrics.portfolioRiskPercent.toFixed(2)}%`,
@@ -1177,7 +1177,7 @@ export default function RiskDashboard({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `MTXquant_Risk_Compliance_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `MTXcapital_Risk_Compliance_Report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -3068,7 +3068,7 @@ export default function RiskDashboard({
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-white block">FIDUCIARY CONTROL DEPLOYED</span>
-                  MTXquant control layers automatically scale order lots when 30-day exposure averages trend upward.
+                  MTXcapital control layers automatically scale order lots when 30-day exposure averages trend upward.
                 </div>
               </div>
             </div>
@@ -3311,7 +3311,7 @@ export default function RiskDashboard({
                   <span>Capital Allocation Philosophy</span>
                 </h4>
                 <p className="text-[10.5px] leading-relaxed text-slate-200 mt-2">
-                  Under the <strong>MTXquant Institutional Framework</strong>, capital is distributed mathematically prioritizing systemic insulation. 
+                  Under the <strong>MTXcapital Institutional Framework</strong>, capital is distributed mathematically prioritizing systemic insulation. 
                   Forex allocations acts as the core liquidity block due to its deep mean reverting nature, while high volatility sectors like Bitcoin 
                   and Precious metals (Gold) are micro-leveraged with stop losses restricted to a <strong>1.0% maximum aggregate drawdown limit</strong>.
                 </p>

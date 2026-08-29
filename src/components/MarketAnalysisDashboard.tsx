@@ -45,7 +45,11 @@ import {
   Sparkles,
   ShieldCheck,
   ArrowUpRight,
-  Tag
+  Tag,
+  Download,
+  FileSpreadsheet,
+  Filter,
+  Shield
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Trade } from '../types.ts';
@@ -406,6 +410,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
   const [activeTimeframe, setActiveTimeframe] = useState<'1W' | '1M' | '3M' | 'YTD' | '1Y' | 'ALL'>('3M');
   const [selectedAssetKey, setSelectedAssetKey] = useState<string>('AAPL');
   const [assetTab, setAssetTab] = useState<'FINANCIALS' | 'RISK' | 'THESIS' | 'GROUNDED_NEWS'>('FINANCIALS');
+  const [holdingsSearchTerm, setHoldingsSearchTerm] = useState<string>('');
   
   // Search Engine Grounding States for Market News across Major Search Engines
   const [groundedNewsMap, setGroundedNewsMap] = useState<Record<string, GroundedNewsData>>({});
@@ -491,118 +496,139 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
     }
   }, [selectedAssetKey]);
 
-  return (
-    <div id="intelligence-terminal" className="space-y-6">
-      
+  // Export Portfolio Intelligence Breakdown as CSV
+  const exportAnalysisCSV = () => {
+    try {
+      const rows = [
+        ['Symbol', 'Name', 'Quantity', 'Avg Cost (USD)', 'Market Price (USD)', 'Total Return', 'Return PnL ($)', 'Weight (%)', 'Beta', 'PE Ratio', 'Consensus']
+      ];
+      Object.values(HOLDINGS_DETAILS).forEach(h => {
+        rows.push([
+          h.symbol,
+          `"${h.name}"`,
+          h.qty.toString(),
+          h.avgCost.toFixed(2),
+          h.marketPrice.toFixed(2),
+          h.returnVal,
+          h.returnPnl.toString(),
+          h.weight,
+          h.beta,
+          h.peRatio,
+          `"${h.consensus}"`
+        ]);
+      });
+      const csvContent = 'data:text/csv;charset=utf-8,' + rows.map(e => e.join(',')).join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `mtx_portfolio_intelligence_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Failed to export Analysis CSV:', err);
+    }
+  };
 
+  return (
+    <div id="intelligence-terminal" className="space-y-6 text-white font-mono">
 
       {/* SECTION 1: PORTFOLIO INTELLIGENCE OVERVIEW */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         
         {/* Card 1: Portfolio Return */}
-        <motion.div 
-          whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
-        >
-          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Portfolio Return</span>
-          <span className="text-lg font-black font-mono block text-emerald-400 mt-1">
+        <div className="bg-[#080808] p-4 rounded-xl border border-neutral-800 space-y-1.5 text-left relative overflow-hidden shadow-lg hover:border-neutral-700 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider block font-bold">Portfolio Return</span>
+            <TrendingUp className="w-3 h-3 text-emerald-400" />
+          </div>
+          <span className="text-xl font-black font-mono block text-emerald-400">
             +$4,670.12
           </span>
-          <span className="text-[8.5px] font-mono text-emerald-400 block font-bold">
+          <span className="px-2 py-0.5 bg-emerald-500 text-neutral-950 text-[8.5px] font-mono font-black inline-block rounded shadow-sm">
             +18.4% YTD
           </span>
-        </motion.div>
+        </div>
 
         {/* Card 2: Diversification Score */}
-        <motion.div 
-          whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
-        >
-          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Diversification Score</span>
-          <span className="text-lg font-black font-mono block text-white mt-1">
-            84 / 100
+        <div className="bg-[#080808] p-4 rounded-xl border border-neutral-800 space-y-1.5 text-left relative overflow-hidden shadow-lg hover:border-neutral-700 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider block font-bold">Diversification</span>
+            <ShieldCheck className="w-3 h-3 text-indigo-400" />
+          </div>
+          <span className="text-xl font-black font-mono block text-white">
+            84 <span className="text-xs text-neutral-500 font-bold">/ 100</span>
           </span>
-          <span className="text-[8.5px] font-mono text-indigo-400 block font-bold uppercase tracking-wide">
+          <span className="px-2 py-0.5 bg-indigo-600 text-white text-[8.5px] font-mono font-black inline-block rounded uppercase shadow-sm">
             Well Diversified
           </span>
-        </motion.div>
+        </div>
 
         {/* Card 3: Portfolio Risk */}
-        <motion.div 
-          whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
-        >
-          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Portfolio Risk</span>
-          <span className="text-lg font-black font-mono block text-amber-400 mt-1">
+        <div className="bg-[#080808] p-4 rounded-xl border border-neutral-800 space-y-1.5 text-left relative overflow-hidden shadow-lg hover:border-neutral-700 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider block font-bold">Portfolio Risk</span>
+            <Scale className="w-3 h-3 text-amber-400" />
+          </div>
+          <span className="text-xl font-black font-mono block text-amber-400">
             Moderate
           </span>
-          <span className="text-[8.5px] font-mono text-white/70 block font-bold">
-            Beta: 1.08
+          <span className="px-2 py-0.5 bg-amber-400 text-neutral-950 text-[8.5px] font-mono font-black inline-block rounded shadow-sm">
+            Beta: 1.08x
           </span>
-        </motion.div>
+        </div>
 
         {/* Card 4: Concentration Exposure */}
-        <motion.div 
-          whileHover={{ y: -2, borderColor: 'rgba(236, 72, 153, 0.25)', boxShadow: '0 4px 20px -2px rgba(236, 72, 153, 0.08)' }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
-        >
-          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Concentration Exposure</span>
-          <span className="text-lg font-black font-mono block text-white mt-1">
+        <div className="bg-[#080808] p-4 rounded-xl border border-neutral-800 space-y-1.5 text-left relative overflow-hidden shadow-lg hover:border-neutral-700 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider block font-bold">Concentration</span>
+            <PieChart className="w-3 h-3 text-pink-400" />
+          </div>
+          <span className="text-xl font-black font-mono block text-white">
             34%
           </span>
-          <span className="text-[8.5px] font-mono text-pink-400 block font-bold uppercase">
-            Technology Sector
+          <span className="px-2 py-0.5 bg-pink-600 text-white text-[8.5px] font-mono font-black inline-block rounded uppercase shadow-sm">
+            Technology
           </span>
-        </motion.div>
+        </div>
 
         {/* Card 5: Dividend Yield */}
-        <motion.div 
-          whileHover={{ y: -2, borderColor: 'rgba(20, 184, 166, 0.25)', boxShadow: '0 4px 20px -2px rgba(20, 184, 166, 0.08)' }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
-        >
-          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Dividend Yield</span>
-          <span className="text-lg font-black font-mono block text-teal-400 mt-1">
+        <div className="bg-[#080808] p-4 rounded-xl border border-neutral-800 space-y-1.5 text-left relative overflow-hidden shadow-lg hover:border-neutral-700 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider block font-bold">Dividend Yield</span>
+            <DollarSign className="w-3 h-3 text-teal-400" />
+          </div>
+          <span className="text-xl font-black font-mono block text-teal-400">
             2.9%
           </span>
-          <span className="text-[8.5px] font-mono text-white/70 block font-bold">
-            Est. Annual Income
+          <span className="px-2 py-0.5 bg-teal-400 text-neutral-950 text-[8.5px] font-mono font-black inline-block rounded shadow-sm">
+            Est. Annual Yield
           </span>
-        </motion.div>
+        </div>
 
         {/* Card 6: Downside Stress */}
-        <motion.div 
-          whileHover={{ y: -2, borderColor: 'rgba(239, 68, 68, 0.25)', boxShadow: '0 4px 20px -2px rgba(239, 68, 68, 0.08)' }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] p-3.5 rounded-xl border border-white/5 space-y-1 text-left relative overflow-hidden group transition-colors duration-200"
-        >
-          <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block font-bold">Downside Stress</span>
-          <span className="text-lg font-black font-mono block text-red-400 mt-1">
+        <div className="bg-[#080808] p-4 rounded-xl border border-neutral-800 space-y-1.5 text-left relative overflow-hidden shadow-lg hover:border-neutral-700 transition-colors">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider block font-bold">Downside Stress</span>
+            <Zap className="w-3 h-3 text-rose-400" />
+          </div>
+          <span className="text-xl font-black font-mono block text-rose-400">
             -11%
           </span>
-          <span className="text-[8.5px] font-mono text-red-400 block font-bold uppercase tracking-wide">
-            Simulated Crash
+          <span className="px-2 py-0.5 bg-rose-600 text-white text-[8.5px] font-mono font-black inline-block rounded uppercase shadow-sm">
+            Stress Tested
           </span>
-        </motion.div>
+        </div>
       </div>
 
       {/* SECTION 2: PORTFOLIO VALUE CURVE */}
-      <motion.div 
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="bg-[#080808] border border-white/5 rounded-xl p-4 md:p-6 text-left"
-      >
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-4">
+      <div className="bg-[#080808] border border-neutral-800 rounded-xl p-4 md:p-6 text-left shadow-xl">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-neutral-800 pb-4 mb-4">
           <div>
             <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono flex items-center gap-2">
               <Activity className="w-4 h-4 text-indigo-400" /> Portfolio Value & Performance
             </h3>
-            <p className="text-[10px] text-white/70 font-mono font-bold">
+            <p className="text-[10px] text-neutral-400 font-mono font-bold">
               Sovereign investment value over time overlaid against benchmark indices.
             </p>
           </div>
@@ -610,15 +636,15 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             
             {/* Timeframe selector */}
-            <div className="flex items-center bg-[#0d0d12] border border-white/10 rounded-lg p-0.5 font-mono text-[9.5px]">
+            <div className="flex items-center bg-neutral-900 border border-neutral-700/80 rounded-lg p-1 font-mono text-[9.5px]">
               {(['1W', '1M', '3M', 'YTD', '1Y', 'ALL'] as const).map((tf) => (
                 <button
                   key={tf}
                   onClick={() => setActiveTimeframe(tf)}
-                  className={`px-2 py-1 rounded font-bold transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
                     activeTimeframe === tf 
-                      ? 'bg-indigo-600 text-white' 
-                      : 'text-white/70 hover:text-white'
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'text-neutral-400 hover:text-white'
                   }`}
                 >
                   {tf}
@@ -637,13 +663,13 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                     className={`px-2.5 py-1 rounded-md border transition-all cursor-pointer font-bold uppercase tracking-wider ${
                       isActive 
                         ? b === 'Portfolio Value' 
-                          ? 'bg-indigo-500/15 border-indigo-500/35 text-indigo-300'
+                          ? 'bg-indigo-600 border-indigo-500 text-white shadow-sm'
                           : b === 'S&P 500'
-                            ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300'
+                            ? 'bg-emerald-500 border-emerald-400 text-neutral-950 shadow-sm font-black'
                             : b === 'Nasdaq'
-                              ? 'bg-pink-500/15 border-pink-500/35 text-pink-300'
-                              : 'bg-amber-500/15 border-amber-500/35 text-amber-300'
-                        : 'bg-white/[0.03] border-white/10 text-white/70 hover:text-white hover:border-white/20'
+                              ? 'bg-pink-600 border-pink-500 text-white shadow-sm'
+                              : 'bg-amber-400 border-amber-300 text-neutral-950 shadow-sm font-black'
+                        : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700'
                     }`}
                   >
                     {b}
@@ -657,160 +683,142 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
 
         {/* Recharts Area Chart */}
         <div className="h-[280px] md:h-[350px] w-full mt-2 select-none relative overflow-hidden">
-          <motion.div
-            key={`${activeTimeframe}-${Object.entries(benchmarks).filter(([_, v]) => v).map(([k]) => k).join(',')}`}
-            initial={{ opacity: 0.1, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full h-full"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={chartData}
-                margin={{ top: 10, right: 15, left: 15, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="pValueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0} />
-                  </linearGradient>
-                  <linearGradient id="spxGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.05} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                  </linearGradient>
-                  <linearGradient id="ndxGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ec4899" stopOpacity={0.05} />
-                    <stop offset="95%" stopColor="#ec4899" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="#ffffff" strokeOpacity={0.08} strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  stroke="#ffffff" 
-                  strokeOpacity={0.5} 
-                  tick={{ fill: '#ffffff', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold' }}
-                  dy={6}
-                />
-                <YAxis 
-                  stroke="#ffffff" 
-                  strokeOpacity={0.5} 
-                  tick={{ fill: '#ffffff', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold' }}
-                  domain={['dataMin - 1000', 'dataMax + 1000']}
-                  tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
-                  dx={-6}
-                />
-                <Tooltip
-                  cursor={{ stroke: 'rgba(255, 255, 255, 0.25)', strokeWidth: 1 }}
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-[#0a0a0f] border border-white/10 p-3 rounded-lg shadow-2xl font-mono text-[10px] space-y-1.5 text-left">
-                          <div className="border-b border-white/10 pb-1 text-white/80 font-bold">
-                            {payload[0].payload.date}
-                          </div>
-                          {payload.map((item, index) => {
-                            let color = '#818cf8';
-                            let label = 'Portfolio Value';
-                            if (item.name === 'spx') { color = '#34d399'; label = 'S&P 500 (Normalized)'; }
-                            else if (item.name === 'nasdaq') { color = '#f472b6'; label = 'Nasdaq (Normalized)'; }
-                            else if (item.name === 'cash') { color = '#fbbf24'; label = 'Cash Contrib.'; }
-
-                            return (
-                              <div key={index} className="flex items-center justify-between gap-5">
-                                <span style={{ color }} className="font-bold uppercase text-[9px]">{label}:</span>
-                                <strong className="text-white text-[10.5px]">${Number(item.value).toLocaleString()}</strong>
-                              </div>
-                            );
-                          })}
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={chartData}
+              margin={{ top: 10, right: 15, left: 15, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient id="pValueGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                </linearGradient>
+                <linearGradient id="spxGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                </linearGradient>
+                <linearGradient id="ndxGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ec4899" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#ec4899" stopOpacity={0.0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#333333" strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="date" 
+                stroke="#666666" 
+                tick={{ fill: '#a3a3a3', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold' }}
+                dy={6}
+              />
+              <YAxis 
+                stroke="#666666" 
+                tick={{ fill: '#a3a3a3', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold' }}
+                domain={['dataMin - 1000', 'dataMax + 1000']}
+                tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
+                dx={-6}
+              />
+              <Tooltip
+                cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '4 4' }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="bg-neutral-950 border border-neutral-700 p-3 rounded-lg shadow-2xl font-mono text-[10px] space-y-1.5 text-left">
+                        <div className="border-b border-neutral-800 pb-1 text-neutral-300 font-bold">
+                          {payload[0].payload.date}
                         </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                
-                {/* Primary Portfolio Value Area */}
+                        {payload.map((item, index) => {
+                          let color = '#818cf8';
+                          let label = 'Portfolio Value';
+                          if (item.name === 'spx') { color = '#34d399'; label = 'S&P 500 (Normalized)'; }
+                          else if (item.name === 'nasdaq') { color = '#f472b6'; label = 'Nasdaq (Normalized)'; }
+                          else if (item.name === 'cash') { color = '#fbbf24'; label = 'Cash Contrib.'; }
+
+                          return (
+                            <div key={index} className="flex items-center justify-between gap-5">
+                              <span style={{ color }} className="font-bold uppercase text-[9px]">{label}:</span>
+                              <strong className="text-white text-[10.5px] font-mono">${Number(item.value).toLocaleString()}</strong>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              
+              {/* Primary Portfolio Value Area */}
+              <Area
+                name="portfolio"
+                type="monotone"
+                dataKey="portfolio"
+                stroke="#6366f1"
+                strokeWidth={2.5}
+                fillOpacity={1}
+                fill="url(#pValueGrad)"
+                activeDot={{ r: 5, stroke: '#a5b4fc', strokeWidth: 1.5, fill: '#080808' }}
+                isAnimationActive={false}
+              />
+
+              {/* S&P 500 normalized */}
+              {benchmarks['S&P 500'] && (
                 <Area
-                  name="portfolio"
+                  name="spx"
                   type="monotone"
-                  dataKey="portfolio"
-                  stroke="#4f46e5"
-                  strokeWidth={2.5}
+                  dataKey="spx"
+                  stroke="#10b981"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
                   fillOpacity={1}
-                  fill="url(#pValueGrad)"
-                  activeDot={{ r: 5, stroke: '#818cf8', strokeWidth: 1, fill: '#080808' }}
-                  isAnimationActive={true}
-                  animationDuration={450}
-                  animationEasing="ease-out"
+                  fill="url(#spxGrad)"
+                  activeDot={{ r: 4, stroke: '#34d399', strokeWidth: 1, fill: '#080808' }}
+                  isAnimationActive={false}
                 />
+              )}
 
-                {/* S&P 500 normalized */}
-                {benchmarks['S&P 500'] && (
-                  <Area
-                    name="spx"
-                    type="monotone"
-                    dataKey="spx"
-                    stroke="#10b981"
-                    strokeWidth={1.5}
-                    strokeDasharray="4 4"
-                    fillOpacity={1}
-                    fill="url(#spxGrad)"
-                    activeDot={{ r: 4, stroke: '#34d399', strokeWidth: 1, fill: '#080808' }}
-                    isAnimationActive={true}
-                    animationDuration={450}
-                    animationEasing="ease-out"
-                  />
-                )}
+              {/* Nasdaq normalized */}
+              {benchmarks['Nasdaq'] && (
+                <Area
+                  name="nasdaq"
+                  type="monotone"
+                  dataKey="nasdaq"
+                  stroke="#ec4899"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
+                  fillOpacity={1}
+                  fill="url(#ndxGrad)"
+                  activeDot={{ r: 4, stroke: '#f472b6', strokeWidth: 1, fill: '#080808' }}
+                  isAnimationActive={false}
+                />
+              )}
 
-                {/* Nasdaq normalized */}
-                {benchmarks['Nasdaq'] && (
-                  <Area
-                    name="nasdaq"
-                    type="monotone"
-                    dataKey="nasdaq"
-                    stroke="#ec4899"
-                    strokeWidth={1.5}
-                    strokeDasharray="4 4"
-                    fillOpacity={1}
-                    fill="url(#ndxGrad)"
-                    activeDot={{ r: 4, stroke: '#f472b6', strokeWidth: 1, fill: '#080808' }}
-                    isAnimationActive={true}
-                    animationDuration={450}
-                    animationEasing="ease-out"
-                  />
-                )}
-
-                {/* Cash Contributions */}
-                {benchmarks['Cash Contributions'] && (
-                  <Area
-                    name="cash"
-                    type="step"
-                    dataKey="cash"
-                    stroke="#fbbf24"
-                    strokeWidth={1.5}
-                    fillOpacity={0}
-                    activeDot={{ r: 4, stroke: '#fbbf24', strokeWidth: 1, fill: '#080808' }}
-                    isAnimationActive={true}
-                    animationDuration={450}
-                    animationEasing="ease-out"
-                  />
-                )}
-              </AreaChart>
-            </ResponsiveContainer>
-          </motion.div>
+              {/* Cash Contributions */}
+              {benchmarks['Cash Contributions'] && (
+                <Area
+                  name="cash"
+                  type="step"
+                  dataKey="cash"
+                  stroke="#fbbf24"
+                  strokeWidth={1.5}
+                  fillOpacity={0}
+                  activeDot={{ r: 4, stroke: '#fbbf24', strokeWidth: 1, fill: '#080808' }}
+                  isAnimationActive={false}
+                />
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
-      </motion.div>
+      </div>
 
       {/* SECTION 3: PERFORMANCE ATTRIBUTION & SECTION 4: MARKET OPPORTUNITY MAP */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
         {/* SECTION 3: CONTRIBUTION TO RETURNS */}
-        <div className="bg-[#080808] border border-white/5 rounded-xl p-4 text-left">
-          <div className="border-b border-white/5 pb-3 mb-3">
+        <div className="bg-[#080808] border border-neutral-800 rounded-xl p-5 text-left shadow-xl">
+          <div className="border-b border-neutral-800 pb-3 mb-3">
             <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
               <PieChart className="w-4 h-4 text-indigo-400" /> Contribution To Returns
             </h4>
-            <p className="text-[10px] text-white/70 font-mono font-bold">
+            <p className="text-[10px] text-neutral-400 font-mono font-bold">
               Individual asset allocations ranked by absolute returns contribution.
             </p>
           </div>
@@ -829,22 +837,22 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                 <div key={i} className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-white text-[10px]">{item.asset}</span>
-                    <span className={`font-bold ${isPositive ? 'text-emerald-400' : isZero ? 'text-white/70' : 'text-pink-400'}`}>
+                    <span className={`font-bold ${isPositive ? 'text-emerald-400' : isZero ? 'text-neutral-400' : 'text-rose-400'}`}>
                       {isPositive ? '+$' : isZero ? '$' : '-$'}{Math.abs(item.pnl).toLocaleString()}
                     </span>
                   </div>
-                  <div className="h-2 bg-white/[0.02] rounded-full overflow-hidden flex items-center">
+                  <div className="h-2 bg-neutral-900 rounded-full overflow-hidden flex items-center border border-neutral-800">
                     {isPositive ? (
                       <div 
                         style={{ width: `${item.pct}%` }} 
-                        className="h-full bg-emerald-500/30 border-r border-emerald-400/50"
+                        className="h-full bg-emerald-500 rounded-full"
                       ></div>
                     ) : isZero ? (
-                      <div className="w-0.5 h-full bg-white/20"></div>
+                      <div className="w-0.5 h-full bg-neutral-700"></div>
                     ) : (
                       <div 
                         style={{ width: `${Math.abs(item.pct)}%` }} 
-                        className="h-full bg-pink-500/30 border-r border-pink-400/50"
+                        className="h-full bg-rose-500 rounded-full"
                       ></div>
                     )}
                   </div>
@@ -855,55 +863,55 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
         </div>
 
         {/* SECTION 4: MARKET OPPORTUNITY MAP */}
-        <div className="bg-[#080808] border border-white/5 rounded-xl p-4 text-left">
-          <div className="border-b border-white/5 pb-3 mb-3">
+        <div className="bg-[#080808] border border-neutral-800 rounded-xl p-5 text-left shadow-xl">
+          <div className="border-b border-neutral-800 pb-3 mb-3">
             <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
               <Zap className="w-4 h-4 text-emerald-400" /> Market Opportunity Map
             </h4>
-            <p className="text-[10px] text-white/70 font-mono font-bold">
+            <p className="text-[10px] text-neutral-400 font-mono font-bold">
               Quantitative asset score card based on proprietary machine intelligence.
             </p>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto border border-neutral-800 rounded-lg">
             <table className="w-full text-[10px] font-mono text-left border-collapse">
-              <thead className="text-white/80 uppercase border-b border-white/10 text-[9px] font-bold">
+              <thead className="bg-neutral-900 border-b border-neutral-800 text-neutral-300 uppercase text-[9px] font-black tracking-wider">
                 <tr>
-                  <th className="pb-2.5">Asset</th>
-                  <th className="pb-2.5 text-center">Momentum</th>
-                  <th className="pb-2.5 text-center">Valuation</th>
-                  <th className="pb-2.5 text-right">AI Score</th>
+                  <th className="p-2.5">Asset</th>
+                  <th className="p-2.5 text-center">Momentum</th>
+                  <th className="p-2.5 text-center">Valuation</th>
+                  <th className="p-2.5 text-right">AI Score</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-neutral-800 bg-[#0d0d0d]">
                 {[
-                  { sym: 'NVDA', mom: 'Strong', val: 'Expensive', score: 82, color: 'text-indigo-400' },
-                  { sym: 'AAPL', mom: 'Moderate', val: 'Fair', score: 88, color: 'text-emerald-400' },
-                  { sym: 'AMZN', mom: 'Strong', val: 'Fair', score: 91, color: 'text-emerald-400' },
-                  { sym: 'SPY', mom: 'Neutral', val: 'Fair', score: 80, color: 'text-indigo-400' }
+                  { sym: 'NVDA', mom: 'Strong', val: 'Expensive', score: 82, color: 'text-indigo-300' },
+                  { sym: 'AAPL', mom: 'Moderate', val: 'Fair', score: 88, color: 'text-emerald-300' },
+                  { sym: 'AMZN', mom: 'Strong', val: 'Fair', score: 91, color: 'text-emerald-300' },
+                  { sym: 'SPY', mom: 'Neutral', val: 'Fair', score: 80, color: 'text-indigo-300' }
                 ].map((row, idx) => (
-                  <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-2.5 text-white font-bold">{row.sym}</td>
-                    <td className="py-2.5 text-center">
-                      <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
+                  <tr key={idx} className="hover:bg-neutral-900/60 transition-colors">
+                    <td className="p-2.5 text-white font-bold">{row.sym}</td>
+                    <td className="p-2.5 text-center">
+                      <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase ${
                         row.mom === 'Strong' 
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                          : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                          ? 'bg-emerald-500 text-neutral-950 shadow-sm' 
+                          : 'bg-indigo-600 text-white shadow-sm'
                       }`}>
                         {row.mom}
                       </span>
                     </td>
-                    <td className="py-2.5 text-center">
-                      <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
+                    <td className="p-2.5 text-center">
+                      <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase ${
                         row.val === 'Expensive' 
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
-                          : 'bg-white/10 text-white/80 border border-white/15'
+                          ? 'bg-amber-400 text-neutral-950 shadow-sm' 
+                          : 'bg-neutral-800 text-neutral-200 border border-neutral-700'
                       }`}>
                         {row.val}
                       </span>
                     </td>
-                    <td className="py-2.5 text-right text-white font-bold">
-                      <span className={`px-1.5 py-0.5 rounded text-[9.5px] ${row.color} bg-white/[0.05] border border-white/10 font-bold`}>
+                    <td className="p-2.5 text-right text-white font-bold">
+                      <span className="px-2 py-0.5 rounded text-[9.5px] text-white bg-neutral-800 border border-neutral-700 font-mono font-black">
                         {row.score}
                       </span>
                     </td>
@@ -919,114 +927,129 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         
         {/* Holdings Ledger Table */}
-        <div className="lg:col-span-8 bg-[#080808] border border-white/5 rounded-xl p-4 text-left flex flex-col justify-between">
+        <div className="lg:col-span-8 bg-[#080808] border border-neutral-800 rounded-xl p-5 text-left flex flex-col justify-between shadow-xl">
           <div>
-            <div className="border-b border-white/5 pb-3 mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="border-b border-neutral-800 pb-3 mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono">
-                  Holdings Ledger
+                <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-indigo-400" /> Holdings Ledger
                 </h4>
-                <p className="text-[10px] text-white/70 font-mono font-bold">
+                <p className="text-[10px] text-neutral-400 font-mono font-bold">
                   Active asset weights, acquisition prices, and immediate market return summaries.
                 </p>
               </div>
+
+              {/* Quick Filter / Search */}
+              <div className="relative w-full sm:w-52">
+                <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={holdingsSearchTerm}
+                  onChange={(e) => setHoldingsSearchTerm(e.target.value)}
+                  placeholder="Filter ticker / name..."
+                  className="w-full bg-neutral-900 border border-neutral-700/80 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white placeholder-neutral-500 font-mono focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
             </div>
 
-            <div className="overflow-x-auto border border-white/5 rounded-lg">
+            <div className="overflow-x-auto border border-neutral-800 rounded-lg">
               <table className="w-full text-[10.5px] font-mono text-left border-collapse">
-                <thead className="bg-[#0b0b0f] text-white/80 sticky top-0 uppercase tracking-wider text-[9px] border-b border-b-white/10 font-bold">
+                <thead className="bg-neutral-900 text-neutral-300 uppercase tracking-wider text-[9px] border-b border-neutral-800 font-black">
                   <tr>
                     <th className="p-2.5">Asset</th>
                     <th className="p-2.5 text-right">Quantity</th>
                     <th className="p-2.5 text-right">Avg Cost</th>
                     <th className="p-2.5 text-right">Market Price</th>
                     <th className="p-2.5 text-right">Return</th>
-                    <th className="p-2.5 text-right">Portfolio Weight</th>
+                    <th className="p-2.5 text-right">Weight</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.04] bg-[#020202]/30">
-                  {Object.values(HOLDINGS_DETAILS).map((h) => {
-                    const isSelected = selectedAssetKey === h.symbol;
-                    const isPositive = h.returnVal.startsWith('+');
-                    const isNeutral = h.returnVal === '--';
-                    return (
-                      <tr
-                        key={h.symbol}
-                        onClick={() => setSelectedAssetKey(h.symbol)}
-                        className={`hover:bg-white/[0.03] transition-all cursor-pointer ${
-                          isSelected 
-                            ? 'bg-indigo-600/10 hover:bg-indigo-600/15 border-l-2 border-indigo-500 font-bold' 
-                            : ''
-                        }`}
-                      >
-                        <td className="p-2.5">
-                          <span className="text-white font-bold">{h.symbol}</span>
-                          <span className="text-[9px] text-white/70 block mt-0.5 font-sans font-medium">{h.name}</span>
-                        </td>
-                        <td className="p-2.5 text-right text-white/90 font-medium">{h.qty.toLocaleString()}</td>
-                        <td className="p-2.5 text-right text-white/80 font-medium">${h.avgCost.toFixed(2)}</td>
-                        <td className="p-2.5 text-right text-white font-bold">${h.marketPrice.toFixed(2)}</td>
-                        <td className={`p-2.5 text-right font-bold ${isNeutral ? 'text-white/70' : isPositive ? 'text-emerald-400' : 'text-pink-400'}`}>
-                          {h.returnVal}
-                        </td>
-                        <td className="p-2.5 text-right text-white font-bold text-indigo-400">
-                          {h.weight}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                <tbody className="divide-y divide-neutral-800 bg-[#0d0d0d]">
+                  {Object.values(HOLDINGS_DETAILS)
+                    .filter(h => {
+                      if (!holdingsSearchTerm.trim()) return true;
+                      const term = holdingsSearchTerm.toLowerCase();
+                      return h.symbol.toLowerCase().includes(term) || h.name.toLowerCase().includes(term);
+                    })
+                    .map((h, idx) => {
+                      const isSelected = selectedAssetKey === h.symbol;
+                      const isPositive = h.returnVal.startsWith('+');
+                      const isNeutral = h.returnVal === '--';
+                      return (
+                        <tr
+                          key={`h-${h.symbol}-${idx}`}
+                          onClick={() => setSelectedAssetKey(h.symbol)}
+                          className={`hover:bg-neutral-900/80 transition-all cursor-pointer ${
+                            isSelected 
+                              ? 'bg-indigo-950/60 hover:bg-indigo-950/80 border-l-4 border-indigo-500 font-bold' 
+                              : ''
+                          }`}
+                        >
+                          <td className="p-2.5">
+                            <span className="text-white font-black">{h.symbol}</span>
+                            <span className="text-[9px] text-neutral-400 block mt-0.5 font-sans font-medium">{h.name}</span>
+                          </td>
+                          <td className="p-2.5 text-right text-neutral-200 font-medium">{h.qty.toLocaleString()}</td>
+                          <td className="p-2.5 text-right text-neutral-300 font-medium">${h.avgCost.toFixed(2)}</td>
+                          <td className="p-2.5 text-right text-white font-bold">${h.marketPrice.toFixed(2)}</td>
+                          <td className={`p-2.5 text-right font-bold ${isNeutral ? 'text-neutral-400' : isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {h.returnVal}
+                          </td>
+                          <td className="p-2.5 text-right text-indigo-300 font-black">
+                            {h.weight}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
           </div>
-          <p className="text-[8.5px] font-mono text-white/60 font-bold text-left mt-3 pt-2.5 border-t border-white/5">
-            Audit Note: Security values refreshed in synchronization with global Bloomberg real-time feeds.
-          </p>
+          <div className="flex items-center justify-between text-[8.5px] font-mono text-neutral-400 font-bold mt-4 pt-3 border-t border-neutral-800">
+            <span>Audit Note: Security values refreshed in synchronization with global Bloomberg real-time feeds.</span>
+            <span className="text-indigo-400 font-black">Click row to inspect asset intelligence</span>
+          </div>
         </div>
 
         {/* Spotlit Asset Intelligence Card */}
         <div className="lg:col-span-4 text-left">
-          <div className="bg-[#080808] border border-indigo-500/15 rounded-xl p-4 flex flex-col justify-between h-full space-y-4">
+          <div className="bg-[#080808] border border-neutral-800 rounded-xl p-5 flex flex-col justify-between h-full space-y-4 shadow-xl">
             <div className="space-y-3.5">
               
               {/* Header Area */}
-              <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
                 <div>
-                  <span className="text-[9px] font-mono text-white/70 uppercase block font-bold">Asset Intelligence</span>
+                  <span className="text-[9px] font-mono text-neutral-400 uppercase block font-bold">Asset Intelligence</span>
                   <h5 className="text-xs font-black text-white font-mono uppercase tracking-wide">
                     {selectedAsset.symbol} - {selectedAsset.name}
                   </h5>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-[8.5px] font-bold font-mono uppercase border ${
+                <span className={`px-2.5 py-0.5 rounded text-[8.5px] font-black font-mono uppercase ${
                   selectedAsset.returnPnl >= 0 
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                    : 'bg-pink-500/10 text-pink-400 border-pink-500/20'
+                    ? 'bg-emerald-500 text-neutral-950 shadow-sm' 
+                    : 'bg-rose-600 text-white shadow-sm'
                 }`}>
                   {selectedAsset.returnPnl >= 0 ? 'ACCUMULATING' : 'UNDERWEIGHT'}
                 </span>
               </div>
 
               {/* Sub-header interactive tabs */}
-              <div className="flex border-b border-white/5 pb-2 text-[10px] font-mono gap-1.5 flex-wrap">
+              <div className="flex border-b border-neutral-800 pb-2 text-[10px] font-mono gap-1.5 flex-wrap">
                 {(['FINANCIALS', 'RISK', 'THESIS', 'GROUNDED_NEWS'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setAssetTab(tab)}
-                    className={`px-2 py-1 rounded border uppercase tracking-wider text-[8px] font-black cursor-pointer transition-all flex items-center gap-1 ${
+                    className={`px-2.5 py-1 rounded-md border uppercase tracking-wider text-[8.5px] font-black cursor-pointer transition-all flex items-center gap-1 ${
                       assetTab === tab 
                         ? tab === 'GROUNDED_NEWS'
-                          ? 'bg-sky-500/20 border-sky-400/50 text-sky-300'
+                          ? 'bg-sky-500 border-sky-400 text-neutral-950 shadow-sm'
                           : tab === 'FINANCIALS'
-                            ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-400'
-                            : 'bg-indigo-600/15 border-indigo-500/50 text-indigo-400' 
-                        : tab === 'GROUNDED_NEWS'
-                          ? 'bg-sky-500/5 border-sky-500/20 text-sky-400 font-bold hover:bg-sky-500/10'
-                          : tab === 'FINANCIALS'
-                            ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400 font-bold hover:bg-emerald-500/10'
-                            : 'bg-transparent border-transparent text-white/70 hover:text-white font-bold'
+                            ? 'bg-emerald-500 border-emerald-400 text-neutral-950 shadow-sm'
+                            : 'bg-indigo-600 border-indigo-500 text-white shadow-sm' 
+                        : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
                     }`}
                   >
-                    {tab === 'GROUNDED_NEWS' && <Globe className="w-2.5 h-2.5 text-sky-400 shrink-0 animate-pulse" />}
+                    {tab === 'GROUNDED_NEWS' && <Globe className="w-2.5 h-2.5 shrink-0" />}
                     {tab === 'GROUNDED_NEWS' ? 'LIVE NEWS' : tab}
                   </button>
                 ))}
@@ -1034,105 +1057,110 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
 
               {/* Tab 1: Financials */}
               {assetTab === 'FINANCIALS' && (() => {
-                const renderFinancialCard = (label: string, value: string, textClass: string = 'text-white') => {
+                const renderFinancialCard = (label: string, value: string, textClass: string = 'text-white', isTop: boolean = false, alignRight: boolean = false) => {
                   const info = FINANCIAL_METRICS_INFO[label] || {
                     definition: 'Institutional quantitative metric measuring underlying corporate fundamental performance.',
                     average: 'Varies by industry sector baseline.',
                     alert: 'Active automated terminal rule monitoring.'
                   };
+                  const vertPos = isTop ? 'top-full mt-2.5' : 'bottom-full mb-2.5';
+                  const arrowVert = isTop ? 'bottom-full border-b-neutral-950' : 'top-full border-t-neutral-950';
+                  const alignPos = alignRight ? 'right-0 left-auto translate-x-0' : 'left-0 translate-x-0';
+                  const arrowAlign = alignRight ? 'right-6 left-auto translate-x-1/2' : 'left-6 -translate-x-1/2';
+
                   return (
-                    <div className="bg-black/40 p-2.5 rounded border border-white/5 flex flex-col justify-between relative group overflow-visible cursor-help hover:border-indigo-500/40 hover:bg-indigo-500/[0.02] transition-all min-h-[56px]">
+                    <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800 flex flex-col justify-between relative group overflow-visible cursor-help hover:border-indigo-500/50 hover:bg-indigo-950/20 transition-all min-h-[60px]">
                       <div className="flex justify-between items-start w-full">
-                        <span className="text-white/70 text-[8px] uppercase tracking-wider block font-bold">{label}</span>
-                        <Info className="w-2.5 h-2.5 text-white/60 group-hover:text-indigo-400 transition-colors" />
+                        <span className="text-neutral-400 text-[8px] uppercase tracking-wider block font-bold">{label}</span>
+                        <Info className="w-2.5 h-2.5 text-neutral-500 group-hover:text-indigo-400 transition-colors" />
                       </div>
                       <span className={`${textClass} font-black text-xs mt-1 block`}>{value}</span>
 
                       {/* Interactive Bloomberg-Style Tooltip */}
-                      <div className="absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 w-64 p-3 bg-zinc-950 border border-indigo-500/30 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 text-left font-sans">
-                        <div className="flex items-center gap-1.5 border-b border-white/10 pb-1 mb-1.5">
+                      <div className={`absolute ${vertPos} ${alignPos} w-64 p-3 bg-neutral-950 border border-neutral-700 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-[100] text-left font-sans`}>
+                        <div className="flex items-center gap-1.5 border-b border-neutral-800 pb-1.5 mb-1.5">
                           <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                           <span className="font-mono font-black uppercase tracking-wider text-[9px] text-indigo-300">
                             {label}
                           </span>
                         </div>
-                        <p className="text-white/80 text-[10px] leading-relaxed mb-2 font-normal">
+                        <p className="text-neutral-300 text-[10px] leading-relaxed mb-2 font-normal">
                           {info.definition}
                         </p>
-                        <div className="bg-[#08080c] rounded p-2 border border-white/5 font-mono text-[9px] space-y-1">
+                        <div className="bg-[#080808] rounded p-2 border border-neutral-800 font-mono text-[9px] space-y-1">
                           <div className="flex justify-between items-center gap-1">
-                            <span className="text-white/70 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
+                            <span className="text-neutral-400 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
                             <span className="text-white font-medium text-[8.5px] text-right">{info.average}</span>
                           </div>
                           <div className="flex justify-between items-center gap-1">
-                            <span className="text-white/70 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
+                            <span className="text-neutral-400 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
                             <span className="text-indigo-400 font-bold text-[8.5px] text-right">{info.alert}</span>
                           </div>
                         </div>
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-950"></div>
+                        <div className={`absolute ${arrowVert} ${arrowAlign} border-4 border-transparent`}></div>
                       </div>
                     </div>
                   );
                 };
 
                 return (
-                  <div className="space-y-3.5 animate-fadeIn font-mono">
+                  <div className="space-y-3 font-mono">
                     <div className="grid grid-cols-2 gap-2 text-[10px]">
-                      {renderFinancialCard('Market Cap', selectedAsset.marketCap)}
-                      {renderFinancialCard('P/E Ratio', selectedAsset.peRatio)}
-                      {renderFinancialCard('P/S Ratio', selectedAsset.psRatio)}
-                      {renderFinancialCard('Debt / Equity', selectedAsset.debtEquity)}
+                      {renderFinancialCard('Market Cap', selectedAsset.marketCap, 'text-white', true, false)}
+                      {renderFinancialCard('P/E Ratio', selectedAsset.peRatio, 'text-white', true, true)}
+                      {renderFinancialCard('P/S Ratio', selectedAsset.psRatio, 'text-white', false, false)}
+                      {renderFinancialCard('Debt / Equity', selectedAsset.debtEquity, 'text-white', false, true)}
                     </div>
 
-                    {/* Profit Margin bar indicator with custom hover tooltip too! */}
+                    {/* Profit Margin bar indicator with custom hover tooltip */}
                     {selectedAsset.profitMargin !== '--' && (() => {
                       const label = 'Profit Margin';
                       const info = FINANCIAL_METRICS_INFO[label];
                       return (
-                        <div className="bg-[#0b0b0f] p-3 rounded-lg border border-white/5 space-y-1.5 relative group overflow-visible cursor-help hover:border-indigo-500/40 hover:bg-indigo-500/[0.02] transition-all">
+                        <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800 space-y-1.5 relative group overflow-visible cursor-help hover:border-indigo-500/50 hover:bg-indigo-950/20 transition-all">
                           <div className="flex justify-between items-center text-[9px]">
                             <div className="flex items-center gap-1">
-                              <span className="text-white/70 uppercase font-bold">PROFIT MARGIN:</span>
-                              <Info className="w-2.5 h-2.5 text-white/60 group-hover:text-indigo-400 transition-colors" />
+                              <span className="text-neutral-400 uppercase font-bold">PROFIT MARGIN:</span>
+                              <Info className="w-2.5 h-2.5 text-neutral-500 group-hover:text-indigo-400 transition-colors" />
                             </div>
                             <span className="text-emerald-400 font-bold">{selectedAsset.profitMargin}</span>
                           </div>
-                          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-1.5 bg-neutral-900 border border-neutral-800 rounded-full overflow-hidden">
                             <div 
                               style={{ width: selectedAsset.profitMargin }}
-                              className="h-full bg-emerald-500/50"
+                              className="h-full bg-emerald-500 rounded-full"
                             ></div>
                           </div>
 
                           {/* Interactive Bloomberg-Style Tooltip */}
-                          <div className="absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 w-64 p-3 bg-zinc-950 border border-indigo-500/30 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 text-left font-sans">
-                            <div className="flex items-center gap-1.5 border-b border-white/10 pb-1 mb-1.5">
+                          <div className="absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 w-64 p-3 bg-neutral-950 border border-neutral-700 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 text-left font-sans">
+                            <div className="flex items-center gap-1.5 border-b border-neutral-800 pb-1.5 mb-1.5">
                               <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                               <span className="font-mono font-black uppercase tracking-wider text-[9px] text-indigo-300">
                                 {label}
                               </span>
                             </div>
-                            <p className="text-white/80 text-[10px] leading-relaxed mb-2 font-normal">
+                            <p className="text-neutral-300 text-[10px] leading-relaxed mb-2 font-normal">
                               {info.definition}
                             </p>
-                            <div className="bg-[#08080c] rounded p-2 border border-white/5 font-mono text-[9px] space-y-1">
+                            <div className="bg-[#080808] rounded p-2 border border-neutral-800 font-mono text-[9px] space-y-1">
                               <div className="flex justify-between items-center gap-1">
-                                <span className="text-white/70 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
+                                <span className="text-neutral-400 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
                                 <span className="text-white font-medium text-[8.5px] text-right">{info.average}</span>
                               </div>
                               <div className="flex justify-between items-center gap-1">
-                                <span className="text-white/70 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
+                                <span className="text-neutral-400 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
                                 <span className="text-indigo-400 font-bold text-[8.5px] text-right">{info.alert}</span>
                               </div>
                             </div>
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-950"></div>
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-950"></div>
                           </div>
                         </div>
                       );
                     })()}
 
                     <div className="grid grid-cols-2 gap-2 text-[10px]">
-                      {renderFinancialCard('Beta', selectedAsset.beta, 'text-indigo-400')}
+                      {renderFinancialCard('Beta', selectedAsset.beta, 'text-indigo-300')}
                       {renderFinancialCard('EPS (LTM)', selectedAsset.eps)}
                     </div>
                   </div>
@@ -1141,41 +1169,41 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
 
               {/* Tab 2: Allocation & Risk */}
               {assetTab === 'RISK' && (
-                <div className="space-y-3.5 animate-fadeIn">
-                  <div className="bg-black/40 border border-white/5 p-3 rounded-lg space-y-2.5">
+                <div className="space-y-3">
+                  <div className="bg-[#0d0d0d] border border-neutral-800 p-3.5 rounded-lg space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[9.5px] font-mono text-white/70 uppercase font-bold">RETURN CONTRIBUTED</span>
-                      <span className={`text-xs font-black font-mono ${selectedAsset.returnPnl >= 0 ? 'text-emerald-400' : 'text-pink-400'}`}>
+                      <span className="text-[9.5px] font-mono text-neutral-400 uppercase font-bold">RETURN CONTRIBUTED</span>
+                      <span className={`text-xs font-black font-mono ${selectedAsset.returnPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {selectedAsset.returnPnl >= 0 ? '+' : ''}${selectedAsset.returnPnl.toLocaleString()}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-[10px] border-t border-white/5 pt-2">
-                      <span className="text-white/70 font-bold">Portfolio Weight:</span>
-                      <strong className="text-indigo-400 text-xs font-black">
+                    <div className="flex items-center justify-between text-[10px] border-t border-neutral-800 pt-2">
+                      <span className="text-neutral-400 font-bold">Portfolio Weight:</span>
+                      <strong className="text-indigo-300 text-xs font-black">
                         {selectedAsset.weight}
                       </strong>
                     </div>
                     <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-white/70 font-bold">Dividend Yield:</span>
+                      <span className="text-neutral-400 font-bold">Dividend Yield:</span>
                       <span className="text-white font-bold">{selectedAsset.dividend}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                    <div className="bg-[#0b0b0f] p-2.5 rounded border border-white/5">
-                      <span className="text-white/70 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">Volatility</span>
+                    <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800">
+                      <span className="text-neutral-400 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">Volatility</span>
                       <span className="text-white font-bold">{selectedAsset.volatility}</span>
                     </div>
-                    <div className="bg-[#0b0b0f] p-2.5 rounded border border-white/5">
-                      <span className="text-white/70 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">Risk Contribution</span>
-                      <span className="text-indigo-400 font-bold">{selectedAsset.riskContrib}</span>
+                    <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800">
+                      <span className="text-neutral-400 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">Risk Contribution</span>
+                      <span className="text-indigo-300 font-bold">{selectedAsset.riskContrib}</span>
                     </div>
-                    <div className="bg-[#0b0b0f] p-2.5 rounded border border-white/5">
-                      <span className="text-white/70 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">52-Week Range</span>
+                    <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800">
+                      <span className="text-neutral-400 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">52-Week Range</span>
                       <span className="text-white font-bold">{selectedAsset.fiftyTwoWeek}</span>
                     </div>
-                    <div className="bg-[#0b0b0f] p-2.5 rounded border border-white/5">
-                      <span className="text-white/70 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">Consensus Grade</span>
+                    <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800">
+                      <span className="text-neutral-400 block text-[8px] uppercase tracking-wider mb-0.5 font-bold">Consensus Grade</span>
                       <span className="text-emerald-400 font-bold">{selectedAsset.consensus}</span>
                     </div>
                   </div>
@@ -1184,14 +1212,14 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
 
               {/* Tab 3: Thesis & Narrative */}
               {assetTab === 'THESIS' && (
-                <div className="space-y-3.5 animate-fadeIn">
+                <div className="space-y-3 font-mono">
                   <div className="space-y-1.5">
-                    <span className="text-[8.5px] font-mono text-white/70 uppercase block font-bold">Structural Drivers</span>
-                    <div className="flex flex-wrap gap-1">
+                    <span className="text-[8.5px] font-mono text-neutral-400 uppercase block font-bold">Structural Drivers</span>
+                    <div className="flex flex-wrap gap-1.5">
                       {selectedAsset.drivers.map((driver, i) => (
                         <span 
                           key={i} 
-                          className="px-1.5 py-0.5 rounded bg-indigo-500/5 border border-indigo-500/10 text-[8.5px] font-mono font-bold text-indigo-300"
+                          className="px-2 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-[8.5px] font-mono font-bold text-neutral-200"
                         >
                           {driver}
                         </span>
@@ -1199,9 +1227,9 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 bg-white/[0.01] p-3 rounded-lg border border-white/5">
-                    <span className="text-[8.5px] font-mono text-white/70 uppercase block font-bold">Investment Thesis Narrative</span>
-                    <p className="text-[10px] text-white/80 leading-normal font-sans italic font-medium">
+                  <div className="space-y-1.5 bg-[#0d0d0d] p-3.5 rounded-lg border border-neutral-800">
+                    <span className="text-[8.5px] font-mono text-neutral-400 uppercase block font-bold">Investment Thesis Narrative</span>
+                    <p className="text-[10px] text-neutral-300 leading-relaxed font-sans italic font-medium">
                       "{selectedAsset.thesis}"
                     </p>
                   </div>
@@ -1212,10 +1240,10 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
               {assetTab === 'GROUNDED_NEWS' && (() => {
                 const activeNews = groundedNewsMap[selectedAssetKey];
                 return (
-                  <div className="space-y-3 animate-fadeIn font-mono">
-                    <div className="flex items-center justify-between bg-sky-950/20 p-2 rounded border border-sky-500/20">
+                  <div className="space-y-3 font-mono">
+                    <div className="flex items-center justify-between bg-sky-950/40 p-2.5 rounded-lg border border-sky-500/30">
                       <div className="flex items-center gap-1.5">
-                        <Globe className="w-3.5 h-3.5 text-sky-400 animate-spin-slow shrink-0" />
+                        <Globe className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                         <span className="text-[9px] font-bold text-sky-300 uppercase tracking-wide">
                           Multi-Engine Search Grounding
                         </span>
@@ -1233,12 +1261,12 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                     {/* Search Engine Selector Pills */}
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[8.5px]">
                       {[
-                        { id: 'ALL', label: 'All Major Engines' },
-                        { id: 'GOOGLE', label: 'Google Search' },
-                        { id: 'BING', label: 'Bing Finance' },
-                        { id: 'YAHOO', label: 'Yahoo! Finance' },
+                        { id: 'ALL', label: 'All Engines' },
+                        { id: 'GOOGLE', label: 'Google' },
+                        { id: 'BING', label: 'Bing' },
+                        { id: 'YAHOO', label: 'Yahoo' },
                         { id: 'DUCKDUCKGO', label: 'DuckDuckGo' },
-                        { id: 'BRAVE', label: 'Brave Search' }
+                        { id: 'BRAVE', label: 'Brave' }
                       ].map((eng) => (
                         <button
                           key={eng.id}
@@ -1247,10 +1275,10 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                             setSelectedSearchEngine(newEng);
                             fetchGroundedNews(selectedAssetKey, selectedAsset?.name, true, newEng);
                           }}
-                          className={`px-1.5 py-0.5 rounded border uppercase font-bold shrink-0 transition-all cursor-pointer ${
+                          className={`px-2 py-0.5 rounded-md border uppercase font-bold shrink-0 transition-all cursor-pointer ${
                             selectedSearchEngine === eng.id
-                              ? 'bg-sky-500/20 border-sky-400 text-sky-300'
-                              : 'bg-black/40 border-white/10 text-white/60 hover:text-white'
+                              ? 'bg-sky-500 border-sky-400 text-neutral-950 shadow-sm font-black'
+                              : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
                           }`}
                         >
                           {eng.label}
@@ -1259,7 +1287,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                     </div>
 
                     {isLoadingNews ? (
-                      <div className="p-6 text-center space-y-2 bg-black/40 rounded border border-white/5">
+                      <div className="p-6 text-center space-y-2 bg-[#0d0d0d] rounded-lg border border-neutral-800">
                         <RefreshCw className="w-5 h-5 text-sky-400 animate-spin mx-auto" />
                         <p className="text-[9.5px] font-mono text-sky-300 font-bold">
                           Grounding live financial news for {selectedAssetKey} across major search engines...
@@ -1268,53 +1296,53 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                     ) : activeNews ? (
                       <div className="space-y-2.5 text-[9.5px]">
                         {/* Sentiment badge */}
-                        <div className="flex items-center justify-between bg-white/[0.02] p-2 rounded border border-white/5">
-                          <span className="text-white/70 font-bold">MARKET SENTIMENT:</span>
+                        <div className="flex items-center justify-between bg-[#0d0d0d] p-2.5 rounded-lg border border-neutral-800">
+                          <span className="text-neutral-400 font-bold">MARKET SENTIMENT:</span>
                           <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase ${
-                            activeNews.sentiment === 'BULLISH' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                            activeNews.sentiment === 'BEARISH' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30' :
-                            'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            activeNews.sentiment === 'BULLISH' ? 'bg-emerald-500 text-neutral-950 shadow-sm' :
+                            activeNews.sentiment === 'BEARISH' ? 'bg-rose-600 text-white shadow-sm' :
+                            'bg-amber-400 text-neutral-950 shadow-sm'
                           }`}>
                             {activeNews.sentiment} ({activeNews.sentimentScore}/100)
                           </span>
                         </div>
 
                         {/* Executive Synthesis */}
-                        <div className="bg-black/50 p-2.5 rounded border border-white/5 space-y-1">
-                          <span className="text-[8px] text-white/70 uppercase block font-bold">Executive Synthesis</span>
-                          <p className="text-white/90 text-[10px] leading-relaxed font-sans font-medium">
+                        <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800 space-y-1">
+                          <span className="text-[8px] text-neutral-400 uppercase block font-bold">Executive Synthesis</span>
+                          <p className="text-neutral-200 text-[10px] leading-relaxed font-sans font-medium">
                             {activeNews.headlineSynthesis}
                           </p>
                         </div>
 
                         {/* Top Headlines List */}
                         <div className="space-y-2">
-                          <span className="text-[8px] text-white/70 uppercase block font-bold">Latest Grounded Headlines</span>
+                          <span className="text-[8px] text-neutral-400 uppercase block font-bold">Latest Grounded Headlines</span>
                           {activeNews.headlines.slice(0, 3).map((item, idx) => (
-                            <div key={idx} className="bg-white/[0.02] p-2 rounded border border-white/5 space-y-1 hover:border-sky-500/30 transition-all">
+                            <div key={idx} className="bg-[#0d0d0d] p-2.5 rounded-lg border border-neutral-800 space-y-1 hover:border-sky-500/40 transition-all">
                               <div className="flex items-center justify-between gap-1">
                                 <div className="flex items-center gap-1">
-                                  <span className="text-[8px] font-bold text-sky-300 px-1 py-0.2 rounded bg-sky-500/10 border border-sky-500/20">
+                                  <span className="text-[8px] font-bold text-neutral-950 px-1.5 py-0.5 rounded bg-sky-400">
                                     {item.category}
                                   </span>
                                   {item.sourceEngine && (
-                                    <span className="text-[7.5px] font-bold text-indigo-300 px-1 py-0.2 rounded bg-indigo-500/10 border border-indigo-500/20">
+                                    <span className="text-[7.5px] font-bold text-white px-1.5 py-0.5 rounded bg-indigo-600">
                                       {item.sourceEngine}
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-[8px] text-white/60">{item.timestamp}</span>
+                                <span className="text-[8px] text-neutral-500 font-mono">{item.timestamp}</span>
                               </div>
                               <h6 className="text-white font-bold text-[10px] leading-snug font-sans">{item.title}</h6>
-                              <p className="text-white/70 text-[9px] line-clamp-2 font-sans font-normal">{item.snippet}</p>
+                              <p className="text-neutral-400 text-[9px] line-clamp-2 font-sans font-normal">{item.snippet}</p>
                             </div>
                           ))}
                         </div>
 
                         {/* Search Engine Quick Links */}
                         {activeNews.engineQuickLinks && activeNews.engineQuickLinks.length > 0 && (
-                          <div className="pt-2 border-t border-white/5 space-y-1">
-                            <span className="text-[8px] text-white/70 uppercase block font-bold">Open Search Engine Index</span>
+                          <div className="pt-2 border-t border-neutral-800 space-y-1">
+                            <span className="text-[8px] text-neutral-400 uppercase block font-bold">Open Search Engine Index</span>
                             <div className="flex flex-wrap gap-1">
                               {activeNews.engineQuickLinks.map((link, idx) => (
                                 <a
@@ -1322,7 +1350,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                                   href={link.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="px-1.5 py-0.5 rounded bg-sky-950/40 border border-sky-500/20 text-[8px] text-sky-300 hover:text-white hover:border-sky-400 transition-colors flex items-center gap-1"
+                                  className="px-2 py-0.5 rounded-md bg-neutral-900 border border-neutral-700 text-[8px] text-sky-300 hover:text-white hover:border-sky-400 transition-colors flex items-center gap-1"
                                 >
                                   {link.label} <ExternalLink className="w-2 h-2" />
                                 </a>
@@ -1333,8 +1361,8 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
 
                         {/* Grounding Sources / Links */}
                         {activeNews.groundingSources && activeNews.groundingSources.length > 0 && (
-                          <div className="pt-2 border-t border-white/5 space-y-1.5">
-                            <span className="text-[8px] text-white/70 uppercase block font-bold">Web Citations & Sources</span>
+                          <div className="pt-2 border-t border-neutral-800 space-y-1.5">
+                            <span className="text-[8px] text-neutral-400 uppercase block font-bold">Web Citations & Sources</span>
                             <div className="space-y-1">
                               {activeNews.groundingSources.slice(0, 3).map((src, idx) => (
                                 <a
@@ -1342,7 +1370,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                                   href={src.uri}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center justify-between text-[8.5px] text-sky-400 hover:text-sky-300 hover:underline transition-colors group bg-sky-950/20 p-1.5 rounded border border-sky-500/10"
+                                  className="flex items-center justify-between text-[8.5px] text-sky-400 hover:text-sky-300 hover:underline transition-colors group bg-neutral-900 p-2 rounded-lg border border-neutral-800"
                                 >
                                   <span className="truncate max-w-[200px] font-sans font-medium">{src.title}</span>
                                   <ExternalLink className="w-2.5 h-2.5 shrink-0 text-sky-400 group-hover:translate-x-0.5 transition-transform" />
@@ -1356,7 +1384,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                       <div className="p-4 text-center space-y-2">
                         <button
                           onClick={() => fetchGroundedNews(selectedAssetKey, selectedAsset?.name, true)}
-                          className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-[10px] rounded transition-colors cursor-pointer"
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
                         >
                           Fetch Grounded News for {selectedAssetKey}
                         </button>
@@ -1369,9 +1397,9 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
             </div>
 
             {/* Timestamp footer */}
-            <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[8px] font-mono text-white/70 font-bold">
+            <div className="pt-3 border-t border-neutral-800 flex items-center justify-between text-[8px] font-mono text-neutral-400 font-bold">
               <span>LEDGER: ACTIVE</span>
-              <span>EXCHANGE: NYSE/NASDAQ</span>
+              <span>EXCHANGE: NYSE / NASDAQ</span>
             </div>
 
           </div>
@@ -1383,12 +1411,12 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
         {/* SECTION 6: PORTFOLIO RISK MATRIX */}
-        <div className="bg-[#080808] border border-white/5 rounded-xl p-4 text-left">
-          <div className="border-b border-white/5 pb-3 mb-3">
+        <div className="bg-[#080808] border border-neutral-800 rounded-xl p-5 text-left shadow-xl">
+          <div className="border-b border-neutral-800 pb-3 mb-3">
             <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
               <Scale className="w-4 h-4 text-amber-400" /> Portfolio Risk Matrix
             </h4>
-            <p className="text-[10px] text-white/70 font-mono font-bold">
+            <p className="text-[10px] text-neutral-400 font-mono font-bold">
               Risk decomposition limits, asset concentrations, and currency indicators.
             </p>
           </div>
@@ -1396,18 +1424,18 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: 'Portfolio Beta', val: '1.08', sub: 'Moderate systemic risk', barColor: 'bg-indigo-500' },
-              { label: 'Largest Position', val: 'NVDA 16%', sub: 'Nvidia Corp tech concentration', barColor: 'bg-amber-500' },
+              { label: 'Largest Position', val: 'NVDA 16%', sub: 'Nvidia Corp concentration', barColor: 'bg-amber-500' },
               { label: 'Top Sector', val: 'Technology 41%', sub: 'Heavy sector dependency', barColor: 'bg-pink-500' },
-              { label: 'Cash Buffer', val: '23%', sub: 'Slippage and liquidity reserve', barColor: 'bg-teal-500' },
-              { label: 'FX Exposure', val: 'USD 94%', sub: 'Sovereign dollar dominance', barColor: 'bg-indigo-400' },
-              { label: 'Stress Buffer', val: 'AAA Rated', sub: 'High liquidity safety compliance', barColor: 'bg-emerald-500' }
+              { label: 'Cash Buffer', val: '23%', sub: 'Liquidity reserve', barColor: 'bg-teal-500' },
+              { label: 'FX Exposure', val: 'USD 94%', sub: 'Dollar sovereign dominance', barColor: 'bg-indigo-400' },
+              { label: 'Stress Buffer', val: 'AAA Rated', sub: 'Safety compliance', barColor: 'bg-emerald-500' }
             ].map((item, i) => (
-              <div key={i} className="bg-white/[0.01] border border-white/5 p-3 rounded-lg space-y-1 font-mono text-left">
-                <span className="text-[8px] text-white/70 uppercase block font-bold">{item.label}</span>
+              <div key={i} className="bg-[#0d0d0d] border border-neutral-800 p-3.5 rounded-lg space-y-1.5 font-mono text-left">
+                <span className="text-[8px] text-neutral-400 uppercase block font-bold">{item.label}</span>
                 <span className="text-sm font-black text-white block">{item.val}</span>
-                <span className="text-[8.5px] text-white/70 block leading-normal font-medium">{item.sub}</span>
-                <div className="h-0.5 w-full bg-white/5 rounded-full mt-1.5 overflow-hidden">
-                  <div className={`h-full w-2/3 ${item.barColor}`}></div>
+                <span className="text-[8.5px] text-neutral-400 block leading-normal font-medium">{item.sub}</span>
+                <div className="h-1 w-full bg-neutral-900 border border-neutral-800 rounded-full mt-1.5 overflow-hidden">
+                  <div className={`h-full w-2/3 ${item.barColor} rounded-full`}></div>
                 </div>
               </div>
             ))}
@@ -1415,13 +1443,13 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
         </div>
 
         {/* SECTION 7: SCENARIO SIMULATOR */}
-        <div className="bg-[#080808] border border-white/5 rounded-xl p-4 text-left">
-          <div className="border-b border-white/5 pb-3 mb-3">
+        <div className="bg-[#080808] border border-neutral-800 rounded-xl p-5 text-left shadow-xl">
+          <div className="border-b border-neutral-800 pb-3 mb-3">
             <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
-              <Zap className="w-4 h-4 text-red-400" /> Scenario Simulator
+              <Zap className="w-4 h-4 text-rose-400" /> Scenario Simulator
             </h4>
-            <p className="text-[10px] text-white/70 font-mono font-bold">
-              Hypothetical macro events applied dynamically against the active portfolio value.
+            <p className="text-[10px] text-neutral-400 font-mono font-bold">
+              Hypothetical macro events applied dynamically against active portfolio value.
             </p>
           </div>
 
@@ -1446,15 +1474,15 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                 percent: '+1.2%'
               }
             ].map((sc, i) => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.01] border border-white/5 font-mono text-[10px]">
+              <div key={i} className="flex items-center justify-between p-3.5 rounded-lg bg-[#0d0d0d] border border-neutral-800 font-mono text-[10px]">
                 <div className="space-y-0.5">
                   <span className="text-white font-bold block">{sc.title}</span>
-                  <span className="text-white/70 block font-medium">{sc.impact}</span>
+                  <span className="text-neutral-400 block font-medium">{sc.impact}</span>
                 </div>
-                <div className={`px-2 py-1 rounded text-[10px] font-bold ${
+                <div className={`px-2.5 py-1 rounded text-[10px] font-black ${
                   sc.isPositive 
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' 
-                    : 'bg-pink-500/10 text-pink-400 border border-pink-500/25'
+                    ? 'bg-emerald-500 text-neutral-950 shadow-sm' 
+                    : 'bg-rose-600 text-white shadow-sm'
                 }`}>
                   {sc.percent}
                 </div>
@@ -1464,8 +1492,6 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
         </div>
 
       </div>
-
-
 
     </div>
   );

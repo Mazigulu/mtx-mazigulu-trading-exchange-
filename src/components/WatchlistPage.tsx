@@ -4,6 +4,7 @@ import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { generateScreenerDatabase } from '../lib/screenerTickersData';
+import { executeRootOrder } from '../services/tradingService';
 import { 
   Star, 
   Search, 
@@ -25,8 +26,7 @@ import {
   HelpCircle, 
   Briefcase,
   AlertCircle,
-  GripVertical,
-  ChevronUp
+  GripVertical
 } from 'lucide-react';
 
 interface AssetMeta {
@@ -201,13 +201,46 @@ interface WatchlistPageProps {
 }
 
 export default function WatchlistPage({ onSelectSymbol, onSelectTab }: WatchlistPageProps) {
+  const [currentUser, setCurrentUser] = useState<User | null>(() => auth.currentUser);
+
+  // Monitor Auth State
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        try {
+          const userKey = `broker_watchlist_${user.uid}`;
+          const saved = localStorage.getItem(userKey);
+          if (saved) {
+            setWatchlist(JSON.parse(saved));
+          } else {
+            // Check if we already have a remote firestore record, else start clean
+            setWatchlist([]);
+          }
+        } catch {
+          setWatchlist([]);
+        }
+      } else {
+        try {
+          const saved = localStorage.getItem('broker_watchlist_guest');
+          setWatchlist(saved ? JSON.parse(saved) : []);
+        } catch {
+          setWatchlist([]);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // 1. Core States
   const [watchlist, setWatchlist] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem('broker_watchlist');
-      return saved ? JSON.parse(saved) : ['AAPL', 'MSFT', 'NVDA', 'BTC-USD'];
+      const user = auth.currentUser;
+      const userKey = user ? `broker_watchlist_${user.uid}` : 'broker_watchlist_guest';
+      const saved = localStorage.getItem(userKey);
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return ['AAPL', 'MSFT', 'NVDA', 'BTC-USD'];
+      return [];
     }
   });
 
@@ -225,7 +258,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSector, setSelectedSector] = useState<string>('All');
-  const [sortBy, setSortBy] = useState<'name' | 'gain' | 'loss' | 'cap' | 'recently_added' | 'custom'>('custom');
+  const [sortBy, setSortBy] = useState<'name' | 'gain' | 'loss' | 'cap' | 'recently_added' | 'price_high' | 'price_low' | 'custom'>('custom');
 
   // Drag and Drop states
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -279,34 +312,6 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
     setDragOverIndex(null);
   };
 
-  const handleMoveUp = (symbol: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (sortBy !== 'custom') {
-      setSortBy('custom');
-    }
-    const idx = watchlist.indexOf(symbol);
-    if (idx > 0) {
-      const newWatchlist = [...watchlist];
-      newWatchlist[idx] = newWatchlist[idx - 1];
-      newWatchlist[idx - 1] = symbol;
-      setWatchlist(newWatchlist);
-    }
-  };
-
-  const handleMoveDown = (symbol: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (sortBy !== 'custom') {
-      setSortBy('custom');
-    }
-    const idx = watchlist.indexOf(symbol);
-    if (idx !== -1 && idx < watchlist.length - 1) {
-      const newWatchlist = [...watchlist];
-      newWatchlist[idx] = newWatchlist[idx + 1];
-      newWatchlist[idx + 1] = symbol;
-      setWatchlist(newWatchlist);
-    }
-  };
-
   // Compare mode selections
   const [compareList, setCompareList] = useState<string[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
@@ -344,20 +349,24 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
   const [buyQty, setBuyQty] = useState('');
   const [buyLoading, setBuyLoading] = useState(false);
   const [buySuccess, setBuySuccess] = useState(false);
+  
+  const isDemo = typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') !== 'REAL') : true;
+  const cashStorageKey = isDemo ? 'mtx_demo_cash' : 'mtx_real_cash';
+  const holdingsStorageKey = isDemo ? 'broker_holdings_demo' : 'broker_holdings_real';
+
   const [brokerCash, setBrokerCash] = useState<number>(() => {
-    const saved = localStorage.getItem('broker_cash');
-    return saved ? parseFloat(saved) : 50000.00;
+    try {
+      if (isDemo) {
+        const saved = localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash');
+        return saved ? parseFloat(saved) : 100000.00;
+      } else {
+        const saved = localStorage.getItem('mtx_real_cash');
+        return saved ? parseFloat(saved) : 0.00;
+      }
+    } catch {
+      return isDemo ? 100000.00 : 0.00;
+    }
   });
-
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-
-  // Monitor Auth State
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-    });
-    return () => unsubscribe();
-  }, []);
 
   // Listen to Firestore real-time changes
   useEffect(() => {
@@ -377,9 +386,9 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
           });
         }
       } else {
-        // Doc doesn't exist, initialize with current watchlist
+        // Doc doesn't exist for new user: initialize strictly clean []
         setDoc(docRef, {
-          symbols: watchlist,
+          symbols: [],
           updatedAt: new Date().toISOString()
         }).catch((err) => {
           handleFirestoreError(err, OperationType.WRITE, docPath);
@@ -392,9 +401,10 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Sync watchlist modifications to local storage and Firestore
+  // Sync watchlist modifications to user-scoped local storage and Firestore
   useEffect(() => {
-    localStorage.setItem('broker_watchlist', JSON.stringify(watchlist));
+    const userKey = currentUser ? `broker_watchlist_${currentUser.uid}` : 'broker_watchlist_guest';
+    localStorage.setItem(userKey, JSON.stringify(watchlist));
     window.dispatchEvent(new Event('storage'));
 
     if (currentUser) {
@@ -409,23 +419,30 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
     }
   }, [watchlist, currentUser]);
 
-  // Sync notes to local storage
+  // Sync notes to user-scoped local storage
   useEffect(() => {
-    localStorage.setItem('broker_watchlist_notes', JSON.stringify(notes));
-  }, [notes]);
+    const notesKey = currentUser ? `broker_watchlist_notes_${currentUser.uid}` : 'broker_watchlist_notes_guest';
+    localStorage.setItem(notesKey, JSON.stringify(notes));
+  }, [notes, currentUser]);
 
   // Sync cash, alerts, and watchlist changes
   useEffect(() => {
     const handleStorage = () => {
-      const savedCash = localStorage.getItem('broker_cash');
+      const mode = localStorage.getItem('mtx_account_mode') || 'DEMO';
+      const cashKey = mode === 'REAL' ? 'mtx_real_cash' : 'mtx_demo_cash';
+      const savedCash = localStorage.getItem(cashKey) || localStorage.getItem('broker_cash');
       if (savedCash) {
         setBrokerCash(parseFloat(savedCash));
       }
-      const savedAlerts = localStorage.getItem('priceAlerts');
+      const alertsKey = currentUser ? `priceAlerts_${currentUser.uid}` : 'priceAlerts_guest';
+      const savedAlerts = localStorage.getItem(alertsKey) || localStorage.getItem('priceAlerts');
       if (savedAlerts) {
-        setPriceAlerts(JSON.parse(savedAlerts));
+        try {
+          setPriceAlerts(JSON.parse(savedAlerts));
+        } catch {}
       }
-      const savedWatchlist = localStorage.getItem('broker_watchlist');
+      const userKey = currentUser ? `broker_watchlist_${currentUser.uid}` : 'broker_watchlist_guest';
+      const savedWatchlist = localStorage.getItem(userKey);
       if (savedWatchlist) {
         try {
           const parsed = JSON.parse(savedWatchlist);
@@ -440,9 +457,10 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
         }
       }
     };
+
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+  }, [currentUser]);
 
   // Fetch prices on mount / watchlist change with deduplication
   const lastFetchedWatchlistRef = React.useRef<string>('');
@@ -540,13 +558,19 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
         return watchlist.indexOf(a.symbol) - watchlist.indexOf(b.symbol);
       }
       if (sortBy === 'name') {
-        return a.name.localeCompare(b.name);
+        return a.symbol.localeCompare(b.symbol);
       }
       if (sortBy === 'gain') {
         return getAssetChange(b.symbol) - getAssetChange(a.symbol);
       }
       if (sortBy === 'loss') {
         return getAssetChange(a.symbol) - getAssetChange(b.symbol);
+      }
+      if (sortBy === 'price_high') {
+        return getAssetPrice(b.symbol) - getAssetPrice(a.symbol);
+      }
+      if (sortBy === 'price_low') {
+        return getAssetPrice(a.symbol) - getAssetPrice(b.symbol);
       }
       if (sortBy === 'cap') {
         // Simple scale resolver for market caps ($3.25T vs $550B)
@@ -663,6 +687,22 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
       setPriceAlerts(updated);
       localStorage.setItem('priceAlerts', JSON.stringify(updated));
       setEditingAlertSymbol(null);
+
+      window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+        detail: {
+          category: 'ALERTS',
+          severity: 'INFO',
+          title: `Price Alert Armed: ${editingAlertSymbol}`,
+          message: `Active trigger set for ${editingAlertSymbol} when price breaches ${alertConditionInput.toLowerCase()} $${priceVal.toFixed(2)}.`,
+          symbol: editingAlertSymbol,
+          actionTab: 'WATCHLIST',
+          actionLabel: 'View Watchlist',
+          metadata: {
+            price: priceVal,
+            tag: `ALERT ${alertConditionInput}`
+          }
+        }
+      }));
     }
   };
 
@@ -724,8 +764,8 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
       return;
     }
 
-    if (dollarAmt < 50) {
-      alert('Minimum purchase amount is $50.00 for fractional shares.');
+    if (dollarAmt < 10) {
+      alert('Minimum purchase amount is $10.00 for orders.');
       return;
     }
 
@@ -734,43 +774,46 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
     const currentPrice = getAssetPrice(buySymbol);
     const calculatedQty = dollarAmt / currentPrice;
 
-    if (dollarAmt > brokerCash) {
-      alert(`Insufficient funds. Total transaction cost is $${dollarAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })} but your balance is only $${brokerCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}.`);
-      return;
-    }
-
     setBuyLoading(true);
 
     try {
-      // Simulate direct blockchain / market settlement delays
-      await new Promise(resolve => setTimeout(resolve, 1200));
+      const result = await executeRootOrder({
+        symbol: buySymbol,
+        name: buySymbol,
+        side: 'BUY',
+        orderType: 'MARKET',
+        sharesOrUnits: calculatedQty,
+        dollarAmount: dollarAmt,
+        executionPrice: currentPrice,
+        accountMode: isDemo ? 'DEMO' : 'REAL',
+        paymentMethod: 'WALLET_CASH',
+        reason: `Watchlist Quick Buy: Acquired $${dollarAmt.toFixed(2)} (${calculatedQty.toFixed(4)} shares) of ${buySymbol}.`,
+        confidence: 90,
+        confluences: ['Watchlist Page Instant Order', 'Balanced Clearing Ledger']
+      });
 
-      // 1. Update cash balance
-      const newCash = parseFloat((brokerCash - dollarAmt).toFixed(2));
-      localStorage.setItem('broker_cash', newCash.toString());
-      setBrokerCash(newCash);
-
-      // 2. Update holdings map
-      let holdingsMap: Record<string, number> = {};
-      const savedHoldings = localStorage.getItem('broker_holdings');
-      if (savedHoldings) {
-        holdingsMap = JSON.parse(savedHoldings);
+      if (!result.success) {
+        alert(result.error || 'Purchase failed.');
+      } else {
+        setBrokerCash(result.newCash);
+        setBuySuccess(true);
       }
-      holdingsMap[buySymbol] = parseFloat(((holdingsMap[buySymbol] || 0) + calculatedQty).toFixed(6));
-      localStorage.setItem('broker_holdings', JSON.stringify(holdingsMap));
-
-      // 3. Dispatch storage event for system-wide synchronicity
-      window.dispatchEvent(new Event('storage'));
-
-      setBuySuccess(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(err.message || 'Execution error.');
     } finally {
       setBuyLoading(false);
     }
   };
 
   const handleViewAssetDetails = (symbol: string) => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
     try {
       localStorage.setItem('mtx_markets_ticker', symbol);
       localStorage.setItem('apex_selected_symbol', symbol);
@@ -793,7 +836,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
         <motion.div 
           whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="p-4 bg-[#080808] border border-white/5 rounded-xl relative overflow-hidden group transition-colors duration-200"
+          className="p-4 bg-[#080808] border border-neutral-800/80 rounded-xl relative overflow-hidden group transition-colors duration-200"
         >
           <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block">Monitored Assets</span>
           <div className="flex items-baseline space-x-2 mt-2">
@@ -809,7 +852,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
         <motion.div 
           whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="p-4 bg-[#080808] border border-white/5 rounded-xl relative overflow-hidden group transition-colors duration-200"
+          className="p-4 bg-[#080808] border border-neutral-800/80 rounded-xl relative overflow-hidden group transition-colors duration-200"
         >
           <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block">Average Daily Change</span>
           <div className="flex items-baseline space-x-2 mt-2">
@@ -827,7 +870,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
         <motion.div 
           whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="p-4 bg-[#080808] border border-white/5 rounded-xl relative overflow-hidden group transition-colors duration-200"
+          className="p-4 bg-[#080808] border border-neutral-800/80 rounded-xl relative overflow-hidden group transition-colors duration-200"
         >
           <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block">Average Dividend Yield</span>
           <div className="flex items-baseline space-x-2 mt-2">
@@ -842,7 +885,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
       </div>
 
       {/* 3. Search, Sort, and Filtering toolbar */}
-      <div className="p-4 bg-[#080808] border border-white/5 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="p-4 bg-[#080808] border border-neutral-800/80 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
         
         {/* Search input */}
         <div className="relative w-full md:w-80">
@@ -891,29 +934,47 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
               >
                 <option value="custom" className="bg-[#0d0d12] text-white">Custom Priority</option>
                 <option value="recently_added" className="bg-[#0d0d12] text-white">Recently Added</option>
-                <option value="name" className="bg-[#0d0d12] text-white">Alphabetical</option>
-                <option value="gain" className="bg-[#0d0d12] text-white">Highest Daily Gain</option>
-                <option value="loss" className="bg-[#0d0d12] text-white">Lowest Daily Gain</option>
-                <option value="cap" className="bg-[#0d0d12] text-white">Market Cap</option>
+                <option value="name" className="bg-[#0d0d12] text-white">Symbol (A → Z)</option>
+                <option value="gain" className="bg-[#0d0d12] text-white">Top 24h Gainers</option>
+                <option value="loss" className="bg-[#0d0d12] text-white">Top 24h Losers</option>
+                <option value="price_high" className="bg-[#0d0d12] text-white">Highest Price ($ → 0)</option>
+                <option value="price_low" className="bg-[#0d0d12] text-white">Lowest Price (0 → $)</option>
+                <option value="cap" className="bg-[#0d0d12] text-white">Market Capitalization</option>
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-white/45 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
           </div>
+
+          {/* Clean Ledger Action */}
+          {watchlist.length > 0 && (
+            <button
+              onClick={() => {
+                if (confirm('Clear all watched assets from your isolated account ledger?')) {
+                  setWatchlist([]);
+                }
+              }}
+              className="px-2.5 py-1.5 bg-rose-950/30 hover:bg-rose-900/50 border border-rose-800/40 text-rose-300 rounded-lg text-[10.5px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1"
+              title="Purge all items from current user watchlist"
+            >
+              <Trash2 className="w-3 h-3 text-rose-400" />
+              <span>Clear Ledger</span>
+            </button>
+          )}
 
         </div>
 
       </div>
 
       {/* Tip Banner for Priority Reordering */}
-      {sortBy !== 'custom' && (
+      {sortBy !== 'custom' && watchlist.length > 0 && (
         <div className="mb-6 px-4 py-3 bg-indigo-950/20 border border-indigo-500/10 rounded-xl flex items-center justify-between text-xs text-indigo-200 animate-fadeIn">
           <div className="flex items-center space-x-2.5">
             <Sliders className="w-4 h-4 text-indigo-400" />
-            <span>Tip: Drag asset cards or use the up/down arrows on each card to prioritize them. Active sort will switch to <strong>Custom Priority</strong>.</span>
+            <span>Tip: Drag asset cards to prioritize them. Active sort will switch to <strong>Custom Priority</strong>.</span>
           </div>
           <button 
             onClick={() => setSortBy('custom')}
-            className="px-3 py-1 bg-indigo-500/20 hover:bg-indigo-500/35 border border-indigo-500/35 rounded-lg text-[10px] font-mono uppercase font-bold text-indigo-200 transition-all cursor-pointer"
+            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-[10px] font-mono uppercase font-bold text-white transition-all cursor-pointer shadow-sm select-none"
           >
             Switch to Custom Priority
           </button>
@@ -933,15 +994,15 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCompareList([])}
-              className="px-3 py-1.5 border border-white/10 hover:bg-white/5 rounded text-[10px] font-mono uppercase text-white/60 hover:text-white transition-all cursor-pointer"
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded text-[10px] font-mono uppercase font-bold transition-all cursor-pointer shadow-sm select-none"
             >
               Clear selections
             </button>
             <button
               onClick={() => setIsCompareOpen(true)}
-              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-mono uppercase font-bold tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-mono uppercase font-bold tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-md select-none"
             >
-              <Check className="w-3 h-3" />
+              <Check className="w-3 h-3 text-white" />
               <span>Compare Side-by-Side</span>
             </button>
           </div>
@@ -950,21 +1011,42 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
 
       {/* 4. Watchlist Grid (Empty vs Cards) */}
       {filteredAssets.length === 0 ? (
-        <div className="p-16 border border-dashed border-white/10 bg-black/20 rounded-2xl text-center">
-          <Star className="w-12 h-12 text-white/10 mx-auto mb-4 animate-pulse" />
-          <h3 className="text-base font-bold text-white uppercase tracking-wider font-mono">Build Your Watchlist</h3>
-          <p className="text-xs text-white/40 mt-2 max-w-md mx-auto leading-relaxed">
-            Monitor companies you are interested in, explore their technical parameters, review custom server-side AI evaluations, and allocate capital effortlessly.
+        <div className="p-10 md:p-14 border border-dashed border-neutral-800 bg-[#060609] rounded-2xl text-center">
+          <div className="w-12 h-12 rounded-full bg-indigo-950/40 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4">
+            <Star className="w-6 h-6 text-indigo-400" />
+          </div>
+          <h3 className="text-base font-bold text-white tracking-wide font-mono">Clean Account Watchlist</h3>
+          <p className="text-xs text-neutral-400 mt-2 max-w-md mx-auto leading-relaxed">
+            Your personalized watchlist is isolated and clean. Search any ticker above, or quickly populate starter assets into your ledger below:
           </p>
-          <div className="flex items-center justify-center gap-3 mt-6">
+
+          <div className="flex flex-wrap items-center justify-center gap-2.5 mt-6 max-w-xl mx-auto">
             <button
               onClick={() => {
-                // Restore default list
-                setWatchlist(['AAPL', 'MSFT', 'NVDA', 'BTC-USD']);
+                setWatchlist(prev => Array.from(new Set([...prev, 'AAPL', 'MSFT', 'NVDA', 'GOOG'])));
               }}
-              className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold uppercase rounded transition-all cursor-pointer"
+              className="px-3.5 py-1.5 bg-neutral-900 hover:bg-indigo-950/50 border border-neutral-750 hover:border-indigo-500/40 text-neutral-200 hover:text-white font-mono text-[11px] font-medium rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
             >
-              Restore Defaults
+              <Plus className="w-3 h-3 text-indigo-400" />
+              <span>+ Tech Blue Chips (AAPL, MSFT, NVDA, GOOG)</span>
+            </button>
+            <button
+              onClick={() => {
+                setWatchlist(prev => Array.from(new Set([...prev, 'SPY', 'QQQ', 'VNDO'])));
+              }}
+              className="px-3.5 py-1.5 bg-neutral-900 hover:bg-emerald-950/50 border border-neutral-750 hover:border-emerald-500/40 text-neutral-200 hover:text-white font-mono text-[11px] font-medium rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <Plus className="w-3 h-3 text-emerald-400" />
+              <span>+ Major Indices & ETFs (SPY, QQQ, VNDO)</span>
+            </button>
+            <button
+              onClick={() => {
+                setWatchlist(prev => Array.from(new Set([...prev, 'BTC-USD', 'ETH-USD', 'SOL-USD'])));
+              }}
+              className="px-3.5 py-1.5 bg-neutral-900 hover:bg-amber-950/50 border border-neutral-750 hover:border-amber-500/40 text-neutral-200 hover:text-white font-mono text-[11px] font-medium rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <Plus className="w-3 h-3 text-amber-400" />
+              <span>+ Crypto Majors (BTC, ETH, SOL)</span>
             </button>
           </div>
         </div>
@@ -1022,7 +1104,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                 {dragOverIndex === index && draggedIndex !== null && draggedIndex !== index && (
                   <motion.div 
                     layoutId="drag-indicator"
-                    className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-[0_0_8px_rgba(99,102,241,0.6)] z-20"
+                    className="absolute top-0 left-0 right-0 h-0.5 bg-indigo-500 z-20"
                     initial={{ opacity: 0, scaleY: 0 }}
                     animate={{ opacity: 1, scaleY: 1 }}
                     exit={{ opacity: 0, scaleY: 0 }}
@@ -1139,10 +1221,10 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                     {/* Compare */}
                     <button
                       onClick={(e) => handleToggleCompare(asset.symbol, e)}
-                      className={`p-1 rounded border text-[11px] font-mono font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                      className={`p-1.5 rounded text-[11px] font-mono font-bold flex items-center gap-1 cursor-pointer transition-all select-none shadow-sm ${
                         compareList.includes(asset.symbol)
-                          ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400'
-                          : 'border-white/10 text-white/50 hover:text-white hover:bg-white/5'
+                          ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+                          : 'bg-white/10 hover:bg-white/20 text-white'
                       }`}
                       title="Add to comparison mode"
                     >
@@ -1153,10 +1235,10 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                     {/* Note editor button */}
                     <button
                       onClick={(e) => handleOpenNotes(asset.symbol, e)}
-                      className={`p-1 rounded border text-[11px] font-mono transition-all cursor-pointer ${
+                      className={`p-1.5 rounded text-[11px] font-mono transition-all cursor-pointer select-none shadow-sm ${
                         assetNote
-                          ? 'bg-white/5 border-white/30 text-white'
-                          : 'border-white/10 text-white/50 hover:text-white hover:bg-white/5'
+                          ? 'bg-white/25 text-white hover:bg-white/35'
+                          : 'bg-white/10 hover:bg-white/20 text-white'
                       }`}
                       title="Personal note annotator"
                     >
@@ -1166,16 +1248,16 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                     {/* Alert setup button */}
                     <button
                       onClick={(e) => handleOpenAlerts(asset.symbol, e)}
-                      className={`p-1 rounded border text-[11px] font-mono transition-all cursor-pointer relative ${
+                      className={`p-1.5 rounded text-[11px] font-mono transition-all cursor-pointer relative select-none shadow-sm ${
                         activeAlert
-                          ? 'bg-amber-500/10 border-amber-500 text-amber-400'
-                          : 'border-white/10 text-white/50 hover:text-white hover:bg-white/5'
+                          ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                          : 'bg-white/10 hover:bg-white/20 text-white'
                       }`}
                       title="Set target price alert"
                     >
                       <Bell className="w-3 h-3" />
                       {activeAlert && (
-                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white animate-ping" />
                       )}
                     </button>
 
@@ -1183,10 +1265,10 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                     {!aiInsights[asset.symbol] && (
                       <button
                         onClick={(e) => fetchAiInsight(asset.symbol, e)}
-                        className="p-1 rounded border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/5 transition-all cursor-pointer text-[11px] font-mono flex items-center gap-1"
+                        className="p-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-all cursor-pointer text-[11px] font-mono flex items-center gap-1 shadow-sm select-none"
                         title="Generate server-side Gemini Insight"
                       >
-                        <Sparkles className="w-3 h-3 animate-pulse" />
+                        <Sparkles className="w-3 h-3 animate-pulse text-white" />
                         <span className="hidden sm:inline text-[9px] uppercase font-bold tracking-wider">AI</span>
                       </button>
                     )}
@@ -1199,7 +1281,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                     {/* View Details */}
                     <button
                       onClick={() => handleViewAssetDetails(asset.symbol)}
-                      className="px-2.5 py-1 border border-white/10 hover:bg-white/5 text-white/70 hover:text-white text-[11px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer"
+                      className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white text-[11px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer shadow-sm select-none"
                     >
                       View
                     </button>
@@ -1207,35 +1289,15 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                     {/* Buy */}
                     <button
                       onClick={(e) => handleOpenBuy(asset.symbol, e)}
-                      className="px-3.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer hover:scale-[1.02] focus:outline-none focus-visible:outline-none"
+                      className="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer hover:scale-[1.03] shadow-sm select-none focus:outline-none focus-visible:outline-none"
                     >
                       Buy
                     </button>
 
-                    {/* Priority buttons */}
-                    <div className="flex items-center space-x-0.5 border border-white/10 rounded bg-white/5 p-0.5">
-                      <button
-                        onClick={(e) => handleMoveUp(asset.symbol, e)}
-                        disabled={index === 0}
-                        className="p-1 text-white/45 hover:text-white disabled:opacity-20 disabled:hover:text-white/45 rounded transition-colors cursor-pointer"
-                        title="Move Up (Prioritize)"
-                      >
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => handleMoveDown(asset.symbol, e)}
-                        disabled={index === filteredAssets.length - 1}
-                        className="p-1 text-white/45 hover:text-white disabled:opacity-20 disabled:hover:text-white/45 rounded transition-colors cursor-pointer"
-                        title="Move Down"
-                      >
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
                     {/* Remove */}
                     <button
                       onClick={(e) => handleRemoveFromWatchlist(asset.symbol, e)}
-                      className="p-1 hover:bg-rose-500/10 text-white/30 hover:text-rose-400 rounded transition-all cursor-pointer"
+                      className="p-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded transition-all cursor-pointer shadow-sm select-none hover:scale-105"
                       title="Remove from watchlist"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -1256,9 +1318,9 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
 
       {/* Notes Modal Dialog */}
       {editingNoteSymbol && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setEditingNoteSymbol(null)} />
-          <div className="relative w-full max-w-md bg-[#0a0a0c] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-10 p-6 animate-zoomIn">
+          <div className="relative w-full max-w-md bg-[#0a0a0c] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-10 p-6 animate-zoomIn my-auto">
             <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
               <div className="flex items-center space-x-2">
                 <FileText className="w-5 h-5 text-indigo-400" />
@@ -1284,13 +1346,13 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
             <div className="flex justify-end gap-3.5 mt-5">
               <button
                 onClick={() => setEditingNoteSymbol(null)}
-                className="px-4 py-2 border border-white/10 rounded text-xs font-mono uppercase hover:bg-white/5 text-white/60 hover:text-white cursor-pointer"
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded text-xs font-mono uppercase font-bold text-white cursor-pointer transition-all shadow-sm select-none"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveNote}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-mono uppercase font-bold cursor-pointer transition-all"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-mono uppercase font-bold cursor-pointer transition-all shadow-md select-none"
               >
                 Save note
               </button>
@@ -1301,9 +1363,9 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
 
       {/* Centralized Price Alert Editor Modal */}
       {editingAlertSymbol && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setEditingAlertSymbol(null)} />
-          <div className="relative w-full max-w-md bg-[#0a0a0c] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-10 p-6 animate-zoomIn">
+          <div className="relative w-full max-w-md bg-[#0a0a0c] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-10 p-6 animate-zoomIn my-auto">
             <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
               <div className="flex items-center space-x-2">
                 <Bell className="w-5 h-5 text-amber-400 animate-pulse" />
@@ -1324,20 +1386,20 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setAlertConditionInput('ABOVE')}
-                    className={`py-2 rounded-lg text-xs font-mono font-bold uppercase border cursor-pointer text-center transition-all ${
+                    className={`py-2 rounded-lg text-xs font-mono font-bold uppercase cursor-pointer text-center transition-all select-none shadow-sm ${
                       alertConditionInput === 'ABOVE'
-                        ? 'bg-amber-500/10 border-amber-500 text-amber-400'
-                        : 'bg-black/30 border-white/10 text-white/50 hover:text-white'
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-white/10 hover:bg-white/20 text-white'
                     }`}
                   >
                     Breaches Above
                   </button>
                   <button
                     onClick={() => setAlertConditionInput('BELOW')}
-                    className={`py-2 rounded-lg text-xs font-mono font-bold uppercase border cursor-pointer text-center transition-all ${
+                    className={`py-2 rounded-lg text-xs font-mono font-bold uppercase cursor-pointer text-center transition-all select-none shadow-sm ${
                       alertConditionInput === 'BELOW'
-                        ? 'bg-amber-500/10 border-amber-500 text-amber-400'
-                        : 'bg-black/30 border-white/10 text-white/50 hover:text-white'
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-white/10 hover:bg-white/20 text-white'
                     }`}
                   >
                     Breaches Below
@@ -1362,7 +1424,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
               {priceAlerts.some(a => a.symbol === editingAlertSymbol) ? (
                 <button
                   onClick={() => handleRemoveAlert(editingAlertSymbol)}
-                  className="px-3.5 py-2 border border-rose-500/20 hover:bg-rose-500/10 rounded text-rose-400 text-xs font-mono uppercase cursor-pointer transition-all"
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 rounded text-white text-xs font-mono uppercase font-bold cursor-pointer transition-all shadow-sm select-none"
                 >
                   Delete Alert
                 </button>
@@ -1372,13 +1434,13 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
               <div className="flex gap-2">
                 <button
                   onClick={() => setEditingAlertSymbol(null)}
-                  className="px-4 py-2 border border-white/10 rounded text-xs font-mono uppercase hover:bg-white/5 text-white/60 hover:text-white cursor-pointer"
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded text-xs font-mono uppercase font-bold text-white cursor-pointer transition-all shadow-sm select-none"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveAlert}
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-450 text-black rounded text-xs font-mono uppercase font-black cursor-pointer transition-all"
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-mono uppercase font-bold cursor-pointer transition-all shadow-md select-none"
                 >
                   Save alert
                 </button>
@@ -1390,14 +1452,14 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
 
       {/* Side-by-Side Compare Modal */}
       {isCompareOpen && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={() => setIsCompareOpen(false)} />
-          <div className="relative w-full max-w-5xl bg-[#0a0a0c] border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-10 flex flex-col max-h-[90vh] animate-zoomIn">
+          <div className="relative w-full max-w-5xl bg-[#0a0a0c] border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-10 flex flex-col max-h-[90vh] animate-zoomIn my-auto">
             
             {/* Header */}
             <div className="px-6 py-5 border-b border-white/5 bg-[#0e0e11] flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-indigo-500/10 border border-indigo-500/25 rounded-lg text-indigo-400">
+                <div className="p-2 bg-indigo-600 rounded-lg text-white shadow-sm">
                   <Layers className="w-5 h-5" />
                 </div>
                 <div>
@@ -1411,7 +1473,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
               </div>
               <button
                 onClick={() => setIsCompareOpen(false)}
-                className="p-1.5 bg-white/5 hover:bg-white/10 rounded text-white/50 hover:text-white cursor-pointer"
+                className="p-1.5 bg-white/10 hover:bg-white/20 rounded text-white cursor-pointer transition-all shadow-sm select-none"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1477,7 +1539,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                             setIsCompareOpen(false);
                             handleViewAssetDetails(asset.symbol);
                           }}
-                          className="px-2.5 py-1.5 border border-white/10 hover:bg-white/5 text-[10px] font-mono font-bold uppercase rounded transition-all cursor-pointer"
+                          className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[10px] font-mono font-bold uppercase rounded transition-all cursor-pointer shadow-sm select-none"
                         >
                           View Charts
                         </button>
@@ -1486,7 +1548,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                             setIsCompareOpen(false);
                             handleOpenBuy(asset.symbol, e);
                           }}
-                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-mono uppercase font-bold transition-all cursor-pointer focus:outline-none focus-visible:outline-none"
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-mono uppercase font-bold transition-all cursor-pointer shadow-sm select-none focus:outline-none focus-visible:outline-none"
                         >
                           Buy Asset
                         </button>
@@ -1513,7 +1575,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
               </span>
               <button
                 onClick={() => setIsCompareOpen(false)}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 hover:scale-[1.02] text-white text-xs font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer shadow-lg"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 hover:scale-[1.02] text-white text-xs font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer shadow-md select-none"
               >
                 Close Comparison
               </button>
@@ -1525,9 +1587,9 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
 
       {/* Real Buy Settlement Dialog Modal */}
       {buySymbol && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setBuySymbol(null)} />
-          <div className="relative w-full max-w-md bg-[#0a0a0c] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-10 p-6 animate-zoomIn">
+          <div className="relative w-full max-w-md bg-[#0a0a0c] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-10 p-6 animate-zoomIn my-auto">
             
             <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
               <div className="flex items-center space-x-2">
@@ -1541,7 +1603,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
 
             {buySuccess ? (
               <div className="text-center py-6 space-y-4">
-                <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto">
+                <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-md">
                   <Check className="w-6 h-6" />
                 </div>
                 <div>
@@ -1572,7 +1634,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                       setBuySymbol(null);
                       onSelectTab('PORTFOLIO');
                     }}
-                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-mono font-bold uppercase rounded cursor-pointer transition-all"
+                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-mono font-bold uppercase rounded cursor-pointer transition-all shadow-md select-none"
                   >
                     Go to Portfolio
                   </button>
@@ -1653,18 +1715,18 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                 <div className="flex justify-end gap-3.5 pt-4 border-t border-white/5">
                   <button
                     onClick={() => setBuySymbol(null)}
-                    className="px-4 py-2 border border-white/10 rounded text-xs font-mono uppercase hover:bg-white/5 text-white/60 hover:text-white cursor-pointer"
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded text-xs font-mono uppercase font-bold text-white cursor-pointer transition-all shadow-sm select-none"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleExecuteBuy}
                     disabled={buyLoading || !buyQty || parseFloat(buyQty) < 50}
-                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded text-xs font-mono uppercase font-bold cursor-pointer transition-all flex items-center gap-1.5"
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded text-xs font-mono uppercase font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-md select-none"
                   >
                     {buyLoading ? (
                       <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
                         <span>Settling...</span>
                       </>
                     ) : (

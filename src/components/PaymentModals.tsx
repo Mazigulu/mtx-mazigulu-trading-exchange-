@@ -100,7 +100,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
     <AnimatePresence>
       {/* 1. STRIPE MODAL */}
       {activePaymentModal === 'stripe' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -119,9 +119,9 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 12 }}
-            className="relative w-full max-w-md bg-[#09090c] border border-white/10 rounded-xl p-5 font-mono text-xs z-55"
+            className="relative w-full max-w-md bg-[#09090c] border border-neutral-800 rounded-xl p-5 font-mono text-xs z-55 shadow-2xl"
           >
-            <div className="border-b border-white/5 pb-3 mb-4 flex justify-between items-center">
+            <div className="border-b border-neutral-800 pb-3 mb-4 flex justify-between items-center">
               <div>
                 <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-indigo-400" /> Stripe Card Gateway
@@ -136,7 +136,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     setStripePaid(false);
                     setStripeProgress([]);
                   }}
-                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/70 hover:text-white uppercase cursor-pointer font-bold"
+                  className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-[9px] text-white uppercase cursor-pointer font-bold transition-all active:scale-95 shadow-sm"
                 >
                   Close
                 </button>
@@ -145,22 +145,22 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
             {!stripePaid ? (
               <div className="space-y-4">
-                <div className="bg-[#040405] border border-white/5 p-3 rounded-lg flex justify-between items-center">
+                <div className="bg-neutral-900/60 border border-neutral-800 p-3 rounded-lg flex justify-between items-center shadow-sm">
                   <span className="text-[10px] text-white/70 uppercase font-bold">Deposit Amount</span>
                   <span className="text-sm font-black text-white">${parseFloat(transferAmount).toLocaleString()} USD</span>
                 </div>
 
                 {stripePaying ? (
-                  <div className="bg-[#040405] border border-white/5 p-4 rounded-lg space-y-3 min-h-[160px] flex flex-col justify-center">
+                  <div className="bg-neutral-900/60 border border-neutral-800 p-4 rounded-lg space-y-3 min-h-[160px] flex flex-col justify-center shadow-sm">
                     <div className="flex items-center gap-3">
                       <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
                       <span className="text-[10px] text-indigo-300 font-extrabold uppercase tracking-wider animate-pulse">
                         Processing Stripe Card Clearing...
                       </span>
                     </div>
-                    <div className="border-t border-white/5 pt-2 space-y-1.5">
+                    <div className="border-t border-neutral-800 pt-2 space-y-1.5">
                       {stripeProgress.map((prog, idx) => (
-                        <div key={idx} className="text-[9px] text-white/80 flex items-center gap-1.5 font-bold">
+                        <div key={idx} className="text-[9px] text-white/90 flex items-center gap-1.5 font-bold">
                           <span className="text-emerald-400">✔</span> {prog}
                         </div>
                       ))}
@@ -200,9 +200,22 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                           });
                           if (res.ok) {
                             const data = await res.json();
-                            localStorage.setItem('broker_cash', data.balance.toString());
-                            setCashBalance(data.balance);
+                            const newBal = typeof data.balance === 'number' ? data.balance : 0.00;
+                            localStorage.setItem('mtx_real_cash', newBal.toString());
+                            setCashBalance(newBal);
                             if (data.balances) setBalances(data.balances);
+                            window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: newBal, mode: 'REAL' } }));
+                            window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+                              detail: {
+                                category: 'FUNDING',
+                                severity: 'SUCCESS',
+                                title: `Card Deposit Cleared: $${parseFloat(transferAmount).toFixed(2)} USD`,
+                                message: `Successfully settled Stripe card deposit. Updated balance: $${newBal.toFixed(2)} USD.`,
+                                actionTab: 'FUNDING',
+                                timestamp: new Date().toISOString()
+                              }
+                            }));
+                            window.dispatchEvent(new Event('storage'));
                             setStripePaying(false);
                             setStripePaid(true);
                             setStripeProgress([]);
@@ -228,7 +241,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                           type="text"
                           value={stripeCardNum}
                           onChange={(e) => setStripeCardNum(e.target.value)}
-                          className="w-full bg-[#040405] border border-white/10 rounded py-2 pl-9 pr-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
+                          className="w-full bg-neutral-900/60 border border-neutral-700/80 rounded-lg py-2 pl-9 pr-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
                           required
                         />
                       </div>
@@ -241,7 +254,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                           type="text"
                           value={stripeCardExpiry}
                           onChange={(e) => setStripeCardExpiry(e.target.value)}
-                          className="w-full bg-[#040405] border border-white/10 rounded py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold text-center"
+                          className="w-full bg-neutral-900/60 border border-neutral-700/80 rounded-lg py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold text-center"
                           required
                         />
                       </div>
@@ -251,7 +264,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                           type="password"
                           value={stripeCardCvc}
                           onChange={(e) => setStripeCardCvc(e.target.value)}
-                          className="w-full bg-[#040405] border border-white/10 rounded py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold text-center tracking-widest"
+                          className="w-full bg-neutral-900/60 border border-neutral-700/80 rounded-lg py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold text-center tracking-widest"
                           required
                         />
                       </div>
@@ -262,7 +275,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                       <input
                         type="text"
                         defaultValue="Principal Investor Account"
-                        className="w-full bg-[#040405] border border-white/10 rounded py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
+                        className="w-full bg-neutral-900/60 border border-neutral-700/80 rounded-lg py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
                         required
                       />
                     </div>
@@ -270,7 +283,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     <div className="pt-2">
                       <button
                         type="submit"
-                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold uppercase text-[10px] tracking-wider rounded-lg transition-all cursor-pointer shadow-lg shadow-indigo-600/10"
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold uppercase text-[10px] tracking-wider rounded-lg transition-all cursor-pointer shadow-md active:scale-95"
                       >
                         Authorize & Pay ${parseFloat(transferAmount).toLocaleString()} USD
                       </button>
@@ -284,7 +297,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
               </div>
             ) : (
               <div className="text-center space-y-4 py-3 font-sans">
-                <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-400">
+                <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-md">
                   <CheckCircle className="w-6 h-6" />
                 </div>
                 <div className="space-y-1.5 font-mono">
@@ -300,7 +313,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     setStripePaying(false);
                     setStripePaid(false);
                   }}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-750 text-white font-bold uppercase text-[9.5px] tracking-wider rounded font-mono cursor-pointer"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-black uppercase text-[9.5px] tracking-wider rounded-lg font-mono cursor-pointer transition-all active:scale-95 shadow-md"
                 >
                   Acknowledge & Sync Workspace
                 </button>
@@ -312,7 +325,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
       {/* 2. PLAID MODAL */}
       {activePaymentModal === 'plaid' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -329,14 +342,14 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 12 }}
-            className="relative w-full max-w-md bg-[#09090c] border border-white/10 rounded-xl p-5 font-mono text-xs z-55"
+            className="relative w-full max-w-md bg-[#09090c] border border-neutral-800 rounded-xl p-5 font-mono text-xs z-55 shadow-2xl"
           >
-            <div className="border-b border-white/5 pb-3 mb-4 flex justify-between items-center">
+            <div className="border-b border-neutral-800 pb-3 mb-4 flex justify-between items-center">
               <div>
                 <h3 className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Building className="w-4 h-4 text-emerald-400" /> Plaid Link Service
                 </h3>
-                <p className="text-[9px] text-white/30 uppercase mt-0.5">Secure Fiduciary Authorization</p>
+                <p className="text-[9px] text-white/70 uppercase mt-0.5 font-bold">Secure Fiduciary Authorization</p>
               </div>
               {plaidInnerStep !== 'exchanging' && (
                 <button
@@ -344,7 +357,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     setActivePaymentModal(null);
                     setPlaidInnerStep('select');
                   }}
-                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/50 hover:text-white uppercase cursor-pointer font-bold"
+                  className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-[9px] text-white uppercase cursor-pointer font-bold transition-all active:scale-95 shadow-sm"
                 >
                   Close
                 </button>
@@ -354,10 +367,10 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
             {plaidInnerStep === 'select' && (
               <div className="space-y-4">
                 <div className="text-center py-2 space-y-1">
-                  <p className="text-[10px] text-white/60 leading-normal uppercase">
-                    mtx Securities uses Plaid to securely connect your bank account.
+                  <p className="text-[10px] text-white/70 leading-normal uppercase font-bold">
+                    mtxcapital uses Plaid to securely connect your bank account.
                   </p>
-                  <p className="text-[8px] text-white/30 uppercase">
+                  <p className="text-[8px] text-white/60 uppercase font-bold">
                     Select your primary financial institution to authenticate.
                   </p>
                 </div>
@@ -371,11 +384,13 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                         setPlaidBankSelected(bank);
                         setPlaidInnerStep('credentials');
                       }}
-                      className="p-3 bg-[#040405] hover:bg-white/[0.03] border border-white/5 hover:border-white/10 rounded-lg text-left cursor-pointer transition-all"
+                      className="p-3 bg-neutral-900/60 hover:bg-neutral-800/80 border border-neutral-800 rounded-lg text-left cursor-pointer transition-all active:scale-[0.98] shadow-sm"
                     >
-                      <Building className="w-4 h-4 text-indigo-400 mb-1" />
+                      <div className="p-1.5 rounded-md bg-indigo-600 text-white w-fit mb-1.5 shadow-sm">
+                        <Building className="w-3.5 h-3.5" />
+                      </div>
                       <div className="font-extrabold text-[10px] text-white uppercase">{bank}</div>
-                      <div className="text-[7.5px] text-white/30 mt-0.5">SECURE CONNECTION</div>
+                      <div className="text-[7.5px] text-emerald-400 mt-0.5 font-bold">SECURE CONNECTION</div>
                     </button>
                   ))}
                 </div>
@@ -384,10 +399,12 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
             {plaidInnerStep === 'credentials' && (
               <div className="space-y-4">
-                <div className="bg-[#040405] border border-white/5 p-3 rounded-lg flex items-center gap-3">
-                  <Building className="w-5 h-5 text-indigo-400" />
+                <div className="bg-neutral-900/60 border border-neutral-800 p-3 rounded-lg flex items-center gap-3 shadow-sm">
+                  <div className="p-2 rounded-lg bg-indigo-600 text-white shadow-sm">
+                    <Building className="w-4 h-4" />
+                  </div>
                   <div>
-                    <span className="text-[8px] text-white/30 uppercase block">Selected Institution</span>
+                    <span className="text-[8px] text-white/70 uppercase block font-bold">Selected Institution</span>
                     <span className="font-extrabold text-[11px] text-white uppercase">{plaidBankSelected}</span>
                   </div>
                 </div>
@@ -420,24 +437,24 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                   className="space-y-3"
                 >
                   <div className="space-y-1">
-                    <label className="text-[9px] text-white/40 uppercase">Online ID / Username</label>
+                    <label className="text-[9px] text-white/70 uppercase font-bold">Online ID / Username</label>
                     <input
                       type="text"
                       value={plaidUsername}
                       onChange={(e) => setPlaidUsername(e.target.value)}
-                      className="w-full bg-[#040405] border border-white/10 rounded py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
+                      className="w-full bg-neutral-900/60 border border-neutral-700/80 rounded-lg py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
                       placeholder="ID / Username"
                       required
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] text-white/40 uppercase">Password</label>
+                    <label className="text-[9px] text-white/70 uppercase font-bold">Password</label>
                     <input
                       type="password"
                       value={plaidPassword}
                       onChange={(e) => setPlaidPassword(e.target.value)}
-                      className="w-full bg-[#040405] border border-white/10 rounded py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
+                      className="w-full bg-neutral-900/60 border border-neutral-700/80 rounded-lg py-2 px-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
                       placeholder="Enter Password"
                       required
                     />
@@ -445,7 +462,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
                   <button
                     type="submit"
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold uppercase text-[10px] tracking-wider rounded-lg cursor-pointer transition-all mt-2"
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold uppercase text-[10px] tracking-wider rounded-lg cursor-pointer transition-all mt-2 shadow-md active:scale-95"
                   >
                     Verify & Link Bank Account
                   </button>
@@ -460,7 +477,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                   <span className="font-extrabold text-[10px] text-emerald-300 uppercase tracking-widest animate-pulse">
                     Exchanging Public Token with Plaid servers...
                   </span>
-                  <p className="text-[8px] text-white/30 uppercase leading-relaxed">
+                  <p className="text-[8px] text-white/70 uppercase leading-relaxed font-bold">
                     Securing auth keys and downloading bank routing nodes...
                   </p>
                 </div>
@@ -469,12 +486,12 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
             {plaidInnerStep === 'success' && (
               <div className="text-center space-y-4 py-3 font-sans">
-                <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-400">
+                <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-md">
                   <CheckCircle className="w-6 h-6" />
                 </div>
                 <div className="space-y-1.5">
                   <h4 className="text-sm font-black text-white uppercase tracking-wider font-mono">CONNECTION AUTHORIZED</h4>
-                  <p className="text-[10px] text-white/40 uppercase leading-normal font-mono">
+                  <p className="text-[10px] text-white/70 uppercase leading-normal font-mono font-bold">
                     Your <span className="text-emerald-400 font-black uppercase">{plaidBankSelected}</span> account is now linked via Plaid ACH Sweep.
                   </p>
                 </div>
@@ -484,7 +501,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     setPlaidInnerStep('select');
                     executeTransferCall();
                   }}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-750 text-white font-bold uppercase text-[9.5px] tracking-wider rounded font-mono cursor-pointer"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-black uppercase text-[9.5px] tracking-wider rounded-lg font-mono cursor-pointer transition-all active:scale-95 shadow-md"
                 >
                   Proceed with ACH Sweep Deposit
                 </button>
@@ -496,7 +513,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
       {/* 3. COINBASE MODAL */}
       {activePaymentModal === 'coinbase' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -514,14 +531,14 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 12 }}
-            className="relative w-full max-w-md bg-[#09090c] border border-white/10 rounded-xl p-5 font-mono text-xs z-55"
+            className="relative w-full max-w-md bg-[#09090c] border border-neutral-800 rounded-xl p-5 font-mono text-xs z-55 shadow-2xl"
           >
-            <div className="border-b border-white/5 pb-3 mb-4 flex justify-between items-center">
+            <div className="border-b border-neutral-800 pb-3 mb-4 flex justify-between items-center">
               <div>
                 <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Coins className="w-4 h-4 text-indigo-400 animate-spin" /> Coinbase Commerce Gateway
                 </h3>
-                <p className="text-[9px] text-white/30 uppercase mt-0.5">On-Chain Custody Clearing Router</p>
+                <p className="text-[9px] text-white/70 uppercase mt-0.5 font-bold">On-Chain Custody Clearing Router</p>
               </div>
               {coinbaseInnerStep !== 'verifying' && (
                 <button
@@ -530,7 +547,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     setCoinbaseInnerStep('awaiting');
                     setCoinbaseProgress([]);
                   }}
-                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/50 hover:text-white uppercase cursor-pointer font-bold"
+                  className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-[9px] text-white uppercase cursor-pointer font-bold transition-all active:scale-95 shadow-sm"
                 >
                   Close
                 </button>
@@ -539,28 +556,28 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
             {coinbaseInnerStep !== 'success' ? (
               <div className="space-y-4">
-                <div className="bg-[#040405] border border-white/5 p-3 rounded-lg flex justify-between items-center text-[10px]">
+                <div className="bg-neutral-900/60 border border-neutral-800 p-3 rounded-lg flex justify-between items-center text-[10px] shadow-sm">
                   <div>
-                    <span className="text-[8px] text-white/30 block uppercase">Charge Reference ID</span>
+                    <span className="text-[8px] text-white/70 block uppercase font-bold">Charge Reference ID</span>
                     <span className="font-extrabold text-white select-all tracking-wider">{coinbaseChargeId}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-[8px] text-white/30 block uppercase">Deposit Quantity</span>
+                    <span className="text-[8px] text-white/70 block uppercase font-bold">Deposit Quantity</span>
                     <span className="font-extrabold text-indigo-400 text-sm">{transferAmount} {selectedAsset}</span>
                   </div>
                 </div>
 
                 {coinbaseInnerStep === 'verifying' ? (
-                  <div className="bg-[#040405] border border-white/5 p-4 rounded-lg space-y-3 min-h-[160px] flex flex-col justify-center">
+                  <div className="bg-neutral-900/60 border border-neutral-800 p-4 rounded-lg space-y-3 min-h-[160px] flex flex-col justify-center shadow-sm">
                     <div className="flex items-center gap-3">
                       <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
                       <span className="text-[10px] text-indigo-300 font-extrabold uppercase tracking-wider animate-pulse">
                         Scanning Base L2 mempool for credit tx...
                       </span>
                     </div>
-                    <div className="border-t border-white/5 pt-2 space-y-1.5">
+                    <div className="border-t border-neutral-800 pt-2 space-y-1.5">
                       {coinbaseProgress.map((prog, idx) => (
-                        <div key={idx} className="text-[9px] text-white/50 flex items-center gap-1.5">
+                        <div key={idx} className="text-[9px] text-white/80 flex items-center gap-1.5 font-bold">
                           <span className="text-emerald-400">✔</span> {prog}
                         </div>
                       ))}
@@ -568,26 +585,26 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-3.5 text-[10px]">
-                    <div className="flex flex-col items-center justify-center py-3 bg-[#040405] border border-white/5 rounded-lg space-y-2">
-                      <QrCode className="w-24 h-24 text-white p-1.5 bg-white rounded border border-white/10" />
+                    <div className="flex flex-col items-center justify-center py-3 bg-neutral-900/60 border border-neutral-800 rounded-lg space-y-2 shadow-sm">
+                      <QrCode className="w-24 h-24 text-white p-1.5 bg-white rounded-lg border border-neutral-700 shadow-sm" />
                       <span className="text-[8px] text-indigo-400 font-extrabold uppercase tracking-widest animate-pulse">
                         Base L2 Network Deposit Portal
                       </span>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[9px] text-white/40 uppercase">Deposit ERC-20 Address (Base Chain)</label>
+                      <label className="text-[9px] text-white/70 uppercase font-bold">Deposit ERC-20 Address (Base Chain)</label>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
                           readOnly
                           value="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-                          className="w-full bg-[#040405] border border-white/10 rounded py-2 px-3 text-[9px] text-white font-bold select-all"
+                          className="w-full bg-neutral-900/60 border border-neutral-700/80 rounded-lg py-2 px-3 text-[9px] text-white font-bold select-all"
                         />
                         <button
                           type="button"
                           onClick={() => copyToClipboard('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', 'crypto_addr')}
-                          className="p-2 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 rounded cursor-pointer transition-colors"
+                          className="p-2 bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg cursor-pointer transition-all active:scale-95 shadow-sm"
                         >
                           {copiedField === 'crypto_addr' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                         </button>
@@ -627,9 +644,22 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                               });
                               if (res.ok) {
                                 const data = await res.json();
-                                localStorage.setItem('broker_cash', data.balance.toString());
-                                setCashBalance(data.balance);
+                                const newBal = typeof data.balance === 'number' ? data.balance : 0.00;
+                                localStorage.setItem('mtx_real_cash', newBal.toString());
+                                setCashBalance(newBal);
                                 if (data.balances) setBalances(data.balances);
+                                window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: newBal, mode: 'REAL' } }));
+                                window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+                                  detail: {
+                                    category: 'FUNDING',
+                                    severity: 'SUCCESS',
+                                    title: `Crypto Deposit Cleared: ${parseFloat(transferAmount).toFixed(2)} ${selectedAsset}`,
+                                    message: `Coinbase Commerce on-chain sweep verified. Updated balance: $${newBal.toFixed(2)} USD.`,
+                                    actionTab: 'FUNDING',
+                                    timestamp: new Date().toISOString()
+                                  }
+                                }));
+                                window.dispatchEvent(new Event('storage'));
                                 setCoinbaseInnerStep('success');
                                 setTransferAmount('');
                                 await fetchFundingState(true);
@@ -643,7 +673,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                             }
                           }, 4500);
                         }}
-                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold uppercase text-[10px] tracking-wider rounded-lg cursor-pointer transition-all flex items-center justify-center gap-2"
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold uppercase text-[10px] tracking-wider rounded-lg cursor-pointer transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"
                       >
                         Simulate Blockchain Credit Sweep
                       </button>
@@ -653,12 +683,12 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
               </div>
             ) : (
               <div className="text-center space-y-4 py-3 font-sans">
-                <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-400">
+                <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-md">
                   <CheckCircle className="w-6 h-6" />
                 </div>
                 <div className="space-y-1.5">
                   <h4 className="text-sm font-black text-white uppercase tracking-wider font-mono">ON-CHAIN DEPOSIT SETTLED</h4>
-                  <p className="text-[10px] text-white/40 uppercase leading-normal font-mono">
+                  <p className="text-[10px] text-white/70 uppercase leading-normal font-mono font-bold">
                     Coinbase Charge <span className="text-indigo-400 font-extrabold select-all">{coinbaseChargeId}</span> completed.
                     Funds are now fully liquid on your brokerage ledger.
                   </p>
@@ -669,7 +699,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     setCoinbaseInnerStep('awaiting');
                     setCoinbaseProgress([]);
                   }}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-750 text-white font-bold uppercase text-[9.5px] tracking-wider rounded font-mono cursor-pointer"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-black uppercase text-[9.5px] tracking-wider rounded-lg font-mono cursor-pointer transition-all active:scale-95 shadow-md"
                 >
                   Return to Wallet Desk
                 </button>
@@ -681,7 +711,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
       {/* 4. M-PESA MODAL */}
       {activePaymentModal === 'mpesa' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -699,14 +729,14 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 12 }}
-            className="relative w-full max-w-md bg-[#09090c] border border-white/10 rounded-xl p-5 font-mono text-xs z-55"
+            className="relative w-full max-w-md bg-[#09090c] border border-neutral-800 rounded-xl p-5 font-mono text-xs z-55 shadow-2xl"
           >
-            <div className="border-b border-white/5 pb-3 mb-4 flex justify-between items-center">
+            <div className="border-b border-neutral-800 pb-3 mb-4 flex justify-between items-center">
               <div>
                 <h3 className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4 text-emerald-400" /> Safaricom M-Pesa Rails
                 </h3>
-                <p className="text-[9px] text-white/30 uppercase mt-0.5">Daraja API STK Push Gateway</p>
+                <p className="text-[9px] text-white/70 uppercase mt-0.5 font-bold">Daraja API STK Push Gateway</p>
               </div>
               {mpesaInnerStep !== 'processing' && mpesaInnerStep !== 'push_sent' && mpesaInnerStep !== 'pin_prompt' && (
                 <button
@@ -715,7 +745,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     setMpesaInnerStep('input');
                     setMpesaPin('');
                   }}
-                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/50 hover:text-white uppercase cursor-pointer font-bold"
+                  className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-[9px] text-white uppercase cursor-pointer font-bold transition-all active:scale-95 shadow-sm"
                 >
                   Close
                 </button>
@@ -724,8 +754,8 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
             {mpesaInnerStep === 'input' && (
               <div className="space-y-4 text-[10px]">
-                <div className="bg-[#040405] border border-white/5 p-3 rounded-lg flex justify-between items-center">
-                  <span className="text-[8px] text-white/40 uppercase">Clearing Amount</span>
+                <div className="bg-neutral-900/60 border border-neutral-800 p-3 rounded-lg flex justify-between items-center shadow-sm">
+                  <span className="text-[8px] text-white/70 uppercase font-bold">Clearing Amount</span>
                   <span className="font-extrabold text-white">{transferAmount} USD (~{(parseFloat(transferAmount) * 129).toLocaleString()} KES)</span>
                 </div>
 
@@ -760,14 +790,14 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                   className="space-y-3"
                 >
                   <div className="space-y-1">
-                    <label className="text-[9px] text-white/40 uppercase">Safaricom Mobile Number (254XXXXXXXXX)</label>
+                    <label className="text-[9px] text-white/70 uppercase font-bold">Safaricom Mobile Number (254XXXXXXXXX)</label>
                     <div className="relative">
-                      <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                      <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
                       <input
                         type="text"
                         value={mpesaPhone}
                         onChange={(e) => setMpesaPhone(e.target.value)}
-                        className="w-full bg-[#040405] border border-white/10 rounded py-2 pl-9 pr-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
+                        className="w-full bg-neutral-900/60 border border-neutral-700/80 rounded-lg py-2 pl-9 pr-3 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-bold"
                         placeholder="e.g. 254712345678"
                         required
                       />
@@ -776,7 +806,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
                   <button
                     type="submit"
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold uppercase text-[10px] tracking-wider rounded-lg cursor-pointer transition-all"
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold uppercase text-[10px] tracking-wider rounded-lg cursor-pointer transition-all shadow-md active:scale-95"
                   >
                     Trigger Lipa Na M-Pesa STK Push
                   </button>
@@ -791,7 +821,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                   <span className="font-extrabold text-[10px] text-emerald-300 uppercase tracking-widest animate-pulse">
                     Contacting Safaricom Daraja Nodes...
                   </span>
-                  <p className="text-[8px] text-white/30 uppercase leading-relaxed">
+                  <p className="text-[8px] text-white/70 uppercase leading-relaxed font-bold">
                     Securing auth signature and dispatching STK push package...
                   </p>
                 </div>
@@ -804,23 +834,23 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                   📱 Safaricom Mobile Handset STK Prompter
                 </div>
 
-                <div className="w-full max-w-[240px] mx-auto bg-[#040405] border-2 border-emerald-500/20 rounded-2xl p-4 font-mono shadow-xl shadow-emerald-500/5">
-                  <div className="text-center text-[7px] text-emerald-400 font-bold mb-2 tracking-widest border-b border-emerald-500/10 pb-1.5 uppercase">
+                <div className="w-full max-w-[240px] mx-auto bg-neutral-900/90 border-2 border-emerald-500/40 rounded-2xl p-4 font-mono shadow-xl">
+                  <div className="text-center text-[7px] text-emerald-400 font-bold mb-2 tracking-widest border-b border-emerald-500/20 pb-1.5 uppercase">
                     LIPA NA M-PESA POPUP
                   </div>
-                  <p className="text-[8px] text-white/70 leading-relaxed mb-3 text-center uppercase">
+                  <p className="text-[8px] text-white/90 leading-relaxed mb-3 text-center uppercase font-bold">
                     Pay KES {Math.round(parseFloat(transferAmount) * 129).toLocaleString()} to <br />
                     <span className="text-emerald-400 font-bold">mtx CAPITAL PARTNERS</span>?
                   </p>
                   <div className="space-y-1.5 mb-4">
-                    <label className="text-[7px] text-white/40 block uppercase text-center">Enter 4-Digit M-Pesa PIN</label>
+                    <label className="text-[7px] text-white/70 block uppercase text-center font-bold">Enter 4-Digit M-Pesa PIN</label>
                     <input
                       type="password"
                       maxLength={4}
                       placeholder="••••"
                       value={mpesaPin}
                       onChange={(e) => setMpesaPin(e.target.value)}
-                      className="w-full bg-[#08080c] border border-emerald-500/30 rounded py-1 px-2 text-[10px] text-white text-center font-bold font-mono tracking-widest focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-[#08080c] border border-emerald-500/40 rounded-lg py-1 px-2 text-[10px] text-white text-center font-bold font-mono tracking-widest focus:outline-none focus:border-emerald-500"
                       required
                     />
                   </div>
@@ -831,7 +861,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                         setMpesaInnerStep('input');
                         setMpesaPin('');
                       }}
-                      className="py-1 bg-white/5 hover:bg-white/10 rounded text-[8px] text-white/50 hover:text-white uppercase font-bold cursor-pointer transition-all"
+                      className="py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-[8px] text-white uppercase font-bold cursor-pointer transition-all active:scale-95 shadow-sm"
                     >
                       Cancel
                     </button>
@@ -858,9 +888,22 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                           });
                           if (res.ok) {
                             const data = await res.json();
-                            localStorage.setItem('broker_cash', data.balance.toString());
-                            setCashBalance(data.balance);
+                            const newBal = typeof data.balance === 'number' ? data.balance : 0.00;
+                            localStorage.setItem('mtx_real_cash', newBal.toString());
+                            setCashBalance(newBal);
                             if (data.balances) setBalances(data.balances);
+                            window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: newBal, mode: 'REAL' } }));
+                            window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+                              detail: {
+                                category: 'FUNDING',
+                                severity: 'SUCCESS',
+                                title: `M-Pesa Mobile Sweep Cleared: ${parseFloat(transferAmount).toLocaleString()} KES`,
+                                message: `Safaricom Paybill transaction settled. Updated balance: $${newBal.toFixed(2)} USD.`,
+                                actionTab: 'FUNDING',
+                                timestamp: new Date().toISOString()
+                              }
+                            }));
+                            window.dispatchEvent(new Event('storage'));
                             setTimeout(async () => {
                               setMpesaInnerStep('success');
                               setTransferAmount('');
@@ -875,7 +918,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                           setMpesaInnerStep('input');
                         }
                       }}
-                      className="py-1 bg-emerald-600 hover:bg-emerald-700 rounded text-[8px] text-white font-extrabold uppercase cursor-pointer transition-all"
+                      className="py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-[8px] text-white font-black uppercase cursor-pointer transition-all active:scale-95 shadow-md"
                     >
                       Send PIN
                     </button>
@@ -891,10 +934,10 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                   <span className="font-extrabold text-[10px] text-emerald-300 uppercase tracking-widest animate-pulse">
                     Waiting for Safaricom Callback...
                   </span>
-                  <p className="text-[8px] text-white/30 uppercase leading-relaxed">
+                  <p className="text-[8px] text-white/70 uppercase leading-relaxed font-bold">
                     Lipa Na M-Pesa reference: <span className="text-indigo-400 font-bold select-all">{mpesaCheckoutId}</span>
                   </p>
-                  <p className="text-[7.5px] text-white/40 uppercase animate-pulse">
+                  <p className="text-[7.5px] text-white/60 uppercase animate-pulse font-bold">
                     Synchronizing with Daraja Webhook Callback Router...
                     Verify standard callback pin authorization.
                   </p>
@@ -904,12 +947,12 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
             {mpesaInnerStep === 'success' && (
               <div className="text-center space-y-4 py-3 font-sans">
-                <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-400">
+                <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-md">
                   <CheckCircle className="w-6 h-6" />
                 </div>
                 <div className="space-y-1.5 font-mono">
                   <h4 className="text-sm font-black text-white uppercase tracking-wider">KES CLEARING SUCCESSFUL</h4>
-                  <p className="text-[10px] text-white/40 uppercase leading-normal">
+                  <p className="text-[10px] text-white/70 uppercase leading-normal font-bold">
                     M-Pesa reference <span className="text-emerald-400 font-black uppercase select-all">{mpesaCheckoutId}</span> completed.
                     Balances updated.
                   </p>
@@ -920,7 +963,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                     setMpesaInnerStep('input');
                     setMpesaPin('');
                   }}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-750 text-white font-bold uppercase text-[9.5px] tracking-wider rounded font-mono cursor-pointer"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-black uppercase text-[9.5px] tracking-wider rounded-lg font-mono cursor-pointer transition-all active:scale-95 shadow-md"
                 >
                   Acknowledge Wallet Balance
                 </button>
@@ -932,7 +975,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
 
       {/* 5. WIRE MODAL */}
       {activePaymentModal === 'wire' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -946,54 +989,54 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 12 }}
-            className="relative w-full max-w-xl bg-[#09090c] border border-white/10 rounded-xl p-5 font-mono text-xs z-55 max-h-[90vh] overflow-y-auto"
+            className="relative w-full max-w-xl bg-[#09090c] border border-neutral-800 rounded-xl p-5 font-mono text-xs z-55 max-h-[90vh] overflow-y-auto shadow-2xl"
           >
-            <div className="border-b border-white/5 pb-3 mb-4 flex justify-between items-center">
+            <div className="border-b border-neutral-800 pb-3 mb-4 flex justify-between items-center">
               <div>
                 <h3 className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Send className="w-3.5 h-3.5 text-amber-400" /> Fedwire / FedNow routing Slip
                 </h3>
-                <p className="text-[9px] text-white/30 uppercase mt-0.5">Real-time Bank Custody Settlement</p>
+                <p className="text-[9px] text-white/70 uppercase mt-0.5 font-bold">Real-time Bank Custody Settlement</p>
               </div>
               <button
                 onClick={() => {
                   setActivePaymentModal(null);
                 }}
-                className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-[9px] text-white/50 hover:text-white uppercase cursor-pointer font-bold"
+                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-[9px] text-white uppercase cursor-pointer font-bold transition-all active:scale-95 shadow-sm"
               >
                 Close
               </button>
             </div>
 
             <div className="space-y-4">
-              <div className="text-center py-2 border border-amber-500/10 bg-amber-500/[0.02] rounded-lg">
+              <div className="text-center py-2.5 border border-amber-500/30 bg-amber-500/10 rounded-lg">
                 <p className="text-[9.5px] text-amber-400 uppercase font-extrabold leading-normal tracking-wider animate-pulse">
                   Fiduciary Wire Deposit Routing
                 </p>
-                <p className="text-[8px] text-white/40 uppercase mt-0.5 leading-relaxed">
+                <p className="text-[8px] text-white/70 uppercase mt-0.5 leading-relaxed font-bold">
                   Initiate a Fedwire / FedNow transfer from your outside account with the specifications below.
                 </p>
               </div>
 
-              <div className="bg-[#040405] border border-white/5 rounded-lg p-4 space-y-3 text-[10px]">
-                <div className="grid grid-cols-3 border-b border-white/5 pb-2">
-                  <span className="text-white/30 uppercase">Beneficiary Bank:</span>
+              <div className="bg-[#040405] border border-neutral-800 rounded-lg p-4 space-y-3 text-[10px] shadow-sm">
+                <div className="grid grid-cols-3 border-b border-neutral-800 pb-2">
+                  <span className="text-white/70 uppercase font-bold">Beneficiary Bank:</span>
                   <span className="col-span-2 text-white font-extrabold uppercase">{wireInstructions?.bankName}</span>
                 </div>
-                <div className="grid grid-cols-3 border-b border-white/5 pb-2">
-                  <span className="text-white/30 uppercase">SWIFT / BIC:</span>
+                <div className="grid grid-cols-3 border-b border-neutral-800 pb-2">
+                  <span className="text-white/70 uppercase font-bold">SWIFT / BIC:</span>
                   <span className="col-span-2 text-indigo-400 font-extrabold select-all tracking-wider">{wireInstructions?.swiftCode}</span>
                 </div>
-                <div className="grid grid-cols-3 border-b border-white/5 pb-2">
-                  <span className="text-white/30 uppercase">ABA Routing:</span>
+                <div className="grid grid-cols-3 border-b border-neutral-800 pb-2">
+                  <span className="text-white/70 uppercase font-bold">ABA Routing:</span>
                   <span className="col-span-2 text-white font-bold select-all tracking-widest">{wireInstructions?.routingNumber}</span>
                 </div>
-                <div className="grid grid-cols-3 border-b border-white/5 pb-2">
-                  <span className="text-white/30 uppercase">Account Number:</span>
+                <div className="grid grid-cols-3 border-b border-neutral-800 pb-2">
+                  <span className="text-white/70 uppercase font-bold">Account Number:</span>
                   <span className="col-span-2 text-white font-bold select-all">{wireInstructions?.accountNumber}</span>
                 </div>
-                <div className="grid grid-cols-3 border-b border-white/5 pb-2">
-                  <span className="text-white/30 uppercase">Beneficiary:</span>
+                <div className="grid grid-cols-3 border-b border-neutral-800 pb-2">
+                  <span className="text-white/70 uppercase font-bold">Beneficiary:</span>
                   <span className="col-span-2 text-white font-bold">{wireInstructions?.beneficiaryName}</span>
                 </div>
                 <div className="grid grid-cols-3">
@@ -1004,12 +1047,12 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                 </div>
               </div>
 
-              <div className="p-3.5 bg-indigo-500/5 border border-indigo-500/15 rounded-lg space-y-2">
+              <div className="p-3.5 bg-neutral-900/80 border border-neutral-800 rounded-lg space-y-2 shadow-sm">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   <span className="font-extrabold text-[10px] text-white uppercase">Automated Clearing House Simulator</span>
                 </div>
-                <p className="text-[8.5px] text-white/50 leading-relaxed uppercase">
+                <p className="text-[8.5px] text-white/70 leading-relaxed uppercase font-bold">
                   In sandbox environment, you can instantly mock the Fedwire Clearing House settlement callback to credit your cash balance:
                 </p>
                 
@@ -1024,10 +1067,22 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                       });
                       if (res.ok) {
                         const data = await res.json();
-                        localStorage.setItem('broker_cash', data.balance.toString());
-                        setCashBalance(data.balance);
+                        const newBal = typeof data.balance === 'number' ? data.balance : 0.00;
+                        localStorage.setItem('mtx_real_cash', newBal.toString());
+                        setCashBalance(newBal);
                         if (data.balances) setBalances(data.balances);
-                        
+                        window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: newBal, mode: 'REAL' } }));
+                        window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+                          detail: {
+                            category: 'FUNDING',
+                            severity: 'SUCCESS',
+                            title: `Fedwire Deposit Cleared: $${parseFloat(transferAmount).toLocaleString()} USD`,
+                            message: `Federal Reserve Wire Network transaction cleared. Updated balance: $${newBal.toFixed(2)} USD.`,
+                            actionTab: 'FUNDING',
+                            timestamp: new Date().toISOString()
+                          }
+                        }));
+                        window.dispatchEvent(new Event('storage'));
                         setNotification(`SUCCESS: Cleared transfer of ${parseFloat(transferAmount).toLocaleString()} USD via Fedwire.`);
                         setTransferAmount('');
                         setActivePaymentModal(null);
@@ -1040,7 +1095,7 @@ export const PaymentModals: React.FC<PaymentModalsProps> = ({
                       alert('Network exception simulating bank settlement.');
                     }
                   }}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold uppercase text-[9.5px] tracking-wider rounded transition-all cursor-pointer shadow-lg shadow-indigo-600/15"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold uppercase text-[9.5px] tracking-wider rounded-lg transition-all cursor-pointer shadow-md active:scale-95"
                 >
                   Simulate Federal Reserve Settlement Release (${parseFloat(transferAmount).toLocaleString()} USD)
                 </button>

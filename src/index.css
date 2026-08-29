@@ -43,11 +43,224 @@
 
 /* Custom scrollbar utility */
 @utility no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
   &::-webkit-scrollbar {
-    display: none;       /* Chrome, Safari and Opera */
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+@utility thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.06);
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 9999px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 9999px;
+  }
+  &:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.65) rgba(255, 255, 255, 0.1);
+  }
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.65);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.85);
+  }
+}
+
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.06);
+}
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 9999px;
+}
+.thin-scrollbar:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.65) rgba(255, 255, 255, 0.1);
+}
+.thin-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.65);
+}
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+@utility screener-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(255, 255, 255, 0.45) rgba(255, 255, 255, 0.08);
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  &:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.75) rgba(255, 255, 255, 0.12);
+  }
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #ffffff;
+  }
+}
+
+.screener-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(255, 255, 255, 0.45) rgba(255, 255, 255, 0.08);
+}
+
+.screener-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.screener-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+
+.screener-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.screener-scrollbar:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.75) rgba(255, 255, 255, 0.12);
+}
+
+.screener-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.screener-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ffffff;
+}
+
+body.light-theme .screener-scrollbar {
+  scrollbar-color: rgba(100, 116, 139, 0.55) rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .screener-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .screener-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.55);
+}
+
+body.light-theme .screener-scrollbar:hover {
+  scrollbar-color: rgba(71, 85, 105, 0.85) rgba(0, 0, 0, 0.12);
+}
+
+body.light-theme .screener-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.85);
+}
+
+body.light-theme .screener-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 1);
+}
+
+/* Global Scrollbar Configuration - Solid, Permanently Visible, High Contrast */
+html, body {
+  scrollbar-color: #52525b #18181b !important;
+}
+
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: #52525b #18181b !important;
+}
+
+::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+  background-color: #18181b !important;
+  display: block !important;
+}
+
+::-webkit-scrollbar-track {
+  background: #18181b !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+  display: block !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #52525b !important;
+  border-radius: 5px !important;
+  border: 2px solid #18181b !important;
+  display: block !important;
+  min-height: 30px !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa !important;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #e4e4e7 !important;
+}
+
+body.light-theme,
+body.light-theme * {
+  scrollbar-color: #94a3b8 #e2e8f0 !important;
+}
+
+body.light-theme ::-webkit-scrollbar {
+  background-color: #e2e8f0 !important;
+}
+
+body.light-theme ::-webkit-scrollbar-track {
+  background: #e2e8f0 !important;
+  border-left: 1px solid #cbd5e1 !important;
+}
+
+body.light-theme ::-webkit-scrollbar-thumb {
+  background: #94a3b8 !important;
+  border: 2px solid #e2e8f0 !important;
+}
+
+body.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: #64748b !important;
 }
 
 body {
@@ -63,7 +276,7 @@ body.light-theme {
 }
 
 /* Base Wrapper Adjustments */
-body.light-theme #mtxquant-app-root {
+body.light-theme #mtxcapital-app-root {
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
 }
@@ -257,11 +470,18 @@ body.light-theme .recharts-tooltip-item {
 }
 
 /* Scrollbar adjustment */
+body.light-theme * {
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
 body.light-theme ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: transparent;
 }
 body.light-theme ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+}
+body.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
 }
 
 /* Highly Polish-Crafted Trade Row Heat Visualizations */

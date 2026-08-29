@@ -34,7 +34,7 @@ import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPass
 import { BureaucracyModal } from './BureaucracyModal';
 
 interface LoginPageProps {
-  onLoginSuccess: (email: string) => void;
+  onLoginSuccess: (email: string, demoCapital?: number) => void;
   defaultEmail?: string;
   onBackToHomepage?: () => void;
   initialTab?: 'signin' | 'register';
@@ -102,6 +102,21 @@ export default function LoginPage({
 }: LoginPageProps) {
   const [activeTab, setActiveTab] = useState<'signin' | 'register'>(initialTab);
   const [email, setEmail] = useState(defaultEmail);
+
+  // Always reset scroll to the very top when Login Page opens or switches between signin and register
+  useEffect(() => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+    if (document.documentElement) {
+      document.documentElement.scrollTop = 0;
+    }
+    if (document.body) {
+      document.body.scrollTop = 0;
+    }
+  }, [activeTab]);
   const [password, setPassword] = useState('*********');
   const [accessKey, setAccessKey] = useState('MTX-QUANT-2026');
   const [showPassword, setShowPassword] = useState(false);
@@ -539,14 +554,14 @@ export default function LoginPage({
     <div id="mtx-login-page-root" className="min-h-screen bg-[#060608] font-sans text-white flex flex-col justify-between relative overflow-hidden selection:bg-neutral-800 selection:text-white">
       
       {/* Header Sticky Navigation (Mirrored from Homepage) */}
-      <header className="sticky top-0 z-50 bg-[#060608]/85 backdrop-blur-md border-b border-neutral-900/80 px-6 lg:px-12 py-4 flex items-center justify-between relative z-50 w-full">
+      <header className="sticky top-0 z-[500] bg-[#060608]/90 backdrop-blur-md border-b border-neutral-900/80 px-6 lg:px-12 py-4 flex items-center justify-between shadow-[0_4px_20px_rgba(0,0,0,0.5)] w-full">
         <div className="flex items-center">
           <button
             type="button"
             onClick={onBackToHomepage}
             className="flex items-center hover:opacity-80 transition-opacity bg-transparent border-none p-0 cursor-pointer"
           >
-            <span className="text-base font-black tracking-tight text-white block lowercase">mtxquant</span>
+            <span className="text-base font-black tracking-tight text-white block lowercase">mtxcapital</span>
           </button>
         </div>
 
@@ -625,7 +640,7 @@ export default function LoginPage({
               
               <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden relative">
                 <div 
-                  className="h-full bg-gradient-to-r from-amber-500 via-indigo-500 to-cyan-400 rounded-full transition-all duration-300"
+                  className="h-full bg-indigo-500 rounded-full transition-all duration-300"
                   style={{ width: `${((connectionStep + 1) / connectionLogs.length) * 100}%` }}
                 />
               </div>
@@ -741,7 +756,7 @@ export default function LoginPage({
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="e.g. trader@mtxquant.com"
+                        placeholder="e.g. trader@mtxcapital.ai.studio"
                         className="w-full bg-black border border-white/10 rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30"
                         required
                       />
@@ -817,7 +832,7 @@ export default function LoginPage({
                       type="button"
                       disabled={isWalletConnecting}
                       onClick={handleMetaMaskConnect}
-                      className="w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-600/10 to-orange-600/10 hover:from-amber-600/25 hover:to-orange-600/25 border border-amber-500/20 hover:border-amber-500/40 text-amber-300 font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/40 disabled:opacity-50"
+                      className="w-full py-2.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 hover:border-neutral-600 text-white font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/40 disabled:opacity-50"
                     >
                       <svg className="w-4 h-4 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M22 13.06l-2.02-3.8-3.92-2-1.95-6.26-2.11 3.52 4.14 1.74-1.12 3.61s-2.03-1.01-3.02-1.02c-1 0-3.03 1.02-3.03 1.02l-1.12-3.61 4.14-1.74-2.11-3.52-1.95 6.26-3.92 2L2 13.06l8.03 2.15 1.97 4.79 1.97-4.79L22 13.06z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -955,7 +970,7 @@ export default function LoginPage({
                           type="button"
                           disabled={isWalletConnecting}
                           onClick={handleMetaMaskConnect}
-                          className="w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-600/10 to-orange-600/10 hover:from-amber-600/25 hover:to-orange-600/25 border border-amber-500/20 hover:border-amber-500/40 text-amber-300 font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/40 disabled:opacity-50"
+                          className="w-full py-2.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 hover:border-neutral-600 text-white font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/40 disabled:opacity-50"
                         >
                           <svg className="w-4 h-4 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M22 13.06l-2.02-3.8-3.92-2-1.95-6.26-2.11 3.52 4.14 1.74-1.12 3.61s-2.03-1.01-3.02-1.02c-1 0-3.03 1.02-3.03 1.02l-1.12-3.61 4.14-1.74-2.11-3.52-1.95 6.26-3.92 2L2 13.06l8.03 2.15 1.97 4.79 1.97-4.79L22 13.06z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1036,7 +1051,7 @@ export default function LoginPage({
                             <Mail className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                             <div className="flex-1 min-w-0 text-left">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold text-white uppercase text-[9px]">MTXquant Compliance</span>
+                                <span className="font-bold text-white uppercase text-[9px]">MTXcapital Compliance</span>
                                 <span className="text-[8px] text-neutral-500 shrink-0">Just Now</span>
                               </div>
                               <p className="text-indigo-300 text-[9.5px] font-semibold truncate mt-0.5">[WELCOME] Action Required: Complete Onboarding & KYC</p>
@@ -1046,7 +1061,7 @@ export default function LoginPage({
                           {mailOpen && (
                             <div className="p-4 bg-neutral-950 text-neutral-200 space-y-4 text-left leading-relaxed">
                               <div className="border-b border-white/5 pb-2.5 text-[9.5px]">
-                                <p className="text-neutral-400"><span className="text-white/40">From:</span> compliance@mtxquant.com</p>
+                                <p className="text-neutral-400"><span className="text-white/40">From:</span> compliance@mtxcapital.ai.studio</p>
                                 <p className="text-neutral-400"><span className="text-white/40">To:</span> {regEmail}</p>
                               </div>
                               
@@ -1056,7 +1071,7 @@ export default function LoginPage({
                                 </div>
                                 <p className="font-bold text-xs text-white leading-snug">Sovereign Onboarding Checklist</p>
                                 <p className="text-neutral-300 leading-relaxed">
-                                  Welcome to the MTXquant liquidity network. A master programmatic ledger allocation of up to <span className="text-emerald-400 font-mono font-bold">$5,000,000 USD</span> has been provisioned for <span className="text-white font-bold">{regName || 'New Trader'}</span> under SEC clearing guidelines.
+                                  Welcome to the MTXcapital liquidity network. A master programmatic ledger allocation of up to <span className="text-emerald-400 font-mono font-bold">$5,000,000 USD</span> has been provisioned for <span className="text-white font-bold">{regName || 'New Trader'}</span> under SEC clearing guidelines.
                                 </p>
                                 <p className="text-neutral-300 leading-relaxed">
                                   To activate this routing portal and bypass direct DMA sandbox limits, you must complete the secure, multi-factor regulatory onboarding form.
@@ -1498,7 +1513,7 @@ export default function LoginPage({
         
         <div className="space-y-4 col-span-1 md:col-span-1">
           <div className="flex items-center space-x-2">
-            <span className="text-base font-black tracking-tight text-white block lowercase">mtxquant</span>
+            <span className="text-base font-black tracking-tight text-white block lowercase">mtxcapital</span>
           </div>
           <p className="text-[10px] text-neutral-300 leading-relaxed font-light">
             Pioneering high-frequency visualizers and client-backed quantitative analysis tools.
@@ -1559,14 +1574,14 @@ export default function LoginPage({
         <div className="space-y-3">
           <span className="font-mono text-[9px] uppercase font-bold tracking-widest text-neutral-200 block">Regulatory Compliance</span>
           <p className="text-[9px] text-neutral-300 leading-relaxed font-light">
-            Disclaimer: MTXquant is a registered trademark. Quantitative trading, options leveraging, and margin allocations carry significant capital risk. segment accounts strictly segregated under SEC and FINRA protocols.
+            Disclaimer: MTXcapital is a registered trademark of MTXcapital Ltd. Quantitative trading, options leveraging, and margin allocations carry significant capital risk. segment accounts strictly segregated under SEC and FINRA protocols.
           </p>
         </div>
 
       </div>
 
       <div className="max-w-6xl mx-auto border-t border-neutral-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-300 text-[10px] font-mono uppercase tracking-wider">
-        <span>MTXquant Quantitative Terminal &copy; 2026. MTXquant is a registered trademark of MTXcapital.</span>
+        <span>MTXcapital Terminal &copy; 2026. MTXcapital is a registered trademark of MTXcapital Ltd.</span>
         <div className="flex space-x-6">
           <button type="button" onClick={() => openBureaucracyTab('terms')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none p-0 uppercase">Terms of service</button>
           <button type="button" onClick={() => openBureaucracyTab('privacy')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none p-0 uppercase">Privacy policy</button>

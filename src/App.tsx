@@ -14,16 +14,20 @@ import { auth } from './lib/firebase.ts';
 import { onAuthStateChanged } from 'firebase/auth';
 import MarketsTerminal from './components/MarketsTerminal';
 import PortfolioDesk from './components/PortfolioDesk';
-import FundingDesk from './components/FundingDesk';
 import ActivityDesk from './components/ActivityDesk';
+import FundingDesk from './components/FundingDesk';
 import AccountControlCenter from './components/AccountControlCenter';
+import NotificationCenter from './components/NotificationCenter';
 import { playNotificationSound, NotificationSoundType } from './utils/audioNotifier';
 import MarketAnalysisDashboard from './components/MarketAnalysisDashboard';
 import WatchlistPage from './components/WatchlistPage';
+import ScreenerDesk from './components/ScreenerDesk';
 import SupportModal from './components/SupportModal';
 import LegalModal from './components/LegalModal';
 import { InteractiveSitemapModal } from './components/InteractiveSitemapModal';
 import { useSeoMetadata, WorkspaceSeoKey } from './hooks/useSeoMetadata';
+import DemoCapitalModal from './components/DemoCapitalModal';
+import { AccountMode } from './types';
 
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
@@ -60,23 +64,10 @@ import {
   Camera,
   Timer,
   Filter,
+  Sliders,
   Share2,
   Check,
-  Terminal,
-  Folder,
-  FileCode,
-  Play,
-  Square,
-  Eye,
   Download,
-  Minimize2,
-  Maximize2,
-  BookOpen,
-  Scale,
-  LogOut,
-  Trash2,
-  Plus,
-  Sliders,
   Sparkles,
   BarChart3,
   User,
@@ -104,7 +95,7 @@ const TerminalWorkspaceLoader = () => (
 
 const emptyPositionsImg = new URL('./assets/images/empty_positions_1781203013885.jpg', import.meta.url).href;
 
-const MTXquantLogo = ({ size = 40 }: { size?: number }) => {
+const MTXcapitalLogo = ({ size = 40 }: { size?: number }) => {
   return (
     <div 
       style={{ width: size, height: size }} 
@@ -169,10 +160,10 @@ export default function App() {
   });
 
   // Centralized Navigation Route State
-  const [activeTab, setActiveTab] = useState<'MARKETS' | 'DISCOVER' | 'PORTFOLIO' | 'WATCHLIST' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(() => {
+  const [activeTab, setActiveTab] = useState<'MARKETS' | 'DISCOVER' | 'SCREENER' | 'PORTFOLIO' | 'WALLET' | 'WATCHLIST' | 'ACTIVITY' | 'ANALYSIS'>(() => {
     try {
       const saved = localStorage.getItem('apex_active_tab');
-      if (saved === 'MARKETS' || saved === 'DISCOVER' || saved === 'PORTFOLIO' || saved === 'WATCHLIST' || saved === 'FUNDING' || saved === 'ACTIVITY' || saved === 'ANALYSIS') {
+      if (saved === 'MARKETS' || saved === 'DISCOVER' || saved === 'SCREENER' || saved === 'PORTFOLIO' || saved === 'WALLET' || saved === 'WATCHLIST' || saved === 'ACTIVITY' || saved === 'ANALYSIS') {
         return saved;
       }
     } catch (err) {
@@ -221,7 +212,7 @@ export default function App() {
     }
   });
 
-  // Dynamically set the browser tab favicon to match the institutional MTXquant logo/image
+  // Dynamically set the browser tab favicon to match the institutional MTXcapital logo/image
   useEffect(() => {
     try {
       const svgString = `<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#000000" /><text x="47.5" y="53" fill="#00e5ff" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="52" font-weight="900" letter-spacing="-3px" text-anchor="middle" dominant-baseline="middle" opacity="0.95">mtx</text><text x="52.5" y="53" fill="#ff0055" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="52" font-weight="900" letter-spacing="-3px" text-anchor="middle" dominant-baseline="middle" opacity="0.95">mtx</text><text x="50" y="53" fill="#ffffff" font-family="'Inter', system-ui, -apple-system, sans-serif" font-size="52" font-weight="900" letter-spacing="-3px" text-anchor="middle" dominant-baseline="middle">mtx</text></svg>`;
@@ -366,11 +357,88 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleLoginSuccess = (email: string) => {
+  // Institutional Trading Mode (DEMO vs REAL Live Ledger)
+  const [accountMode, setAccountMode] = useState<AccountMode>(() => {
+    try {
+      return (localStorage.getItem('mtx_account_mode') as AccountMode) || 'DEMO';
+    } catch {
+      return 'DEMO';
+    }
+  });
+
+  const [cashBalance, setCashBalance] = useState<number>(() => {
+    try {
+      const mode = (localStorage.getItem('mtx_account_mode') as AccountMode) || 'DEMO';
+      if (mode === 'REAL') {
+        const savedReal = localStorage.getItem('mtx_real_cash');
+        return savedReal ? parseFloat(savedReal) : 0.00;
+      } else {
+        const savedDemo = localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash');
+        return savedDemo ? parseFloat(savedDemo) : 100000.00;
+      }
+    } catch {
+      return 0.00;
+    }
+  });
+
+  const [isDemoCapitalModalOpen, setIsDemoCapitalModalOpen] = useState(false);
+
+  // Synchronize broker cash across components strictly respecting account mode
+  useEffect(() => {
+    const handleCashUpdate = (e: any) => {
+      const currentMode = (localStorage.getItem('mtx_account_mode') as AccountMode) || 'DEMO';
+      if (e?.detail?.mode) {
+        if (e.detail.mode === currentMode && e?.detail?.cash !== undefined) {
+          setCashBalance(e.detail.cash);
+        }
+      } else if (e?.detail?.cash !== undefined) {
+        setCashBalance(e.detail.cash);
+      }
+      if (e?.detail?.mode && e.detail.mode !== currentMode) {
+        setAccountMode(e.detail.mode);
+      }
+    };
+    window.addEventListener('broker_cash_updated', handleCashUpdate);
+    return () => window.removeEventListener('broker_cash_updated', handleCashUpdate);
+  }, []);
+
+  const handleSwitchAccountMode = (newMode: AccountMode) => {
+    setAccountMode(newMode);
+    localStorage.setItem('mtx_account_mode', newMode);
+    if (newMode === 'DEMO') {
+      const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash') || '100000.00');
+      setCashBalance(demoCash);
+      window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: demoCash, mode: 'DEMO' } }));
+    } else {
+      const realCash = parseFloat(localStorage.getItem('mtx_real_cash') || '0.00');
+      setCashBalance(realCash);
+      window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: realCash, mode: 'REAL' } }));
+      fetch('/api/funding/state')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && typeof data.balance === 'number') {
+            setCashBalance(data.balance);
+            localStorage.setItem('mtx_real_cash', data.balance.toString());
+            window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: data.balance, mode: 'REAL' } }));
+          }
+        })
+        .catch(err => console.warn('Real funding sync on mode switch:', err));
+    }
+  };
+
+  const handleLoginSuccess = (email: string, demoCapital?: number) => {
     try {
       localStorage.setItem('apex_is_logged_in', 'true');
       localStorage.setItem('apex_trader_email', email);
       localStorage.setItem('apex_active_tab', 'MARKETS');
+      if (demoCapital !== undefined && demoCapital > 0) {
+        localStorage.setItem('mtx_demo_cash', demoCapital.toString());
+        localStorage.setItem('broker_cash', demoCapital.toString());
+        localStorage.setItem('mtx_account_mode', 'DEMO');
+        setAccountMode('DEMO');
+        setCashBalance(demoCapital);
+        window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: demoCapital, mode: 'DEMO' } }));
+      }
     } catch (err) {
       console.error(err);
     }
@@ -560,7 +628,7 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [prevTab, setPrevTab] = useState<'MARKETS' | 'DISCOVER' | 'PORTFOLIO' | 'WATCHLIST' | 'FUNDING' | 'ACTIVITY' | 'ANALYSIS'>(activeTab);
+  const [prevTab, setPrevTab] = useState<'MARKETS' | 'DISCOVER' | 'SCREENER' | 'PORTFOLIO' | 'WATCHLIST' | 'ACTIVITY' | 'ANALYSIS'>(activeTab);
 
   useEffect(() => {
     if (activeTab !== prevTab) {
@@ -568,12 +636,27 @@ export default function App() {
     }
   }, [activeTab, prevTab]);
 
-  const TABS_ORDER = ['MARKETS', 'DISCOVER', 'PORTFOLIO', 'WATCHLIST', 'FUNDING', 'ACTIVITY', 'ANALYSIS'];
+  const TABS_ORDER = ['MARKETS', 'DISCOVER', 'SCREENER', 'PORTFOLIO', 'WATCHLIST', 'ACTIVITY', 'ANALYSIS'];
   const tabIndex = TABS_ORDER.indexOf(activeTab);
   const prevTabIndex = TABS_ORDER.indexOf(prevTab);
   const slideDirection = tabIndex >= prevTabIndex ? 1 : -1;
 
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const sidebarHoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleSidebarMouseEnter = () => {
+    if (sidebarHoverTimerRef.current) clearTimeout(sidebarHoverTimerRef.current);
+    sidebarHoverTimerRef.current = setTimeout(() => {
+      setIsSidebarExpanded(true);
+    }, 80);
+  };
+
+  const handleSidebarMouseLeave = () => {
+    if (sidebarHoverTimerRef.current) clearTimeout(sidebarHoverTimerRef.current);
+    sidebarHoverTimerRef.current = setTimeout(() => {
+      setIsSidebarExpanded(false);
+    }, 120);
+  };
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isChartExpanded, setIsChartExpanded] = useState(true);
 
@@ -602,6 +685,38 @@ export default function App() {
       console.error(err);
     }
   }, [symbol]);
+
+  // Ensure workspace always scrolls to top upon tab or active ticker changes
+  useEffect(() => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+    const scrollables = document.querySelectorAll('main, #root, #app-main-layout, [data-scrollable]');
+    scrollables.forEach(el => {
+      el.scrollTop = 0;
+    });
+  }, [activeTab, symbol]);
+
+  // --- CENTRALIZED SCROLL RESTORATION ---
+  // Guarantees that every navigation transition (swapping workspace tabs, opening login page, returning to homepage, logging in/out, selecting ticker)
+  // instantly resets viewport scroll position to the very top (0, 0).
+  useEffect(() => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+    if (document.documentElement) {
+      document.documentElement.scrollTop = 0;
+    }
+    if (document.body) {
+      document.body.scrollTop = 0;
+    }
+  }, [activeTab, isLoggedIn, showLoginPanel, symbol]);
 
   const [timeframe, setTimeframe] = useState<'M15' | 'H1' | 'H4' | 'D1'>(() => {
     try {
@@ -740,11 +855,45 @@ export default function App() {
     setIsSitemapModalOpen(false);
     const hash = path.includes('#') ? path.split('#')[1] : '';
     if (hash) {
-      const wsNames = ['markets', 'portfolio', 'screener', 'watchlist', 'funding', 'activity', 'analysis'];
-      const matchingWs = wsNames.find(w => hash.toLowerCase().startsWith(w));
-      if (matchingWs && isLoggedIn) {
-        setActiveTab(matchingWs);
+      const lowerHash = hash.toLowerCase();
+      
+      // Workspace tab routing
+      if (lowerHash.startsWith('markets')) {
+        if (isLoggedIn) setActiveTab('MARKETS');
+      } else if (lowerHash.startsWith('discover')) {
+        if (isLoggedIn) setActiveTab('DISCOVER');
+      } else if (lowerHash.startsWith('screener')) {
+        if (isLoggedIn) setActiveTab('SCREENER');
+      } else if (lowerHash.startsWith('portfolio')) {
+        if (isLoggedIn) setActiveTab('PORTFOLIO');
+      } else if (lowerHash.startsWith('wallet') || lowerHash.startsWith('funding')) {
+        if (isLoggedIn) setActiveTab('WALLET');
+      } else if (lowerHash.startsWith('watchlist')) {
+        if (isLoggedIn) setActiveTab('WATCHLIST');
+      } else if (lowerHash.startsWith('activity')) {
+        if (isLoggedIn) setActiveTab('ACTIVITY');
+      } else if (lowerHash.startsWith('analysis')) {
+        if (isLoggedIn) setActiveTab('ANALYSIS');
       }
+
+      // Modal routing
+      if (lowerHash === 'support') {
+        setIsSupportModalOpen(true);
+      } else if (lowerHash === 'legal') {
+        setIsLegalModalOpen(true);
+      } else if (lowerHash === 'sitemap') {
+        setIsSitemapModalOpen(true);
+      } else if (['bureaucracy', 'compliance', 'docs', 'faq', 'privacy', 'terms', 'disclosures'].includes(lowerHash)) {
+        setIsBureaucracyModalOpen(true);
+        if (lowerHash === 'docs') setBureaucracyActiveTab('docs');
+        else if (lowerHash === 'privacy') setBureaucracyActiveTab('privacy');
+        else if (lowerHash === 'terms') setBureaucracyActiveTab('terms');
+        else if (lowerHash === 'disclosures') setBureaucracyActiveTab('risk');
+        else setBureaucracyActiveTab('compliance');
+      } else if (lowerHash === 'account' || lowerHash === 'profile') {
+        setIsProfileMenuOpen(true);
+      }
+
       setTimeout(() => {
         const el = document.getElementById(hash);
         if (el) {
@@ -758,8 +907,19 @@ export default function App() {
 
   useEffect(() => {
     const handleHashCheck = () => {
-      if (window.location.hash === '#sitemap') {
+      const rawHash = window.location.hash.replace('#', '').toLowerCase();
+      if (!rawHash) return;
+
+      if (rawHash === 'sitemap') {
         setIsSitemapModalOpen(true);
+      } else if (rawHash === 'support') {
+        setIsSupportModalOpen(true);
+      } else if (rawHash === 'legal') {
+        setIsLegalModalOpen(true);
+      } else if (['bureaucracy', 'compliance', 'docs', 'faq'].includes(rawHash)) {
+        setIsBureaucracyModalOpen(true);
+      } else if (rawHash === 'account' || rawHash === 'profile') {
+        setIsProfileMenuOpen(true);
       }
     };
     handleHashCheck();
@@ -1313,6 +1473,26 @@ export default function App() {
             if (isTriggered) {
               triggeredAny = true;
               
+              // Dispatch global in-app system notification
+              try {
+                window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+                  detail: {
+                    category: 'ALERTS',
+                    severity: 'WARNING',
+                    title: `Price Alert Triggered: ${alert.symbol}`,
+                    message: `${alert.symbol} achieved condition ${alert.condition} ${alert.targetPrice}! Market price reached ${currentPrice}.`,
+                    symbol: alert.symbol,
+                    actionTab: 'MARKETS',
+                    actionLabel: 'Open Chart',
+                    metadata: {
+                      price: currentPrice,
+                      threshold: alert.targetPrice,
+                      tag: `${alert.condition} TRIGGER`
+                    }
+                  }
+                }));
+              } catch (e) {}
+
               // Play custom notification sound
               playNotificationSound(notificationSound, soundAlertsEnabled);
 
@@ -1458,6 +1638,27 @@ export default function App() {
             const pnlString = currentTrade.pnl >= 0 ? `+$${currentTrade.pnl}` : `-$${Math.abs(currentTrade.pnl)}`;
             const body = `${currentTrade.symbol} ${currentTrade.side} hit ${isTP ? 'TP' : 'SL'} at ${hitPrice}. Net PnL: ${pnlString}. Reason: ${reason}`;
 
+            // Dispatch global in-app system notification
+            try {
+              window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+                detail: {
+                  category: 'TRADES',
+                  severity: isTP ? 'SUCCESS' : 'WARNING',
+                  title: heading,
+                  message: body,
+                  symbol: currentTrade.symbol,
+                  actionTab: 'ACTIVITY',
+                  actionLabel: 'View Closed Trade',
+                  metadata: {
+                    price: hitPrice,
+                    pnl: currentTrade.pnl,
+                    tradeId: currentTrade.id,
+                    tag: isTP ? 'TP EXECUTED' : 'SL EXECUTED'
+                  }
+                }
+              }));
+            } catch (e) {}
+
             if (desktopNotificationsEnabled && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
               try {
                 new Notification(heading, {
@@ -1532,7 +1733,7 @@ export default function App() {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(15);
       doc.setTextColor(255, 255, 255);
-      doc.text('MTXQUANT TERMINAL', 15, 21);
+      doc.text('MTXCAPITAL TERMINAL', 15, 21);
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
@@ -1762,12 +1963,12 @@ export default function App() {
         doc.setDrawColor(241, 245, 249);
         doc.line(10, 284, 200, 284);
         
-        doc.text(`MTXquant Session Audit Ledger • Certified Performance Record • Page ${i} of ${totalPages}`, 10, 288);
-        doc.text('Sovereign node validation protocol MTXQUANT • Live performance log audit.', 130, 288);
+        doc.text(`MTXcapital Session Audit Ledger • Certified Performance Record • Page ${i} of ${totalPages}`, 10, 288);
+        doc.text('Sovereign node validation protocol MTXCAPITAL • Live performance log audit.', 130, 288);
       }
 
       // Trigger automatic save / download
-      doc.save(`MTXquant-SessionSummary-${Date.now()}.pdf`);
+      doc.save(`MTXcapital-SessionSummary-${Date.now()}.pdf`);
     } catch (e) {
       console.error("Failed to generate and download session pdf: ", e);
     }
@@ -1826,7 +2027,7 @@ export default function App() {
       });
       
       const link = document.createElement('a');
-      link.download = `Positions_Overview_MTXquant_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+      link.download = `Positions_Overview_MTXcapital_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
@@ -1854,7 +2055,7 @@ export default function App() {
       timeZoneName: 'short' 
     });
 
-    let textSummary = `⚡ MTXQUANT INSTITUTIONAL ACTIVE EXPOSURES SUMMARY ⚡\n`;
+    let textSummary = `⚡ MTXCAPITAL INSTITUTIONAL ACTIVE EXPOSURES SUMMARY ⚡\n`;
     textSummary += `==============================================\n`;
     textSummary += `Generated At       : ${timestamp}\n`;
     textSummary += `Active Positions   : ${openPos.length}\n`;
@@ -1877,7 +2078,7 @@ export default function App() {
     }
 
     textSummary += `==============================================\n`;
-    textSummary += `MTXquant Institutional Risk & Position Engine active.`;
+    textSummary += `MTXcapital Institutional Risk & Position Engine active.`;
 
     try {
       await navigator.clipboard.writeText(textSummary);
@@ -2127,6 +2328,23 @@ export default function App() {
         pnl: totalPnlClosed,
         timestamp: new Date().toLocaleTimeString(),
       });
+
+      try {
+        window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+          detail: {
+            category: 'RISK',
+            severity: 'CRITICAL',
+            title: 'Emergency Close-All Executed',
+            message: `Terminated ${openPositions.length} active position(s). Realized session PnL: ${totalPnlClosed >= 0 ? '+' : ''}$${totalPnlClosed.toFixed(2)}.`,
+            actionTab: 'PORTFOLIO',
+            actionLabel: 'Inspect Portfolio',
+            metadata: {
+              pnl: totalPnlClosed,
+              tag: 'EMERGENCY CLOSE'
+            }
+          }
+        }));
+      } catch (e) {}
       
       fetchMarketData();
     } catch (error) {
@@ -2158,6 +2376,23 @@ export default function App() {
           })
         )
       );
+
+      try {
+        window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+          detail: {
+            category: 'RISK',
+            severity: 'WARNING',
+            title: `Partial Close (${Math.round(ratio * 100)}%) Executed`,
+            message: `De-risked ${openPositions.length} active position(s) by ${Math.round(ratio * 100)}%. Realized net: ${estimatedPnl >= 0 ? '+' : ''}$${estimatedPnl.toFixed(2)}.`,
+            actionTab: 'PORTFOLIO',
+            actionLabel: 'Inspect Portfolio',
+            metadata: {
+              pnl: estimatedPnl,
+              tag: 'PARTIAL CLOSE'
+            }
+          }
+        }));
+      } catch (e) {}
 
       setEmergencyCloseStatus({
         show: true,
@@ -2313,7 +2548,9 @@ export default function App() {
     const userClosedPnL = closedTrades.reduce((acc, t) => acc + t.pnl, 0);
     const activePnL = trades.filter((t) => t.status === 'OPEN').reduce((acc, t) => acc + t.pnl, 0);
     
-    const accountEquity = (isDemo ? 10000 : 0) + seedTradesPnL + userClosedPnL + activePnL;
+    const savedCashStr = typeof window !== 'undefined' ? localStorage.getItem('broker_cash') : null;
+    const liveCash = savedCashStr ? parseFloat(savedCashStr) : ((isDemo ? 10000 : 0) + seedTradesPnL + userClosedPnL);
+    const accountEquity = liveCash + activePnL;
     
     // Daily Profit or loss
     const dailyPnL = activePnL + (closedTrades.filter(t => {
@@ -2478,6 +2715,26 @@ export default function App() {
     if (currentDailyPnL >= dailyPnLPositiveThreshold) {
       if (!hasTriggeredPositiveRef.current) {
         hasTriggeredPositiveRef.current = true;
+
+        // Dispatch global in-app system notification
+        try {
+          window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+            detail: {
+              category: 'RISK',
+              severity: 'SUCCESS',
+              title: '📈 Daily Profit Goal Reached',
+              message: `Daily PnL of $${currentDailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} reached your profit target ($${dailyPnLPositiveThreshold.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).`,
+              actionTab: 'PORTFOLIO',
+              actionLabel: 'Review Portfolio',
+              metadata: {
+                pnl: currentDailyPnL,
+                threshold: dailyPnLPositiveThreshold,
+                tag: 'PROFIT TARGET'
+              }
+            }
+          }));
+        } catch (e) {}
+
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           try {
             new Notification('📈 Daily Profit Threshold Reached', {
@@ -2501,6 +2758,26 @@ export default function App() {
     if (currentDailyPnL <= resolvedMinLimit) {
       if (!hasTriggeredNegativeRef.current) {
         hasTriggeredNegativeRef.current = true;
+
+        // Dispatch global in-app system notification
+        try {
+          window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+            detail: {
+              category: 'RISK',
+              severity: 'CRITICAL',
+              title: '🚨 Daily Loss Limit Alert',
+              message: `Daily PnL of $${currentDailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} breached your risk threshold ($${resolvedMinLimit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).`,
+              actionTab: 'PORTFOLIO',
+              actionLabel: 'Risk Management',
+              metadata: {
+                pnl: currentDailyPnL,
+                threshold: resolvedMinLimit,
+                tag: 'LOSS GUARD'
+              }
+            }
+          }));
+        } catch (e) {}
+
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           try {
             new Notification('🚨 Daily Loss Threshold Reached', {
@@ -2645,7 +2922,7 @@ export default function App() {
   }
 
   return (
-    <div id="mtxquant-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex selection:bg-indigo-500/30 selection:text-indigo-200 relative overflow-x-hidden">
+    <div id="mtxcapital-app-root" className="min-h-screen bg-[#050505] font-sans text-[#e5e5e5] flex selection:bg-indigo-500/30 selection:text-indigo-200 relative overflow-x-clip">
       
       {/* Dynamic Background Image Overlay synced with Backend settings */}
       {backgroundUrl && (
@@ -2662,52 +2939,66 @@ export default function App() {
       {/* Retractable Left-Hand Side Menu Navigation - Hidden on mobile screens */}
       <aside
         id="reproducible-side-nav"
-        className={`fixed inset-y-0 left-0 z-[300] bg-[#080808]/85 backdrop-blur-xl border-r border-white/10 flex-col justify-between transition-all duration-300 ease-in-out hidden md:flex ${
-          isSidebarExpanded ? 'w-52 shadow-[10px_0_35px_rgba(0,0,0,0.8)]' : 'w-16 shadow-none'
+        className={`fixed inset-y-0 left-0 z-[600] bg-[#080808]/95 backdrop-blur-xl border-r border-white/10 flex-col justify-between transition-[width,box-shadow] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hidden md:flex select-none ${
+          isSidebarExpanded ? 'w-52 shadow-[12px_0_35px_rgba(0,0,0,0.85)]' : 'w-16 shadow-none'
         }`}
-        onMouseEnter={() => setIsSidebarExpanded(true)}
-        onMouseLeave={() => setIsSidebarExpanded(false)}
+        onMouseEnter={handleSidebarMouseEnter}
+        onMouseLeave={handleSidebarMouseLeave}
       >
-        <div className="flex flex-col h-full justify-between py-5 overflow-y-auto overflow-x-hidden no-scrollbar">
+        <div className="flex flex-col h-full justify-between py-5 overflow-hidden no-scrollbar">
           <div>
-            {/* Top section: Brand Identity Logo */}
+            {/* Top section: Brand Identity Logo with smooth cross-fade transition */}
             <button
               id="desktop-logo-home-button"
+              type="button"
               onClick={() => {
                 setActiveTab('MARKETS');
                 window.dispatchEvent(new CustomEvent('mtx_nav_markets'));
               }}
-              className="w-full text-left px-3 mb-8 flex items-center min-h-[40px] hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent"
+              className="w-full text-left px-3 mb-8 flex items-center h-10 hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer border-none bg-transparent relative overflow-hidden group"
               title="Return to Markets"
             >
-              {!isSidebarExpanded ? (
-                <div className="w-full flex justify-center animate-fadeIn">
-                  <span className="text-sm font-black tracking-tight text-white lowercase">
-                    mtx
+              {/* Collapsed Logo (mtx) - centered in 64px (w-16) column */}
+              <div
+                className={`absolute left-0 w-16 h-10 flex items-center justify-center transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                  !isSidebarExpanded
+                    ? 'opacity-100 scale-100 translate-x-0'
+                    : 'opacity-0 scale-90 -translate-x-2 pointer-events-none'
+                }`}
+              >
+                <span className="text-sm font-black tracking-tight text-white lowercase">
+                  mtx
+                </span>
+              </div>
+
+              {/* Expanded Logo (mtxcapital / Prime Brokerage) */}
+              <div
+                className={`whitespace-nowrap transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden pl-1.5 ${
+                  isSidebarExpanded
+                    ? 'opacity-100 max-w-[140px] translate-x-0'
+                    : 'opacity-0 max-w-0 -translate-x-3 pointer-events-none'
+                }`}
+              >
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-base font-black tracking-tight text-white lowercase">
+                    mtxcapital
                   </span>
                 </div>
-              ) : (
-                <div className="whitespace-nowrap animate-fadeIn">
-                  <div className="flex items-center space-x-1.5">
-                    <span className="text-base font-black tracking-tight text-white lowercase">
-                      mtxquant
-                    </span>
-                  </div>
-                  <p className="text-[8.5px] text-white/70 font-serif italic font-medium tracking-wide leading-none mt-1">
-                    Prime Brokerage
-                  </p>
-                </div>
-              )}
+                <p className="text-[8.5px] text-white/70 font-serif italic font-medium tracking-wide leading-none mt-1">
+                  Prime Brokerage
+                </p>
+              </div>
             </button>
 
             {/* Middle section: Navigation Links */}
-            <nav className="space-y-2 px-2.5">
+            <nav className="space-y-1.5 px-2.5">
               {[
                 { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
                 { id: 'DISCOVER', label: 'Discover', icon: Compass },
+                { id: 'SCREENER', label: 'Screener', icon: Sliders },
                 { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
+                { id: 'WALLET', label: 'Wallet', icon: Wallet },
                 { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
-                { id: 'FUNDING', label: 'Wallet', icon: Wallet },
                 { id: 'ACTIVITY', label: 'Activity', icon: History },
                 { id: 'ANALYSIS', label: 'Analysis', icon: BarChart3 }
               ].map((item) => {
@@ -2717,20 +3008,27 @@ export default function App() {
                   <button
                     key={item.id}
                     id={`side-nav-tab-${item.id.toLowerCase()}`}
+                    type="button"
                     onClick={() => setActiveTab(item.id as any)}
-                    className={`w-full py-3 rounded-lg text-xs font-mono font-black uppercase transition-all duration-150 flex items-center gap-3 cursor-pointer ${
+                    className={`w-full py-2.5 px-2.5 rounded-lg text-xs font-mono uppercase transition-colors duration-200 flex items-center gap-3 cursor-pointer overflow-hidden group ${
                       active
                         ? 'bg-indigo-600/30 text-white border border-indigo-400/80 shadow-[0_0_16px_rgba(99,102,241,0.3)] font-black'
-                        : 'text-white/80 hover:text-white hover:bg-white/10 border border-transparent font-bold'
-                    } ${isSidebarExpanded ? 'px-4' : 'justify-center px-0'}`}
+                        : 'text-white/70 hover:text-white hover:bg-white/10 border border-transparent font-bold'
+                    }`}
                     title={item.label}
                   >
-                    <Icon className={`w-5 h-5 shrink-0 transition-colors ${active ? 'text-indigo-300 stroke-[2.5px]' : 'text-white/75'}`} />
-                    {isSidebarExpanded && (
-                      <span className="whitespace-nowrap animate-fadeIn">
-                        {item.label}
-                      </span>
-                    )}
+                    <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                      <Icon className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${active ? 'text-indigo-300 stroke-[2.5px]' : 'text-white/75'}`} />
+                    </div>
+                    <span
+                      className={`whitespace-nowrap transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] font-mono font-black overflow-hidden ${
+                        isSidebarExpanded
+                          ? 'opacity-100 max-w-[130px] translate-x-0'
+                          : 'opacity-0 max-w-0 -translate-x-2 pointer-events-none'
+                      }`}
+                    >
+                      {item.label}
+                    </span>
                   </button>
                 );
               })}
@@ -2738,17 +3036,21 @@ export default function App() {
           </div>
 
           {/* Bottom section: Connectivity Indicators */}
-          <div className="px-3 pt-4 border-t border-white/5">
-            <div className={`flex items-center gap-2.5 ${isSidebarExpanded ? 'px-1' : 'justify-center'}`}>
-              <div className="relative flex h-2 w-2 shrink-0">
+          <div className="px-2.5 pt-4 border-t border-white/5">
+            <div className="flex items-center gap-3 px-2 h-6">
+              <div className="relative flex h-2 w-2 shrink-0 items-center justify-center">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </div>
-              {isSidebarExpanded && (
-                <span className="text-[8.5px] font-mono text-emerald-400 font-bold uppercase tracking-wider whitespace-nowrap animate-fadeIn">
-                  System Online
-                </span>
-              )}
+              <span
+                className={`text-[8.5px] font-mono text-emerald-400 font-bold uppercase tracking-wider whitespace-nowrap transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${
+                  isSidebarExpanded
+                    ? 'opacity-100 max-w-[130px] translate-x-0'
+                    : 'opacity-0 max-w-0 -translate-x-2 pointer-events-none'
+                }`}
+              >
+                System Online
+              </span>
             </div>
           </div>
         </div>
@@ -2759,7 +3061,7 @@ export default function App() {
         className="flex-1 flex flex-col min-w-0 min-h-screen transition-all duration-300 ease-in-out justify-between pl-0 pb-16 md:pb-0 md:pl-16"
       >
         {/* Top Status Header Bar */}
-        <header className="border-b border-white/10 bg-[#080808]/80 backdrop-blur sticky top-0 z-[180]">
+        <header className="border-b border-white/10 bg-[#080808]/90 backdrop-blur-md sticky top-0 z-[500] shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
           <div className="max-w-[1400px] mx-auto px-3 md:px-6 py-3 flex items-center justify-between gap-4">
             
             {/* Mobile Brand Logo & Active Sub-Workspace Label Badge */}
@@ -2785,19 +3087,20 @@ export default function App() {
                 title="Return to Markets"
               >
                 <span className="text-sm font-black tracking-tight text-white lowercase">
-                  mtxquant
+                  mtxcapital
                 </span>
               </button>
 
               {/* Standard workspace indicator for desktop screens only */}
               <div className="hidden md:flex items-center space-x-1.5 lg:space-x-2.5 text-[10px] font-mono">
                 <span className="hidden lg:inline text-white/30 uppercase tracking-wider font-bold">Workspace:</span>
-                <span className="px-2 py-0.5 lg:px-2.5 lg:py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold uppercase tracking-wider text-[9px] lg:text-[10px]">
+                <span className="px-2 py-0.5 lg:px-2.5 lg:py-1 rounded bg-indigo-600 text-white font-black uppercase tracking-wider text-[9px] lg:text-[10px] shadow-sm">
                   {activeTab === 'MARKETS' && 'Markets'}
                   {activeTab === 'DISCOVER' && 'Discover'}
+                  {activeTab === 'SCREENER' && 'Screener Desk'}
                   {activeTab === 'PORTFOLIO' && 'Portfolio'}
+                  {activeTab === 'WALLET' && 'Wallet & Funding'}
                   {activeTab === 'WATCHLIST' && 'Watchlist'}
-                  {activeTab === 'FUNDING' && 'Wallet'}
                   {activeTab === 'ACTIVITY' && 'Activity'}
                   {activeTab === 'ANALYSIS' && 'Market Analysis'}
                 </span>
@@ -2805,7 +3108,71 @@ export default function App() {
             </div>
 
             {/* Active status indicator ledger */}
-            <div className="flex items-center space-x-2 md:space-x-3">
+            <div className="flex items-center space-x-2.5 md:space-x-3.5">
+              {/* Account Mode & Funding Switcher */}
+              {accountMode === 'DEMO' ? (
+                <div className="hidden sm:flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-1 pr-2 font-mono text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setIsDemoCapitalModalOpen(true)}
+                    className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                    title="Change or Refill Demo Capital ($50k - $200k+)"
+                  >
+                    <Coins className="w-3 h-3 text-indigo-200" />
+                    <span>DEMO</span>
+                  </button>
+                  <span className="font-black text-white px-1">
+                    ${cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchAccountMode('REAL')}
+                    className="text-[9px] text-white/60 hover:text-emerald-400 font-bold transition-colors cursor-pointer border-l border-white/10 pl-1.5"
+                    title="Switch to Real Account ($0.00)"
+                  >
+                    GO REAL
+                  </button>
+                </div>
+              ) : (
+                <div className="hidden sm:flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-1 pr-2 font-mono text-[10px]">
+                  <span className="px-2 py-0.5 rounded bg-emerald-600 text-black font-black flex items-center gap-1 shadow-sm">
+                    <ShieldCheck className="w-3 h-3 text-black" />
+                    <span>REAL</span>
+                  </span>
+                  <span className="font-black text-white px-1">
+                    ${cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('WALLET')}
+                    className="px-2 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[9px] transition-all cursor-pointer shadow-sm"
+                  >
+                    + DEPOSIT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchAccountMode('DEMO')}
+                    className="text-[9px] text-white/60 hover:text-indigo-400 font-bold transition-colors cursor-pointer border-l border-white/10 pl-1.5"
+                    title="Switch to Demo Sandbox"
+                  >
+                    DEMO
+                  </button>
+                </div>
+              )}
+
+              {/* Institutional System Notification Center */}
+              <div className="mr-1.5 md:mr-2.5">
+                <NotificationCenter
+                  activeTab={activeTab}
+                  onNavigateTab={(tab) => setActiveTab(tab)}
+                  onSelectSymbol={(sym) => setSymbol(sym)}
+                  trades={trades}
+                  metrics={metrics}
+                  soundAlertsEnabled={soundAlertsEnabled}
+                  notificationSound={notificationSound}
+                />
+              </div>
+
               {/* Institutional Profile & Terminal Control Center Dropdown */}
               <div 
                 className="relative shrink-0" 
@@ -2872,7 +3239,7 @@ export default function App() {
 
 
       {/* Core Dynamic Workplace Area */}
-      <main className="max-w-[1400px] mx-auto w-full px-3 md:px-6 py-2 md:py-6 flex-1 flex flex-col overflow-hidden w-full">
+      <main className="max-w-[1400px] mx-auto w-full px-3 md:px-6 py-2 md:py-6 flex-1 flex flex-col w-full">
         
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -2963,9 +3330,25 @@ export default function App() {
                 </motion.div>
               )}
 
+              {activeTab === 'SCREENER' && (
+                <motion.div
+                  key="SCREENER"
+                  custom={slideDirection}
+                  variants={slideOverVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  id="screener-workspace"
+                  className="w-full"
+                >
+                  <ScreenerDesk onSelectSymbol={setSymbol} onSelectTab={setActiveTab} />
+                </motion.div>
+              )}
+
               {activeTab === 'PORTFOLIO' && (
                 <motion.div
-                  key="PORTFOLIO"
+                  key={`PORTFOLIO-${accountMode}`}
                   custom={slideDirection}
                   variants={slideOverVariants}
                   initial="enter"
@@ -2975,7 +3358,23 @@ export default function App() {
                   id="portfolio-workspace"
                   className="w-full"
                 >
-                  <PortfolioDesk traderEmail={traderEmail} />
+                  <PortfolioDesk traderEmail={traderEmail} accountMode={accountMode} />
+                </motion.div>
+              )}
+
+              {activeTab === 'WALLET' && (
+                <motion.div
+                  key="WALLET"
+                  custom={slideDirection}
+                  variants={slideOverVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  id="wallet-workspace"
+                  className="w-full"
+                >
+                  <FundingDesk />
                 </motion.div>
               )}
               
@@ -2992,21 +3391,6 @@ export default function App() {
                   className="w-full"
                 >
                   <WatchlistPage onSelectSymbol={setSymbol} onSelectTab={setActiveTab} />
-                </motion.div>
-              )}
-              {activeTab === 'FUNDING' && (
-                <motion.div
-                  key="FUNDING"
-                  custom={slideDirection}
-                  variants={slideOverVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  id="funding-workspace"
-                  className="w-full"
-                >
-                  <FundingDesk />
                 </motion.div>
               )}
               {activeTab === 'ACTIVITY' && (
@@ -3050,7 +3434,7 @@ export default function App() {
         <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-white/30">
           <div className="flex items-center space-x-3 text-[10px]">
             <span className="text-white text-sm font-black tracking-tight lowercase mr-1">
-              mtxquant
+              mtxcapital
             </span>
             <span className="text-white/10">|</span>
             <button
@@ -3068,7 +3452,7 @@ export default function App() {
             </button>
           </div>
           <div className="text-center sm:text-right select-none text-[9.5px]">
-            <span>MTXquant Quantitative Terminal &copy; 2026. MTXquant is a registered trademark of MTXcapital.</span>
+            <span>MTXcapital Terminal &copy; 2026. MTXcapital is a registered trademark of MTXcapital Ltd.</span>
           </div>
         </div>
       </footer>
@@ -3078,9 +3462,11 @@ export default function App() {
         {[
           { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
           { id: 'DISCOVER', label: 'Discover', icon: Compass },
+          { id: 'SCREENER', label: 'Screener', icon: Sliders },
           { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
+          { id: 'WALLET', label: 'Wallet', icon: Wallet },
           { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
-          { id: 'FUNDING', label: 'Wallet', icon: Wallet }
+          { id: 'ACTIVITY', label: 'Activity', icon: History }
         ].map((item) => {
           const active = activeTab === item.id;
           const Icon = item.icon;
@@ -3089,11 +3475,11 @@ export default function App() {
               key={item.id}
               onClick={() => setActiveTab(item.id as any)}
               className={`flex flex-col items-center justify-center flex-1 h-full py-1 gap-1 cursor-pointer transition-all duration-200 bg-transparent border-none ${
-                active ? 'text-indigo-400 font-extrabold scale-105' : 'text-white/40 hover:text-white'
+                active ? 'text-indigo-400 font-black scale-105' : 'text-neutral-400 hover:text-white font-bold'
               }`}
             >
-              <Icon className={`w-4.5 h-4.5 ${active ? 'stroke-[2.5px]' : 'stroke-[1.8px]'}`} />
-              <span className="text-[8px] font-mono uppercase tracking-wider scale-90">
+              <Icon className={`w-4.5 h-4.5 ${active ? 'stroke-[2.5px]' : 'stroke-[2px]'}`} />
+              <span className="text-[8.5px] font-mono font-bold uppercase tracking-wider scale-90">
                 {item.label}
               </span>
             </button>
@@ -3105,7 +3491,7 @@ export default function App() {
       {/* Session Summary Modal */}
       <AnimatePresence>
         {isSessionSummaryOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
             {/* Backdrop delay-fade */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -3376,7 +3762,7 @@ export default function App() {
       {/* Mobile drawer navigation menu */}
       <AnimatePresence>
         {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-[400] md:hidden flex">
+          <div className="fixed inset-0 z-[700] md:hidden flex">
             {/* Backdrop overlay */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -3408,7 +3794,7 @@ export default function App() {
                     title="Return to Markets Desk"
                   >
                     <span className="text-sm font-black tracking-tight text-white lowercase">
-                      mtxquant
+                      mtxcapital
                     </span>
                   </button>
 
@@ -3425,9 +3811,10 @@ export default function App() {
                   {[
                     { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
                     { id: 'DISCOVER', label: 'Discover', icon: Compass },
+                    { id: 'SCREENER', label: 'Screener', icon: Sliders },
                     { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
+                    { id: 'WALLET', label: 'Wallet', icon: Wallet },
                     { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
-                    { id: 'FUNDING', label: 'Wallet', icon: Wallet },
                     { id: 'ACTIVITY', label: 'Activity', icon: History },
                     { id: 'ANALYSIS', label: 'Analysis', icon: BarChart3 }
                   ].map((item) => {
@@ -3513,8 +3900,8 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               className="relative w-full max-w-md bg-[#09090d] border border-red-500/20 rounded-xl overflow-hidden shadow-[0_0_40px_rgba(239,68,68,0.07)] p-6 text-center z-10"
             >
-              {/* Top Warning Glow Header */}
-              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-red-500/30 via-amber-500/30 to-red-500/30 animate-pulse" />
+              {/* Top Warning Accent Line */}
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-rose-500/50" />
 
               {/* Icon Container with Warning Ping */}
               <div className="mx-auto w-14 h-14 bg-red-500/5 border border-red-500/10 rounded-full flex items-center justify-center mb-5 relative">
@@ -3589,6 +3976,21 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Demo Capital Tier Allocation Dialog */}
+      <DemoCapitalModal
+        isOpen={isDemoCapitalModalOpen}
+        onClose={() => setIsDemoCapitalModalOpen(false)}
+        currentCash={cashBalance}
+        onSelectAmount={(amount) => {
+          setCashBalance(amount);
+          localStorage.setItem('broker_cash', amount.toString());
+          localStorage.setItem('mtx_demo_cash', amount.toString());
+          localStorage.setItem('mtx_account_mode', 'DEMO');
+          setAccountMode('DEMO');
+          window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: amount, mode: 'DEMO' } }));
+        }}
+      />
 
     </div>
   );

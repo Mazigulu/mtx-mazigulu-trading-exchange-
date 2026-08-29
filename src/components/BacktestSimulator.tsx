@@ -578,7 +578,7 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
         if (activeTrade) continue;
 
         // Determine Daily/4H bias rule (aligned with 50 EMA on index)
-        const isBullishBias = curr.close > curr.ema50;
+        const isBullishBias = curr.close > (curr.ema50 || curr.close);
 
         // 2. Scan Signal Setups
         
@@ -1147,7 +1147,7 @@ export default function BacktestSimulator({ selectedSymbol = 'NAS100', onSymbolC
                 onChange={(e) => setStrategyType(e.target.value)}
                 className="w-full bg-[#050505] border border-white/10 text-white px-3 py-2 rounded text-xs focus:outline-none focus:border-indigo-500 font-bold"
               >
-                <option value="COMBO">MTX Securities Confluence Strategy (All Heuristics)</option>
+                <option value="COMBO">MTX Capital Confluence Strategy (All Heuristics)</option>
                 <option value="FVG">Intraday Mean Reversion (Trend Stabilization Touch)</option>
                 <option value="OB">Institutional Trend Following (Consolidation Zone Retests)</option>
                 <option value="SWEEP">Breakout Momentum Range (Highs/Lows Excursions)</option>
