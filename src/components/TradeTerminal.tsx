@@ -209,7 +209,39 @@ export default function TradeTerminal({
   sweeps = [],
   orderBook,
 }: TradeTerminalProps) {
-  const [accountBalance, setAccountBalance] = useState(10000);
+  const [accountBalance, setAccountBalance] = useState<number>(() => {
+    try {
+      const mode = localStorage.getItem('mtx_account_mode') || 'DEMO';
+      if (mode === 'REAL') {
+        const saved = localStorage.getItem('mtx_real_cash');
+        const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
+        if (!saved || parseFloat(saved) === 58000 || parseFloat(saved) === 100000 || parseFloat(saved) === demoCash) {
+          localStorage.setItem('mtx_real_cash', '0.00');
+          return 0.00;
+        }
+        return Math.max(0, parseFloat(saved));
+      } else {
+        const saved = localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash');
+        return saved ? parseFloat(saved) : 100000.00;
+      }
+    } catch {
+      return 100000.00;
+    }
+  });
+
+  // Synchronize TradeTerminal accountBalance with global broker cash events
+  useEffect(() => {
+    const handleCashUpdate = (e: any) => {
+      const mode = localStorage.getItem('mtx_account_mode') || 'DEMO';
+      if (e?.detail?.cash !== undefined) {
+        if (!e?.detail?.mode || e?.detail?.mode === mode) {
+          setAccountBalance(e.detail.cash);
+        }
+      }
+    };
+    window.addEventListener('broker_cash_updated', handleCashUpdate);
+    return () => window.removeEventListener('broker_cash_updated', handleCashUpdate);
+  }, []);
 
   const [isBrokerBridgePaused, setIsBrokerBridgePaused] = useState<boolean>(() => {
     try {
@@ -876,6 +908,7 @@ export default function TradeTerminal({
           confidence,
           confluences: selectedConfluences,
           marketNote,
+          accountMode: (typeof window !== 'undefined' && localStorage.getItem('mtx_account_mode') === 'REAL') ? 'REAL' : 'DEMO',
           autoBreakEvenProfitPct: autoBreakEvenEnabled ? parseFloat(autoBreakEvenProfitPct) : undefined,
         }),
       });
@@ -1268,6 +1301,7 @@ export default function TradeTerminal({
                 confidence,
                 confluences: selectedConfluences,
                 marketNote: `${marketNote} (AI Executed Mode)`,
+                accountMode: (typeof window !== 'undefined' && localStorage.getItem('mtx_account_mode') === 'REAL') ? 'REAL' : 'DEMO',
                 autoBreakEvenProfitPct: autoBreakEvenEnabled ? parseFloat(autoBreakEvenProfitPct) : undefined,
               }),
             });

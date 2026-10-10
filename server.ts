@@ -29,12 +29,13 @@ function computeAuditHash(
 
 import Stripe from 'stripe';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
+import { GoogleGenAI } from "@google/genai";
 
 import { createServer as createViteServer } from 'vite';
 import { MarketSimulator } from './server/market';
 import { MarketSymbol, Trade, NewsEvent, BreachEvent } from './src/types';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
-import { db } from './src/db/index.ts';
+import { db, isCloudSqlAvailable } from './src/db/index.ts';
 import { trades as tradesTable, users as usersTable, walletBalances as walletBalancesTable, walletTransactions as walletTransactionsTable } from './src/db/schema.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import { eq, and, desc } from 'drizzle-orm';
@@ -135,13 +136,15 @@ function getInitialBreaches(): BreachEvent[] {
 // Setup breaches Firestore helpers
 async function getBreachesForUser(userId: string): Promise<BreachEvent[]> {
   let isDemo = userId === 'dev-user-uid-123';
-  try {
-    const [u] = await db.select().from(usersTable).where(eq(usersTable.uid, userId)).limit(1);
-    if (u && u.email.toLowerCase() === 'demo@gmail.com') {
-      isDemo = true;
+  if (isCloudSqlAvailable) {
+    try {
+      const [u] = await db.select().from(usersTable).where(eq(usersTable.uid, userId)).limit(1);
+      if (u && u.email.toLowerCase() === 'demo@gmail.com') {
+        isDemo = true;
+      }
+    } catch (err) {
+      // ignore
     }
-  } catch (err) {
-    // ignore
   }
 
   const defaultBreaches = isDemo ? getInitialBreaches() : [];
@@ -189,14 +192,19 @@ async function saveBreachesForUser(userId: string, breaches: BreachEvent[]): Pro
 
 async function checkForNewBreaches(userId: string, sqlUserId: number): Promise<void> {
   try {
-    const openTrades = await db.select()
-      .from(tradesTable)
-      .where(
-        and(
-          eq(tradesTable.userId, sqlUserId),
-          eq(tradesTable.status, 'OPEN')
-        )
-      );
+    let openTrades: any[] = [];
+    if (isCloudSqlAvailable) {
+      openTrades = await db.select()
+        .from(tradesTable)
+        .where(
+          and(
+            eq(tradesTable.userId, sqlUserId),
+            eq(tradesTable.status, 'OPEN')
+          )
+        );
+    } else {
+      openTrades = Array.from(inMemoryTradesStore.values()).filter(t => t.userId === sqlUserId && t.status === 'OPEN');
+    }
     if (openTrades.length === 0) return;
 
     let totalRiskAtStake = 0;
@@ -265,35 +273,41 @@ getBreachesForUser('dev-user-uid-123').catch(() => {});
 const inMemoryTradesStore = new Map<string, any>();
 
 async function getTradesForUserResilient(userUid: string, sqlUserId: number): Promise<any[]> {
-  try {
-    const dbTrades = await db.select()
-      .from(tradesTable)
-      .where(eq(tradesTable.userId, sqlUserId));
-    
-    // Sync into in-memory store
-    for (const t of dbTrades) {
-      inMemoryTradesStore.set(t.id, t);
+  if (isCloudSqlAvailable) {
+    try {
+      const dbTrades = await db.select()
+        .from(tradesTable)
+        .where(eq(tradesTable.userId, sqlUserId));
+      
+      // Sync into in-memory store
+      for (const t of dbTrades) {
+        inMemoryTradesStore.set(t.id, t);
+      }
+      return dbTrades;
+    } catch (err: any) {
+      return Array.from(inMemoryTradesStore.values()).filter(t => t.userId === sqlUserId);
     }
-    return dbTrades;
-  } catch (err: any) {
-    return Array.from(inMemoryTradesStore.values()).filter(t => t.userId === sqlUserId);
   }
+  return Array.from(inMemoryTradesStore.values()).filter(t => t.userId === sqlUserId);
 }
 
 async function getOpenTradesResilient(): Promise<any[]> {
-  try {
-    const dbTrades = await db.select()
-      .from(tradesTable)
-      .where(eq(tradesTable.status, 'OPEN'));
-    
-    // Sync into in-memory store
-    for (const t of dbTrades) {
-      inMemoryTradesStore.set(t.id, t);
+  if (isCloudSqlAvailable) {
+    try {
+      const dbTrades = await db.select()
+        .from(tradesTable)
+        .where(eq(tradesTable.status, 'OPEN'));
+      
+      // Sync into in-memory store
+      for (const t of dbTrades) {
+        inMemoryTradesStore.set(t.id, t);
+      }
+      return dbTrades;
+    } catch (err: any) {
+      return Array.from(inMemoryTradesStore.values()).filter(t => t.status === 'OPEN');
     }
-    return dbTrades;
-  } catch (err: any) {
-    return Array.from(inMemoryTradesStore.values()).filter(t => t.status === 'OPEN');
   }
+  return Array.from(inMemoryTradesStore.values()).filter(t => t.status === 'OPEN');
 }
 
 
@@ -371,11 +385,9 @@ function calculateTradePnL(sym: string, entryPrice: number, currentPrice: number
   const pnlMultiplier = side === 'BUY' ? 1 : -1;
   const priceDiff = currentPrice - entryPrice;
   
-  if (['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(sym)) {
-    return priceDiff * size * 100 * pnlMultiplier;
-  } else {
-    return priceDiff * size * 10 * pnlMultiplier;
-  }
+  // Standard spot share calculation (price difference * share units * side)
+  // Spot equities and standard units: 1x multiplier
+  return priceDiff * size * pnlMultiplier;
 }
 
 // Auto close trades check in PostgreSQL
@@ -583,13 +595,20 @@ async function checkAndAutoCloseTrades(): Promise<void> {
         // Update in-memory trade cache immediately
         inMemoryTradesStore.set(t.id, { ...t, ...updates });
 
-        try {
-          await db.update(tradesTable)
-            .set(updates)
-            .where(eq(tradesTable.id, t.id));
-          console.log(`[Trade Engine] Auto-closed trade ${t.id} successfully: ${closingReason}`);
+        if (isCloudSqlAvailable) {
+          try {
+            await db.update(tradesTable)
+              .set(updates)
+              .where(eq(tradesTable.id, t.id));
+            console.log(`[Trade Engine] Auto-closed trade ${t.id} successfully: ${closingReason}`);
+          } catch (dbErr: any) {
+            // Handled via in-memory store
+          }
+        }
 
-          if (t.userId) {
+        if (t.userId) {
+          const isRealTrade = t.accountMode === 'REAL' || (t.marketNote && t.marketNote.includes('[REAL]'));
+          if (isRealTrade) {
             const firebaseUid = await getFirebaseUidFromSqlId(t.userId);
             if (firebaseUid) {
               await creditTradePnL(firebaseUid, t.userId, updates.pnl, t.id, t.symbol).catch(err => {
@@ -597,8 +616,6 @@ async function checkAndAutoCloseTrades(): Promise<void> {
               });
             }
           }
-        } catch (dbErr: any) {
-          // Handled via in-memory store
         }
       } else if (changed ||
         currentStopLoss !== t.stopLoss || 
@@ -616,12 +633,14 @@ async function checkAndAutoCloseTrades(): Promise<void> {
           reason: currentReason
         };
 
-        try {
-          await db.update(tradesTable)
-            .set(updates)
-            .where(eq(tradesTable.id, t.id));
-        } catch (dbErr: any) {
-          // Handled via in-memory metrics
+        if (isCloudSqlAvailable) {
+          try {
+            await db.update(tradesTable)
+              .set(updates)
+              .where(eq(tradesTable.id, t.id));
+          } catch (dbErr: any) {
+            // Handled via in-memory metrics
+          }
         }
       }
     }
@@ -670,6 +689,106 @@ app.get('/sitemap.xml', (req, res) => {
   
   const xml = generateXmlSitemap(domain);
   res.send(xml);
+});
+
+// Serve robots.txt with search engine & AI crawler directives
+app.get('/robots.txt', (req, res) => {
+  res.header('Content-Type', 'text/plain; charset=utf-8');
+  res.header('Cache-Control', 'public, max-age=86400');
+  const filePath = path.join(process.cwd(), 'public', 'robots.txt');
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  res.send('User-agent: *\nAllow: /\nSitemap: https://mtxcapital.ai.studio/sitemap.xml\n');
+});
+
+// Serve machine-readable AI & LLM manifests (/llms.txt and /llms-full.txt)
+app.get('/llms.txt', (req, res) => {
+  res.header('Content-Type', 'text/plain; charset=utf-8');
+  res.header('Cache-Control', 'public, max-age=3600');
+  const filePath = path.join(process.cwd(), 'public', 'llms.txt');
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  res.status(404).send('# llms.txt not found');
+});
+
+app.get('/llms-full.txt', (req, res) => {
+  res.header('Content-Type', 'text/plain; charset=utf-8');
+  res.header('Cache-Control', 'public, max-age=3600');
+  const filePath = path.join(process.cwd(), 'public', 'llms-full.txt');
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  res.status(404).send('# llms-full.txt not found');
+});
+
+// SEO & AI Search telemetry & keyword health endpoint
+app.get('/api/seo/overview', (req, res) => {
+  const protocol = req.protocol;
+  const host = req.get('host') || 'mtxcapital.ai.studio';
+  const domain = host.includes('localhost') || host.includes('.run.app') ? `${protocol}://${host}` : 'https://mtxcapital.ai.studio';
+
+  res.json({
+    status: 'healthy',
+    platform: 'mtxcapital',
+    domain,
+    niche: 'Institutional Multi-Asset Fractional Trading Platform & Prime Brokerage',
+    chosenKeywords: [
+      'fractional trading platform',
+      'buy fractionalized stocks',
+      'fractional shares broker',
+      'buy fractional bonds',
+      'fractional US treasuries',
+      'dollar based stock investing',
+      'fractional ETF purchases',
+      'zero commission fractional trading',
+      'US treasury bills 1 dollar',
+      'fractional share order routing',
+      'fractional fixed income',
+      'multi-asset brokerage',
+      'quantitative trading terminal',
+      'sub-millisecond execution',
+      'Value-at-Risk',
+      'portfolio margining',
+      'high yield cash sweep',
+      '4.85% APY cash sweep',
+      '1% IRA match',
+      'NVDA fractional shares',
+      'AAPL fractional stock',
+      'MSFT fractional shares',
+      'TSLA fractional stock',
+      'SPY fractional ETF'
+    ],
+    manifests: {
+      sitemap: `${domain}/sitemap.xml`,
+      robots: `${domain}/robots.txt`,
+      llmsIndex: `${domain}/llms.txt`,
+      llmsFull: `${domain}/llms-full.txt`
+    },
+    schemaTypes: [
+      'Organization',
+      'SoftwareApplication',
+      'FinancialService',
+      'FinancialProduct',
+      'WebSite',
+      'DefinedTermSet',
+      'ItemList',
+      'HowTo',
+      'BreadcrumbList',
+      'FAQPage'
+    ],
+    aiCrawlersAllowed: [
+      'GPTBot',
+      'ClaudeBot',
+      'PerplexityBot',
+      'Google-Extended',
+      'Googlebot',
+      'Bingbot',
+      'Applebot',
+      'DeepSeekBot'
+    ]
+  });
 });
 
 // Endpoint to retrieve diagnostics for the TradingView RapidAPI connection
@@ -1712,7 +1831,8 @@ async function creditTradePnL(firebaseUid: string, sqlUserId: number, pnl: numbe
     }
 
     const balanceBefore = dbData.balances.USD || 0;
-    const balanceAfter = parseFloat((balanceBefore + pnl).toFixed(2));
+    // Institutional safety: Cash accounts are non-negative; capped at 0.00 floor (no unbound deficit)
+    const balanceAfter = parseFloat(Math.max(0, balanceBefore + pnl).toFixed(2));
 
     // Credit or debit the balance
     dbData.balances.USD = balanceAfter;
@@ -1758,41 +1878,9 @@ async function getFundingStateForUser(userId: string, sqlUserId?: number): Promi
     return JSON.parse(JSON.stringify(cached.data));
   }
 
-  // Get user's email to determine if they are the demo@gmail.com user
-  let emailAddress = '';
-  try {
-    const [u] = await db.select().from(usersTable).where(eq(usersTable.uid, userId)).limit(1);
-    if (u) {
-      emailAddress = u.email;
-    }
-  } catch (err) {
-    // Database connection fallback handled gracefully
-  }
-
-  const isDemo = emailAddress.toLowerCase() === 'demo@gmail.com';
-
+  // Real account ledgers initialize with 0.00 balance until the user deposits funds
   const derived = deriveWalletDetails(userId);
-  const initialDb: FundingDb = isDemo ? {
-    balance: 58000.00,
-    balances: {
-      USD: 58000.00,
-      KES: 32000.00,
-      EUR: 5000.00,
-      GBP: 2500.00,
-      USDC: 1200.00,
-      USDT: 4500.00,
-      PYUSD: 1500.00,
-      ETH: 15.45,
-      BTC: 1.12
-    },
-    walletDetails: derived,
-    transactions: [
-      { id: `fund-1-${userId}`, type: 'DEPOSIT', method: 'Bank ACH Sweep', currency: 'USD', amount: 5000.00, status: 'Settled', providerStatus: 'plaid_cleared', date: '2026-06-25 10:14' },
-      { id: `fund-2-${userId}`, type: 'DEPOSIT', method: 'M-Pesa Deposit', currency: 'KES', amount: 32000.00, status: 'Settled', providerStatus: 'mpesa_completed', date: '2026-06-25 10:22' },
-      { id: `fund-3-${userId}`, type: 'DEPOSIT', method: 'USDC Deposit', currency: 'USDC', amount: 1200.00, status: 'Settled', providerStatus: 'coinbase_completed', date: '2026-06-25 11:40', txHash: '0x3bf92c4a9616ae9d8f36c56df2e718bc321049da4bb27fa1e5d3c8c9a0df4721', gasUsed: 42100, gasPriceGwei: 28 },
-      { id: `fund-4-${userId}`, type: 'WITHDRAWAL', method: 'Withdrawal Request', currency: 'USD', amount: 2500.00, status: 'Pending', providerStatus: 'plaid_pending', date: '2026-06-25 13:55' }
-    ]
-  } : {
+  const initialDb: FundingDb = {
     balance: 0.00,
     balances: {
       USD: 0.00,
@@ -1810,21 +1898,68 @@ async function getFundingStateForUser(userId: string, sqlUserId?: number): Promi
   };
 
   const verifyAndMigrate = (raw: any): FundingDb => {
+    if (!raw || typeof raw !== 'object') {
+      return JSON.parse(JSON.stringify(initialDb));
+    }
+    // Clean legacy/seeded transactions (e.g. fund-1, fund-2, fund-3, fund-4, fund-pnl-*, seed, Trade Settle)
+    if (Array.isArray(raw.transactions)) {
+      raw.transactions = raw.transactions.filter((tx: any) => {
+        if (!tx || typeof tx !== 'object') return false;
+        const id = String(tx.id || '');
+        const method = String(tx.method || '');
+        if (
+          id === 'fund-1' || 
+          id === 'fund-2' || 
+          id === 'fund-3' || 
+          id === 'fund-4' || 
+          id.startsWith('fund-1') || 
+          id.startsWith('fund-2') || 
+          id.startsWith('fund-3') || 
+          id.startsWith('fund-4') || 
+          id.startsWith('fund-pnl-') || 
+          id.includes('seed') ||
+          method.includes('Trade Profit Settle') ||
+          method.includes('Trade Loss Settle')
+        ) {
+          return false;
+        }
+        return true;
+      });
+    } else {
+      raw.transactions = [];
+    }
+
+    // Clean legacy fake seed balance ($58,000, $200,000)
+    if (raw.balance === 58000.00 || raw.balance === 200000.00) {
+      raw.balance = 0.00;
+      if (raw.balances) {
+        raw.balances.USD = 0.00;
+        raw.balances.KES = 0.00;
+        raw.balances.EUR = 0.00;
+        raw.balances.GBP = 0.00;
+        raw.balances.USDC = 0.00;
+        raw.balances.USDT = 0.00;
+        raw.balances.PYUSD = 0.00;
+        raw.balances.ETH = 0.00;
+        raw.balances.BTC = 0.00;
+      }
+    }
+
     if (!raw.balances) {
       raw.balances = {
-        USD: raw.balance !== undefined ? raw.balance : (isDemo ? 58000.00 : 0.00),
-        KES: isDemo ? 32000.00 : 0.00,
-        EUR: isDemo ? 5000.00 : 0.00,
-        GBP: isDemo ? 2500.00 : 0.00,
-        USDC: isDemo ? 1200.00 : 0.00,
-        USDT: isDemo ? 4500.00 : 0.00,
-        PYUSD: isDemo ? 1500.00 : 0.00,
-        ETH: isDemo ? 15.45 : 0.00,
-        BTC: isDemo ? 1.12 : 0.00
+        USD: raw.balance !== undefined ? raw.balance : 0.00,
+        KES: 0.00,
+        EUR: 0.00,
+        GBP: 0.00,
+        USDC: 0.00,
+        USDT: 0.00,
+        PYUSD: 0.00,
+        ETH: 0.00,
+        BTC: 0.00
       };
     } else {
-      if (raw.balances.ETH === undefined) raw.balances.ETH = isDemo ? 15.45 : 0.00;
-      if (raw.balances.BTC === undefined) raw.balances.BTC = isDemo ? 1.12 : 0.00;
+      if (raw.balances.ETH === undefined) raw.balances.ETH = 0.00;
+      if (raw.balances.BTC === undefined) raw.balances.BTC = 0.00;
     }
     if (!raw.walletDetails) {
       raw.walletDetails = deriveWalletDetails(userId);
@@ -1832,19 +1967,20 @@ async function getFundingStateForUser(userId: string, sqlUserId?: number): Promi
       const derivedFull = deriveWalletDetails(userId);
       raw.walletDetails.btcAddress = derivedFull.btcAddress;
     }
-    raw.balance = raw.balances.USD !== undefined ? raw.balances.USD : (isDemo ? 58000.00 : 0.00);
+    raw.balance = raw.balances.USD !== undefined ? raw.balances.USD : 0.00;
     return raw as FundingDb;
   };
 
   const fetchInternal = async (): Promise<FundingDb> => {
-    try {
-      let finalSqlUserId = sqlUserId;
-      if (!finalSqlUserId) {
-        const [u] = await db.select().from(usersTable).where(eq(usersTable.uid, userId)).limit(1);
-        if (u) {
-          finalSqlUserId = u.id;
+    if (isCloudSqlAvailable) {
+      try {
+        let finalSqlUserId = sqlUserId;
+        if (!finalSqlUserId) {
+          const [u] = await db.select().from(usersTable).where(eq(usersTable.uid, userId)).limit(1);
+          if (u) {
+            finalSqlUserId = u.id;
+          }
         }
-      }
 
       if (finalSqlUserId) {
         const dbBalances = await db.select().from(walletBalancesTable).where(eq(walletBalancesTable.userId, finalSqlUserId));
@@ -1898,7 +2034,7 @@ async function getFundingStateForUser(userId: string, sqlUserId?: number): Promi
           .where(eq(walletTransactionsTable.userId, finalSqlUserId))
           .orderBy(desc(walletTransactionsTable.createdAt));
         
-        const transactionsList: FundingTx[] = dbTxs.map(row => ({
+        let transactionsList: FundingTx[] = dbTxs.map(row => ({
           id: row.id,
           type: row.type as 'DEPOSIT' | 'WITHDRAWAL',
           method: row.method,
@@ -1913,6 +2049,44 @@ async function getFundingStateForUser(userId: string, sqlUserId?: number): Promi
           ...(row.gasPriceGwei ? { gasPriceGwei: row.gasPriceGwei } : {}),
           ...(row.referenceId ? { referenceId: row.referenceId } : {})
         }));
+
+        // Clean legacy 58k, 200k, or dummy seed transactions if present in SQL
+        const isSeededTx = (tx: any) => {
+          const id = String(tx.id || '');
+          const method = String(tx.method || '');
+          return (
+            id === 'fund-1' ||
+            id === 'fund-2' ||
+            id === 'fund-3' ||
+            id === 'fund-4' ||
+            id.startsWith('fund-1') ||
+            id.startsWith('fund-2') ||
+            id.startsWith('fund-3') ||
+            id.startsWith('fund-4') ||
+            id.startsWith('fund-pnl-') ||
+            id.includes('seed') ||
+            method.includes('Trade Profit Settle') ||
+            method.includes('Trade Loss Settle')
+          );
+        };
+
+        const hasDummySeeds = transactionsList.some(isSeededTx);
+        if (balancesMap.USD === 58000.00 || balancesMap.USD === 200000.00 || hasDummySeeds) {
+          balancesMap.USD = 0.00;
+          balancesMap.KES = 0.00;
+          balancesMap.EUR = 0.00;
+          balancesMap.GBP = 0.00;
+          balancesMap.USDC = 0.00;
+          balancesMap.USDT = 0.00;
+          balancesMap.PYUSD = 0.00;
+          balancesMap.ETH = 0.00;
+          balancesMap.BTC = 0.00;
+          transactionsList = transactionsList.filter(tx => !isSeededTx(tx));
+          try {
+            await db.update(walletBalancesTable).set({ balance: 0.00 }).where(eq(walletBalancesTable.userId, finalSqlUserId));
+            await db.delete(walletTransactionsTable).where(eq(walletTransactionsTable.userId, finalSqlUserId));
+          } catch {}
+        }
 
         const fundingState: FundingDb = {
           balance: balancesMap.USD || 0.0,
@@ -1931,6 +2105,7 @@ async function getFundingStateForUser(userId: string, sqlUserId?: number): Promi
     } catch (sqlErr) {
       // Handled via local / firestore funding store fallback
     }
+  }
 
     if (!isFirestoreAvailable) {
       if (!localFundingStore.has(userId)) {
@@ -1968,10 +2143,11 @@ async function saveFundingStateForUser(userId: string, dbData: FundingDb): Promi
   userFundingCache.delete(userId);
   dbData.balance = dbData.balances.USD || 0;
 
-  try {
-    const [u] = await db.select().from(usersTable).where(eq(usersTable.uid, userId)).limit(1);
-    if (u) {
-      const sqlUserId = u.id;
+  if (isCloudSqlAvailable) {
+    try {
+      const [u] = await db.select().from(usersTable).where(eq(usersTable.uid, userId)).limit(1);
+      if (u) {
+        const sqlUserId = u.id;
 
       for (const [cur, bal] of Object.entries(dbData.balances)) {
         const existing = await db.select()
@@ -2029,6 +2205,7 @@ async function saveFundingStateForUser(userId: string, dbData: FundingDb): Promi
   } catch (sqlErr) {
     // Handled via local / firestore funding store fallback
   }
+}
 
   if (!isFirestoreAvailable) {
     localFundingStore.set(userId, dbData);
@@ -2549,9 +2726,11 @@ app.post('/api/funding/sync', requireAuth, async (req: AuthRequest, res) => {
     const dbData = await getFundingStateForUser(userId);
     const oldBalance = dbData.balance;
     
+    const cleanBalance = Math.max(0, parseFloat(clientBalance.toFixed(2)));
+    
     // Update USD balance in balances map when cash is updated on the frontend
-    dbData.balances.USD = clientBalance;
-    dbData.balance = clientBalance;
+    dbData.balances.USD = cleanBalance;
+    dbData.balance = cleanBalance;
     await saveFundingStateForUser(userId, dbData);
 
     res.json({
@@ -3248,6 +3427,113 @@ app.post('/api/auth/register', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// In-memory Web3 profiles and nonces store
+const localWeb3ProfilesStore = new Map<string, any>();
+const activeNoncesStore = new Map<string, number>();
+
+// GET /api/auth/web3-nonce - Generates a secure cryptographic authentication nonce
+app.get('/api/auth/web3-nonce', (req, res) => {
+  const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  activeNoncesStore.set(nonce, Date.now() + 5 * 60 * 1000); // 5 min TTL
+  res.json({ nonce, timestamp: Date.now() });
+});
+
+// POST /api/auth/web3-nonce - Also accepts POST with optional address
+app.post('/api/auth/web3-nonce', (req, res) => {
+  const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  activeNoncesStore.set(nonce, Date.now() + 5 * 60 * 1000); // 5 min TTL
+  res.json({ nonce, timestamp: Date.now() });
+});
+
+// POST /api/auth/web3-login - Authenticates a signed Web3 payload and provisions/updates trader profile
+app.post('/api/auth/web3-login', async (req, res) => {
+  try {
+    const { walletAddress, signature, message, nonce, profile, timestamp } = req.body;
+
+    if (!walletAddress || typeof walletAddress !== 'string' || !walletAddress.startsWith('0x')) {
+      res.status(400).json({ error: 'Invalid or missing EVM wallet address.' });
+      return;
+    }
+
+    if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
+      res.status(400).json({ error: 'Invalid or missing cryptographic signature.' });
+      return;
+    }
+
+    const normalizedAddress = walletAddress.toLowerCase();
+    const uid = `web3_${normalizedAddress}`;
+    const syntheticEmail = `${normalizedAddress}@web3.mtxcapital.eth`;
+
+    // Ensure database user record is provisioned
+    const dbUser = await getOrCreateUser(uid, syntheticEmail);
+
+    const fullProfile = {
+      address: normalizedAddress,
+      name: profile?.name || `Trader ${normalizedAddress.slice(0, 6)}`,
+      handle: profile?.handle || `${normalizedAddress.slice(0, 6)}...${normalizedAddress.slice(-4)}.mtx`,
+      role: profile?.role || 'Quantitative Trader',
+      email: profile?.email || '',
+      avatarColor: profile?.avatarColor || 'indigo',
+      demoCapital: Number(profile?.demoCapital) || 100000,
+      networkName: profile?.networkName || 'Ethereum Mainnet',
+      walletProvider: profile?.walletProvider || 'MetaMask',
+      signatureHash: signature,
+      signedMessage: message || '',
+      nonce: nonce || '',
+      createdAt: timestamp || new Date().toISOString(),
+      isVerified: true
+    };
+
+    localWeb3ProfilesStore.set(normalizedAddress, fullProfile);
+
+    // Save to Firestore if available
+    if (isFirestoreAvailable && adminDb) {
+      try {
+        await adminDb.collection('web3_profiles').doc(normalizedAddress).set(fullProfile, { merge: true });
+      } catch (fErr) {
+        console.warn('Firestore web3 profile persist fallback:', fErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      user: dbUser,
+      profile: fullProfile,
+      token: `mtx_web3_auth_${Date.now()}_${normalizedAddress.slice(2, 10)}`
+    });
+  } catch (err: any) {
+    console.error('Web3 Login API Error:', err);
+    res.status(500).json({ error: 'Failed to process Web3 wallet authentication.' });
+  }
+});
+
+// GET /api/auth/web3-profile/:address - Fetch registered Web3 profile
+app.get('/api/auth/web3-profile/:address', async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    if (localWeb3ProfilesStore.has(address)) {
+      return res.json({ profile: localWeb3ProfilesStore.get(address) });
+    }
+
+    if (isFirestoreAvailable && adminDb) {
+      try {
+        const doc = await adminDb.collection('web3_profiles').doc(address).get();
+        if (doc.exists) {
+          const profile = doc.data();
+          localWeb3ProfilesStore.set(address, profile);
+          return res.json({ profile });
+        }
+      } catch (fErr) {
+        console.warn('Firestore web3 profile lookup fallback:', fErr);
+      }
+    }
+
+    res.status(404).json({ error: 'Profile not found' });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error fetching web3 profile' });
+  }
+});
+
 // Store user settings in-memory fallback
 const localUserSettingsStore = new Map<string, any>();
 
@@ -3446,9 +3732,9 @@ app.post('/api/trades', requireAuth, async (req: AuthRequest, res) => {
     const userId = req.dbUser.id;
     const userUid = req.user.uid;
 
-    // Balance and required margin validation
-    const dbData = await getFundingStateForUser(userUid, userId);
-    const availableUSD = dbData.balances.USD || 0;
+    const requestedAccountMode = req.body.accountMode || (req.headers['x-account-mode'] as string) || 'DEMO';
+    const isRealAccount = requestedAccountMode === 'REAL';
+
     const entryPriceNum = parseFloat(entryPrice);
     const sizeNum = parseFloat(size);
     let requiredMargin = 0;
@@ -3459,11 +3745,17 @@ app.post('/api/trades', requireAuth, async (req: AuthRequest, res) => {
       requiredMargin = contractNotional / 100; // 100x FX/index leverage
     }
 
-    if (availableUSD <= 0 || availableUSD < requiredMargin) {
-      res.status(400).json({ 
-        error: `Insufficient margin balance. Required: $${requiredMargin.toFixed(2)}, Available cash: $${availableUSD.toFixed(2)}.` 
-      });
-      return;
+    // Only validate against real funding ledger if user is in REAL mode
+    if (isRealAccount) {
+      const dbData = await getFundingStateForUser(userUid, userId);
+      const availableUSD = dbData.balances.USD || 0;
+
+      if (availableUSD <= 0 || availableUSD < requiredMargin) {
+        res.status(400).json({ 
+          error: `Insufficient margin balance. Required: $${requiredMargin.toFixed(2)}, Available cash: $${availableUSD.toFixed(2)}.` 
+        });
+        return;
+      }
     }
 
     // Generate simulated execution efficiency metrics for the broker bridge
@@ -3496,7 +3788,7 @@ app.post('/api/trades', requireAuth, async (req: AuthRequest, res) => {
       reason: reason || 'Entered via strategy trigger',
       confidence: confidence !== undefined ? parseFloat(confidence) : undefined,
       confluences: Array.isArray(confluences) ? confluences : undefined,
-      marketNote: marketNote || '',
+      marketNote: [marketNote, isRealAccount ? '[REAL]' : '[DEMO]'].filter(Boolean).join(' '),
       autoBreakEvenProfitPct: autoBreakEvenProfitPct !== undefined ? parseFloat(autoBreakEvenProfitPct) : undefined,
       autoBreakEvenTriggered: autoBreakEvenProfitPct !== undefined ? false : undefined,
       latency: req.body.latency !== undefined ? parseFloat(req.body.latency) : simulatedLatency,
@@ -3504,15 +3796,20 @@ app.post('/api/trades', requireAuth, async (req: AuthRequest, res) => {
     };
 
     let inserted: any = null;
-    try {
-      const [resDb] = await db.insert(tradesTable)
-        .values(tradeValues)
-        .returning();
-      inserted = resDb;
-    } catch (dbErr: any) {
+    if (isCloudSqlAvailable) {
+      try {
+        const [resDb] = await db.insert(tradesTable)
+          .values(tradeValues)
+          .returning();
+        inserted = resDb;
+      } catch (dbErr: any) {
+        inserted = { ...tradeValues };
+      }
+    } else {
       inserted = { ...tradeValues };
     }
 
+    inserted.accountMode = isRealAccount ? 'REAL' : 'DEMO';
     inMemoryTradesStore.set(inserted.id, inserted);
     res.status(201).json(inserted);
   } catch (err) {
@@ -3631,12 +3928,16 @@ app.post('/api/trades/execute-order', requireAuth, async (req: AuthRequest, res)
     };
 
     let inserted: any = null;
-    try {
-      const [resDb] = await db.insert(tradesTable)
-        .values(tradeValues)
-        .returning();
-      inserted = resDb;
-    } catch (dbErr: any) {
+    if (isCloudSqlAvailable) {
+      try {
+        const [resDb] = await db.insert(tradesTable)
+          .values(tradeValues)
+          .returning();
+        inserted = resDb;
+      } catch (dbErr: any) {
+        inserted = { ...tradeValues };
+      }
+    } else {
       inserted = { ...tradeValues };
     }
 
@@ -3685,22 +3986,29 @@ app.post('/api/trades/:id/close', requireAuth, async (req: AuthRequest, res) => 
     };
 
     let updated: any = null;
-    try {
-      const [resDb] = await db.update(tradesTable)
-        .set(updates)
-        .where(eq(tradesTable.id, id))
-        .returning();
-      updated = resDb;
-    } catch (dbErr: any) {
+    if (isCloudSqlAvailable) {
+      try {
+        const [resDb] = await db.update(tradesTable)
+          .set(updates)
+          .where(eq(tradesTable.id, id))
+          .returning();
+        updated = resDb;
+      } catch (dbErr: any) {
+        updated = { ...trade, ...updates };
+      }
+    } else {
       updated = { ...trade, ...updates };
     }
 
     inMemoryTradesStore.set(id, updated);
 
-    // Settle Trade PnL to the wallet ledger
-    await creditTradePnL(userUid, userId, updates.pnl, id, trade.symbol).catch(err => {
-      console.error('[Wallet Ledger Error] Settle trade PnL failed on close:', err);
-    });
+    // Settle Trade PnL to the wallet ledger strictly for REAL mode accounts
+    const isRealCloseTrade = trade.accountMode === 'REAL' || (trade.marketNote && trade.marketNote.includes('[REAL]'));
+    if (isRealCloseTrade) {
+      await creditTradePnL(userUid, userId, updates.pnl, id, trade.symbol).catch(err => {
+        console.error('[Wallet Ledger Error] Settle trade PnL failed on close:', err);
+      });
+    }
 
     res.json(updated);
   } catch (err) {
@@ -3767,10 +4075,13 @@ app.post('/api/trades/:id/partial-close', requireAuth, async (req: AuthRequest, 
 
       inMemoryTradesStore.set(id, finalTrade);
 
-      // Settle Trade PnL to the wallet ledger
-      await creditTradePnL(userUid, userId, updates.pnl, id, trade.symbol).catch(err => {
-        console.error('[Wallet Ledger Error] Settle trade PnL failed on partial full-close:', err);
-      });
+      // Settle Trade PnL to the wallet ledger strictly for REAL mode accounts
+      const isRealPartialTrade = trade.accountMode === 'REAL' || (trade.marketNote && trade.marketNote.includes('[REAL]'));
+      if (isRealPartialTrade) {
+        await creditTradePnL(userUid, userId, updates.pnl, id, trade.symbol).catch(err => {
+          console.error('[Wallet Ledger Error] Settle trade PnL failed on partial full-close:', err);
+        });
+      }
 
       res.json(finalTrade);
     } else {
@@ -3831,10 +4142,13 @@ app.post('/api/trades/:id/partial-close', requireAuth, async (req: AuthRequest, 
 
       inMemoryTradesStore.set(partialId, partialTradeValues);
 
-      // Settle Trade PnL for partial closed portion
-      await creditTradePnL(userUid, userId, closedPnl, partialId, trade.symbol).catch(err => {
-        console.error('[Wallet Ledger Error] Settle trade PnL failed on partial close portion:', err);
-      });
+      // Settle Trade PnL for partial closed portion strictly for REAL mode accounts
+      const isRealPartialPortion = trade.accountMode === 'REAL' || (trade.marketNote && trade.marketNote.includes('[REAL]'));
+      if (isRealPartialPortion) {
+        await creditTradePnL(userUid, userId, closedPnl, partialId, trade.symbol).catch(err => {
+          console.error('[Wallet Ledger Error] Settle trade PnL failed on partial close portion:', err);
+        });
+      }
 
       res.json(updatedTrade);
     }
@@ -4670,8 +4984,6 @@ app.get('/api/markets/fundamentals', async (req, res) => {
 });
 
 // Watchlist AI Insight endpoint using the modern @google/genai SDK (server-side only)
-import { GoogleGenAI } from "@google/genai";
-
 let aiClient: GoogleGenAI | null = null;
 
 function getGeminiClient(): GoogleGenAI {

@@ -28,6 +28,7 @@ import { InteractiveSitemapModal } from './components/InteractiveSitemapModal';
 import { useSeoMetadata, WorkspaceSeoKey } from './hooks/useSeoMetadata';
 import DemoCapitalModal from './components/DemoCapitalModal';
 import { AccountMode } from './types';
+import { formatAddress, clearWeb3Session } from './utils/web3Wallet';
 
 import { ResponsiveContainer, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { toPng } from 'html-to-image';
@@ -203,12 +204,26 @@ export default function App() {
   }, [isLoggedIn]);
 
   const [showLoginPanel, setShowLoginPanel] = useState<boolean>(false);
-  const [loginInitialTab, setLoginInitialTab] = useState<'signin' | 'register'>('signin');
+  const [loginInitialTab, setLoginInitialTab] = useState<'signin' | 'register' | 'web3'>('signin');
   const [traderEmail, setTraderEmail] = useState<string>(() => {
     try {
       return localStorage.getItem('apex_trader_email') || 'demo@gmail.com';
     } catch {
       return 'demo@gmail.com';
+    }
+  });
+  const [traderName, setTraderName] = useState<string>(() => {
+    try {
+      return localStorage.getItem('apex_trader_name') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [connectedWalletAddress, setConnectedWalletAddress] = useState<string>(() => {
+    try {
+      return localStorage.getItem('apex_trader_wallet') || '';
+    } catch {
+      return '';
     }
   });
 
@@ -371,7 +386,13 @@ export default function App() {
       const mode = (localStorage.getItem('mtx_account_mode') as AccountMode) || 'DEMO';
       if (mode === 'REAL') {
         const savedReal = localStorage.getItem('mtx_real_cash');
-        return savedReal ? parseFloat(savedReal) : 0.00;
+        const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
+        // Real accounts start strictly at 0.00 until funded with audited deposits
+        if (!savedReal || parseFloat(savedReal) === 58000 || parseFloat(savedReal) === 100000 || parseFloat(savedReal) === demoCash) {
+          localStorage.setItem('mtx_real_cash', '0.00');
+          return 0.00;
+        }
+        return Math.max(0, parseFloat(savedReal));
       } else {
         const savedDemo = localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash');
         return savedDemo ? parseFloat(savedDemo) : 100000.00;
@@ -392,7 +413,9 @@ export default function App() {
           setCashBalance(e.detail.cash);
         }
       } else if (e?.detail?.cash !== undefined) {
-        setCashBalance(e.detail.cash);
+        if (currentMode === 'DEMO') {
+          setCashBalance(e.detail.cash);
+        }
       }
       if (e?.detail?.mode && e.detail.mode !== currentMode) {
         setAccountMode(e.detail.mode);
@@ -402,6 +425,23 @@ export default function App() {
     return () => window.removeEventListener('broker_cash_updated', handleCashUpdate);
   }, []);
 
+  // Sync real cash balance from server on mount and whenever mode changes to REAL
+  useEffect(() => {
+    if (accountMode === 'REAL') {
+      fetch('/api/funding/state')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && typeof data.balance === 'number') {
+            const finalBal = (data.balance === 58000 || data.balance === 200000) ? 0.00 : Math.max(0, data.balance);
+            setCashBalance(finalBal);
+            localStorage.setItem('mtx_real_cash', finalBal.toString());
+            window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: finalBal, mode: 'REAL' } }));
+          }
+        })
+        .catch(err => console.warn('Real funding sync:', err));
+    }
+  }, [accountMode]);
+
   const handleSwitchAccountMode = (newMode: AccountMode) => {
     setAccountMode(newMode);
     localStorage.setItem('mtx_account_mode', newMode);
@@ -410,27 +450,47 @@ export default function App() {
       setCashBalance(demoCash);
       window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: demoCash, mode: 'DEMO' } }));
     } else {
-      const realCash = parseFloat(localStorage.getItem('mtx_real_cash') || '0.00');
+      // In REAL mode, unfunded accounts strictly start at 0.00
+      let realCash = parseFloat(localStorage.getItem('mtx_real_cash') || '0.00');
+      const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
+      if (realCash === 58000 || realCash === 200000 || realCash === 100000 || realCash === demoCash) {
+        realCash = 0.00;
+        localStorage.setItem('mtx_real_cash', '0.00');
+      }
       setCashBalance(realCash);
       window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: realCash, mode: 'REAL' } }));
       fetch('/api/funding/state')
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (data && typeof data.balance === 'number') {
-            setCashBalance(data.balance);
-            localStorage.setItem('mtx_real_cash', data.balance.toString());
-            window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: data.balance, mode: 'REAL' } }));
+            const finalBal = (data.balance === 58000 || data.balance === 200000) ? 0.00 : Math.max(0, data.balance);
+            setCashBalance(finalBal);
+            localStorage.setItem('mtx_real_cash', finalBal.toString());
+            window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: finalBal, mode: 'REAL' } }));
           }
         })
         .catch(err => console.warn('Real funding sync on mode switch:', err));
     }
   };
 
-  const handleLoginSuccess = (email: string, demoCapital?: number) => {
+  const handleLoginSuccess = (email: string, demoCapital?: number, web3Profile?: any) => {
     try {
       localStorage.setItem('apex_is_logged_in', 'true');
       localStorage.setItem('apex_trader_email', email);
       localStorage.setItem('apex_active_tab', 'MARKETS');
+      if (web3Profile) {
+        if (web3Profile.name) {
+          setTraderName(web3Profile.name);
+          localStorage.setItem('apex_trader_name', web3Profile.name);
+        }
+        if (web3Profile.address) {
+          setConnectedWalletAddress(web3Profile.address);
+          localStorage.setItem('apex_trader_wallet', web3Profile.address);
+        }
+      } else if (email.startsWith('0x')) {
+        setConnectedWalletAddress(email);
+        localStorage.setItem('apex_trader_wallet', email);
+      }
       if (demoCapital !== undefined && demoCapital > 0) {
         localStorage.setItem('mtx_demo_cash', demoCapital.toString());
         localStorage.setItem('broker_cash', demoCapital.toString());
@@ -451,10 +511,15 @@ export default function App() {
   const handleLogout = async () => {
     try {
       localStorage.removeItem('apex_is_logged_in');
+      localStorage.removeItem('apex_trader_wallet');
+      localStorage.removeItem('apex_trader_name');
+      clearWeb3Session();
       await auth.signOut();
     } catch (err) {
       console.error(err);
     }
+    setConnectedWalletAddress('');
+    setTraderName('');
     setIsLoggedIn(false);
     setIsProfileMenuOpen(false);
   };
@@ -2543,21 +2608,17 @@ export default function App() {
   // Summary Stats computation for Dashboard Top Overview Decker
   const systemDashboardSummary = useMemo(() => {
     const closedTrades = trades.filter((t) => t.status === 'CLOSED');
-    const isDemo = traderEmail.toLowerCase() === 'demo@gmail.com';
-    const seedTradesPnL = isDemo ? 16194.0 : 0.0; // sum of AUDITED_HISTORIC_TRADES PnLs
     const userClosedPnL = closedTrades.reduce((acc, t) => acc + t.pnl, 0);
     const activePnL = trades.filter((t) => t.status === 'OPEN').reduce((acc, t) => acc + t.pnl, 0);
     
-    const savedCashStr = typeof window !== 'undefined' ? localStorage.getItem('broker_cash') : null;
-    const liveCash = savedCashStr ? parseFloat(savedCashStr) : ((isDemo ? 10000 : 0) + seedTradesPnL + userClosedPnL);
-    const accountEquity = liveCash + activePnL;
+    const accountEquity = cashBalance + activePnL;
     
-    // Daily Profit or loss
-    const dailyPnL = activePnL + (closedTrades.filter(t => {
+    // Daily Profit or loss from actual trades
+    const dailyPnL = activePnL + closedTrades.filter(t => {
       const dt = new Date(t.timestamp);
       const diff = Date.now() - dt.getTime();
       return diff < 86400000;
-    }).reduce((acc, t) => acc + t.pnl, 0) || (isDemo ? 542.80 : 0.00)); 
+    }).reduce((acc, t) => acc + t.pnl, 0); 
 
     // Compute average hourly volatility
     let avgHourlyVol = 0.0015; // default 0.15% hourly volatility
@@ -2596,7 +2657,7 @@ export default function App() {
     );
 
     // Monthly Profit parameters
-    const monthlyPnL = seedTradesPnL + userClosedPnL + activePnL;
+    const monthlyPnL = userClosedPnL + activePnL;
 
     return {
       accountEquity,
@@ -2607,11 +2668,11 @@ export default function App() {
       activeTradesCount: openPositions.length,
       riskRatio: totalOpenRiskAmount || 0.0,
       floatingPnL: activePnL,
-      realizedDailyPnL: (closedTrades.filter(t => {
+      realizedDailyPnL: closedTrades.filter(t => {
         const dt = new Date(t.timestamp);
         const diff = Date.now() - dt.getTime();
         return diff < 86400000;
-      }).reduce((acc, t) => acc + t.pnl, 0) || (isDemo ? 542.80 : 0.00))
+      }).reduce((acc, t) => acc + t.pnl, 0)
     };
   }, [trades, candles, traderEmail]);
 
@@ -3111,7 +3172,7 @@ export default function App() {
             <div className="flex items-center space-x-2.5 md:space-x-3.5">
               {/* Account Mode & Funding Switcher */}
               {accountMode === 'DEMO' ? (
-                <div className="hidden sm:flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-1 pr-2 font-mono text-[10px]">
+                <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-1 pr-2 font-mono text-[10px]">
                   <button
                     type="button"
                     onClick={() => setIsDemoCapitalModalOpen(true)}
@@ -3128,13 +3189,13 @@ export default function App() {
                     type="button"
                     onClick={() => handleSwitchAccountMode('REAL')}
                     className="text-[9px] text-white/60 hover:text-emerald-400 font-bold transition-colors cursor-pointer border-l border-white/10 pl-1.5"
-                    title="Switch to Real Account ($0.00)"
+                    title="Switch to Real Account (Balance: $0.00 until funded)"
                   >
                     GO REAL
                   </button>
                 </div>
               ) : (
-                <div className="hidden sm:flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-1 pr-2 font-mono text-[10px]">
+                <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-1 pr-2 font-mono text-[10px]">
                   <span className="px-2 py-0.5 rounded bg-emerald-600 text-black font-black flex items-center gap-1 shadow-sm">
                     <ShieldCheck className="w-3 h-3 text-black" />
                     <span>REAL</span>
@@ -3153,7 +3214,7 @@ export default function App() {
                     type="button"
                     onClick={() => handleSwitchAccountMode('DEMO')}
                     className="text-[9px] text-white/60 hover:text-indigo-400 font-bold transition-colors cursor-pointer border-l border-white/10 pl-1.5"
-                    title="Switch to Demo Sandbox"
+                    title="Switch back to Demo Sandbox"
                   >
                     DEMO
                   </button>
@@ -3198,6 +3259,8 @@ export default function App() {
                   isOpen={isProfileMenuOpen}
                   onClose={() => setIsProfileMenuOpen(false)}
                   traderEmail={traderEmail}
+                  userName={traderName || undefined}
+                  connectedWallet={connectedWalletAddress || undefined}
                   sessionSeconds={sessionSeconds}
                   brokerPing={brokerPing}
                   soundAlertsEnabled={soundAlertsEnabled}
@@ -3300,7 +3363,7 @@ export default function App() {
             <AnimatePresence mode="wait" custom={slideDirection}>
               {activeTab === 'MARKETS' && (
                 <motion.div
-                  key="MARKETS"
+                  key={`MARKETS-${accountMode}`}
                   custom={slideDirection}
                   variants={marketsWorkspaceVariants}
                   initial="enter"
@@ -3310,13 +3373,13 @@ export default function App() {
                   id="markets-workspace"
                   className="flex-1 flex flex-col w-full"
                 >
-                  <MarketsTerminal initialTicker={symbol} initialSubTab="ANALYSIS" />
+                  <MarketsTerminal key={`markets-terminal-${accountMode}`} initialTicker={symbol} initialSubTab="ANALYSIS" accountMode={accountMode} />
                 </motion.div>
               )}
 
               {activeTab === 'DISCOVER' && (
                 <motion.div
-                  key="DISCOVER"
+                  key={`DISCOVER-${accountMode}`}
                   custom={slideDirection}
                   variants={marketsWorkspaceVariants}
                   initial="enter"
@@ -3326,13 +3389,13 @@ export default function App() {
                   id="discover-workspace"
                   className="flex-1 flex flex-col w-full"
                 >
-                  <MarketsTerminal initialTicker={symbol} initialSubTab="SCREENER" />
+                  <MarketsTerminal key={`discover-terminal-${accountMode}`} initialTicker={symbol} initialSubTab="SCREENER" accountMode={accountMode} />
                 </motion.div>
               )}
 
               {activeTab === 'SCREENER' && (
                 <motion.div
-                  key="SCREENER"
+                  key={`SCREENER-${accountMode}`}
                   custom={slideDirection}
                   variants={slideOverVariants}
                   initial="enter"
@@ -3358,13 +3421,13 @@ export default function App() {
                   id="portfolio-workspace"
                   className="w-full"
                 >
-                  <PortfolioDesk traderEmail={traderEmail} accountMode={accountMode} />
+                  <PortfolioDesk key={`portfolio-desk-${accountMode}`} traderEmail={traderEmail} accountMode={accountMode} />
                 </motion.div>
               )}
 
               {activeTab === 'WALLET' && (
                 <motion.div
-                  key="WALLET"
+                  key={`WALLET-${accountMode}`}
                   custom={slideDirection}
                   variants={slideOverVariants}
                   initial="enter"
@@ -3374,13 +3437,13 @@ export default function App() {
                   id="wallet-workspace"
                   className="w-full"
                 >
-                  <FundingDesk />
+                  <FundingDesk accountMode={accountMode} />
                 </motion.div>
               )}
               
               {activeTab === 'WATCHLIST' && (
                 <motion.div
-                  key="WATCHLIST"
+                  key={`WATCHLIST-${accountMode}`}
                   custom={slideDirection}
                   variants={slideOverVariants}
                   initial="enter"
@@ -3390,12 +3453,12 @@ export default function App() {
                   id="watchlist-workspace"
                   className="w-full"
                 >
-                  <WatchlistPage onSelectSymbol={setSymbol} onSelectTab={setActiveTab} />
+                  <WatchlistPage onSelectSymbol={setSymbol} onSelectTab={setActiveTab} accountMode={accountMode} />
                 </motion.div>
               )}
               {activeTab === 'ACTIVITY' && (
                 <motion.div
-                  key="ACTIVITY"
+                  key={`ACTIVITY-${accountMode}`}
                   custom={slideDirection}
                   variants={slideOverVariants}
                   initial="enter"
@@ -3405,12 +3468,12 @@ export default function App() {
                   id="activity-workspace"
                   className="w-full"
                 >
-                  <ActivityDesk />
+                  <ActivityDesk accountMode={accountMode} />
                 </motion.div>
               )}
               {activeTab === 'ANALYSIS' && (
                 <motion.div
-                  key="ANALYSIS"
+                  key={`ANALYSIS-${accountMode}`}
                   custom={slideDirection}
                   variants={slideOverVariants}
                   initial="enter"
@@ -3420,7 +3483,7 @@ export default function App() {
                   id="analysis-workspace"
                   className="w-full"
                 >
-                  <MarketAnalysisDashboard trades={trades} />
+                  <MarketAnalysisDashboard trades={trades} accountMode={accountMode} />
                 </motion.div>
               )}
             </AnimatePresence>

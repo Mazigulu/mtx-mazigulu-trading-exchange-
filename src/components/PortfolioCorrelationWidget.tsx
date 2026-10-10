@@ -111,25 +111,10 @@ export default function PortfolioCorrelationWidget({ trades }: PortfolioCorrelat
     return list;
   }, [activeActualPositions, virtualPositions]);
 
-  // If no actual trades and no virtual positions exist, we pre-seed with a realistic set of initial demo positions
-  // so the UI never displays broken and has functional, high-fidelity mock assets to interact with
-  const demoVirtualPositions: VirtualPosition[] = useMemo(() => [
-    { id: 'v1', symbol: 'NAS100', side: 'BUY', size: 1.0 },
-    { id: 'v2', symbol: 'SPX500', side: 'BUY', size: 0.5 },
-    { id: 'v3', symbol: 'AAPL', side: 'SELL', size: 1.2 }
-  ], []);
-
+  // Clean slate: portfolio positions derived strictly from active trades and user sandbox inputs
   const ultimatePortfolio = useMemo(() => {
-    if (combinedPortfolio.length > 0) {
-      return combinedPortfolio;
-    }
-    // Pre-seed demo portfolio
-    return demoVirtualPositions.map(p => ({
-      ...p,
-      isVirtual: true,
-      id: `seed-${p.id}`
-    }));
-  }, [combinedPortfolio, demoVirtualPositions]);
+    return combinedPortfolio;
+  }, [combinedPortfolio]);
 
   // Compute pairwise correlation coefficients for the portfolio
   const pairwiseCorrelations = useMemo(() => {
@@ -386,18 +371,11 @@ export default function PortfolioCorrelationWidget({ trades }: PortfolioCorrelat
             <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="w-4 h-4 text-white/45" />
               <span>CO-CODING PAIRWISE LEDGER</span>
-              {isDemoMode && (
-                <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[8px] font-black border border-amber-500/20 tracking-wider">
-                  PRE-SEEDED DEMO PORTFOLIO
-                </span>
-              )}
             </h4>
             
-            {!isDemoMode && (
-              <span className="text-[9px] text-indigo-300 font-black">
-                {ultimatePortfolio.length} POSITIONS MAPPED
-              </span>
-            )}
+            <span className="text-[9px] text-indigo-300 font-black">
+              {ultimatePortfolio.length} POSITIONS MAPPED
+            </span>
           </div>
 
           {loading ? (

@@ -95,6 +95,7 @@ interface GroundedNewsData {
 
 interface MarketAnalysisDashboardProps {
   trades: Trade[];
+  accountMode?: 'DEMO' | 'REAL';
 }
 
 interface AssetDetail {
@@ -164,8 +165,8 @@ const FINANCIAL_METRICS_INFO: Record<string, {
   }
 };
 
-// Full Holdings Ledger Detail Map
-const HOLDINGS_DETAILS: Record<string, AssetDetail> = {
+// Default / Benchmark Holdings Ledger Detail Map
+const DEFAULT_HOLDINGS_DETAILS: Record<string, AssetDetail> = {
   AAPL: {
     symbol: 'AAPL',
     name: 'Apple Inc.',
@@ -405,7 +406,9 @@ const generatePerformanceData = (timeframe: string, benchmarks: Record<string, b
   return data;
 };
 
-export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashboardProps) {
+export default function MarketAnalysisDashboard({ trades, accountMode: propAccountMode }: MarketAnalysisDashboardProps) {
+  const currentMode = propAccountMode || (typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') === 'REAL' ? 'REAL' : 'DEMO') : 'DEMO');
+
   // Navigation & Toggle States
   const [activeTimeframe, setActiveTimeframe] = useState<'1W' | '1M' | '3M' | 'YTD' | '1Y' | 'ALL'>('3M');
   const [selectedAssetKey, setSelectedAssetKey] = useState<string>('AAPL');
@@ -440,10 +443,202 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
     return generatePerformanceData(activeTimeframe, benchmarks);
   }, [activeTimeframe, benchmarks]);
 
+  // Dynamic account and holdings synchronization
+  const [accountMode, setAccountMode] = useState<'DEMO' | 'REAL'>(currentMode);
+
+  const [activeCash, setActiveCash] = useState<number>(() => {
+    if (typeof window === 'undefined') return 100000.00;
+    const isDemo = currentMode !== 'REAL';
+    if (!isDemo) {
+      const saved = localStorage.getItem('mtx_real_cash');
+      const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
+      if (!saved || parseFloat(saved) === 58000 || parseFloat(saved) === 100000 || parseFloat(saved) === demoCash) {
+        localStorage.setItem('mtx_real_cash', '0.00');
+        return 0.00;
+      }
+      return Math.max(0, parseFloat(saved));
+    }
+    const saved = localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash');
+    return saved ? parseFloat(saved) : 100000.00;
+  });
+
+  const [rawHoldings, setRawHoldings] = useState<any[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const isDemo = localStorage.getItem('mtx_account_mode') !== 'REAL';
+    const mode = isDemo ? 'DEMO' : 'REAL';
+    const detailedKey = `portfolio_detailed_holdings_${mode}`;
+    try {
+      const savedDetailed = localStorage.getItem(detailedKey);
+      if (savedDetailed) {
+        const parsed = JSON.parse(savedDetailed);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      const mapKey = isDemo ? 'broker_holdings_demo' : 'broker_holdings_real';
+      let savedMap = localStorage.getItem(mapKey);
+      if (!savedMap && isDemo) savedMap = localStorage.getItem('broker_holdings');
+      if (savedMap) {
+        const parsedMap = JSON.parse(savedMap);
+        if (parsedMap && typeof parsedMap === 'object' && !Array.isArray(parsedMap)) {
+          return Object.entries(parsedMap)
+            .filter(([_, q]) => typeof q === 'number' && (q as number) > 0)
+            .map(([sym, qty]) => ({
+              symbol: sym,
+              name: `${sym} Security`,
+              qty,
+              avgCost: 150.00,
+              currentPrice: 150.00
+            }));
+        }
+      }
+    } catch {}
+    return [];
+  });
+
+  // Listen to storage and execution events to refresh holdings dynamically
+  useEffect(() => {
+    const handleSync = () => {
+      const mode = (localStorage.getItem('mtx_account_mode') === 'REAL') ? 'REAL' : 'DEMO';
+      setAccountMode(mode);
+      const isDemo = mode === 'DEMO';
+      const key = isDemo ? 'mtx_demo_cash' : 'mtx_real_cash';
+      const savedCash = localStorage.getItem(key) || (isDemo ? localStorage.getItem('broker_cash') : null);
+      if (savedCash) setActiveCash(parseFloat(savedCash));
+
+      const detailedKey = `portfolio_detailed_holdings_${mode}`;
+      try {
+        const savedDetailed = localStorage.getItem(detailedKey);
+        if (savedDetailed) {
+          const parsed = JSON.parse(savedDetailed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRawHoldings(parsed.filter((h: any) => h && h.symbol && h.qty > 0));
+            return;
+          }
+        }
+        const mapKey = isDemo ? 'broker_holdings_demo' : 'broker_holdings_real';
+        let savedMap = localStorage.getItem(mapKey);
+        if (!savedMap && isDemo) savedMap = localStorage.getItem('broker_holdings');
+        if (savedMap) {
+          const parsedMap = JSON.parse(savedMap);
+          if (parsedMap && typeof parsedMap === 'object' && !Array.isArray(parsedMap)) {
+            setRawHoldings(
+              Object.entries(parsedMap)
+                .filter(([_, q]) => typeof q === 'number' && (q as number) > 0)
+                .map(([sym, qty]) => ({
+                  symbol: sym,
+                  name: `${sym} Security`,
+                  qty,
+                  avgCost: 150.00,
+                  currentPrice: 150.00
+                }))
+            );
+            return;
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('broker_cash_updated', handleSync);
+    window.addEventListener('mtx_order_executed', handleSync);
+    const interval = setInterval(handleSync, 2000);
+
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('broker_cash_updated', handleSync);
+      window.removeEventListener('mtx_order_executed', handleSync);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Compute active holdings map based on actual positions bought
+  const holdingsDetails: Record<string, AssetDetail> = useMemo(() => {
+    const map: Record<string, AssetDetail> = {};
+    const totalAssetVal = rawHoldings.reduce((sum, h) => sum + (h.qty * (h.currentPrice || h.avgCost || 150)), 0);
+    const totalEquity = Math.max(1, totalAssetVal + activeCash);
+
+    if (rawHoldings.length > 0) {
+      rawHoldings.forEach(h => {
+        const sym = h.symbol.toUpperCase();
+        const base = DEFAULT_HOLDINGS_DETAILS[sym] || {
+          symbol: sym,
+          name: h.name || `${sym} Security`,
+          qty: h.qty,
+          avgCost: h.avgCost || 150.00,
+          marketPrice: h.currentPrice || h.avgCost || 150.00,
+          returnVal: '+0.0%',
+          returnPnl: 0,
+          weight: '0%',
+          dividend: '0.00%',
+          volatility: 'Medium',
+          riskContrib: '15%',
+          fiftyTwoWeek: 'Active',
+          consensus: 'Buy',
+          drivers: ['Active Portfolio Holding', 'Institutional Clearing'],
+          thesis: `Active position in ${sym} held in the ${accountMode} account with ${h.qty} shares deployed.`,
+          marketCap: '$100B',
+          peRatio: '25.0',
+          psRatio: '5.0',
+          profitMargin: '18.0%',
+          debtEquity: '0.50',
+          beta: '1.10',
+          eps: '$3.50'
+        };
+
+        const qty = h.qty;
+        const avgCost = h.avgCost || base.avgCost || 150;
+        const marketPrice = h.currentPrice || base.marketPrice || avgCost;
+        const pnl = parseFloat(((marketPrice - avgCost) * qty).toFixed(2));
+        const pct = avgCost > 0 ? ((marketPrice - avgCost) / avgCost * 100).toFixed(1) : '0.0';
+        const weightPct = ((marketPrice * qty) / totalEquity * 100).toFixed(1);
+
+        map[sym] = {
+          ...base,
+          symbol: sym,
+          name: h.name || base.name,
+          qty,
+          avgCost,
+          marketPrice,
+          returnPnl: pnl,
+          returnVal: `${pnl >= 0 ? '+' : ''}${pct}%`,
+          weight: `${weightPct}%`
+        };
+      });
+    }
+
+    // Always include Cash entry reflecting true demo/real liquid cash
+    const cashWeightPct = ((activeCash / totalEquity) * 100).toFixed(1);
+    map['Cash'] = {
+      symbol: 'Cash',
+      name: `${accountMode === 'DEMO' ? 'Demo' : 'Real'} USD Liquidity Reserves`,
+      qty: activeCash,
+      avgCost: 1.00,
+      marketPrice: 1.00,
+      returnVal: '--',
+      returnPnl: 0,
+      weight: `${cashWeightPct}%`,
+      dividend: '5.20%',
+      volatility: 'None',
+      riskContrib: '0%',
+      fiftyTwoWeek: 'Stable',
+      consensus: 'Hold',
+      drivers: ['Sovereign Security', 'Yield Capture', 'Slippage Defense', 'Paper Trading Buying Power'],
+      thesis: `Liquid reserves available in ${accountMode} mode to deploy into equities, ETFs, FX, or crypto assets.`,
+      marketCap: '--',
+      peRatio: '--',
+      psRatio: '--',
+      profitMargin: '--',
+      debtEquity: '--',
+      beta: '0.00',
+      eps: '--'
+    };
+
+    return map;
+  }, [rawHoldings, activeCash, accountMode]);
+
   // Selected asset detail
   const selectedAsset = useMemo(() => {
-    return HOLDINGS_DETAILS[selectedAssetKey] || HOLDINGS_DETAILS['AAPL'];
-  }, [selectedAssetKey]);
+    return holdingsDetails[selectedAssetKey] || Object.values(holdingsDetails)[0] || holdingsDetails['Cash'] || DEFAULT_HOLDINGS_DETAILS['Cash'];
+  }, [holdingsDetails, selectedAssetKey]);
 
   // Fetch Grounded Financial News via API with Multi-Engine Search Grounding
   const fetchGroundedNews = async (
@@ -469,7 +664,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           symbol: cleanSym,
-          companyName: nameToFetch || HOLDINGS_DETAILS[cleanSym]?.name || cleanSym,
+          companyName: nameToFetch || holdingsDetails[cleanSym]?.name || cleanSym,
           searchEngine: engine
         })
       });
@@ -502,7 +697,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
       const rows = [
         ['Symbol', 'Name', 'Quantity', 'Avg Cost (USD)', 'Market Price (USD)', 'Total Return', 'Return PnL ($)', 'Weight (%)', 'Beta', 'PE Ratio', 'Consensus']
       ];
-      Object.values(HOLDINGS_DETAILS).forEach(h => {
+      Object.values(holdingsDetails).forEach(h => {
         rows.push([
           h.symbol,
           `"${h.name}"`,
@@ -965,7 +1160,7 @@ export default function MarketAnalysisDashboard({ trades }: MarketAnalysisDashbo
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800 bg-[#0d0d0d]">
-                  {Object.values(HOLDINGS_DETAILS)
+                  {Object.values(holdingsDetails)
                     .filter(h => {
                       if (!holdingsSearchTerm.trim()) return true;
                       const term = holdingsSearchTerm.toLowerCase();

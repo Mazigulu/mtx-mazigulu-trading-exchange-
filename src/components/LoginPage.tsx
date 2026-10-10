@@ -32,12 +32,14 @@ import {
 import { auth, googleAuthProvider } from '../lib/firebase.ts';
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { BureaucracyModal } from './BureaucracyModal';
+import Web3ConnectModal from './Web3ConnectModal';
+import { getActiveWeb3Profile, Web3UserProfile, saveWeb3Profile } from '../utils/web3Wallet';
 
 interface LoginPageProps {
-  onLoginSuccess: (email: string, demoCapital?: number) => void;
+  onLoginSuccess: (email: string, demoCapital?: number, web3Profile?: Web3UserProfile) => void;
   defaultEmail?: string;
   onBackToHomepage?: () => void;
-  initialTab?: 'signin' | 'register';
+  initialTab?: 'signin' | 'register' | 'web3';
 }
 
 function getCleanAuthErrorMessage(err: any): string {
@@ -189,76 +191,187 @@ export default function LoginPage({
     }
   };
 
-  const [activeWalletAddress, setActiveWalletAddress] = useState<string | null>(null);
+  const [isWeb3ModalOpen, setIsWeb3ModalOpen] = useState<boolean>(() => initialTab === 'web3');
+  const [activeWeb3Profile, setActiveWeb3Profile] = useState<Web3UserProfile | null>(() => getActiveWeb3Profile());
+  const [activeWalletAddress, setActiveWalletAddress] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('apex_trader_wallet') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [web3DemoCapital, setWeb3DemoCapital] = useState<number | undefined>(undefined);
 
-  const handleMetaMaskConnect = async (e?: React.MouseEvent) => {
+  useEffect(() => {
+    if (initialTab === 'web3') {
+      setIsWeb3ModalOpen(true);
+    }
+  }, [initialTab]);
+
+  const handleOpenWeb3Modal = (e?: React.MouseEvent) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    setErrorMessage(null);
+    setIsWeb3ModalOpen(true);
+  };
+
+  const handleWeb3Success = (addressOrEmail: string, demoCapital?: number, profile?: Web3UserProfile) => {
+    setIsWeb3ModalOpen(false);
+    setActiveWalletAddress(addressOrEmail);
+    setEmail(addressOrEmail);
+    setPassword('METAMASK_AUTHENTICATED');
+    setAccessKey(`WEB3-KEY-${addressOrEmail.slice(2, 8).toUpperCase()}`);
+    setErrorMessage(null);
+    if (profile) {
+      setActiveWeb3Profile(profile);
+    }
+    if (demoCapital) {
+      setWeb3DemoCapital(demoCapital);
+    }
+    setIsConnecting(true);
+    setConnectionStep(0);
+  };
+
+  const handleDirectWeb3Connect = async (e?: React.MouseEvent) => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
     }
     setErrorMessage(null);
     setIsWalletConnecting(true);
 
-    let targetAccount = "0x71C7656EC7ab88b098defB751B7401B5f6d1476B";
-
     try {
       const eth = typeof window !== 'undefined' ? (window as any).ethereum : null;
 
+      let accountAddress: string;
+      let signatureHash: string = '';
+      let challengeMsg: string = '';
+      let nonceVal: string = Math.random().toString(36).substring(2, 15);
+
       if (eth) {
+        // Direct EIP-1193 native wallet extension connection
+        let accounts: any[] = [];
         try {
-          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
-          let accountsPromise: Promise<any> | null = null;
           if (typeof eth.request === 'function') {
-            accountsPromise = new Promise((resolve) => {
-              try {
-                eth.request({ method: 'eth_requestAccounts' })
-                  .then((accounts: any) => resolve(accounts))
-                  .catch((err: any) => {
-                    console.warn('MetaMask wallet request declined or returned error cleanly:', err?.message || err);
-                    resolve(null);
-                  });
-              } catch (err: any) {
-                console.warn('MetaMask request thrown synchronously:', err?.message || err);
-                resolve(null);
-              }
-            });
+            accounts = await eth.request({ method: 'eth_requestAccounts' });
           } else if (typeof eth.enable === 'function') {
-            accountsPromise = new Promise((resolve) => {
-              try {
-                eth.enable()
-                  .then((accounts: any) => resolve(accounts))
-                  .catch((err: any) => {
-                    console.warn('MetaMask enable declined cleanly:', err?.message || err);
-                    resolve(null);
-                  });
-              } catch (err: any) {
-                console.warn('MetaMask enable thrown synchronously:', err?.message || err);
-                resolve(null);
-              }
-            });
+            accounts = await eth.enable();
           }
-          if (accountsPromise) {
-            const accounts = await Promise.race([accountsPromise, timeoutPromise]);
-            if (accounts && Array.isArray(accounts) && accounts.length > 0 && typeof accounts[0] === 'string') {
-              targetAccount = accounts[0];
-            }
+        } catch (reqErr: any) {
+          if (reqErr?.code === 4001) {
+            throw new Error('Connection request was rejected in your Web3 wallet.');
           }
-        } catch (_reqErr) {
-          // Handled gracefully via sandbox wallet fallback
+          throw new Error(reqErr?.message || 'Failed to connect to Web3 wallet.');
         }
+
+        if (!accounts || !accounts[0]) {
+          throw new Error('No EVM account selected in Web3 wallet.');
+        }
+
+        accountAddress = String(accounts[0]).toLowerCase();
+
+        // Retrieve server challenge nonce
+        try {
+          const nonceRes = await fetch('/api/auth/web3-nonce', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: accountAddress })
+          });
+          if (nonceRes.ok) {
+            const data = await nonceRes.json();
+            if (data.nonce) nonceVal = data.nonce;
+          }
+        } catch (nErr) {
+          console.warn('Nonce sync warning:', nErr);
+        }
+
+        // Sign challenge with native personal_sign in wallet
+        challengeMsg = `MTXcapital Institutional Terminal Authentication\n\nURI: ${typeof window !== 'undefined' ? window.location.origin : 'https://mtxcapital.com'}\nAddress: ${accountAddress}\nNonce: ${nonceVal}\nIssued At: ${new Date().toISOString()}`;
+
+        try {
+          signatureHash = await eth.request({
+            method: 'personal_sign',
+            params: [challengeMsg, accountAddress]
+          });
+        } catch (signErr: any) {
+          if (signErr?.code === 4001) {
+            throw new Error('Cryptographic signature was rejected in your wallet.');
+          }
+          try {
+            // Older legacy parameter order fallback
+            signatureHash = await eth.request({
+              method: 'personal_sign',
+              params: [accountAddress, challengeMsg]
+            });
+          } catch {
+            throw new Error(signErr?.message || 'Cryptographic signing was not completed.');
+          }
+        }
+      } else {
+        // Sandbox fallback for browsers without extension
+        accountAddress = "0x71c7656ec7ab88b098defb751b7401b5f6d1476b";
+        signatureHash = "0x" + Array.from({ length: 130 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+        challengeMsg = `MTXcapital Institutional Terminal Sandbox Auth\nAddress: ${accountAddress}\nNonce: ${nonceVal}`;
       }
-    } catch (_err) {
-      // Handled gracefully via sandbox wallet fallback
+
+      // Provision profile and authenticate on backend
+      const defaultProfile: Web3UserProfile = {
+        address: accountAddress,
+        name: `Trader ${accountAddress.slice(0, 6).toUpperCase()}`,
+        handle: `${accountAddress.slice(0, 6)}...${accountAddress.slice(-4)}.mtx`,
+        role: 'Quantitative Trader',
+        avatarColor: 'indigo',
+        chainId: '0x1',
+        demoCapital: 100000,
+        networkName: eth ? 'Ethereum / EVM Connected' : 'Institutional Sandbox Enclave',
+        walletProvider: eth?.isMetaMask ? 'MetaMask' : (eth?.isCoinbaseWallet ? 'Coinbase' : 'Injected'),
+        signatureHash,
+        signedMessage: challengeMsg,
+        nonce: nonceVal,
+        createdAt: new Date().toISOString(),
+        isVerified: true
+      };
+
+      try {
+        const loginRes = await fetch('/api/auth/web3-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress: accountAddress,
+            signature: signatureHash,
+            message: challengeMsg,
+            nonce: nonceVal,
+            profile: defaultProfile,
+            timestamp: new Date().toISOString()
+          })
+        });
+
+        if (loginRes.ok) {
+          const resData = await loginRes.json();
+          if (resData.profile) {
+            saveWeb3Profile(resData.profile);
+          }
+          if (resData.token) {
+            localStorage.setItem('apex_web3_token', resData.token);
+          }
+        }
+      } catch (backendErr) {
+        console.warn('Backend login profile sync fallback:', backendErr);
+      }
+
+      try {
+        localStorage.setItem('apex_trader_wallet', accountAddress);
+        localStorage.setItem('apex_trader_name', defaultProfile.name);
+        localStorage.setItem('apex_user_email', accountAddress);
+      } catch {}
+
+      handleWeb3Success(accountAddress, 100000, defaultProfile);
+    } catch (err: any) {
+      console.error('Direct Web3 connection error:', err);
+      setErrorMessage(err?.message || 'Web3 wallet connection failed. Please ensure your wallet is unlocked.');
     } finally {
       setIsWalletConnecting(false);
     }
-
-    setEmail(targetAccount);
-    setActiveWalletAddress(targetAccount);
-    setPassword('METAMASK_AUTHENTICATED');
-    setAccessKey(`WEB3-KEY-${targetAccount.slice(2, 8).toUpperCase()}`);
-    setErrorMessage(null);
-    setIsConnecting(true);
-    setConnectionStep(0);
   };
 
   // Register state
@@ -311,7 +424,11 @@ export default function LoginPage({
         }, 450);
       } else {
         timer = setTimeout(() => {
-          onLoginSuccess(activeWalletAddress || email || regEmail || 'demo@gmail.com');
+          onLoginSuccess(
+            activeWalletAddress || email || regEmail || 'demo@gmail.com',
+            web3DemoCapital,
+            activeWeb3Profile || undefined
+          );
         }, 500);
       }
     }
@@ -711,22 +828,10 @@ export default function LoginPage({
                       </p>
                       <button
                         type="button"
-                        onClick={() => {
-                          setErrorMessage(null);
-                          setIsWalletConnecting(true);
-                          setTimeout(() => {
-                            const mockAccount = "0x71C7656EC7ab88b098defB751B7401B5f6d1476B";
-                            setEmail(mockAccount);
-                            setPassword('METAMASK_SIMULATED_AUTHENTICATED');
-                            setAccessKey(`WEB3-SANDBOX-KEY`);
-                            setIsConnecting(true);
-                            setConnectionStep(0);
-                            setIsWalletConnecting(false);
-                          }, 600);
-                        }}
+                        onClick={handleOpenWeb3Modal}
                         className="px-3 py-1.5 self-start text-[10px] font-mono font-bold uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 hover:bg-amber-500/20 rounded-md transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
                       >
-                        <RefreshCw className="w-3 h-3 animate-spin duration-1000" />
+                        <RefreshCw className="w-3 h-3" />
                         Simulate Sandbox Web3 Connection
                       </button>
                     </div>
@@ -831,7 +936,7 @@ export default function LoginPage({
                       id="login-connect-metamask-btn"
                       type="button"
                       disabled={isWalletConnecting}
-                      onClick={handleMetaMaskConnect}
+                      onClick={handleOpenWeb3Modal}
                       className="w-full py-2.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 hover:border-neutral-600 text-white font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/40 disabled:opacity-50"
                     >
                       <svg className="w-4 h-4 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -969,7 +1074,7 @@ export default function LoginPage({
                           id="register-connect-metamask-btn"
                           type="button"
                           disabled={isWalletConnecting}
-                          onClick={handleMetaMaskConnect}
+                          onClick={handleOpenWeb3Modal}
                           className="w-full py-2.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 hover:border-neutral-600 text-white font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500/40 disabled:opacity-50"
                         >
                           <svg className="w-4 h-4 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1595,6 +1700,13 @@ export default function LoginPage({
       isOpen={isBureaucracyModalOpen} 
       onClose={() => setIsBureaucracyModalOpen(false)} 
       initialTab={bureaucracyActiveTab}
+    />
+
+    {/* Terminal Native Web3 Node Connection & SIWE Challenge Dialog */}
+    <Web3ConnectModal
+      isOpen={isWeb3ModalOpen}
+      onClose={() => setIsWeb3ModalOpen(false)}
+      onSuccess={handleWeb3Success}
     />
 
   </div>

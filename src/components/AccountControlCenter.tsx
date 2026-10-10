@@ -87,6 +87,7 @@ interface AccountControlCenterProps {
   onClose: () => void;
   traderEmail: string;
   userName?: string;
+  connectedWallet?: string;
   sessionSeconds: number;
   brokerPing: number;
   soundAlertsEnabled: boolean;
@@ -126,6 +127,7 @@ export default function AccountControlCenter({
   onClose,
   traderEmail,
   userName,
+  connectedWallet,
   sessionSeconds,
   brokerPing,
   soundAlertsEnabled,
@@ -166,6 +168,8 @@ export default function AccountControlCenter({
   // Compute clean initial display name for the user
   const getInitialName = () => {
     if (userName && userName.trim()) return userName;
+    if (connectedWallet) return `Trader ${connectedWallet.slice(2, 6).toUpperCase()}`;
+    if (traderEmail && traderEmail.startsWith('0x')) return `Trader ${traderEmail.slice(2, 6).toUpperCase()}`;
     if (traderEmail && traderEmail.includes('@')) {
       const prefix = traderEmail.split('@')[0];
       if (prefix.toLowerCase() === 'demo') return 'Institutional Demo Trader';
@@ -923,6 +927,33 @@ export default function AccountControlCenter({
                         <h2 className="text-sm font-black text-white uppercase tracking-wider">PERSONAL IDENTITY LEDGER</h2>
                         <p className="text-white/50 text-[9px] mt-1 leading-relaxed">Manage your registered personal account details, custom avatars, phone, tax residency indicators and regional parameters below.</p>
                       </div>
+
+                      {/* Web3 Connected Wallet Badge if active */}
+                      {(connectedWallet || traderEmail.startsWith('0x')) && (
+                        <div className="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-xl space-y-2 font-mono">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Wallet className="w-4 h-4 text-indigo-400" />
+                              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                Cryptographic Web3 Wallet
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3" />
+                              SIWE Verified
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs bg-black/60 p-2.5 rounded-lg border border-white/5">
+                            <span className="text-neutral-400 text-[10px]">Public Address:</span>
+                            <span className="text-indigo-300 font-bold select-all">
+                              {connectedWallet || traderEmail}
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-neutral-400 leading-relaxed">
+                            This profile is cryptographically bonded to your Web3 EVM wallet. Orders and funding transactions can be signed on-chain or via institutional clearing rails.
+                          </p>
+                        </div>
+                      )}
 
                       {profileSaveSuccess && (
                         <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded text-emerald-300 text-[9px] font-bold flex items-center gap-2">

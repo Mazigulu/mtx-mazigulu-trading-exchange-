@@ -58,6 +58,36 @@ type SortField =
 type PresetMode = 'ALL' | 'PROP_DESK' | 'FAMILY_OFFICE' | 'DEEP_VALUE' | 'AI_SEMI' | 'RVOL_SPIKE';
 
 export function ScreenerDesk({ onSelectSymbol, onSelectTab }: ScreenerDeskProps) {
+  // Holdings state to display demo/real owned shares in screener table
+  const [holdings, setHoldings] = useState<Record<string, number>>(() => {
+    try {
+      const mode = (typeof window !== 'undefined' && localStorage.getItem('mtx_account_mode') === 'REAL') ? 'REAL' : 'DEMO';
+      const key = mode === 'REAL' ? 'broker_holdings_real' : 'broker_holdings_demo';
+      let saved = localStorage.getItem(key);
+      if (!saved && mode === 'DEMO') saved = localStorage.getItem('broker_holdings');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
+
+  useEffect(() => {
+    const handleSyncHoldings = () => {
+      try {
+        const mode = (localStorage.getItem('mtx_account_mode') === 'REAL') ? 'REAL' : 'DEMO';
+        const key = mode === 'REAL' ? 'broker_holdings_real' : 'broker_holdings_demo';
+        let saved = localStorage.getItem(key);
+        if (!saved && mode === 'DEMO') saved = localStorage.getItem('broker_holdings');
+        if (saved) setHoldings(JSON.parse(saved));
+      } catch {}
+    };
+    window.addEventListener('storage', handleSyncHoldings);
+    window.addEventListener('mtx_order_executed', handleSyncHoldings);
+    return () => {
+      window.removeEventListener('storage', handleSyncHoldings);
+      window.removeEventListener('mtx_order_executed', handleSyncHoldings);
+    };
+  }, []);
+
   // Quantitative Factor Weights
   const [weights, setWeights] = useState<FactorWeights>({
     value: 20,
@@ -1088,6 +1118,11 @@ export function ScreenerDesk({ onSelectSymbol, onSelectTab }: ScreenerDeskProps)
                         <div>
                           <div className="font-bold flex items-center space-x-1.5">
                             <span className="text-indigo-400 group-hover:text-indigo-300 transition-colors">{row.ticker}</span>
+                            {holdings[row.ticker] !== undefined && holdings[row.ticker] > 0 && (
+                              <span className="text-[8px] px-1.5 py-0.2 rounded font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 font-mono" title={`Owned: ${holdings[row.ticker].toFixed(4)} shares`}>
+                                {holdings[row.ticker].toFixed(2)} sh
+                              </span>
+                            )}
                             <span className="text-[9px] px-1.5 py-0.2 rounded font-normal bg-white/5 text-white/60 border border-white/5">
                               {row.moatTier}
                             </span>

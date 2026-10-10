@@ -50,203 +50,7 @@ interface PerformanceTrackerProps {
 
 // A rock-solid, audited set of historic institutional trades to seed the core performance engine.
 // This ensures the equity curve can show professional progression, drawdowns, and auditability.
-const AUDITED_HISTORIC_TRADES: Trade[] = [
-  {
-    id: 'audited-01',
-    symbol: 'SPX500',
-    side: 'BUY',
-    entryPrice: 5120.0,
-    exitPrice: 5155.0,
-    stopLoss: 5100.0,
-    takeProfit: 5160.0,
-    size: 2.5,
-    status: 'CLOSED',
-    pnl: 950.00,
-    timestamp: '2026-05-04T08:15:00Z',
-    exitTimestamp: '2026-05-04T16:30:00Z',
-    reason: 'Bullish daily bias FVG mitigation on 4H structure alignment. RR 2.9 achieved.',
-  },
-  {
-    id: 'audited-02',
-    symbol: 'NAS100',
-    side: 'SELL',
-    entryPrice: 18450.0,
-    exitPrice: 18380.0,
-    stopLoss: 18490.0,
-    takeProfit: 18350.0,
-    size: 3.0,
-    status: 'CLOSED',
-    pnl: 1590.00,
-    timestamp: '2026-05-06T10:00:00Z',
-    exitTimestamp: '2026-05-06T18:45:00Z',
-    reason: '4H Liquidity sweep at key resistance with bearish Order Block rejection.',
-  },
-  {
-    id: 'audited-03',
-    symbol: 'US30',
-    side: 'BUY',
-    entryPrice: 39200.0,
-    exitPrice: 39050.0,
-    stopLoss: 39050.0,
-    takeProfit: 39450.0,
-    size: 2.0,
-    status: 'CLOSED',
-    pnl: -400.00,
-    timestamp: '2026-05-08T13:20:00Z',
-    exitTimestamp: '2026-05-08T15:10:00Z',
-    reason: 'CPI print spiked volatility, invalidating support limit prior to recovery.',
-  },
-  {
-    id: 'audited-04',
-    symbol: 'AAPL',
-    side: 'BUY',
-    entryPrice: 172.50,
-    exitPrice: 178.00,
-    stopLoss: 170.00,
-    takeProfit: 180.00,
-    size: 0.8,
-    status: 'CLOSED',
-    pnl: 1320.00,
-    timestamp: '2026-05-11T04:10:00Z',
-    exitTimestamp: '2026-05-12T01:30:00Z',
-    reason: 'Overnight liquidity sweep of week-lows. Bullish MACD convergence on H4.',
-  },
-  {
-    id: 'audited-05',
-    symbol: 'MSFT',
-    side: 'SELL',
-    entryPrice: 418.00,
-    exitPrice: 412.00,
-    stopLoss: 422.00,
-    takeProfit: 410.00,
-    size: 2.0,
-    status: 'CLOSED',
-    pnl: 480.00,
-    timestamp: '2026-05-13T09:30:00Z',
-    exitTimestamp: '2026-05-13T14:50:00Z',
-    reason: 'Inside bar breakdown matching bearish 50 EMA slope alignment.',
-  },
-  {
-    id: 'audited-06',
-    symbol: 'NVDA',
-    side: 'SELL',
-    entryPrice: 890.00,
-    exitPrice: 875.00,
-    stopLoss: 898.00,
-    takeProfit: 870.00,
-    size: 1.5,
-    status: 'CLOSED',
-    pnl: 1875.00,
-    timestamp: '2026-05-15T15:00:00Z',
-    exitTimestamp: '2026-05-16T11:20:00Z',
-    reason: 'Earnings release micro-liquidity sweep. Premium valuation exit.',
-  },
-  {
-    id: 'audited-07',
-    symbol: 'TSLA',
-    side: 'BUY',
-    entryPrice: 178.50,
-    exitPrice: 173.00,
-    stopLoss: 173.00,
-    takeProfit: 190.00,
-    size: 2.5,
-    status: 'CLOSED',
-    pnl: -700.00,
-    timestamp: '2026-05-18T08:00:00Z',
-    exitTimestamp: '2026-05-18T12:15:00Z',
-    reason: 'London open breakout fade invalidated on unexpected retail sales print.',
-  },
-  {
-    id: 'audited-08',
-    symbol: 'GER40',
-    side: 'SELL',
-    entryPrice: 18200.0,
-    exitPrice: 18110.0,
-    stopLoss: 18250.0,
-    takeProfit: 18050.0,
-    size: 1.0,
-    status: 'CLOSED',
-    pnl: 1680.00,
-    timestamp: '2026-05-20T17:30:00Z',
-    exitTimestamp: '2026-05-21T09:40:00Z',
-    reason: 'Distribution block reject and standard FVG gap close validation.',
-  },
-  {
-    id: 'audited-09',
-    symbol: 'SPX500',
-    side: 'BUY',
-    entryPrice: 5180.0,
-    exitPrice: 5210.0,
-    stopLoss: 5160.0,
-    takeProfit: 5230.0,
-    size: 4.0,
-    status: 'CLOSED',
-    pnl: 1780.00,
-    timestamp: '2026-05-22T11:15:00Z',
-    exitTimestamp: '2026-05-22T19:50:00Z',
-    reason: 'Institutional discount zone re-entry. Daily biased swing trade placement.',
-  },
-  {
-    id: 'audited-10',
-    symbol: 'NAS100',
-    side: 'BUY',
-    entryPrice: 18550.0,
-    exitPrice: 18480.0,
-    stopLoss: 18480.0,
-    takeProfit: 18650.0,
-    size: 3.5,
-    status: 'CLOSED',
-    pnl: -980.00,
-    timestamp: '2026-05-25T14:40:00Z',
-    exitTimestamp: '2026-05-25T17:15:00Z',
-    reason: 'Stop run hunting prior to structural expansion upward.',
-  },
-  {
-    id: 'audited-11',
-    symbol: 'US30',
-    side: 'SELL',
-    entryPrice: 39400.0,
-    exitPrice: 39250.0,
-    stopLoss: 39500.0,
-    takeProfit: 39200.0,
-    size: 2.0,
-    status: 'CLOSED',
-    pnl: 1100.00,
-    timestamp: '2026-05-27T10:00:00Z',
-    exitTimestamp: '2026-05-27T18:30:00Z',
-    reason: 'Mean reversion off the 200 SMA on the 1H timeframe. Managed trailing trade.',
-  },
-  {
-    id: 'audited-12',
-    symbol: 'GER40',
-    side: 'BUY',
-    entryPrice: 18300.0,
-    exitPrice: 18450.0,
-    stopLoss: 18220.0,
-    takeProfit: 18500.0,
-    size: 1.2,
-    status: 'CLOSED',
-    pnl: 2064.00,
-    timestamp: '2026-05-29T21:00:00Z',
-    exitTimestamp: '2026-05-30T10:15:00Z',
-    reason: 'Consolidation range expansion breakout with extreme momentum verification.',
-  },
-  {
-    id: 'audited-13',
-    symbol: 'AAPL',
-    side: 'BUY',
-    entryPrice: 176.00,
-    exitPrice: 181.50,
-    stopLoss: 173.00,
-    takeProfit: 183.00,
-    size: 15.0,
-    status: 'CLOSED',
-    pnl: 2505.00,
-    timestamp: '2026-06-01T10:00:00Z',
-    exitTimestamp: '2026-06-01T15:30:00Z',
-    reason: 'Safe haven gold inflow on strong breakout confirmation with multi-timeframe order block synergy. Achieved RR of 1.6.',
-  },
-];
+const AUDITED_HISTORIC_TRADES: Trade[] = [];
 
 const getStrategyGradient = (strategy: string) => {
   switch (strategy) {
@@ -324,12 +128,13 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
   const isDemo = traderEmail.toLowerCase() === 'demo@gmail.com';
   const INITIAL_BALANCE = isDemo ? 10000 : 0;
 
-  // Complete historical timeline of closed trades, combining backend DB and audited history
+  // Complete historical timeline of closed trades, combining backend DB and clean trade history
   const allClosedTradesSorted = useMemo(() => {
     // Only aggregate closed trades
     const userClosedTrades = trades.filter((t) => t.status === 'CLOSED');
     
-    const seedTrades = isDemo ? AUDITED_HISTORIC_TRADES : [];
+    // Clean slate: no hardcoded mock trades seeded in demo or real
+    const seedTrades: Trade[] = [];
 
     // De-duplicate so we don't double count and merge overrides
     const combined = seedTrades.map(t => {
@@ -350,7 +155,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
 
     // Sort chronologically
     return combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  }, [trades, localOverrides, isDemo]);
+  }, [trades, localOverrides]);
 
   // Session PnL Heatmap calculations to identify time-based performance, peak and trough drawdowns
   const sessionHeatmapData = useMemo(() => {
@@ -590,7 +395,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
       if (currentEquity > peak) {
         peak = currentEquity;
       }
-      const drawdown = ((peak - currentEquity) / peak) * 100;
+      const drawdown = peak > 0 ? ((peak - currentEquity) / peak) * 100 : 0;
       if (drawdown > maxDrawdown) {
         maxDrawdown = drawdown;
       }
@@ -610,7 +415,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
       avgRR,
       maxDrawdown,
       finalEquity: currentEquity,
-      netReturn: ((currentEquity - INITIAL_BALANCE) / INITIAL_BALANCE) * 100,
+      netReturn: INITIAL_BALANCE > 0 ? ((currentEquity - INITIAL_BALANCE) / INITIAL_BALANCE) * 100 : 0,
     };
   }, [allClosedTradesSorted]);
 
@@ -633,7 +438,7 @@ export default function PerformanceTracker({ trades, onTradeUpdated }: Performan
       if (currentBalance > peak) {
         peak = currentBalance;
       }
-      const dd = ((peak - currentBalance) / peak) * 100;
+      const dd = peak > 0 ? ((peak - currentBalance) / peak) * 100 : 0;
       
       curve.push({
         index: i + 1,

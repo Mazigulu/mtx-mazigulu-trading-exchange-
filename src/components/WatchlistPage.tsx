@@ -198,9 +198,11 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 interface WatchlistPageProps {
   onSelectSymbol: (symbol: any) => void;
   onSelectTab: (tab: string) => void;
+  accountMode?: 'DEMO' | 'REAL';
 }
 
-export default function WatchlistPage({ onSelectSymbol, onSelectTab }: WatchlistPageProps) {
+export default function WatchlistPage({ onSelectSymbol, onSelectTab, accountMode: propAccountMode }: WatchlistPageProps) {
+  const currentMode = propAccountMode || (typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') === 'REAL' ? 'REAL' : 'DEMO') : 'DEMO');
   const [currentUser, setCurrentUser] = useState<User | null>(() => auth.currentUser);
 
   // Monitor Auth State
@@ -350,9 +352,18 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
   const [buyLoading, setBuyLoading] = useState(false);
   const [buySuccess, setBuySuccess] = useState(false);
   
-  const isDemo = typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') !== 'REAL') : true;
+  const isDemo = currentMode !== 'REAL';
   const cashStorageKey = isDemo ? 'mtx_demo_cash' : 'mtx_real_cash';
   const holdingsStorageKey = isDemo ? 'broker_holdings_demo' : 'broker_holdings_real';
+
+  const [holdings, setHoldings] = useState<Record<string, number>>(() => {
+    try {
+      let saved = localStorage.getItem(holdingsStorageKey);
+      if (!saved && isDemo) saved = localStorage.getItem('broker_holdings');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
 
   const [brokerCash, setBrokerCash] = useState<number>(() => {
     try {
@@ -361,7 +372,12 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
         return saved ? parseFloat(saved) : 100000.00;
       } else {
         const saved = localStorage.getItem('mtx_real_cash');
-        return saved ? parseFloat(saved) : 0.00;
+        const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
+        if (!saved || parseFloat(saved) === 58000 || parseFloat(saved) === 100000 || parseFloat(saved) === demoCash) {
+          localStorage.setItem('mtx_real_cash', '0.00');
+          return 0.00;
+        }
+        return Math.max(0, parseFloat(saved));
       }
     } catch {
       return isDemo ? 100000.00 : 0.00;
@@ -434,6 +450,16 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
       if (savedCash) {
         setBrokerCash(parseFloat(savedCash));
       }
+
+      const holdKey = mode === 'REAL' ? 'broker_holdings_real' : 'broker_holdings_demo';
+      let savedHold = localStorage.getItem(holdKey);
+      if (!savedHold && mode === 'DEMO') savedHold = localStorage.getItem('broker_holdings');
+      if (savedHold) {
+        try {
+          setHoldings(JSON.parse(savedHold));
+        } catch {}
+      }
+
       const alertsKey = currentUser ? `priceAlerts_${currentUser.uid}` : 'priceAlerts_guest';
       const savedAlerts = localStorage.getItem(alertsKey) || localStorage.getItem('priceAlerts');
       if (savedAlerts) {
@@ -458,8 +484,23 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
       }
     };
 
+    const handleCashEvent = (e: any) => {
+      const mode = localStorage.getItem('mtx_account_mode') || 'DEMO';
+      if (e?.detail?.cash !== undefined) {
+        if (!e?.detail?.mode || e?.detail?.mode === mode) {
+          setBrokerCash(e.detail.cash);
+        }
+      }
+    };
+
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener('broker_cash_updated', handleCashEvent);
+    window.addEventListener('mtx_order_executed', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('broker_cash_updated', handleCashEvent);
+      window.removeEventListener('mtx_order_executed', handleStorage);
+    };
   }, [currentUser]);
 
   // Fetch prices on mount / watchlist change with deduplication
@@ -1134,6 +1175,11 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab }: Watchlist
                           <span className="px-1 py-0.2 rounded bg-white/5 border border-white/10 text-[7.5px] font-mono text-[#e5e5e5]/50 font-bold uppercase tracking-wide">
                             {asset.exchange}
                           </span>
+                          {holdings[asset.symbol] !== undefined && holdings[asset.symbol] > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-[8px] font-mono text-indigo-300 font-bold" title={`Holding ${holdings[asset.symbol].toFixed(4)} shares in portfolio`}>
+                              {holdings[asset.symbol].toFixed(2)} sh
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] text-white/55 font-sans mt-0.5 truncate max-w-[130px] sm:max-w-[160px]" title={asset.name}>
                           {asset.name}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PaymentModals } from './PaymentModals';
+import DemoCapitalModal from './DemoCapitalModal';
 import { 
   Wallet, 
   ArrowLeftRight, 
@@ -73,32 +74,78 @@ const SUPPORTED_ASSETS = [
   { symbol: 'KES', name: 'Kenya Shilling', type: 'FIAT', logo: '🇰🇪', network: 'M-Pesa Express', rate: 0.0078, explorer: null, contract: null },
 ];
 
-export default function FundingDesk() {
+interface FundingDeskProps {
+  key?: React.Key;
+  accountMode?: 'DEMO' | 'REAL';
+}
+
+export default function FundingDesk({ accountMode = (typeof window !== 'undefined' && localStorage.getItem('mtx_account_mode') === 'REAL' ? 'REAL' : 'DEMO') }: FundingDeskProps) {
+  const isDemo = accountMode === 'DEMO';
+  const cashStorageKey = isDemo ? 'mtx_demo_cash' : 'mtx_real_cash';
+  const txStorageKey = isDemo ? 'mtx_demo_funding_txs' : 'mtx_real_funding_txs';
+  const balancesStorageKey = isDemo ? 'mtx_demo_balances' : 'mtx_real_balances';
+
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [showConnectionsModal, setShowConnectionsModal] = useState(false);
   const [modalStep, setModalStep] = useState<'view' | 'add' | 'success'>('view');
+  const [isDemoCapitalModalOpen, setIsDemoCapitalModalOpen] = useState(false);
   
-  // Base cash balance state (synchronized with USD balance for REAL mode)
+  // Base cash balance state (synchronized with USD balance for DEMO / REAL mode)
   const [cashBalance, setCashBalance] = useState<number>(() => {
     try {
+      if (isDemo) {
+        const saved = localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash');
+        return saved ? parseFloat(saved) : 100000.00;
+      }
       const saved = localStorage.getItem('mtx_real_cash');
-      return saved ? parseFloat(saved) : 0.00;
+      const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
+      if (!saved || parseFloat(saved) === 58000 || parseFloat(saved) === 100000 || parseFloat(saved) === demoCash) {
+        localStorage.setItem('mtx_real_cash', '0.00');
+        return 0.00;
+      }
+      return Math.max(0, parseFloat(saved));
     } catch {
-      return 0.00;
+      return isDemo ? 100000.00 : 0.00;
     }
   });
 
   // Comprehensive multi-currency balances and identity details
-  const [balances, setBalances] = useState<{ [symbol: string]: number }>({
-    USD: 0.00,
-    KES: 0.00,
-    EUR: 0.00,
-    GBP: 0.00,
-    USDC: 0.00,
-    USDT: 0.00,
-    PYUSD: 0.00,
-    ETH: 0.00,
-    BTC: 0.00
+  const [balances, setBalances] = useState<{ [symbol: string]: number }>(() => {
+    try {
+      const saved = localStorage.getItem(balancesStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (!isDemo && (parsed.USD === 58000 || parsed.USD === 100000 || parsed.USD >= 50000)) {
+          localStorage.removeItem('mtx_real_balances');
+        } else {
+          return parsed;
+        }
+      }
+      if (isDemo) {
+        return {
+          USD: 100000.00,
+          KES: 0.00,
+          EUR: 0.00,
+          GBP: 0.00,
+          USDC: 0.00,
+          USDT: 0.00,
+          PYUSD: 0.00,
+          ETH: 0.00,
+          BTC: 0.00
+        };
+      }
+    } catch {}
+    return {
+      USD: 0.00,
+      KES: 0.00,
+      EUR: 0.00,
+      GBP: 0.00,
+      USDC: 0.00,
+      USDT: 0.00,
+      PYUSD: 0.00,
+      ETH: 0.00,
+      BTC: 0.00
+    };
   });
 
   const [walletDetails, setWalletDetails] = useState<WalletDetails>({
@@ -228,17 +275,92 @@ export default function FundingDesk() {
 
   // 1. Fetch balance and transaction list from backend server
   const fetchFundingState = async (silently = false) => {
+    if (isDemo) {
+      // Demo sandbox state is managed locally and in sync with demo capital
+      const savedCash = localStorage.getItem('mtx_demo_cash') || localStorage.getItem('broker_cash') || '100000.00';
+      const parsedCash = parseFloat(savedCash);
+      setCashBalance(parsedCash);
+      
+      const savedBalances = localStorage.getItem(balancesStorageKey);
+      if (savedBalances) {
+        try {
+          const b = JSON.parse(savedBalances);
+          b.USD = parsedCash;
+          setBalances(b);
+        } catch {}
+      } else {
+        setBalances(prev => ({ ...prev, USD: parsedCash }));
+      }
+
+      const isSeededOrMock = (t: any) => {
+        if (!t || typeof t !== 'object') return true;
+        const id = String(t.id || '').toLowerCase();
+        const method = String(t.method || '').toLowerCase();
+        return (
+          id === 'fund-1' ||
+          id === 'fund-2' ||
+          id === 'fund-3' ||
+          id === 'fund-4' ||
+          id.startsWith('fund-1') ||
+          id.startsWith('fund-2') ||
+          id.startsWith('fund-3') ||
+          id.startsWith('fund-4') ||
+          id.startsWith('fund-pnl-') ||
+          id.startsWith('act_1') ||
+          id.includes('seed') ||
+          method.includes('trade profit settle') ||
+          method.includes('trade loss settle')
+        );
+      };
+
+      const savedTxs = localStorage.getItem(txStorageKey);
+      if (savedTxs) {
+        try {
+          const parsed = JSON.parse(savedTxs);
+          const sanitized = Array.isArray(parsed) ? parsed.filter((t: any) => !isSeededOrMock(t)) : [];
+          setTxs(sanitized);
+        } catch {}
+      }
+      return;
+    }
+
     if (!silently) setLoading(true);
     try {
+      const isSeededOrMock = (t: any) => {
+        if (!t || typeof t !== 'object') return true;
+        const id = String(t.id || '').toLowerCase();
+        const method = String(t.method || '').toLowerCase();
+        return (
+          id === 'fund-1' ||
+          id === 'fund-2' ||
+          id === 'fund-3' ||
+          id === 'fund-4' ||
+          id.startsWith('fund-1') ||
+          id.startsWith('fund-2') ||
+          id.startsWith('fund-3') ||
+          id.startsWith('fund-4') ||
+          id.startsWith('fund-pnl-') ||
+          id.startsWith('act_1') ||
+          id.includes('seed') ||
+          method.includes('trade profit settle') ||
+          method.includes('trade loss settle')
+        );
+      };
+
       const res = await fetch('/api/funding/state');
       if (res.ok) {
         const data = await res.json();
-        const realBal = typeof data.balance === 'number' ? data.balance : 0.00;
+        let realBal = typeof data.balance === 'number' ? Math.max(0, data.balance) : 0.00;
+        if (realBal === 58000 || realBal === 200000) realBal = 0.00;
         localStorage.setItem('mtx_real_cash', realBal.toString());
         setCashBalance(realBal);
-        if (data.balances) setBalances(data.balances);
+        if (data.balances) {
+          if (data.balances.USD === 58000 || data.balances.USD === 200000) data.balances.USD = 0.00;
+          setBalances(data.balances);
+        }
         if (data.walletDetails) setWalletDetails(data.walletDetails);
-        setTxs(data.transactions || []);
+        const cleanServerTxs = Array.isArray(data.transactions) ? data.transactions.filter((t: any) => !isSeededOrMock(t)) : [];
+        setTxs(cleanServerTxs);
         window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: realBal, mode: 'REAL' } }));
       }
     } catch (err) {
@@ -251,20 +373,23 @@ export default function FundingDesk() {
   // Fetch state on mount and poll for background transaction simulation (pending status)
   useEffect(() => {
     fetchFundingState();
-    const interval = setInterval(() => {
-      fetchFundingState(true);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!isDemo) {
+      const interval = setInterval(() => {
+        fetchFundingState(true);
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [accountMode]);
 
-  // Listen to local storage changes to keep cash balance perfectly synchronized for REAL ledger
+  // Listen to local storage changes to keep cash balance perfectly synchronized for active ledger
   useEffect(() => {
     const handleStorageChange = async () => {
-      const saved = localStorage.getItem('mtx_real_cash');
+      const saved = localStorage.getItem(cashStorageKey);
       if (saved) {
         const val = parseFloat(saved);
         if (!isNaN(val) && val !== cashBalance) {
           setCashBalance(val);
+          setBalances(prev => ({ ...prev, USD: val }));
         }
       }
     };
@@ -274,7 +399,7 @@ export default function FundingDesk() {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
     };
-  }, [cashBalance]);
+  }, [cashBalance, cashStorageKey]);
 
   // Handle Tab/Asset matching
   useEffect(() => {
@@ -455,6 +580,65 @@ export default function FundingDesk() {
       }
     }
 
+    // If in DEMO sandbox mode, execute instant simulated ledger transfer
+    if (isDemo) {
+      setLoading(true);
+      setTimeout(() => {
+        const isDep = activeTab === 'deposit';
+        const currentAssetBal = balances[selectedAsset] || 0;
+        const newAssetBal = isDep ? (currentAssetBal + amount) : Math.max(0, currentAssetBal - amount);
+        const updatedBalances = { ...balances, [selectedAsset]: newAssetBal };
+        
+        // If USD changed, update cash
+        let newUsdCash = cashBalance;
+        if (selectedAsset === 'USD') {
+          newUsdCash = newAssetBal;
+        } else {
+          // Adjust USD cash equivalent
+          const rate = currentAssetDetails ? currentAssetDetails.rate : 1.0;
+          const deltaUsd = isDep ? (amount * rate) : -(amount * rate);
+          newUsdCash = Math.max(0, parseFloat((cashBalance + deltaUsd).toFixed(2)));
+          updatedBalances.USD = newUsdCash;
+        }
+
+        const now = new Date();
+        const dateStr = now.toISOString().replace('T', ' ').substring(0, 16);
+        const newTx: FundingTx = {
+          id: `fund-demo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: isDep ? 'DEPOSIT' : 'WITHDRAWAL',
+          method: `Demo ${transferMethod} Sandbox Clearing`,
+          currency: selectedAsset,
+          amount,
+          balanceBefore: currentAssetBal,
+          balanceAfter: newAssetBal,
+          status: 'Settled',
+          providerStatus: 'sandbox_completed',
+          date: dateStr,
+          auditHash: `demo_sha256_${Date.now().toString(16)}`
+        };
+
+        const updatedTxs = [newTx, ...txs];
+        setTxs(updatedTxs);
+        setCashBalance(newUsdCash);
+        setBalances(updatedBalances);
+
+        localStorage.setItem(cashStorageKey, newUsdCash.toString());
+        localStorage.setItem('broker_cash', newUsdCash.toString());
+        localStorage.setItem(balancesStorageKey, JSON.stringify(updatedBalances));
+        localStorage.setItem(txStorageKey, JSON.stringify(updatedTxs));
+
+        window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: newUsdCash, mode: 'DEMO' } }));
+
+        setNotification(`SUCCESS: Cleared demo ${isDep ? 'deposit' : 'withdrawal'} of ${amount.toLocaleString()} ${selectedAsset}.`);
+        setTransferAmount('');
+        setDestWalletAddress('');
+        setWithdrawalStep(1);
+        setLoading(false);
+        setTimeout(() => setNotification(null), 5000);
+      }, 500);
+      return;
+    }
+
     // Default or fallback (such as Withdrawals or already-authenticated ACH)
     try {
       setLoading(true);
@@ -569,11 +753,29 @@ export default function FundingDesk() {
             <h3 className="text-3xl font-black font-mono tracking-tight text-white">
               ${totalValuationUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
-            <div className="mt-2.5 flex items-center">
-              <span className="inline-flex items-center gap-1.5 bg-emerald-600 text-white font-mono text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md shadow-sm">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Audited & Collateralized</span>
-              </span>
+            <div className="mt-2.5 flex items-center gap-2">
+              {isDemo ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 bg-indigo-600 text-white font-mono text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md shadow-sm">
+                    <Coins className="w-3.5 h-3.5" />
+                    <span>Demo Institutional Sandbox</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsDemoCapitalModalOpen(true)}
+                    className="px-2.5 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-200 hover:text-white border border-indigo-400/40 text-[9px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                    title="Change or Refill Demo Capital ($50k - $200k+)"
+                  >
+                    <RefreshCw className="w-2.5 h-2.5" />
+                    <span>Refill Capital</span>
+                  </button>
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 bg-emerald-600 text-white font-mono text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md shadow-sm">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Audited Real Collateral</span>
+                </span>
+              )}
             </div>
           </div>
         </motion.div>
@@ -1796,6 +1998,39 @@ export default function FundingDesk() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Demo Capital Tier Allocation Dialog */}
+      <DemoCapitalModal
+        isOpen={isDemoCapitalModalOpen}
+        onClose={() => setIsDemoCapitalModalOpen(false)}
+        currentCash={cashBalance}
+        isRefill={true}
+        onSelectAmount={(amount) => {
+          setCashBalance(amount);
+          setBalances(prev => ({ ...prev, USD: amount }));
+          localStorage.setItem('broker_cash', amount.toString());
+          localStorage.setItem('mtx_demo_cash', amount.toString());
+          const now = new Date();
+          const newTx: FundingTx = {
+            id: `fund-demo-refill-${Date.now()}`,
+            type: 'DEPOSIT',
+            method: 'Sandbox Demo Capital Refill',
+            currency: 'USD',
+            amount: amount,
+            balanceBefore: cashBalance,
+            balanceAfter: amount,
+            status: 'Settled',
+            providerStatus: 'sandbox_refilled',
+            date: now.toISOString().replace('T', ' ').substring(0, 16),
+            auditHash: `demo_sha256_${Date.now().toString(16)}`
+          };
+          const updatedTxs = [newTx, ...txs];
+          setTxs(updatedTxs);
+          localStorage.setItem(txStorageKey, JSON.stringify(updatedTxs));
+          window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: amount, mode: 'DEMO' } }));
+          window.dispatchEvent(new Event('storage'));
+        }}
+      />
 
     </div>
   );

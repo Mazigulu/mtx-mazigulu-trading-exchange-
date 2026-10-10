@@ -1,6 +1,6 @@
 {
   "name": "mtx",
-  "description": "Apex MTX institutional multi-asset brokerage and portfolio builder featuring available demo cash allocation, interactive asset picking across US tech giants, index ETFs, blue chips, and digital assets, fractional share settlement, and real-time portfolio analytics.",
+  "description": "MTX is an institutional-grade multi-asset fractional trading platform and brokerage. Buy fractionalized stocks, corporate bonds, and US Treasuries starting at $1 with sub-millisecond execution, zero commission, real-time Value-at-Risk portfolio margin, 4.85% APY cash sweeps, and 1% matching IRAs.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

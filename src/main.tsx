@@ -4,21 +4,33 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Gracefully handle web3, MetaMask, or third-party background promise rejections
+// Gracefully handle AbortError, web3, MetaMask, or background promise rejections
+const isIgnorableError = (err: any): boolean => {
+  if (!err) return false;
+  const name = err?.name || '';
+  const message = err?.message || String(err || '');
+  const text = (name + ' ' + message).toLowerCase();
+  return (
+    name === 'AbortError' ||
+    text.includes('aborterror') ||
+    text.includes('the user aborted a request') ||
+    text.includes('signal is aborted') ||
+    text.includes('aborted without reason') ||
+    text.includes('operation was aborted') ||
+    text.includes('metamask') || 
+    text.includes('ethereum') || 
+    text.includes('wallet') || 
+    text.includes('web3') ||
+    text.includes('provider') ||
+    text.includes('failed to connect') ||
+    text.includes('user rejected')
+  );
+};
+
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', (event) => {
-    const errorReason = event.reason?.message || String(event.reason || '');
-    const lowerReason = errorReason.toLowerCase();
-    if (
-      lowerReason.includes('metamask') || 
-      lowerReason.includes('ethereum') || 
-      lowerReason.includes('wallet') || 
-      lowerReason.includes('web3') ||
-      lowerReason.includes('provider') ||
-      lowerReason.includes('failed to connect') ||
-      lowerReason.includes('user rejected')
-    ) {
-      console.warn('Intercepted and secured MetaMask/Web3 async connection exception gracefully:', event.reason);
+    if (isIgnorableError(event.reason)) {
+      console.warn('Intercepted and secured background rejection gracefully:', event.reason);
       try {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -27,18 +39,8 @@ if (typeof window !== 'undefined') {
   }, true);
 
   window.addEventListener('error', (event) => {
-    const errorMsg = event.message || String(event.error?.message || '');
-    const lowerMsg = errorMsg.toLowerCase();
-    if (
-      lowerMsg.includes('metamask') || 
-      lowerMsg.includes('ethereum') || 
-      lowerMsg.includes('wallet') || 
-      lowerMsg.includes('web3') ||
-      lowerMsg.includes('provider') ||
-      lowerMsg.includes('failed to connect') ||
-      lowerMsg.includes('user rejected')
-    ) {
-      console.warn('Intercepted and secured MetaMask/Web3 global error report gracefully:', event.error);
+    if (isIgnorableError(event.error) || isIgnorableError(event.message)) {
+      console.warn('Intercepted and secured global error report gracefully:', event.error || event.message);
       try {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -75,6 +77,10 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      if (isIgnorableError(this.state.error)) {
+        console.warn('Recovered from AbortError/Network signal in ErrorBoundary:', this.state.error);
+        return (this as any).props.children;
+      }
       const errMessage = (this.state.error?.toString() || '').toLowerCase();
       if (
         errMessage.includes('metamask') ||

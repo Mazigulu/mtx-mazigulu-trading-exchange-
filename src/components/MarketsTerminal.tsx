@@ -281,11 +281,14 @@ const itemVariants = {
 };
 
 interface MarketsTerminalProps {
+  key?: React.Key;
   initialTicker?: string;
   initialSubTab?: 'ANALYSIS' | 'SCREENER';
+  accountMode?: 'DEMO' | 'REAL';
 }
 
-export default function MarketsTerminal({ initialTicker, initialSubTab }: MarketsTerminalProps = {}) {
+export default function MarketsTerminal({ initialTicker, initialSubTab, accountMode: propAccountMode }: MarketsTerminalProps = {}) {
+  const currentMode = propAccountMode || (typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') === 'REAL' ? 'REAL' : 'DEMO') : 'DEMO');
   const [activeSubTab, setActiveSubTab] = useState<'ANALYSIS' | 'SCREENER'>(() => {
     if (initialSubTab) return initialSubTab;
     try {
@@ -1085,7 +1088,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
     );
   };
 
-  const isDemo = typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') !== 'REAL') : true;
+  const isDemo = currentMode !== 'REAL';
   const cashStorageKey = isDemo ? 'mtx_demo_cash' : 'mtx_real_cash';
   const holdingsStorageKey = isDemo ? 'broker_holdings_demo' : 'broker_holdings_real';
 
@@ -1097,7 +1100,12 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
         return saved ? parseFloat(saved) : 100000.00;
       } else {
         const saved = localStorage.getItem('mtx_real_cash');
-        return saved ? parseFloat(saved) : 0.00;
+        const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
+        if (!saved || parseFloat(saved) === 58000 || parseFloat(saved) === 100000 || parseFloat(saved) === demoCash) {
+          localStorage.setItem('mtx_real_cash', '0.00');
+          return 0.00;
+        }
+        return Math.max(0, parseFloat(saved));
       }
     } catch {
       return isDemo ? 100000.00 : 0.00;
@@ -1122,12 +1130,30 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
     return {};
   });
 
-  // Persist to localStorage whenever changed
+  // Synchronize cash and holdings from storage & global execution events
   useEffect(() => {
-    localStorage.setItem(cashStorageKey, brokerCash.toString());
-  }, [brokerCash, cashStorageKey]);
+    const handleSync = () => {
+      try {
+        const savedCash = localStorage.getItem(cashStorageKey);
+        if (savedCash) {
+          const parsed = parseFloat(savedCash);
+          if (!isNaN(parsed)) setBrokerCash(parsed);
+        }
+        let savedHoldings = localStorage.getItem(holdingsStorageKey);
+        if (!savedHoldings && isDemo) {
+          savedHoldings = localStorage.getItem('broker_holdings');
+        }
+        if (savedHoldings) {
+          const parsed = JSON.parse(savedHoldings);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            setBrokerHoldings(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn('MarketsTerminal sync error:', e);
+      }
+    };
 
-  useEffect(() => {
     const handleCashUpdate = (e: any) => {
       if (e?.detail?.cash !== undefined) {
         if (e.detail.mode) {
@@ -1139,13 +1165,23 @@ export default function MarketsTerminal({ initialTicker, initialSubTab }: Market
         }
       }
     };
-    window.addEventListener('broker_cash_updated', handleCashUpdate);
-    return () => window.removeEventListener('broker_cash_updated', handleCashUpdate);
-  }, [isDemo]);
 
-  useEffect(() => {
-    localStorage.setItem(holdingsStorageKey, JSON.stringify(brokerHoldings));
-  }, [brokerHoldings, holdingsStorageKey]);
+    const handleOrderExecuted = (e: any) => {
+      handleSync();
+    };
+
+    window.addEventListener('broker_cash_updated', handleCashUpdate);
+    window.addEventListener('mtx_order_executed', handleOrderExecuted);
+    window.addEventListener('storage', handleSync);
+    const interval = setInterval(handleSync, 2000);
+
+    return () => {
+      window.removeEventListener('broker_cash_updated', handleCashUpdate);
+      window.removeEventListener('mtx_order_executed', handleOrderExecuted);
+      window.removeEventListener('storage', handleSync);
+      clearInterval(interval);
+    };
+  }, [isDemo, cashStorageKey, holdingsStorageKey]);
 
   // Order ticket inputs
   const [orderSide, setOrderSide] = useState<'BUY' | 'SELL'>('BUY');

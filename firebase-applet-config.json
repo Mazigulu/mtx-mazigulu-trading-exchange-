@@ -3,7 +3,10 @@
   "appId": "1:603218542669:web:0a8dcd3df18a5c176f1c04",
   "apiKey": "AIzaSyAAfKLgqOrc6CfIzHgPPGFxnd_r_NKWjDY",
   "authDomain": "emerald-emissary-27k72.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-mtxtradingagent-6576b039-cd3f-45fd-a145-82a41a8eeb24",
   "storageBucket": "emerald-emissary-27k72.firebasestorage.app",
   "messagingSenderId": "603218542669",
-  "measurementId": ""
+  "measurementId": "",
+  "oAuthClientId": "603218542669-9p6jan498jmc558pd1e3oo7jiia0e8o0.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

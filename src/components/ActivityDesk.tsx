@@ -54,563 +54,16 @@ interface ActivityEvent {
   timeline: TimelineStep[];
 }
 
-// 25+ highly detailed records covering all required operational actions inside MTXCapital
-const INITIAL_ACTIVITIES: ActivityEvent[] = [
-  {
-    id: 'act_101',
-    timestamp: '2026-07-03 11:24:06',
-    type: 'BUY',
-    category: 'investment',
-    eventName: 'Purchased Apple Inc.',
-    asset: 'AAPL',
-    methodOrDetail: 'USD Balance',
-    amount: '$500.00',
-    amountUSDValue: 500,
-    status: 'Completed',
-    refId: 'ord_92845',
-    quantity: '1.62 Shares',
-    price: '$307.92',
-    network: 'Nasdaq Equities Feed',
-    settlementRail: 'Apex DTC Instant Settlement',
-    fees: '$0.15 (0.03% Clearing)',
-    timeline: [
-      { label: 'Order Submitted', timestamp: '11:24:01', description: 'Limit Buy order routed via terminal interface' },
-      { label: 'Settlement Initiated', timestamp: '11:24:03', description: 'Internal treasury clearance validation triggered' },
-      { label: 'Settlement Completed', timestamp: '11:24:06', description: 'Securities ledger credited and cash asset debited' }
-    ]
-  },
-  {
-    id: 'act_102',
-    timestamp: '2026-07-03 11:17:42',
-    type: 'DEPOSIT',
-    category: 'funding',
-    eventName: 'KES Deposit via M-Pesa',
-    asset: 'KES',
-    methodOrDetail: 'M-Pesa Gateway',
-    amount: 'KES 30,000',
-    amountUSDValue: 230.77,
-    status: 'Completed',
-    refId: 'dep_29182',
-    quantity: 'N/A',
-    price: '1.00 KES',
-    network: 'Safaricom API integration',
-    settlementRail: 'Safaricom Paybill #408892',
-    fees: 'KES 450.00 (Merchant Processing Fee)',
-    timeline: [
-      { label: 'M-Pesa Prompt Triggered', timestamp: '11:16:30', description: 'USSD push sent to customer phone ending in *492' },
-      { label: 'Safaricom Authentication Verified', timestamp: '11:17:15', description: 'Customer completed PIN verification successfully' },
-      { label: 'Account Ledger Credited', timestamp: '11:17:42', description: 'Deposit matched to reference ID: dep_29182' }
-    ]
-  },
-  {
-    id: 'act_103',
-    timestamp: '2026-07-03 10:52:11',
-    type: 'CONVERSION',
-    category: 'funding',
-    eventName: 'Currency Conversion KES → USD',
-    asset: 'KES → USD',
-    methodOrDetail: 'MTX Instant FX Spot',
-    amount: '$230.00',
-    amountUSDValue: 230,
-    status: 'Completed',
-    refId: 'fx_10283',
-    quantity: 'KES 29,550.00',
-    price: '0.00778 USD/KES',
-    network: 'Bloomberg FX Desk Fix',
-    settlementRail: 'MTX Spot Settlement Pool',
-    fees: '$0.92 (0.4% FX Spread Markup)',
-    timeline: [
-      { label: 'FX Rate Locked', timestamp: '10:51:55', description: 'Spot contract quote accepted at 128.48 KES/USD' },
-      { label: 'Asset Swapped', timestamp: '10:52:05', description: 'Settled KES balance subtracted and USD credited' },
-      { label: 'Clearing Settlement Finished', timestamp: '10:52:11', description: 'FX blotter updated' }
-    ]
-  },
-  {
-    id: 'act_104',
-    timestamp: '2026-07-03 09:45:00',
-    type: 'WITHDRAWAL',
-    category: 'funding',
-    eventName: 'Withdrawal to Commercial Bank',
-    asset: 'USD',
-    methodOrDetail: 'Fedwire Transfer',
-    amount: '$1,000.00',
-    amountUSDValue: 1000,
-    status: 'Pending',
-    refId: 'wd_82920',
-    quantity: 'N/A',
-    price: '1.00 USD',
-    network: 'Federal Reserve Wire Network',
-    settlementRail: 'Chase ACH/Fedwire Gate #12',
-    fees: '$15.00 (Standard Outgoing Wire fee)',
-    timeline: [
-      { label: 'Withdrawal Instruction Received', timestamp: '09:44:12', description: 'Outgoing wire request initiated by verified user' },
-      { label: 'Dual-Factor Audit Cleared', timestamp: '09:44:55', description: 'Secured via hardware security key confirmation' },
-      { label: 'Awaiting Federal Reserve Settlement', timestamp: '09:45:00', description: 'Held in clearing status. Cutoff window next settlement: 14:00' }
-    ]
-  },
-  {
-    id: 'act_105',
-    timestamp: '2026-07-02 16:21:18',
-    type: 'DIVIDEND',
-    category: 'investment',
-    eventName: 'Dividend Credit',
-    asset: 'VOO',
-    methodOrDetail: 'Vanguard S&P 500 ETF',
-    amount: '$12.40',
-    amountUSDValue: 12.4,
-    status: 'Completed',
-    refId: 'div_18281',
-    quantity: '7.82 Shares (Held on Record Date)',
-    price: '$1.585 per Share',
-    network: 'SEC Registered Custodian Feed',
-    settlementRail: 'DTCC Corporate Action Pool',
-    fees: '$0.00 (No fee on incoming dividend credits)',
-    timeline: [
-      { label: 'Ex-Dividend Date Logged', timestamp: '2026-06-28 09:00:00', description: 'Record position verified' },
-      { label: 'Dividend Disbursed', timestamp: '2026-07-02 12:00:00', description: 'Vanguard disbursed capital distribution to custodial clearing' },
-      { label: 'Ledger Settlement Cleared', timestamp: '2026-07-02 16:21:18', description: 'Portfolio cash balances credited' }
-    ]
-  },
-  {
-    id: 'act_106',
-    timestamp: '2026-07-02 14:10:02',
-    type: 'STABLECOIN',
-    category: 'funding',
-    eventName: 'Stablecoin Transfer Inbound',
-    asset: 'USDC',
-    methodOrDetail: 'Arbitrum Network',
-    amount: '1,500.00 USDC',
-    amountUSDValue: 1500,
-    status: 'Completed',
-    refId: 'dep_usdc_7729',
-    quantity: '1,500.00 USDC',
-    price: '$1.00',
-    network: 'Arbitrum L2 Blockchain',
-    settlementRail: 'Circle Smart Contract Vault #0x7721...',
-    fees: '$0.02 (Gas absorbed by MTX)',
-    timeline: [
-      { label: 'Transaction Detected', timestamp: '14:09:15', description: 'Block #19208453 validated inbound USDC to allocated deposit address' },
-      { label: '6 Confirmations Cleared', timestamp: '14:09:45', description: 'Optimistic settlement finalized on Arbitrum rollup' },
-      { label: 'Ledger Balance Updated', timestamp: '14:10:02', description: 'Credited directly to core USD collateral vault' }
-    ]
-  },
-  {
-    id: 'act_107',
-    timestamp: '2026-07-02 11:45:12',
-    type: 'SELL',
-    category: 'investment',
-    eventName: 'Sold Exposure Position',
-    asset: 'BTC-USD',
-    methodOrDetail: 'Crypto Desk',
-    amount: '$2,345.00',
-    amountUSDValue: 2345,
-    status: 'Completed',
-    refId: 'ord_btc_88291',
-    quantity: '0.0348 BTC',
-    price: '$67,385.00',
-    network: 'Coinbase Prime Institutional Execution',
-    settlementRail: 'MTX Liquidity Partner Settlement',
-    fees: '$2.35 (0.10% Spot Commission)',
-    timeline: [
-      { label: 'Limit Sell Triggered', timestamp: '11:45:01', description: 'Position liquidated at BTC target level of $67,385' },
-      { label: 'Order Matched', timestamp: '11:45:04', description: 'Routed to order-matching engine with Coinbase Prime liquidity bridge' },
-      { label: 'Execution Certified', timestamp: '11:45:12', description: 'Subtracted 0.0348 BTC, added $2,345.00 cash' }
-    ]
-  },
-  {
-    id: 'act_108',
-    timestamp: '2026-07-01 10:00:00',
-    type: 'REBALANCING',
-    category: 'corporate',
-    eventName: 'ETF Rebalancing Allocation',
-    asset: 'QQQ',
-    methodOrDetail: 'Invesco Portfolio Rebalancing',
-    amount: 'N/A',
-    amountUSDValue: 0,
-    status: 'Completed',
-    refId: 'corp_91082',
-    quantity: 'Adjusted Weights',
-    price: 'Market close fixings',
-    network: 'Nasdaq Indexing Services',
-    settlementRail: 'Apex Clearing Portfolio Recalibration',
-    fees: '$0.00 (Automatic Internal Corporate Action)',
-    timeline: [
-      { label: 'Notification of Weight Modification', timestamp: '2026-06-25 08:30:00', description: 'Invesco Index announced reweighting adjustments for top Nasdaq holdings' },
-      { label: 'Recalibration Phase Initiated', timestamp: '2026-07-01 09:30:00', description: 'Portfolio weights balanced according to standard index specifications' },
-      { label: 'Heuristics Validated', timestamp: '2026-07-01 10:00:00', description: 'Fractional holdings matching finalized' }
-    ]
-  },
-  {
-    id: 'act_109',
-    timestamp: '2026-07-01 08:30:22',
-    type: 'LOGIN',
-    category: 'account',
-    eventName: 'New Device Security Login',
-    asset: 'System Audit',
-    methodOrDetail: 'Secured Web Terminal',
-    amount: 'N/A',
-    amountUSDValue: 0,
-    status: 'Completed',
-    refId: 'evt_log_48192',
-    quantity: 'N/A',
-    price: 'N/A',
-    network: 'MTX Identity Gateway',
-    settlementRail: 'Cloudflare Zero Trust Guard',
-    fees: '$0.00',
-    timeline: [
-      { label: 'Access Attempt Detected', timestamp: '08:30:05', description: 'Inbound session from IP 197.234.18.91 (Nairobi, Kenya)' },
-      { label: 'Dual Factor Authenticated', timestamp: '08:30:18', description: 'FIDO2 WebAuthn security key validation successful' },
-      { label: 'Session Certificate Provisioned', timestamp: '08:30:22', description: 'Assigned session token: MTX_SESS_6576B...' }
-    ]
-  },
-  {
-    id: 'act_110',
-    timestamp: '2026-06-30 15:45:00',
-    type: 'DELAYED',
-    category: 'system',
-    eventName: 'Settlement Delayed Alert',
-    asset: 'Chase Bank ACH Rail',
-    methodOrDetail: 'ACH Clearing',
-    amount: 'N/A',
-    amountUSDValue: 0,
-    status: 'Processing',
-    refId: 'sys_warn_2910',
-    quantity: 'N/A',
-    price: 'N/A',
-    network: 'Automated Operations Monitor',
-    settlementRail: 'FedACH Processing Gate #4',
-    fees: 'N/A',
-    timeline: [
-      { label: 'Processing Lag Logged', timestamp: '15:40:00', description: 'ACH endpoint did not return standard settlement signal' },
-      { label: 'Warning Disseminated', timestamp: '15:45:00', description: 'Delay advisory posted. Standard settlement operations extended by 30 mins' }
-    ]
-  },
-  {
-    id: 'act_111',
-    timestamp: '2026-06-30 09:12:15',
-    type: 'STOCK_SPLIT',
-    category: 'corporate',
-    eventName: 'Stock Split (NVIDIA 10:1)',
-    asset: 'NVDA',
-    methodOrDetail: 'Corporate Restructure',
-    amount: 'Adjusted x10',
-    amountUSDValue: 0,
-    status: 'Completed',
-    refId: 'corp_nvda_split',
-    quantity: 'Position multiplied by 10',
-    price: '$125.40 (Adjusted from $1,254.00)',
-    network: 'SEC Registered Securities Transfer Corp',
-    settlementRail: 'Apex Custodian Board',
-    fees: '$0.00',
-    timeline: [
-      { label: 'Corporate Decision Promulgated', timestamp: '2026-06-05 09:00:00', description: 'Board announced 10-for-1 forward split' },
-      { label: 'Split Ratio Evaluated', timestamp: '2026-06-30 08:00:00', description: 'Calculated holding expansion. Multiplied shares from 10 to 100' },
-      { label: 'Trading Commenced (Post-Split)', timestamp: '2026-06-30 09:12:15', description: 'Position cost bases recalibrated to prevent synthetic capital gain/loss' }
-    ]
-  },
-  {
-    id: 'act_112',
-    timestamp: '2026-06-29 17:33:04',
-    type: 'PASSWORD_CHANGE',
-    category: 'account',
-    eventName: 'Identity Password Reset',
-    asset: 'Security Creds',
-    methodOrDetail: 'User Self-Service Portal',
-    amount: 'N/A',
-    amountUSDValue: 0,
-    status: 'Completed',
-    refId: 'sec_pwd_910',
-    quantity: 'N/A',
-    price: 'N/A',
-    network: 'Identity Security Shield',
-    settlementRail: 'Firebase Authentication Auth-Service',
-    fees: 'N/A',
-    timeline: [
-      { label: 'Reset Email Requested', timestamp: '17:29:12', description: 'Verification link sent to user email: demo@gmail.com' },
-      { label: 'One-Time Secret Validated', timestamp: '17:32:00', description: 'User clicked cryptographic token and verified identity' },
-      { label: 'Security Password Committed', timestamp: '17:33:04', description: 'Salts updated in database. Current user active sessions retained' }
-    ]
-  },
-  {
-    id: 'act_113',
-    timestamp: '2026-06-29 14:00:00',
-    type: 'HALT',
-    category: 'system',
-    eventName: 'NYSE Regulatory Trading Halt',
-    asset: 'TSLA',
-    methodOrDetail: 'Volatility Circuit Breaker',
-    amount: 'Halt Level LULD',
-    amountUSDValue: 0,
-    status: 'Cancelled',
-    refId: 'hlt_tsla_2910',
-    quantity: 'N/A',
-    price: 'N/A',
-    network: 'NYSE SIP Market Feed',
-    settlementRail: 'NASDAQ SIP / Securities Information Processor',
-    fees: 'N/A',
-    timeline: [
-      { label: 'Trigger Event Logged', timestamp: '13:55:00', description: 'TSLA fell -10.2% within a 5-minute interval' },
-      { label: 'Circuit Breaker Inundation', timestamp: '14:00:00', description: 'LULD (Limit-Up Limit-Down) level 1 halt. Trading restricted on all public venues' },
-      { label: 'Halt Revoked', timestamp: '14:05:00', description: 'Market re-entered standard auction order match mode' }
-    ]
-  },
-  {
-    id: 'act_114',
-    timestamp: '2026-06-28 11:32:10',
-    type: 'FRACTIONAL_BUY',
-    category: 'investment',
-    eventName: 'Fractional Share Purchase',
-    asset: 'MSFT',
-    methodOrDetail: 'USD Cash Ledger',
-    amount: '$100.00',
-    amountUSDValue: 100,
-    status: 'Completed',
-    refId: 'ord_frac_881',
-    quantity: '0.238 Shares',
-    price: '$420.168',
-    network: 'MTX Fractional Fractionalization Feed',
-    settlementRail: 'Apex Co-Ownership Brokerage Ledger',
-    fees: '$0.03',
-    timeline: [
-      { label: 'Fractional Request Scheduled', timestamp: '11:32:01', description: 'Allocated portion of full-share matching block' },
-      { label: 'Cleared internally', timestamp: '11:32:05', description: 'Matched with corresponding fractional buy/sell blocks from alternate accounts' },
-      { label: 'Position Ledger Certified', timestamp: '11:32:10', description: 'Fractional balance adjusted dynamically' }
-    ]
-  },
-  {
-    id: 'act_115',
-    timestamp: '2026-06-27 10:15:00',
-    type: 'WITHDRAWAL',
-    category: 'funding',
-    eventName: 'Withdrawal to Bank Card',
-    asset: 'KES',
-    methodOrDetail: 'Visa / Mastercard payout',
-    amount: 'KES 150,000',
-    amountUSDValue: 1153.85,
-    status: 'Failed',
-    refId: 'wd_card_910',
-    quantity: 'N/A',
-    price: 'N/A',
-    network: 'Equity Bank Nairobi Card Clearing',
-    settlementRail: 'Visa Direct Payout API',
-    fees: 'KES 0.00 (Refunded completely upon abort)',
-    timeline: [
-      { label: 'Transaction Triggered', timestamp: '10:14:15', description: 'Card payout request sent to Visa gateway' },
-      { label: 'Authorization Denied', timestamp: '10:15:00', description: 'Card issuer bank returned decline code: "54 - Expired Card / Restriction on Account"' },
-      { label: 'Ledger Rollback Executed', timestamp: '10:15:05', description: 'Capital re-credited to KES wallet balance instantly' }
-    ]
-  },
-  {
-    id: 'act_116',
-    timestamp: '2026-06-26 12:00:00',
-    type: 'MAINTENANCE',
-    category: 'system',
-    eventName: 'Scheduled Database Optimization',
-    asset: 'MTX Core Infrastructure',
-    methodOrDetail: 'Maintenance Window',
-    amount: 'N/A',
-    amountUSDValue: 0,
-    status: 'Completed',
-    refId: 'sys_maint_919',
-    quantity: 'N/A',
-    price: 'N/A',
-    network: 'GCP Kubernetes Engine Control',
-    settlementRail: 'System redundancy switchover',
-    fees: 'N/A',
-    timeline: [
-      { label: 'Preparatory Sync Initiated', timestamp: '11:30:00', description: 'All database transactions safely flushed to cold storage Spanner' },
-      { label: 'Re-indexing Sequence Started', timestamp: '12:00:00', description: 'Secondary replication sets rebuilt to reduce telemetry overhead' },
-      { label: 'Full Access Restored', timestamp: '12:05:00', description: 'API routes and WebSocket streaming servers successfully verified' }
-    ]
-  },
-  {
-    id: 'act_117',
-    timestamp: '2026-06-25 15:44:09',
-    type: 'PAYMENT_ADDED',
-    category: 'account',
-    eventName: 'New Settlement Bank Bound',
-    asset: 'Commercial Bank',
-    methodOrDetail: 'Plaid ACH Connection',
-    amount: 'Account Linked',
-    amountUSDValue: 0,
-    status: 'Completed',
-    refId: 'evt_bnk_098',
-    quantity: 'N/A',
-    price: 'N/A',
-    network: 'Plaid API Core Network',
-    settlementRail: 'Chase ACH Protocol Verification',
-    fees: 'N/A',
-    timeline: [
-      { label: 'Link Initiated', timestamp: '15:42:15', description: 'Plaid link widget initialized' },
-      { label: 'Bank Credentials Cleared', timestamp: '15:43:50', description: 'Secured login authorized by JPMorgan Chase bank system' },
-      { label: 'Direct Debit Mandate Verified', timestamp: '15:44:09', description: 'ACH mandate approved for routing ...4402' }
-    ]
-  },
-  {
-    id: 'act_118',
-    timestamp: '2026-06-25 09:15:30',
-    type: 'DEPOSIT',
-    category: 'funding',
-    eventName: 'Wire Transfer Inbound Deposit',
-    asset: 'USD',
-    methodOrDetail: 'Chase Bank Wire',
-    amount: '$10,000.00',
-    amountUSDValue: 10000,
-    status: 'Completed',
-    refId: 'dep_wire_0029',
-    quantity: 'N/A',
-    price: '1.00 USD',
-    network: 'Federal Reserve Wire Network',
-    settlementRail: ' chase-institutional-settlement-gateway',
-    fees: '$0.00 (Inbound institutional wire fees waived)',
-    timeline: [
-      { label: 'SWIFT Message Processed', timestamp: '08:15:00', description: 'Fedwire incoming block received' },
-      { label: 'Treasury Matching Succeeded', timestamp: '09:05:10', description: 'Matched sub-account code to demo@gmail.com' },
-      { label: 'Ledger Capital Certified', timestamp: '09:15:30', description: 'USD Balance increased to support active positions' }
-    ]
-  },
-  {
-    id: 'act_119',
-    timestamp: '2026-06-24 14:12:00',
-    type: 'VERIFICATION',
-    category: 'account',
-    eventName: 'Tier-2 KYC Verification',
-    asset: 'Compliance Audit',
-    methodOrDetail: 'Sumsub Automated Biometrics',
-    amount: 'Approved',
-    amountUSDValue: 0,
-    status: 'Completed',
-    refId: 'kyc_tier2_2291',
-    quantity: 'N/A',
-    price: 'N/A',
-    network: 'Sumsub AML Compliance DB',
-    settlementRail: 'MTX Identity Ledger API',
-    fees: 'N/A',
-    timeline: [
-      { label: 'Identity Documents Uploaded', timestamp: '13:58:00', description: 'National ID and Proof of Residency submitted' },
-      { label: 'Facial Biometric Cleared', timestamp: '13:59:45', description: 'Liveness test matched ID image exactly' },
-      { label: 'Compliance Audit Authorized', timestamp: '14:12:00', description: 'PEP database scans completed. Verification grade assigned: Tier-2 Cleared' }
-    ]
-  },
-  {
-    id: 'act_120',
-    timestamp: '2026-06-24 10:15:00',
-    type: 'REDEMPTION',
-    category: 'investment',
-    eventName: 'Asset Redemption Event',
-    asset: 'SPY',
-    methodOrDetail: 'Custodial Clearing',
-    amount: '$3,400.00',
-    amountUSDValue: 3400,
-    status: 'Completed',
-    refId: 'rdm_88291',
-    quantity: '6.67 Shares',
-    price: '$510.12',
-    network: 'Apex DTC Clearing Core',
-    settlementRail: 'Custodial Redemption Gate',
-    fees: '$0.00',
-    timeline: [
-      { label: 'Redemption Request Initiated', timestamp: '09:30:00', description: 'Redemption protocol selected for SPY index balance' },
-      { label: 'Custodial Settlement Cleared', timestamp: '10:05:00', description: 'APEX liquidated underlying share certificates' },
-      { label: 'Capital Disbursed', timestamp: '10:15:00', description: 'Proceeds credited to main dollar wallet' }
-    ]
-  },
-  {
-    id: 'act_121',
-    timestamp: '2026-06-23 11:20:15',
-    type: 'CONVERSION',
-    category: 'funding',
-    eventName: 'Currency Conversion USD → EUR',
-    asset: 'USD → EUR',
-    methodOrDetail: 'MTX Instant FX Spot',
-    amount: '€4,500.00',
-    amountUSDValue: 4860,
-    status: 'Completed',
-    refId: 'fx_77281',
-    quantity: '$4,860.00',
-    price: '0.9259 EUR/USD',
-    network: 'LMAX Institutional FX Engine',
-    settlementRail: 'MTX Multi-Currency Liquidity Pool',
-    fees: '$4.86 (0.10% Spot Markup)',
-    timeline: [
-      { label: 'Spot Exchange Requested', timestamp: '11:19:40', description: 'Exchange bid processed for $4,860' },
-      { label: 'Spread Calculation Complete', timestamp: '11:20:02', description: 'Locked exchange rate at 0.9259 EUR per USD' },
-      { label: 'Ledger balances posted', timestamp: '11:20:15', description: 'Swapped USD for EUR successfully' }
-    ]
-  },
-  {
-    id: 'act_122',
-    timestamp: '2026-06-22 16:11:42',
-    type: 'BUY',
-    category: 'investment',
-    eventName: 'Purchased Microsoft Corp.',
-    asset: 'MSFT',
-    methodOrDetail: 'USD Cash Balance',
-    amount: '$2,500.00',
-    amountUSDValue: 2500,
-    status: 'Completed',
-    refId: 'ord_91028',
-    quantity: '5.92 Shares',
-    price: '$421.90',
-    network: 'NASDAQ direct clearing',
-    settlementRail: 'Apex clearing block',
-    fees: '$0.75',
-    timeline: [
-      { label: 'Order placed', timestamp: '16:11:02', description: 'Routed via smart-order broker group' },
-      { label: 'Order filled', timestamp: '16:11:15', description: 'Filled on institutional dark pool' },
-      { label: 'Equity position logged', timestamp: '16:11:42', description: 'MSFT holding updated' }
-    ]
-  },
-  {
-    id: 'act_123',
-    timestamp: '2026-06-22 10:45:10',
-    type: 'TICKER_CHANGE',
-    category: 'corporate',
-    eventName: 'Corporate Ticker Change (FB → META)',
-    asset: 'META',
-    methodOrDetail: 'Mandatory Asset Rename',
-    amount: 'Ticker Changed',
-    amountUSDValue: 0,
-    status: 'Completed',
-    refId: 'corp_fb_meta_rename',
-    quantity: 'N/A',
-    price: 'N/A',
-    network: 'SEC Master Securities database',
-    settlementRail: 'DTC Master Registry',
-    fees: '$0.00',
-    timeline: [
-      { label: 'Advisory Released', timestamp: '2026-06-15 09:00:00', description: 'DTC scheduled corporate identifier modifications' },
-      { label: 'Ledger Asset Remapped', timestamp: '2026-06-22 08:30:00', description: 'Renamed class identifiers from FB to META in all client positions' },
-      { label: 'Registry Sync Finalized', timestamp: '2026-06-22 10:45:10', description: 'Securities ledger verified as structurally intact' }
-    ]
-  },
-  {
-    id: 'act_124',
-    timestamp: '2026-06-21 09:00:00',
-    type: 'DEPOSIT',
-    category: 'funding',
-    eventName: 'Wire Transfer Inbound Deposit',
-    asset: 'USD',
-    methodOrDetail: 'JP Morgan Chase Wire',
-    amount: '$5,000.00',
-    amountUSDValue: 5000,
-    status: 'Partially Filled',
-    refId: 'dep_wire_0028',
-    quantity: 'N/A',
-    price: '1.00 USD',
-    network: 'Federal Reserve Wire Network',
-    settlementRail: 'Chase-Institutional-Settlement-Gateway',
-    fees: '$0.00',
-    timeline: [
-      { label: 'SWIFT Message Processed', timestamp: '08:00:00', description: 'Fedwire incoming block received' },
-      { label: 'Treasury Matching Suspended', timestamp: '08:30:00', description: 'Amount did not match matching wire instruction precisely. Held for partial matching' },
-      { label: 'Partial Release Completed', timestamp: '09:00:00', description: 'Authorized partial posting of $5,000.00 pending full clearance check' }
-    ]
-  }
-];
+// Clean slate: activities populated dynamically from actual trades and wallet transactions
+const INITIAL_ACTIVITIES: ActivityEvent[] = [];
 
-export default function ActivityDesk() {
-  const [activities, setActivities] = useState<ActivityEvent[]>(INITIAL_ACTIVITIES);
+interface ActivityDeskProps {
+  accountMode?: 'DEMO' | 'REAL';
+}
+
+export default function ActivityDesk({ accountMode: propAccountMode }: ActivityDeskProps = {}) {
+  const currentMode = propAccountMode || (typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') === 'REAL' ? 'REAL' : 'DEMO') : 'DEMO');
+  const [activities, setActivities] = useState<ActivityEvent[]>([]);
   const [selectedActivity, setSelectedActivity] = useState<ActivityEvent | null>(null);
   const [viewMode, setViewMode] = useState<'TABLE' | 'TIMELINE'>('TABLE');
   
@@ -634,111 +87,173 @@ export default function ActivityDesk() {
       if (isFetching) return;
       isFetching = true;
       try {
+        const isMockOrSeeded = (item: any) => {
+          if (!item || typeof item !== 'object') return true;
+          const id = String(item.id || '').toLowerCase();
+          const method = String(item.method || item.methodOrDetail || item.eventName || '').toLowerCase();
+          return (
+            id === 'fund-1' ||
+            id === 'fund-2' ||
+            id === 'fund-3' ||
+            id === 'fund-4' ||
+            id.startsWith('fund-1') ||
+            id.startsWith('fund-2') ||
+            id.startsWith('fund-3') ||
+            id.startsWith('fund-4') ||
+            id.startsWith('fund-pnl-') ||
+            id.startsWith('act_1') ||
+            id.includes('seed') ||
+            method.includes('trade profit settle') ||
+            method.includes('trade loss settle')
+          );
+        };
+
         // 1. Read cached trade activity events from trading service
-        let localTradeActivities: ActivityEvent[] = [];
+        let localTradeActivities: any[] = [];
         try {
           const cached = localStorage.getItem('mtx_activity_events');
           if (cached) {
-            localTradeActivities = JSON.parse(cached);
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) {
+              // Unseed legacy mock activities and filter by account mode
+              localTradeActivities = parsed.filter((a: any) => {
+                if (isMockOrSeeded(a)) return false;
+                if (currentMode === 'REAL') {
+                  return a.accountMode === 'REAL';
+                } else {
+                  return a.accountMode !== 'REAL';
+                }
+              });
+
+              // Clean out the mock data from localStorage if found
+              if (localTradeActivities.length !== parsed.length) {
+                const cleanedRaw = parsed.filter((a: any) => !isMockOrSeeded(a));
+                localStorage.setItem('mtx_activity_events', JSON.stringify(cleanedRaw));
+              }
+            }
           }
         } catch (e) {
           console.warn('Error reading cached trade activities:', e);
         }
 
-        const res = await fetch('/api/funding/state');
-        if (res.ok && isMounted) {
-          const data = await res.json();
-          const walletTxs: any[] = data.transactions || [];
-          
-          // Map wallet transactions to ActivityEvents
-          const mappedWalletActivities: ActivityEvent[] = walletTxs.map((tx: any) => {
-            const isOutbound = tx.type === 'WITHDRAWAL';
-            
-            // Format amount nicely
-            let displayAmount = `${tx.currency} ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-            if (tx.currency === 'USD') displayAmount = `$${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-            else if (tx.currency === 'EUR') displayAmount = `€${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-            else if (tx.currency === 'GBP') displayAmount = `£${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-
-            // Determine rate for USD calculation
-            let rate = 1.0;
-            if (tx.currency === 'EUR') rate = 1.09;
-            else if (tx.currency === 'GBP') rate = 1.28;
-            else if (tx.currency === 'KES') rate = 0.0078;
-            
-            const amountUSDValue = tx.amount * rate;
-
-            // Map status
-            let status: 'Completed' | 'Pending' | 'Processing' | 'Cancelled' | 'Failed' = 'Completed';
-            if (tx.status === 'Settled') status = 'Completed';
-            else if (tx.status === 'Pending') status = 'Pending';
-            else if (tx.status === 'Processing') status = 'Processing';
-            else if (tx.status === 'Cancelled') status = 'Cancelled';
-            else if (tx.status === 'Failed') status = 'Failed';
-
-            // Settlement rail details
-            let settlementRail = 'Apex DTC Instant Settlement';
-            if (tx.method?.includes('ACH')) settlementRail = 'Chase ACH Protocol Verification';
-            else if (tx.method?.includes('Wire')) settlementRail = 'Federal Reserve Wire Network';
-            else if (tx.method?.includes('Card')) settlementRail = 'Visa Direct Payout API';
-            else if (tx.method?.includes('M-Pesa')) settlementRail = 'Safaricom Paybill #408892';
-            else if (tx.method?.includes('Transfer') || tx.method?.includes('Deposit') || tx.method?.includes('Withdrawal')) {
-              if (['USDC', 'USDT', 'PYUSD'].includes(tx.currency)) {
-                settlementRail = 'Circle Smart Contract Vault';
+        let walletTxs: any[] = [];
+        const isDemoAccount = currentMode !== 'REAL';
+        if (isDemoAccount) {
+          try {
+            const demoTxsSaved = localStorage.getItem('mtx_demo_funding_txs');
+            if (demoTxsSaved) {
+              const parsedDemo = JSON.parse(demoTxsSaved);
+              if (Array.isArray(parsedDemo)) {
+                walletTxs = parsedDemo.filter((t: any) => !isMockOrSeeded(t));
+                if (walletTxs.length !== parsedDemo.length) {
+                  localStorage.setItem('mtx_demo_funding_txs', JSON.stringify(walletTxs));
+                }
               }
             }
-
-            // Timeline steps
-            const timelineSteps = [];
-            if (status === 'Completed') {
-              timelineSteps.push(
-                { label: 'Order Submitted', timestamp: '09:00:00', description: `Inbound transfer of ${tx.amount} ${tx.currency} initiated.` },
-                { label: 'Settlement Initiated', timestamp: '09:05:00', description: 'Internal treasury clearance validation triggered.' },
-                { label: 'Settlement Completed', timestamp: '09:15:00', description: 'Securities ledger credited and cash asset debited.' }
-              );
-            } else if (status === 'Pending' || status === 'Processing') {
-              timelineSteps.push(
-                { label: 'Order Submitted', timestamp: '09:00:00', description: `Inbound transfer of ${tx.amount} ${tx.currency} initiated.` },
-                { label: 'Awaiting Settlement', timestamp: '09:05:00', description: 'Held in clearing status. Awaiting external network authorization.' }
-              );
-            } else {
-              timelineSteps.push(
-                { label: 'Order Submitted', timestamp: '09:00:00', description: `Inbound transfer of ${tx.amount} ${tx.currency} initiated.` },
-                { label: 'Settlement Failed', timestamp: '09:15:00', description: 'External system returned decline code or network exception.' }
-              );
-            }
-
-            return {
-              id: tx.id,
-              timestamp: tx.date.length === 16 ? `${tx.date}:00` : tx.date,
-              type: tx.type,
-              category: 'funding',
-              eventName: `${tx.currency} ${tx.type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'} via ${tx.method}`,
-              asset: tx.currency,
-              methodOrDetail: tx.method,
-              amount: displayAmount,
-              amountUSDValue: amountUSDValue,
-              status: status,
-              refId: tx.id,
-              quantity: 'N/A',
-              price: `1.00 ${tx.currency}`,
-              network: ['USDC', 'USDT', 'PYUSD'].includes(tx.currency) ? 'Base L2 Network' : 'Standard Clearing Rails',
-              settlementRail: settlementRail,
-              fees: tx.method?.includes('Wire') ? '$15.00' : '$0.00',
-              timeline: timelineSteps
-            };
-          });
-
-          // Merge local trade activities, wallet transactions, and INITIAL_ACTIVITIES
-          if (isMounted) {
-            setActivities(prev => {
-              const allDynamic = [...localTradeActivities, ...mappedWalletActivities];
-              const filteredPrev = prev.filter(p => !allDynamic.some(w => w.id === p.id));
-              const merged = [...allDynamic, ...filteredPrev];
-              // Sort by timestamp descending
-              return merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-            });
+          } catch (e) {
+            console.warn('Error reading demo funding txs:', e);
           }
+        }
+
+        try {
+          const res = await fetch('/api/funding/state');
+          if (res.ok && isMounted) {
+            const data = await res.json();
+            const serverTxs: any[] = (data.transactions || []).filter((t: any) => !isMockOrSeeded(t));
+            if (!isDemoAccount) {
+              walletTxs = serverTxs;
+            } else if (walletTxs.length === 0 && serverTxs.length > 0) {
+              walletTxs = serverTxs;
+            }
+          }
+        } catch (fetchErr) {
+          console.warn('Funding state fetch warning:', fetchErr);
+        }
+
+        // Map wallet transactions to ActivityEvents
+        const mappedWalletActivities: ActivityEvent[] = walletTxs.map((tx: any) => {
+          const isOutbound = tx.type === 'WITHDRAWAL';
+          
+          // Format amount nicely
+          let displayAmount = `${tx.currency} ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+          if (tx.currency === 'USD') displayAmount = `$${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+          else if (tx.currency === 'EUR') displayAmount = `€${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+          else if (tx.currency === 'GBP') displayAmount = `£${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+          // Determine rate for USD calculation
+          let rate = 1.0;
+          if (tx.currency === 'EUR') rate = 1.09;
+          else if (tx.currency === 'GBP') rate = 1.28;
+          else if (tx.currency === 'KES') rate = 0.0078;
+          
+          const amountUSDValue = tx.amount * rate;
+
+          // Map status
+          let status: 'Completed' | 'Pending' | 'Processing' | 'Cancelled' | 'Failed' = 'Completed';
+          if (tx.status === 'Settled') status = 'Completed';
+          else if (tx.status === 'Pending') status = 'Pending';
+          else if (tx.status === 'Processing') status = 'Processing';
+          else if (tx.status === 'Cancelled') status = 'Cancelled';
+          else if (tx.status === 'Failed') status = 'Failed';
+
+          // Settlement rail details
+          let settlementRail = 'Apex DTC Instant Settlement';
+          if (tx.method?.includes('ACH')) settlementRail = 'Chase ACH Protocol Verification';
+          else if (tx.method?.includes('Wire')) settlementRail = 'Federal Reserve Wire Network';
+          else if (tx.method?.includes('Card')) settlementRail = 'Visa Direct Payout API';
+          else if (tx.method?.includes('M-Pesa')) settlementRail = 'Safaricom Paybill #408892';
+          else if (tx.method?.includes('Transfer') || tx.method?.includes('Deposit') || tx.method?.includes('Withdrawal')) {
+            if (['USDC', 'USDT', 'PYUSD'].includes(tx.currency)) {
+              settlementRail = 'Circle Smart Contract Vault';
+            }
+          }
+
+          // Timeline steps
+          const timelineSteps = [];
+          if (status === 'Completed') {
+            timelineSteps.push(
+              { label: 'Order Submitted', timestamp: '09:00:00', description: `Inbound transfer of ${tx.amount} ${tx.currency} initiated.` },
+              { label: 'Settlement Initiated', timestamp: '09:05:00', description: 'Internal treasury clearance validation triggered.' },
+              { label: 'Settlement Completed', timestamp: '09:15:00', description: 'Securities ledger credited and cash asset debited.' }
+            );
+          } else if (status === 'Pending' || status === 'Processing') {
+            timelineSteps.push(
+              { label: 'Order Submitted', timestamp: '09:00:00', description: `Inbound transfer of ${tx.amount} ${tx.currency} initiated.` },
+              { label: 'Awaiting Settlement', timestamp: '09:05:00', description: 'Held in clearing status. Awaiting external network authorization.' }
+            );
+          } else {
+            timelineSteps.push(
+              { label: 'Order Submitted', timestamp: '09:00:00', description: `Inbound transfer of ${tx.amount} ${tx.currency} initiated.` },
+              { label: 'Settlement Failed', timestamp: '09:15:00', description: 'External system returned decline code or network exception.' }
+            );
+          }
+
+          return {
+            id: tx.id,
+            timestamp: tx.date.length === 16 ? `${tx.date}:00` : tx.date,
+            type: tx.type,
+            category: 'funding',
+            eventName: `${tx.currency} ${tx.type === 'DEPOSIT' ? 'Deposit' : 'Withdrawal'} via ${tx.method}`,
+            asset: tx.currency,
+            methodOrDetail: tx.method,
+            amount: displayAmount,
+            amountUSDValue: amountUSDValue,
+            status: status,
+            refId: tx.id,
+            quantity: 'N/A',
+            price: `1.00 ${tx.currency}`,
+            network: ['USDC', 'USDT', 'PYUSD'].includes(tx.currency) ? 'Base L2 Network' : 'Standard Clearing Rails',
+            settlementRail: settlementRail,
+            fees: tx.method?.includes('Wire') ? '$15.00' : '$0.00',
+            timeline: timelineSteps
+          };
+        });
+
+        // Set exclusively dynamic real operations without mock seed retention
+        if (isMounted) {
+          const allDynamic = [...localTradeActivities, ...mappedWalletActivities];
+          allDynamic.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setActivities(allDynamic);
         }
       } catch (err) {
         console.warn('Failed to fetch wallet activities:', err);
@@ -765,7 +280,7 @@ export default function ActivityDesk() {
       window.removeEventListener('broker_cash_updated', handleTradeSync);
       window.removeEventListener('storage', handleTradeSync);
     };
-  }, []);
+  }, [currentMode]);
 
   // 1-to-1 mappings of category filters from prompt
   const CATEGORY_CHIPS = [
@@ -780,16 +295,12 @@ export default function ActivityDesk() {
     { label: 'System Events', value: 'SYSTEM' } // delayed, maintenance, halt
   ];
 
-  // Operations metrics calculations based on INITIAL_ACTIVITIES to maintain operational overview
+  // Operations metrics calculations based on recorded activity ledger
   const operationsMetrics = useMemo(() => {
-    const today = new Date('2026-07-03').getTime(); // align to custom simulated local time
-    const oneDayMs = 24 * 60 * 60 * 1000;
+    const todayStr = new Date().toISOString().substring(0, 10);
     
     // Today's Activity Events
-    const todaysEvents = activities.filter(a => {
-      const eventTime = new Date(a.timestamp.substring(0, 10)).getTime();
-      return eventTime === today;
-    });
+    const todaysEvents = activities.filter(a => a.timestamp.startsWith(todayStr));
 
     // Pending Actions Count
     const pendingActions = activities.filter(a => a.status === 'Pending' || a.status === 'Processing');
@@ -801,10 +312,10 @@ export default function ActivityDesk() {
     const failedOrCancelledEvents = activities.filter(a => a.status === 'Failed' || a.status === 'Cancelled').length;
     const successRate = completedEvents > 0 
       ? (completedEvents / (completedEvents + failedOrCancelledEvents)) * 100 
-      : 99.6;
+      : (failedOrCancelledEvents > 0 ? 0.0 : 100.0);
 
     // Total Transaction Volume (Since Account Creation)
-    const totalVolume = activities.reduce((sum, a) => sum + a.amountUSDValue, 0);
+    const totalVolume = activities.reduce((sum, a) => sum + (a.amountUSDValue || 0), 0);
 
     return {
       todaysEventsCount: todaysEvents.length,
@@ -857,14 +368,15 @@ export default function ActivityDesk() {
         }
       }
 
-      // 3. Date Filters (Simulated with baseline 2026-07-03 as Today)
-      const baseToday = new Date('2026-07-03');
+      // 3. Dynamic Date Filters based on real calendar days
+      const now = new Date();
+      const todayStr = now.toISOString().substring(0, 10);
       const itemDate = new Date(a.timestamp.substring(0, 10));
-      const diffTime = Math.abs(baseToday.getTime() - itemDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const diffTime = Math.max(0, now.getTime() - itemDate.getTime());
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
       if (dateFilter === 'TODAY') {
-        if (a.timestamp.substring(0, 10) !== '2026-07-03') return false;
+        if (!a.timestamp.startsWith(todayStr)) return false;
       } else if (dateFilter === '7D') {
         if (diffDays > 7) return false;
       } else if (dateFilter === '30D') {
@@ -872,8 +384,8 @@ export default function ActivityDesk() {
       } else if (dateFilter === '90D') {
         if (diffDays > 90) return false;
       } else if (dateFilter === 'CUSTOM') {
-        if (customStartDate && itemDate < new Date(customStartDate)) return false;
-        if (customEndDate && itemDate > new Date(customEndDate)) return false;
+        if (customStartDate && a.timestamp.substring(0, 10) < customStartDate) return false;
+        if (customEndDate && a.timestamp.substring(0, 10) > customEndDate) return false;
       }
 
       return true;
@@ -1019,7 +531,7 @@ export default function ActivityDesk() {
               className="w-full bg-neutral-900/80 border border-neutral-700/80 rounded-lg py-2.5 px-3 text-[11px] text-white font-bold focus:outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm"
             >
               <option value="ALL">All Recorded Dates</option>
-              <option value="TODAY">Today (2026-07-03)</option>
+              <option value="TODAY">Today</option>
               <option value="7D">Past 7 Days</option>
               <option value="30D">Past 30 Days</option>
               <option value="90D">Past 90 Days</option>

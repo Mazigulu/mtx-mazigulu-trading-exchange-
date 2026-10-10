@@ -645,6 +645,7 @@ export default function ChartContainer({
             `${selectedTemplateName} Allocation`
           ],
           marketNote: userMarketNote ? `${userMarketNote} (Chart Triggered)` : 'Entered via Chart One-Click template.',
+          accountMode: (typeof window !== 'undefined' && localStorage.getItem('mtx_account_mode') === 'REAL') ? 'REAL' : 'DEMO',
         }),
       });
       

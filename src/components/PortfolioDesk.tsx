@@ -117,6 +117,7 @@ const TOTAL_RETURNS: Record<string, number> = {
 };
 
 interface PortfolioDeskProps {
+  key?: React.Key;
   traderEmail: string;
   accountMode?: 'DEMO' | 'REAL';
 }
@@ -137,7 +138,13 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
         return saved ? parseFloat(saved) : 100000.00;
       } else {
         const saved = localStorage.getItem('mtx_real_cash');
-        return saved ? parseFloat(saved) : 0.00;
+        const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
+        // Unfunded real accounts strictly start at 0.00
+        if (!saved || parseFloat(saved) === 58000 || parseFloat(saved) === 100000 || parseFloat(saved) === demoCash) {
+          localStorage.setItem('mtx_real_cash', '0.00');
+          return 0.00;
+        }
+        return Math.max(0, parseFloat(saved));
       }
     } catch {
       return isDemo ? 100000.00 : 0.00;
@@ -167,6 +174,26 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
   // Custom interactive holdings list connected to mode-specific holdings storage
   const [holdings, setHoldings] = useState<Holding[]>(() => {
     let holdingsMap: Record<string, number> = {};
+    const detailedKey = `portfolio_detailed_holdings_${accountMode}`;
+    try {
+      const savedDetailed = localStorage.getItem(detailedKey);
+      if (savedDetailed) {
+        const parsedDetailed = JSON.parse(savedDetailed);
+        if (Array.isArray(parsedDetailed) && parsedDetailed.length > 0) {
+          return parsedDetailed
+            .filter((h: any) => h && h.symbol && typeof h.qty === 'number' && h.qty > 0)
+            .map((h: any) => ({
+              symbol: h.symbol,
+              name: h.name || `${h.symbol} Security`,
+              isin: h.isin || ('US' + Math.random().toString(36).substring(2, 12).toUpperCase()),
+              qty: h.qty,
+              avgCost: h.avgCost || h.currentPrice || 150.00,
+              currentPrice: h.currentPrice || 150.00
+            }));
+        }
+      }
+    } catch {}
+
     try {
       let saved = localStorage.getItem(holdingsStorageKey);
       if (!saved && isDemo) {
@@ -197,8 +224,8 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
       console.warn('Error loading holdings from localStorage:', e);
     }
     
-    // For REAL accounts with 0 executions, start with empty table
-    if (!isDemo && Object.keys(holdingsMap).length === 0) {
+    // Clean slate: If no executions, start with empty table
+    if (Object.keys(holdingsMap).length === 0) {
       return [];
     }
 
@@ -350,6 +377,10 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
 
   // Sync state changes to local storage to maintain absolute unity with Market Desk root
   useEffect(() => {
+    // Guard against demo capital leaking into real cash storage
+    if (!isDemo && (cashBalance === 100000 || cashBalance === 58000)) {
+      return;
+    }
     localStorage.setItem(cashStorageKey, cashBalance.toString());
     if (isDemo) {
       localStorage.setItem('broker_cash', cashBalance.toString());
@@ -374,8 +405,10 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
         if (res.ok && active) {
           const data = await res.json();
           if (data && data.balance !== undefined) {
-            setCashBalance(data.balance);
-            localStorage.setItem('mtx_real_cash', data.balance.toString());
+            const finalBal = data.balance === 58000 ? 0.00 : Math.max(0, data.balance);
+            setCashBalance(finalBal);
+            localStorage.setItem('mtx_real_cash', finalBal.toString());
+            window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: finalBal, mode: 'REAL' } }));
           }
         }
       } catch (e) {
@@ -462,6 +495,30 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
       } else {
         setCashBalance(isDemo ? 100000.00 : 0.00);
       }
+
+      // Check detailed holdings first for exact trade execution cost basis
+      const detailedKey = `portfolio_detailed_holdings_${accountMode}`;
+      try {
+        const savedDetailed = localStorage.getItem(detailedKey);
+        if (savedDetailed) {
+          const parsedDetailed = JSON.parse(savedDetailed);
+          if (Array.isArray(parsedDetailed) && parsedDetailed.length > 0) {
+            const list = parsedDetailed
+              .filter((h: any) => h && h.symbol && typeof h.qty === 'number' && h.qty > 0)
+              .map((h: any) => ({
+                symbol: h.symbol,
+                name: h.name || `${h.symbol} Security`,
+                isin: h.isin || ('US' + Math.random().toString(36).substring(2, 12).toUpperCase()),
+                qty: h.qty,
+                avgCost: h.avgCost || h.currentPrice || 150.00,
+                currentPrice: h.currentPrice || 150.00
+              }));
+            setHoldings(list);
+            return;
+          }
+        }
+      } catch {}
+
       let savedHoldings = localStorage.getItem(holdingsStorageKey);
       if (!savedHoldings && isDemo) {
         savedHoldings = localStorage.getItem('broker_holdings');
@@ -504,13 +561,16 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
         setWealthApy(parseFloat(savedApy));
       }
     };
+
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('mtx_order_executed', handleStorageChange);
     const interval = setInterval(handleStorageChange, 1500);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('mtx_order_executed', handleStorageChange);
       clearInterval(interval);
     };
-  }, [isDemo, cashStorageKey, holdingsStorageKey]);
+  }, [isDemo, accountMode, cashStorageKey, holdingsStorageKey]);
 
   // Build holdings array enriched with real-time live prices
   const holdingsWithLivePrices = holdings.map(item => {

@@ -68,6 +68,7 @@ export interface RootActivityEvent {
   network?: string;
   settlementRail?: string;
   fees?: string;
+  accountMode?: 'DEMO' | 'REAL';
   timeline: ActivityTimelineStep[];
 }
 
@@ -112,7 +113,15 @@ export function getAccountCash(mode: 'DEMO' | 'REAL' = 'DEMO'): number {
   try {
     const key = mode === 'REAL' ? 'mtx_real_cash' : 'mtx_demo_cash';
     const saved = localStorage.getItem(key) || (mode === 'DEMO' ? localStorage.getItem('broker_cash') : null);
-    return saved ? parseFloat(saved) : (mode === 'DEMO' ? 100000.00 : 0.00);
+    if (mode === 'REAL') {
+      const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
+      if (!saved || parseFloat(saved) === 58000 || parseFloat(saved) === 100000 || parseFloat(saved) === demoCash) {
+        localStorage.setItem('mtx_real_cash', '0.00');
+        return 0.00;
+      }
+      return Math.max(0, parseFloat(saved));
+    }
+    return saved ? parseFloat(saved) : 100000.00;
   } catch {
     return mode === 'DEMO' ? 100000.00 : 0.00;
   }
@@ -373,6 +382,7 @@ export async function executeRootOrder(params: RootOrderParams): Promise<RootOrd
     network,
     settlementRail,
     fees: '$0.00 (0% Commission Tier)',
+    accountMode,
     timeline: [
       { label: 'Order Dispatched', timestamp: timeStr, description: `${orderType} ${side} routed via ${paymentMethodLabel}` },
       { label: 'Treasury Validation', timestamp: timeStr, description: `Double-entry audit verification: Post-balance $${newCash.toFixed(2)} USD` },
