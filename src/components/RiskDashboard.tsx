@@ -403,12 +403,12 @@ export default function RiskDashboard({
     
     // Daily Loss Limit default set to 5.0% ($500)
     const dailyLimitMax = 500;
-    const dailyLossToday = 85.00; // Mock current session commissions & closed slips
-    const dailyLossLimitRemainingPercent = parseFloat((((dailyLimitMax - dailyLossToday) / dailyLimitMax) * 100).toFixed(2));
+    const dailyLossToday = Math.abs(trades.filter(t => t.status === 'CLOSED' && t.pnl < 0).reduce((acc, t) => acc + t.pnl, 0));
+    const dailyLossLimitRemainingPercent = parseFloat((((Math.max(0, dailyLimitMax - dailyLossToday)) / dailyLimitMax) * 100).toFixed(2));
 
     return {
       openRiskDollar: solvedRisk,
-      portfolioRiskPercent: portfolioRiskPercent > 0 ? portfolioRiskPercent : 1.85,
+      portfolioRiskPercent: portfolioRiskPercent,
       dailyLossLimitRemaining: dailyLossLimitRemainingPercent,
       activeLevers: openTrades.length,
     };
@@ -659,42 +659,13 @@ export default function RiskDashboard({
         recommendations
       };
     } else {
-      // Simulator mode / baseline default if no actual trades
-      const mockPositions = [
-        { symbol: 'NAS100' as MarketSymbol, side: 'BUY' as const, size: 1.10, riskUSD: 105.00 },
-        { symbol: 'AAPL' as MarketSymbol, side: 'BUY' as const, size: 0.35, riskUSD: 55.00 },
-        { symbol: 'SPX500' as MarketSymbol, side: 'BUY' as const, size: 0.15, riskUSD: 25.00 }
-      ];
-      
-      const totalRisk = mockPositions.reduce((acc, p) => acc + p.riskUSD, 0); // $185
-      const reductionNeeded = totalRisk - targetThresholdDollar; // $35
-      const reductionFactor = reductionNeeded / totalRisk; // ~18.9%
-      
-      const recommendations = mockPositions.map(p => {
-        const reducedRisk = p.riskUSD * reductionFactor;
-        const percentageToClose = Math.round(reductionFactor * 100);
-        const recommendedReduceSize = parseFloat((p.size * reductionFactor).toFixed(2));
-        const newSize = parseFloat((p.size - recommendedReduceSize).toFixed(2));
-        
-        return {
-          symbol: p.symbol,
-          side: p.side,
-          originalSize: p.size,
-          recommendedReduceSize,
-          newSize,
-          currentRisk: p.riskUSD,
-          reducedRisk,
-          newRisk: p.riskUSD - reducedRisk,
-          percentageToClose
-        };
-      });
-      
+      // Normal state when no positions exceed risk threshold or portfolio is flat
       return {
-        requiresRebalance: true,
-        totalRisk,
+        requiresRebalance: false,
+        totalRisk: 0,
         targetThresholdDollar,
-        reductionNeeded,
-        recommendations
+        reductionNeeded: 0,
+        recommendations: []
       };
     }
   }, [openTrades]);

@@ -9,7 +9,9 @@ const isIgnorableError = (err: any): boolean => {
   if (!err) return false;
   const name = err?.name || '';
   const message = err?.message || String(err || '');
-  const text = (name + ' ' + message).toLowerCase();
+  const stack = err?.stack || '';
+  const filename = err?.filename || '';
+  const text = (name + ' ' + message + ' ' + stack + ' ' + filename).toLowerCase();
   return (
     name === 'AbortError' ||
     text.includes('aborterror') ||
@@ -18,16 +20,31 @@ const isIgnorableError = (err: any): boolean => {
     text.includes('aborted without reason') ||
     text.includes('operation was aborted') ||
     text.includes('metamask') || 
+    text.includes('failed to connect') ||
+    text.includes('chrome-extension://') ||
+    text.includes('moz-extension://') ||
+    text.includes('inpage.js') ||
     text.includes('ethereum') || 
     text.includes('wallet') || 
     text.includes('web3') ||
     text.includes('provider') ||
-    text.includes('failed to connect') ||
     text.includes('user rejected')
   );
 };
 
 if (typeof window !== 'undefined') {
+  const prevOnError = window.onerror;
+  window.onerror = (msg, url, lineNo, colNo, error) => {
+    if (isIgnorableError(error) || isIgnorableError(msg) || (url && isIgnorableError(url))) {
+      console.warn('Intercepted and secured window error gracefully:', msg || error);
+      return true;
+    }
+    if (typeof prevOnError === 'function') {
+      return (prevOnError as any)(msg, url, lineNo, colNo, error);
+    }
+    return false;
+  };
+
   window.addEventListener('unhandledrejection', (event) => {
     if (isIgnorableError(event.reason)) {
       console.warn('Intercepted and secured background rejection gracefully:', event.reason);
@@ -39,7 +56,7 @@ if (typeof window !== 'undefined') {
   }, true);
 
   window.addEventListener('error', (event) => {
-    if (isIgnorableError(event.error) || isIgnorableError(event.message)) {
+    if (isIgnorableError(event.error) || isIgnorableError(event.message) || (event.filename && isIgnorableError(event.filename))) {
       console.warn('Intercepted and secured global error report gracefully:', event.error || event.message);
       try {
         event.preventDefault();
@@ -67,10 +84,17 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    if (isIgnorableError(error)) {
+      return { hasError: false, error: null, errorInfo: null };
+    }
     return { hasError: true, error, errorInfo: null };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    if (isIgnorableError(error)) {
+      console.warn("Recovered from background extension error in React boundary:", error);
+      return;
+    }
     console.error("Uncaught React Error:", error, errorInfo);
     (this as any).setState({ errorInfo });
   }

@@ -34,8 +34,11 @@ export default function SistineFinancialCeiling() {
   }, [stocks]);
 
   useEffect(() => {
+    let isMounted = true;
+    let abortController: AbortController | null = null;
+
     const fetchStocksData = async () => {
-      if (document.hidden) return;
+      if (document.hidden || !isMounted) return;
       try {
         const cacheKey = 'sistine_top_stocks';
         const cacheTimeKey = 'sistine_top_stocks_time';
@@ -47,7 +50,7 @@ export default function SistineFinancialCeiling() {
         if (cachedData && cachedTime && (now - parseInt(cachedTime)) < 30 * 1000) {
           try {
             const parsed = JSON.parse(cachedData);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed) && parsed.length > 0 && isMounted) {
               setStocks(parsed);
             }
           } catch (e) {
@@ -55,8 +58,17 @@ export default function SistineFinancialCeiling() {
           }
         }
 
-        const response = await fetch('/api/top-stocks');
-        if (response.ok) {
+        abortController = new AbortController();
+        const timeoutId = setTimeout(() => {
+          try { abortController?.abort(); } catch {}
+        }, 8000);
+
+        const response = await fetch('/api/top-stocks', {
+          signal: abortController.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (response.ok && isMounted) {
           const data = await response.json();
           if (data && Array.isArray(data.stocks) && data.stocks.length > 0) {
             setStocks(prev => {
@@ -77,12 +89,17 @@ export default function SistineFinancialCeiling() {
                 };
               });
             });
-            localStorage.setItem(cacheKey, JSON.stringify(data.stocks));
-            localStorage.setItem(cacheTimeKey, now.toString());
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(data.stocks));
+              localStorage.setItem(cacheTimeKey, now.toString());
+            } catch {}
           }
         }
-      } catch (err) {
-        console.error('Failed to load top stocks on background canvas:', err);
+      } catch (err: any) {
+        // Non-blocking fallback: graceful degradation to cached quotes or defaults
+        if (err?.name !== 'AbortError') {
+          console.warn('Background ceiling stock ticker fetch skipped or offline, using fallback quotes:', err?.message || err);
+        }
       }
     };
 
@@ -92,7 +109,7 @@ export default function SistineFinancialCeiling() {
 
     // Live micro-tick simulation every 1.5 seconds for active rotational background stocks
     const tickInterval = setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || !isMounted) return;
       setStocks(prevStocks => {
         if (!prevStocks || prevStocks.length === 0) return prevStocks;
         return prevStocks.map(stock => {
@@ -125,6 +142,10 @@ export default function SistineFinancialCeiling() {
     }, 1500);
 
     return () => {
+      isMounted = false;
+      if (abortController) {
+        try { abortController.abort(); } catch {}
+      }
       clearInterval(pollInterval);
       clearInterval(tickInterval);
     };

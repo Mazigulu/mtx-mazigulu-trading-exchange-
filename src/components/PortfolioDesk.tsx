@@ -351,6 +351,8 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
     }
     setHoldings([]);
     localStorage.setItem(holdingsStorageKey, JSON.stringify({}));
+    const detailedKey = `portfolio_detailed_holdings_${accountMode}`;
+    localStorage.removeItem(detailedKey);
     if (!isDemo) {
       syncCashWithServer(newCash);
     }
@@ -393,7 +395,9 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
       holdingsMap[item.symbol] = item.qty;
     });
     localStorage.setItem(holdingsStorageKey, JSON.stringify(holdingsMap));
-  }, [holdings, holdingsStorageKey]);
+    const detailedKey = `portfolio_detailed_holdings_${accountMode}`;
+    localStorage.setItem(detailedKey, JSON.stringify(holdings));
+  }, [holdings, holdingsStorageKey, accountMode]);
 
   // Sync cash state from SQL database funding ledger on mount and poll for REAL accounts
   useEffect(() => {
@@ -447,8 +451,12 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
           }
         }
 
-        // Fetch ETF and Crypto tickers in parallel for live prices and day change percentages
-        const remainingTickers = ['SPY', 'QQQ', 'BTC-USD', 'ETH-USD', 'SOL-USD'];
+        // Fetch ETF, Crypto, and all active user-held tickers in parallel for live prices and day change percentages
+        const defaultTickers = ['SPY', 'QQQ', 'BTC-USD', 'ETH-USD', 'SOL-USD'];
+        const heldSymbols = holdings.map(h => h.symbol);
+        const remainingTickers = Array.from(new Set([...defaultTickers, ...heldSymbols]))
+          .filter(t => !['AAPL', 'MSFT', 'NVDA', 'TSLA'].includes(t));
+
         await Promise.all(
           remainingTickers.map(async (ticker) => {
             try {
@@ -484,7 +492,7 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [holdings]);
 
   // Sync state with local storage updates & periodic checks
   useEffect(() => {
@@ -691,11 +699,12 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
           { name: 'May 26', value: baseValue * 0.92 },
           { name: 'Jul 26', value: baseValue }
         ];
-      case 'ALL':
+      case '5Y':
         return [
-          { name: '2023', value: baseValue * 0.45 },
-          { name: '2024', value: baseValue * 0.65 },
-          { name: '2025', value: baseValue * 0.82 },
+          { name: '2022', value: baseValue * 0.45 },
+          { name: '2023', value: baseValue * 0.60 },
+          { name: '2024', value: baseValue * 0.72 },
+          { name: '2025', value: baseValue * 0.86 },
           { name: '2026', value: baseValue }
         ];
     }
@@ -923,14 +932,14 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
               <Briefcase className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-4">
-            <h3 className="text-2xl font-black font-mono tracking-tight text-white">
+          <div className="mt-4 min-w-0">
+            <h3 className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white truncate">
               ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
-            <div className="flex items-center gap-1 mt-1 text-emerald-400 font-bold text-[10px] font-mono">
-              <TrendingUp className="w-3 h-3 shrink-0" />
-              <span>+${todayReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Today</span>
-              <span className="text-emerald-500/80">({todayReturnPercent >= 0 ? '+' : ''}{todayReturnPercent.toFixed(2)}%)</span>
+            <div className={`flex flex-wrap items-center gap-1 mt-1 font-bold text-[10px] font-mono ${todayReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {todayReturnAmount >= 0 ? <TrendingUp className="w-3 h-3 shrink-0" /> : <TrendingDown className="w-3 h-3 shrink-0" />}
+              <span className="truncate">{todayReturnAmount >= 0 ? '+' : '-'}${Math.abs(todayReturnAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Today</span>
+              <span className={`shrink-0 ${todayReturnAmount >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>({todayReturnPercent >= 0 ? '+' : ''}{todayReturnPercent.toFixed(2)}%)</span>
             </div>
           </div>
         </motion.div>
@@ -1021,12 +1030,12 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
               </div>
               
               {/* Timeframes Selector */}
-              <div className="flex items-center bg-[#050505] border border-white/10 rounded-lg p-0.5 font-mono text-[9.5px]">
-                {['1D', '1W', '1M', '3M', 'YTD', '1Y', 'ALL'].map((tf) => (
+              <div className="flex items-center bg-[#050505] border border-white/10 rounded-lg p-0.5 font-mono text-[9.5px] overflow-x-auto no-scrollbar max-w-full">
+                {['1D', '1W', '1M', '3M', 'YTD', '1Y', '5Y'].map((tf) => (
                   <button
                     key={tf}
                     onClick={() => setTimeframe(tf)}
-                    className={`px-2.5 py-1 rounded font-bold transition-all cursor-pointer select-none focus:outline-none focus-visible:outline-none ${
+                    className={`px-2.5 py-1 rounded font-bold transition-all cursor-pointer select-none shrink-0 focus:outline-none focus-visible:outline-none ${
                       timeframe === tf 
                         ? 'bg-indigo-600 text-white shadow-md' 
                         : 'text-white/70 hover:text-white hover:bg-white/10'
@@ -1080,22 +1089,22 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
             </div>
 
             {/* Under-chart metrics overview */}
-            <div className="grid grid-cols-3 gap-4 border-t border-white/5 pt-4">
-              <div className="font-mono">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 border-t border-white/5 pt-4">
+              <div className="font-mono min-w-0">
                 <span className="text-[9px] text-white/70 uppercase tracking-wider block">Today's Return</span>
-                <span className="text-xs font-black text-emerald-400 mt-0.5 block">
+                <span className="text-xs font-black text-emerald-400 mt-0.5 block truncate">
                   +${todayReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({todayReturnPercent.toFixed(2)}%)
                 </span>
               </div>
-              <div className="font-mono border-l border-white/5 pl-4">
+              <div className="font-mono border-t sm:border-t-0 sm:border-l border-white/5 pt-2 sm:pt-0 pl-0 sm:pl-4 min-w-0">
                 <span className="text-[9px] text-white/70 uppercase tracking-wider block">Total Return</span>
-                <span className={`text-xs font-black mt-0.5 block ${lifetimeReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span className={`text-xs font-black mt-0.5 block truncate ${lifetimeReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {lifetimeReturnAmount >= 0 ? '+' : ''}${lifetimeReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({lifetimeReturnPercent.toFixed(2)}%)
                 </span>
               </div>
-              <div className="font-mono border-l border-white/5 pl-4">
+              <div className="font-mono border-t sm:border-t-0 sm:border-l border-white/5 pt-2 sm:pt-0 pl-0 sm:pl-4 min-w-0">
                 <span className="text-[9px] text-white/70 uppercase tracking-wider block">Net Contributions</span>
-                <span className="text-xs font-black text-white/85 mt-0.5 block">
+                <span className="text-xs font-black text-white/85 mt-0.5 block truncate">
                   ${netContributions.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
@@ -1644,7 +1653,9 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
                   const mktVal = item.qty * item.currentPrice;
                   const weightPct = totalValue > 0 ? (mktVal / totalValue) * 100 : 0;
                   const retToday = liveReturns[item.symbol] !== undefined ? liveReturns[item.symbol] : (DAILY_RETURNS[item.symbol] || 0.00);
-                  const retTotal = TOTAL_RETURNS[item.symbol] || 0.00;
+                  const retTotal = item.avgCost > 0 
+                    ? ((item.currentPrice - item.avgCost) / item.avgCost) * 100 
+                    : (TOTAL_RETURNS[item.symbol] || 0.00);
 
                   return (
                     <tr 
@@ -1883,9 +1894,16 @@ export default function PortfolioDesk({ traderEmail, accountMode: propAccountMod
               </div>
               <div>
                 <span className="text-[8px] text-white/70 uppercase tracking-wider block">Overall Return</span>
-                <span className={`text-base font-black mt-1 block ${(TOTAL_RETURNS[selectedHistoryAsset.symbol] || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {(TOTAL_RETURNS[selectedHistoryAsset.symbol] || 0) >= 0 ? '+' : ''}{(TOTAL_RETURNS[selectedHistoryAsset.symbol] || 0).toFixed(2)}%
-                </span>
+                {(() => {
+                  const modalRet = selectedHistoryAsset.avgCost > 0
+                    ? ((selectedHistoryAsset.currentPrice - selectedHistoryAsset.avgCost) / selectedHistoryAsset.avgCost) * 100
+                    : (TOTAL_RETURNS[selectedHistoryAsset.symbol] || 0.00);
+                  return (
+                    <span className={`text-base font-black mt-1 block ${modalRet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {modalRet >= 0 ? '+' : ''}{modalRet.toFixed(2)}%
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 

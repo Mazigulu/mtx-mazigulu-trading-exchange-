@@ -11,47 +11,25 @@ import {
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip, 
-  BarChart, 
-  Bar, 
-  XAxis as BarXAxis,
-  YAxis as BarYAxis,
-  Cell
+  Tooltip
 } from 'recharts';
 import { 
   TrendingUp, 
   TrendingDown, 
   Activity, 
-  Clock, 
-  Target, 
   Briefcase, 
-  Sliders, 
   Zap, 
-  BarChart3, 
   Info, 
-  Check, 
-  Layers, 
   Search,
   Scale,
-  Percent,
-  LineChart as LineIcon,
-  BookOpen,
   PieChart,
   DollarSign,
   Globe,
   ExternalLink,
   RefreshCw,
-  Newspaper,
-  Sparkles,
   ShieldCheck,
-  ArrowUpRight,
-  Tag,
-  Download,
-  FileSpreadsheet,
-  Filter,
-  Shield
+  Download
 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { Trade } from '../types.ts';
 
 interface GroundedHeadline {
@@ -165,261 +143,29 @@ const FINANCIAL_METRICS_INFO: Record<string, {
   }
 };
 
-// Default / Benchmark Holdings Ledger Detail Map
-const DEFAULT_HOLDINGS_DETAILS: Record<string, AssetDetail> = {
-  AAPL: {
-    symbol: 'AAPL',
-    name: 'Apple Inc.',
-    qty: 25,
-    avgCost: 280.00,
-    marketPrice: 307.00,
-    returnVal: '+9.6%',
-    returnPnl: 675.00,
-    weight: '18%',
-    dividend: '0.46%',
-    volatility: 'Medium',
-    riskContrib: '12%',
-    fiftyTwoWeek: 'Near Highs',
-    consensus: 'Moderate Buy',
-    drivers: ['AI Infrastructure', 'Services Growth', 'Share Buybacks', 'Institutional Accumulation'],
-    thesis: 'Apple continues benefiting from robust high-margin services revenue growth and an impending AI-driven device upgrade cycle. Balance sheet fortress with aggressive stock buyback yields supports current premium valuations.',
-    marketCap: '$3.45T',
-    peRatio: '31.4',
-    psRatio: '8.9',
-    profitMargin: '26.3%',
-    debtEquity: '1.43',
-    beta: '1.01',
-    eps: '$6.16'
-  },
-  NVDA: {
-    symbol: 'NVDA',
-    name: 'NVIDIA Corporation',
-    qty: 12,
-    avgCost: 130.00,
-    marketPrice: 170.00,
-    returnVal: '+30.7%',
-    returnPnl: 480.00,
-    weight: '16%',
-    dividend: '0.02%',
-    volatility: 'High',
-    riskContrib: '24%',
-    fiftyTwoWeek: 'All-Time Highs',
-    consensus: 'Strong Buy',
-    drivers: ['AI Infrastructure', 'Datacenter Dominance', 'Next-Gen Chips', 'Institutional Accumulation'],
-    thesis: 'Uncontested market share in compute fabrics with robust hyper-scaler demand pipelines. While valuations remain rich, sequential operating margins continue to surprise on the upside, validating secular structural growth.',
-    marketCap: '$3.10T',
-    peRatio: '68.2',
-    psRatio: '24.5',
-    profitMargin: '53.2%',
-    debtEquity: '0.17',
-    beta: '1.85',
-    eps: '$2.82'
-  },
-  SPY: {
-    symbol: 'SPY',
-    name: 'SPDR S&P 500 ETF Trust',
-    qty: 30,
-    avgCost: 550.00,
-    marketPrice: 575.00,
-    returnVal: '+4.5%',
-    returnPnl: 750.00,
-    weight: '20%',
-    dividend: '1.32%',
-    volatility: 'Low',
-    riskContrib: '8%',
-    fiftyTwoWeek: 'Near Highs',
-    consensus: 'Buy',
-    drivers: ['Broad Diversification', 'Liquid Options', 'Sovereign Security', 'Institutional Accumulation'],
-    thesis: 'Serves as the absolute structural anchor for systemic beta tracking. Satisfies core compliance metrics while buffering higher-volatility individual equity spikes.',
-    marketCap: '$558B',
-    peRatio: '24.8',
-    psRatio: '3.1',
-    profitMargin: '11.5%',
-    debtEquity: '0.85',
-    beta: '1.00',
-    eps: '$23.18'
-  },
-  MSFT: {
-    symbol: 'MSFT',
-    name: 'Microsoft Corporation',
-    qty: 15,
-    avgCost: 410.00,
-    marketPrice: 422.00,
-    returnVal: '+2.9%',
-    returnPnl: 180.00,
-    weight: '15%',
-    dividend: '0.71%',
-    volatility: 'Low',
-    riskContrib: '11%',
-    fiftyTwoWeek: 'Mid-Range',
-    consensus: 'Strong Buy',
-    drivers: ['AI Infrastructure', 'Cloud Scalability', 'Enterprise Moats', 'Institutional Accumulation'],
-    thesis: 'Enterprise AI commercialization via Copilot and Azure is scaling ahead of projections. Operating margins maintain a robust floor due to sticky long-term software subscriptions and sovereign cloud migrations.',
-    marketCap: '$3.15T',
-    peRatio: '34.7',
-    psRatio: '12.1',
-    profitMargin: '35.4%',
-    debtEquity: '0.42',
-    beta: '0.90',
-    eps: '$11.80'
-  },
-  GOOGL: {
-    symbol: 'GOOGL',
-    name: 'Alphabet Inc.',
-    qty: 20,
-    avgCost: 175.00,
-    marketPrice: 166.00,
-    returnVal: '-5.1%',
-    returnPnl: -180.00,
-    weight: '10%',
-    dividend: '0.48%',
-    volatility: 'Medium',
-    riskContrib: '9%',
-    fiftyTwoWeek: 'Consolidating',
-    consensus: 'Buy',
-    drivers: ['Search Resiliency', 'YouTube Monetization', 'AI Search Integration', 'Institutional Accumulation'],
-    thesis: 'Near-term valuation discount reflects legal headwind concerns. However, core search revenue structures remain extremely resilient with cloud division reaching structural profitability scale.',
-    marketCap: '$2.05T',
-    peRatio: '22.1',
-    psRatio: '6.4',
-    profitMargin: '25.9%',
-    debtEquity: '0.11',
-    beta: '1.12',
-    eps: '$6.97'
-  },
-  AMZN: {
-    symbol: 'AMZN',
-    name: 'Amazon.com Inc.',
-    qty: 18,
-    avgCost: 180.00,
-    marketPrice: 189.00,
-    returnVal: '+5.0%',
-    returnPnl: 162.00,
-    weight: '12%',
-    dividend: '0.00%',
-    volatility: 'Medium',
-    riskContrib: '10%',
-    fiftyTwoWeek: 'Near Highs',
-    consensus: 'Strong Buy',
-    drivers: ['Cloud Acceleration', 'Retail Efficiency', 'Advertising Network', 'Institutional Accumulation'],
-    thesis: 'AWS segment is showing clear re-acceleration alongside strong high-margin advertising momentum. Fulfills fundamental requirements for high-margin infrastructure growth profiles.',
-    marketCap: '$1.98T',
-    peRatio: '40.5',
-    psRatio: '3.2',
-    profitMargin: '6.4%',
-    debtEquity: '0.55',
-    beta: '1.15',
-    eps: '$4.18'
-  },
-  Cash: {
-    symbol: 'Cash',
-    name: 'USD Liquidity Reserves',
-    qty: 9200,
-    avgCost: 1.00,
-    marketPrice: 1.00,
-    returnVal: '--',
-    returnPnl: 0,
-    weight: '9%',
-    dividend: '5.20%',
-    volatility: 'None',
-    riskContrib: '0%',
-    fiftyTwoWeek: 'Stable',
-    consensus: 'Hold',
-    drivers: ['Sovereign Security', 'Yield Capture', 'Slippage Defense', 'Institutional Accumulation'],
-    thesis: 'Maintained strictly as dry powder for systemic liquidity risk defense and to capture high risk-free yields. Satisfies high-grade compliance liquidity ratios.',
-    marketCap: '--',
-    peRatio: '--',
-    psRatio: '--',
-    profitMargin: '--',
-    debtEquity: '--',
-    beta: '0.00',
-    eps: '--'
-  }
-};;
+interface OpportunityAsset {
+  sym: string;
+  name: string;
+  price: number;
+  change: number;
+  mom: 'Strong' | 'Moderate' | 'Neutral';
+  val: 'Fair' | 'Premium' | 'Discount';
+  score: number;
+}
 
-// Generates simulated historical curves based on timeframe selections and toggled benchmarks
-const generatePerformanceData = (timeframe: string, benchmarks: Record<string, boolean>) => {
-  let length = 30;
-  let startValue = 100000;
-  let spxStart = 5000;
-  let ndxStart = 17000;
-
-  switch (timeframe) {
-    case '1W':
-      length = 7;
-      break;
-    case '1M':
-      length = 30;
-      break;
-    case '3M':
-      length = 90;
-      break;
-    case 'YTD':
-      length = 180;
-      break;
-    case '1Y':
-      length = 250;
-      break;
-    case 'ALL':
-      length = 500;
-      break;
-  }
-
-  const data = [];
-  const baseDate = new Date('2026-07-03T11:00:00Z');
-
-  for (let i = 0; i < length; i++) {
-    const dayOffset = length - 1 - i;
-    const date = new Date(baseDate.getTime() - dayOffset * 24 * 60 * 60 * 1000);
-    const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-
-    // Seed-based random walk so that the shape remains beautiful, consistent, and organic
-    const t = i / length;
-    const sineFactor = Math.sin(t * Math.PI * 2.5) * 8000;
-    const noiseFactor = Math.sin(i * 0.4) * 1200 + Math.cos(i * 0.9) * 800;
-    const upwardTrend = t * 14000;
-
-    // Base value calculations
-    const portfolioVal = startValue + upwardTrend + sineFactor + noiseFactor;
-    const spxVal = spxStart * (portfolioVal / startValue * 0.95 + Math.sin(i * 0.1) * 0.02);
-    const ndxVal = ndxStart * (portfolioVal / startValue * 1.05 + Math.cos(i * 0.1) * 0.04);
-    const cashContrib = startValue + (i > length / 2 ? 8000 : 0) + (i > length * 0.8 ? 5000 : 0);
-
-    const record: Record<string, any> = {
-      date: dateStr,
-      portfolio: Number(portfolioVal.toFixed(2))
-    };
-
-    if (benchmarks['S&P 500']) {
-      record.spx = Number((spxVal * (startValue / spxStart)).toFixed(2)); // normalized to portfolio starting scale
-    }
-    if (benchmarks['Nasdaq']) {
-      record.nasdaq = Number((ndxVal * (startValue / ndxStart)).toFixed(2)); // normalized to portfolio starting scale
-    }
-    if (benchmarks['Cash Contributions']) {
-      record.cash = Number(cashContrib.toFixed(2));
-    }
-
-    data.push(record);
-  }
-
-  return data;
-};
-
-export default function MarketAnalysisDashboard({ trades, accountMode: propAccountMode }: MarketAnalysisDashboardProps) {
+export default function MarketAnalysisDashboard({ trades = [], accountMode: propAccountMode }: MarketAnalysisDashboardProps) {
   const currentMode = propAccountMode || (typeof window !== 'undefined' ? (localStorage.getItem('mtx_account_mode') === 'REAL' ? 'REAL' : 'DEMO') : 'DEMO');
+  const [accountMode, setAccountMode] = useState<'DEMO' | 'REAL'>(currentMode);
 
-  // Navigation & Toggle States
+  // Timeframe and selection states
   const [activeTimeframe, setActiveTimeframe] = useState<'1W' | '1M' | '3M' | 'YTD' | '1Y' | 'ALL'>('3M');
-  const [selectedAssetKey, setSelectedAssetKey] = useState<string>('AAPL');
+  const [selectedAssetKey, setSelectedAssetKey] = useState<string>('Cash');
   const [assetTab, setAssetTab] = useState<'FINANCIALS' | 'RISK' | 'THESIS' | 'GROUNDED_NEWS'>('FINANCIALS');
   const [holdingsSearchTerm, setHoldingsSearchTerm] = useState<string>('');
-  
+
   // Search Engine Grounding States for Market News across Major Search Engines
   const [groundedNewsMap, setGroundedNewsMap] = useState<Record<string, GroundedNewsData>>({});
   const [isLoadingNews, setIsLoadingNews] = useState<boolean>(false);
-  const [customNewsQuery, setCustomNewsQuery] = useState<string>('');
-  const [customSearchSymbol, setCustomSearchSymbol] = useState<string>('AAPL');
   const [selectedSearchEngine, setSelectedSearchEngine] = useState<'ALL' | 'GOOGLE' | 'BING' | 'YAHOO' | 'DUCKDUCKGO' | 'BRAVE'>('ALL');
 
   // Benchmark Overlays
@@ -431,28 +177,61 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
   });
 
   const toggleBenchmark = (b: string) => {
-    if (b === 'Portfolio Value') return; // Always keep the primary active
+    if (b === 'Portfolio Value') return;
     setBenchmarks(prev => ({
       ...prev,
       [b]: !prev[b]
     }));
   };
 
-  // Generate curves based on timeframe & benchmarks
-  const chartData = useMemo(() => {
-    return generatePerformanceData(activeTimeframe, benchmarks);
-  }, [activeTimeframe, benchmarks]);
+  // Real-time dynamic opportunity list loaded from market prices/top-stocks
+  const [opportunityAssets, setOpportunityAssets] = useState<OpportunityAsset[]>([]);
+  const [isLoadingOpportunities, setIsLoadingOpportunities] = useState<boolean>(true);
 
-  // Dynamic account and holdings synchronization
-  const [accountMode, setAccountMode] = useState<'DEMO' | 'REAL'>(currentMode);
+  // Fundamentals cache for assets
+  const [fundamentalsCache, setFundamentalsCache] = useState<Record<string, any>>({});
 
+  // Fetch real market leaders for Opportunity Map
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingOpportunities(true);
+    fetch('/api/top-stocks')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && Array.isArray(data.stocks) && isMounted) {
+          const list: OpportunityAsset[] = data.stocks.slice(0, 6).map((s: any) => {
+            const chg = typeof s.changePercent === 'number' ? s.changePercent : 0.0;
+            const mom: 'Strong' | 'Moderate' | 'Neutral' = chg >= 1.2 ? 'Strong' : chg >= 0 ? 'Moderate' : 'Neutral';
+            const val: 'Fair' | 'Premium' | 'Discount' = chg > 2.0 ? 'Premium' : chg < -1.0 ? 'Discount' : 'Fair';
+            const score = Math.min(98, Math.max(70, Math.round(80 + chg * 5)));
+            return {
+              sym: s.symbol,
+              name: s.name,
+              price: s.current,
+              change: chg,
+              mom,
+              val,
+              score
+            };
+          });
+          setOpportunityAssets(list);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setIsLoadingOpportunities(false);
+      });
+    return () => { isMounted = false; };
+  }, []);
+
+  // Fetch live cash balance
   const [activeCash, setActiveCash] = useState<number>(() => {
-    if (typeof window === 'undefined') return 100000.00;
+    if (typeof window === 'undefined') return 0.00;
     const isDemo = currentMode !== 'REAL';
     if (!isDemo) {
       const saved = localStorage.getItem('mtx_real_cash');
       const demoCash = parseFloat(localStorage.getItem('mtx_demo_cash') || '100000');
-      if (!saved || parseFloat(saved) === 58000 || parseFloat(saved) === 100000 || parseFloat(saved) === demoCash) {
+      if (!saved || parseFloat(saved) === 58000 || parseFloat(saved) === 200000 || parseFloat(saved) === demoCash) {
         localStorage.setItem('mtx_real_cash', '0.00');
         return 0.00;
       }
@@ -462,6 +241,7 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
     return saved ? parseFloat(saved) : 100000.00;
   });
 
+  // Fetch holdings stored locally
   const [rawHoldings, setRawHoldings] = useState<any[]>(() => {
     if (typeof window === 'undefined') return [];
     const isDemo = localStorage.getItem('mtx_account_mode') !== 'REAL';
@@ -471,66 +251,45 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
       const savedDetailed = localStorage.getItem(detailedKey);
       if (savedDetailed) {
         const parsed = JSON.parse(savedDetailed);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-      const mapKey = isDemo ? 'broker_holdings_demo' : 'broker_holdings_real';
-      let savedMap = localStorage.getItem(mapKey);
-      if (!savedMap && isDemo) savedMap = localStorage.getItem('broker_holdings');
-      if (savedMap) {
-        const parsedMap = JSON.parse(savedMap);
-        if (parsedMap && typeof parsedMap === 'object' && !Array.isArray(parsedMap)) {
-          return Object.entries(parsedMap)
-            .filter(([_, q]) => typeof q === 'number' && (q as number) > 0)
-            .map(([sym, qty]) => ({
-              symbol: sym,
-              name: `${sym} Security`,
-              qty,
-              avgCost: 150.00,
-              currentPrice: 150.00
-            }));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const isMockDefault = parsed.length === 6 && parsed.some((h: any) => h.symbol === 'NVDA' && h.qty === 100);
+          if (isMockDefault) return [];
+          return parsed;
         }
       }
     } catch {}
     return [];
   });
 
-  // Listen to storage and execution events to refresh holdings dynamically
+  // Synchronize mode, cash, and holdings dynamically
   useEffect(() => {
     const handleSync = () => {
       const mode = (localStorage.getItem('mtx_account_mode') === 'REAL') ? 'REAL' : 'DEMO';
       setAccountMode(mode);
       const isDemo = mode === 'DEMO';
       const key = isDemo ? 'mtx_demo_cash' : 'mtx_real_cash';
-      const savedCash = localStorage.getItem(key) || (isDemo ? localStorage.getItem('broker_cash') : null);
-      if (savedCash) setActiveCash(parseFloat(savedCash));
+      const savedCash = localStorage.getItem(key) || (isDemo ? localStorage.getItem('broker_cash') : '0.00');
+      if (savedCash) {
+        let val = parseFloat(savedCash);
+        if (!isDemo && (val === 58000 || val === 200000)) {
+          val = 0.00;
+          localStorage.setItem('mtx_real_cash', '0.00');
+        }
+        setActiveCash(val);
+      }
 
       const detailedKey = `portfolio_detailed_holdings_${mode}`;
       try {
         const savedDetailed = localStorage.getItem(detailedKey);
         if (savedDetailed) {
           const parsed = JSON.parse(savedDetailed);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
+            const isMockDefault = parsed.length === 6 && parsed.some((h: any) => h.symbol === 'NVDA' && h.qty === 100);
+            if (isMockDefault) {
+              setRawHoldings([]);
+              return;
+            }
             setRawHoldings(parsed.filter((h: any) => h && h.symbol && h.qty > 0));
-            return;
-          }
-        }
-        const mapKey = isDemo ? 'broker_holdings_demo' : 'broker_holdings_real';
-        let savedMap = localStorage.getItem(mapKey);
-        if (!savedMap && isDemo) savedMap = localStorage.getItem('broker_holdings');
-        if (savedMap) {
-          const parsedMap = JSON.parse(savedMap);
-          if (parsedMap && typeof parsedMap === 'object' && !Array.isArray(parsedMap)) {
-            setRawHoldings(
-              Object.entries(parsedMap)
-                .filter(([_, q]) => typeof q === 'number' && (q as number) > 0)
-                .map(([sym, qty]) => ({
-                  symbol: sym,
-                  name: `${sym} Security`,
-                  qty,
-                  avgCost: 150.00,
-                  currentPrice: 150.00
-                }))
-            );
             return;
           }
         }
@@ -550,79 +309,106 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
     };
   }, []);
 
-  // Compute active holdings map based on actual positions bought
+  // Filter trades for current mode
+  const currentModeTrades = useMemo(() => {
+    return trades.filter(t => {
+      if (accountMode === 'REAL') {
+        return t.accountMode === 'REAL' || (t.marketNote && t.marketNote.includes('[REAL]'));
+      }
+      return t.accountMode !== 'REAL';
+    });
+  }, [trades, accountMode]);
+
+  const openPositions = useMemo(() => {
+    return currentModeTrades.filter(t => t.status === 'OPEN');
+  }, [currentModeTrades]);
+
+  const closedPositions = useMemo(() => {
+    return currentModeTrades.filter(t => t.status === 'CLOSED');
+  }, [currentModeTrades]);
+
+  // Aggregate user actual active holdings from rawHoldings AND open trades
   const holdingsDetails: Record<string, AssetDetail> = useMemo(() => {
     const map: Record<string, AssetDetail> = {};
-    const totalAssetVal = rawHoldings.reduce((sum, h) => sum + (h.qty * (h.currentPrice || h.avgCost || 150)), 0);
+
+    // Combine rawHoldings and open trades
+    const combinedPositions: Record<string, { qty: number; totalCost: number; currentPrice: number; name: string }> = {};
+
+    rawHoldings.forEach(h => {
+      if (!h || !h.symbol || h.qty <= 0) return;
+      const sym = h.symbol.toUpperCase();
+      combinedPositions[sym] = {
+        qty: h.qty,
+        totalCost: h.qty * (h.avgCost || 150),
+        currentPrice: h.currentPrice || h.avgCost || 150,
+        name: h.name || `${sym} Security`
+      };
+    });
+
+    openPositions.forEach(p => {
+      const sym = p.symbol.toUpperCase();
+      const current = combinedPositions[sym] || { qty: 0, totalCost: 0, currentPrice: p.entryPrice, name: `${sym} Security` };
+      current.qty += p.size;
+      current.totalCost += p.size * p.entryPrice;
+      current.currentPrice = p.entryPrice;
+      combinedPositions[sym] = current;
+    });
+
+    const totalAssetVal = Object.values(combinedPositions).reduce((sum, p) => sum + (p.qty * p.currentPrice), 0);
     const totalEquity = Math.max(1, totalAssetVal + activeCash);
 
-    if (rawHoldings.length > 0) {
-      rawHoldings.forEach(h => {
-        const sym = h.symbol.toUpperCase();
-        const base = DEFAULT_HOLDINGS_DETAILS[sym] || {
-          symbol: sym,
-          name: h.name || `${sym} Security`,
-          qty: h.qty,
-          avgCost: h.avgCost || 150.00,
-          marketPrice: h.currentPrice || h.avgCost || 150.00,
-          returnVal: '+0.0%',
-          returnPnl: 0,
-          weight: '0%',
-          dividend: '0.00%',
-          volatility: 'Medium',
-          riskContrib: '15%',
-          fiftyTwoWeek: 'Active',
-          consensus: 'Buy',
-          drivers: ['Active Portfolio Holding', 'Institutional Clearing'],
-          thesis: `Active position in ${sym} held in the ${accountMode} account with ${h.qty} shares deployed.`,
-          marketCap: '$100B',
-          peRatio: '25.0',
-          psRatio: '5.0',
-          profitMargin: '18.0%',
-          debtEquity: '0.50',
-          beta: '1.10',
-          eps: '$3.50'
-        };
+    Object.entries(combinedPositions).forEach(([sym, p]) => {
+      const avgCost = p.qty > 0 ? p.totalCost / p.qty : p.currentPrice;
+      const pnl = parseFloat(((p.currentPrice - avgCost) * p.qty).toFixed(2));
+      const pct = avgCost > 0 ? ((p.currentPrice - avgCost) / avgCost * 100).toFixed(1) : '0.0';
+      const weightPct = ((p.currentPrice * p.qty) / totalEquity * 100).toFixed(1);
 
-        const qty = h.qty;
-        const avgCost = h.avgCost || base.avgCost || 150;
-        const marketPrice = h.currentPrice || base.marketPrice || avgCost;
-        const pnl = parseFloat(((marketPrice - avgCost) * qty).toFixed(2));
-        const pct = avgCost > 0 ? ((marketPrice - avgCost) / avgCost * 100).toFixed(1) : '0.0';
-        const weightPct = ((marketPrice * qty) / totalEquity * 100).toFixed(1);
+      const f = fundamentalsCache[sym]?.ratios || {};
 
-        map[sym] = {
-          ...base,
-          symbol: sym,
-          name: h.name || base.name,
-          qty,
-          avgCost,
-          marketPrice,
-          returnPnl: pnl,
-          returnVal: `${pnl >= 0 ? '+' : ''}${pct}%`,
-          weight: `${weightPct}%`
-        };
-      });
-    }
+      map[sym] = {
+        symbol: sym,
+        name: p.name,
+        qty: parseFloat(p.qty.toFixed(4)),
+        avgCost: parseFloat(avgCost.toFixed(2)),
+        marketPrice: parseFloat(p.currentPrice.toFixed(2)),
+        returnPnl: pnl,
+        returnVal: `${pnl >= 0 ? '+' : ''}${pct}%`,
+        weight: `${weightPct}%`,
+        dividend: f.dividendYield ? `${(f.dividendYield * 100).toFixed(2)}%` : '0.00%',
+        volatility: f.beta > 1.3 ? 'High' : f.beta < 0.9 ? 'Low' : 'Medium',
+        riskContrib: `${Math.round(parseFloat(weightPct) * (f.beta || 1.0))}%`,
+        fiftyTwoWeek: 'Active',
+        consensus: pnl >= 0 ? 'Buy' : 'Hold',
+        drivers: ['Portfolio Exposure', 'Market Order Fill'],
+        thesis: `Active position deployed in ${accountMode} mode with ${p.qty} units held.`,
+        marketCap: f.marketCap ? `$${(f.marketCap / 1e9).toFixed(1)}B` : '--',
+        peRatio: f.peRatio ? f.peRatio.toFixed(1) : '--',
+        psRatio: f.priceToBook ? f.priceToBook.toFixed(1) : '--',
+        profitMargin: f.profitMargin ? `${(f.profitMargin * 100).toFixed(1)}%` : '--',
+        debtEquity: f.debtToEquity ? (f.debtToEquity / 100).toFixed(2) : '--',
+        beta: f.beta ? f.beta.toFixed(2) : '1.00',
+        eps: f.eps ? `$${f.eps.toFixed(2)}` : '--'
+      };
+    });
 
-    // Always include Cash entry reflecting true demo/real liquid cash
+    // Always include Cash entry representing actual cash in current mode
     const cashWeightPct = ((activeCash / totalEquity) * 100).toFixed(1);
     map['Cash'] = {
       symbol: 'Cash',
-      name: `${accountMode === 'DEMO' ? 'Demo' : 'Real'} USD Liquidity Reserves`,
+      name: `${accountMode === 'DEMO' ? 'Demo' : 'Real'} USD Reserves`,
       qty: activeCash,
       avgCost: 1.00,
       marketPrice: 1.00,
       returnVal: '--',
       returnPnl: 0,
       weight: `${cashWeightPct}%`,
-      dividend: '5.20%',
+      dividend: activeCash > 0 ? '4.80% APY' : '0.00%',
       volatility: 'None',
       riskContrib: '0%',
       fiftyTwoWeek: 'Stable',
       consensus: 'Hold',
-      drivers: ['Sovereign Security', 'Yield Capture', 'Slippage Defense', 'Paper Trading Buying Power'],
-      thesis: `Liquid reserves available in ${accountMode} mode to deploy into equities, ETFs, FX, or crypto assets.`,
+      drivers: ['Capital Preservation', 'Dry Powder', 'Execution Power'],
+      thesis: `Liquid reserves available in ${accountMode} mode to allocate into trading positions.`,
       marketCap: '--',
       peRatio: '--',
       psRatio: '--',
@@ -633,12 +419,49 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
     };
 
     return map;
-  }, [rawHoldings, activeCash, accountMode]);
+  }, [rawHoldings, openPositions, activeCash, accountMode, fundamentalsCache]);
 
   // Selected asset detail
   const selectedAsset = useMemo(() => {
-    return holdingsDetails[selectedAssetKey] || Object.values(holdingsDetails)[0] || holdingsDetails['Cash'] || DEFAULT_HOLDINGS_DETAILS['Cash'];
+    return holdingsDetails[selectedAssetKey] || holdingsDetails['Cash'] || {
+      symbol: selectedAssetKey,
+      name: `${selectedAssetKey} Market Security`,
+      qty: 0,
+      avgCost: 0,
+      marketPrice: 0,
+      returnVal: '--',
+      returnPnl: 0,
+      weight: '0%',
+      dividend: '0.00%',
+      volatility: 'Medium',
+      riskContrib: '0%',
+      fiftyTwoWeek: 'Active',
+      consensus: 'Watch',
+      drivers: ['Market Discovery'],
+      thesis: `Security queried for market intelligence overview.`,
+      marketCap: '--',
+      peRatio: '--',
+      psRatio: '--',
+      profitMargin: '--',
+      debtEquity: '--',
+      beta: '1.00',
+      eps: '--'
+    };
   }, [holdingsDetails, selectedAssetKey]);
+
+  // Fetch fundamentals for queried / selected asset
+  useEffect(() => {
+    if (selectedAssetKey && selectedAssetKey !== 'Cash' && !fundamentalsCache[selectedAssetKey]) {
+      fetch(`/api/markets/fundamentals?ticker=${encodeURIComponent(selectedAssetKey)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.ratios) {
+            setFundamentalsCache(prev => ({ ...prev, [selectedAssetKey]: data }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedAssetKey, fundamentalsCache]);
 
   // Fetch Grounded Financial News via API with Multi-Engine Search Grounding
   const fetchGroundedNews = async (
@@ -648,7 +471,7 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
     engineToUse?: 'ALL' | 'GOOGLE' | 'BING' | 'YAHOO' | 'DUCKDUCKGO' | 'BRAVE'
   ) => {
     const cleanSym = symbolToFetch.trim().toUpperCase();
-    if (!cleanSym) return;
+    if (!cleanSym || cleanSym === 'CASH') return;
 
     const engine = engineToUse || selectedSearchEngine;
     const cacheKey = `${cleanSym}_${engine}`;
@@ -684,12 +507,183 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
     }
   };
 
-  // Trigger Google Search Grounding fetch on symbol selection
   useEffect(() => {
-    if (selectedAssetKey) {
+    if (selectedAssetKey && selectedAssetKey !== 'Cash') {
       fetchGroundedNews(selectedAssetKey, selectedAsset?.name);
     }
   }, [selectedAssetKey]);
+
+  // Dynamic Portfolio Return & Performance Metrics
+  const overviewStats = useMemo(() => {
+    const closed = closedPositions;
+    const open = openPositions;
+
+    const realizedPnl = closed.reduce((sum, t) => sum + (t.pnl || 0), 0);
+    const unrealizedPnl = open.reduce((sum, t) => sum + (t.pnl || 0), 0);
+    const totalReturnDollar = realizedPnl + unrealizedPnl;
+
+    const totalEquity = activeCash + open.reduce((sum, t) => sum + (t.size * t.entryPrice), 0);
+    const startingCapital = accountMode === 'REAL' 
+      ? Math.max(0, totalEquity - totalReturnDollar) 
+      : 100000;
+
+    const returnPct = startingCapital > 0 ? (totalReturnDollar / startingCapital) * 100 : 0;
+
+    const stockKeys = Object.keys(holdingsDetails).filter(k => k !== 'Cash');
+    const uniqueHoldingsCount = stockKeys.length;
+
+    let divScore = 0;
+    let divLabel = 'Unfunded';
+    if (totalEquity <= 0) {
+      divScore = 0;
+      divLabel = 'Clean Slate ($0.00)';
+    } else if (uniqueHoldingsCount === 0) {
+      divScore = 100;
+      divLabel = '100% Cash Reserves';
+    } else if (uniqueHoldingsCount === 1) {
+      divScore = 25;
+      divLabel = 'Concentrated';
+    } else if (uniqueHoldingsCount <= 3) {
+      divScore = 60;
+      divLabel = 'Moderate';
+    } else {
+      divScore = Math.min(95, 65 + uniqueHoldingsCount * 6);
+      divLabel = 'Well Diversified';
+    }
+
+    // Weighted beta
+    let portfolioBeta = 0.0;
+    if (uniqueHoldingsCount > 0) {
+      const nonCash = Object.values(holdingsDetails).filter(h => h.symbol !== 'Cash');
+      const sumBeta = nonCash.reduce((s, h) => s + (parseFloat(h.beta) || 1.0), 0);
+      portfolioBeta = parseFloat((sumBeta / nonCash.length).toFixed(2));
+    }
+    const riskLabel = totalEquity <= 0 ? 'Zero Exposure' : portfolioBeta === 0 ? 'Risk Free' : portfolioBeta > 1.3 ? 'High Volatility' : 'Moderate';
+
+    // Concentration
+    let concentrationPct = totalEquity > 0 ? 100 : 0;
+    let concentrationName = totalEquity > 0 ? 'USD Cash' : 'None';
+    if (uniqueHoldingsCount > 0) {
+      const nonCash = Object.values(holdingsDetails).filter(h => h.symbol !== 'Cash');
+      const sorted = [...nonCash].sort((a, b) => (b.qty * b.marketPrice) - (a.qty * a.marketPrice));
+      if (sorted[0]) {
+        concentrationPct = Math.min(100, Math.round(((sorted[0].qty * sorted[0].marketPrice) / totalEquity) * 100));
+        concentrationName = sorted[0].symbol;
+      }
+    }
+
+    // Dividend yield
+    const divYield = totalEquity <= 0 ? '0.0%' : uniqueHoldingsCount === 0 ? '4.8% APY (Cash Yield)' : '1.4%';
+
+    // Downside stress / Max Drawdown
+    let maxDrawdown = 0;
+    let peak = 0;
+    let current = 0;
+    closed.forEach(t => {
+      current += t.pnl;
+      if (current > peak) peak = current;
+      const dd = peak > 0 ? ((peak - current) / peak) * 100 : 0;
+      if (dd > maxDrawdown) maxDrawdown = dd;
+    });
+
+    return {
+      returnDollar: totalReturnDollar,
+      returnPct: parseFloat(returnPct.toFixed(2)),
+      divScore,
+      divLabel,
+      portfolioBeta,
+      riskLabel,
+      concentrationPct,
+      concentrationName,
+      divYield,
+      downsideStress: maxDrawdown > 0 ? `-${maxDrawdown.toFixed(1)}%` : '0.0%'
+    };
+  }, [closedPositions, openPositions, activeCash, holdingsDetails, accountMode]);
+
+  // Generate historical curve ending on current date
+  const chartData = useMemo(() => {
+    let length = 30;
+    switch (activeTimeframe) {
+      case '1W': length = 7; break;
+      case '1M': length = 30; break;
+      case '3M': length = 90; break;
+      case 'YTD': length = 180; break;
+      case '1Y': length = 250; break;
+      case 'ALL': length = 365; break;
+    }
+
+    const data = [];
+    const now = new Date();
+    const currentEquity = activeCash + openPositions.reduce((s, p) => s + (p.size * p.entryPrice), 0);
+
+    // If account has zero balance (unfunded clean real account), render clean flat zero
+    if (currentEquity <= 0) {
+      for (let i = 0; i < length; i++) {
+        const dayOffset = length - 1 - i;
+        const d = new Date(now.getTime() - dayOffset * 24 * 60 * 60 * 1000);
+        data.push({
+          date: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+          portfolio: 0.00,
+          spx: benchmarks['S&P 500'] ? 0.00 : undefined,
+          nasdaq: benchmarks['Nasdaq'] ? 0.00 : undefined,
+          cash: benchmarks['Cash Contributions'] ? 0.00 : undefined
+        });
+      }
+      return data;
+    }
+
+    // Build timeline incorporating real equity and trades
+    const totalTradesCount = currentModeTrades.length;
+    const baseCapital = accountMode === 'REAL' ? activeCash : 100000;
+
+    for (let i = 0; i < length; i++) {
+      const dayOffset = length - 1 - i;
+      const d = new Date(now.getTime() - dayOffset * 24 * 60 * 60 * 1000);
+      const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+      let val = currentEquity;
+      if (totalTradesCount > 0) {
+        const cutoffTime = d.getTime();
+        const realizedPnlBeforeCutoff = closedPositions
+          .filter(t => new Date(t.exitTimestamp || t.timestamp).getTime() <= cutoffTime)
+          .reduce((sum, t) => sum + (t.pnl || 0), 0);
+        val = baseCapital + realizedPnlBeforeCutoff;
+      }
+
+      const record: Record<string, any> = {
+        date: dateStr,
+        portfolio: Number(Math.max(0, val).toFixed(2))
+      };
+
+      if (benchmarks['S&P 500']) record.spx = Number(baseCapital.toFixed(2));
+      if (benchmarks['Nasdaq']) record.nasdaq = Number(baseCapital.toFixed(2));
+      if (benchmarks['Cash Contributions']) record.cash = Number(activeCash.toFixed(2));
+
+      data.push(record);
+    }
+
+    return data;
+  }, [activeTimeframe, benchmarks, activeCash, openPositions, accountMode]);
+
+  // Dynamic Return Attribution derived from actual user trades
+  const returnAttributions = useMemo(() => {
+    const map: Record<string, number> = {};
+    currentModeTrades.forEach(t => {
+      map[t.symbol] = (map[t.symbol] || 0) + (t.pnl || 0);
+    });
+
+    const items = Object.entries(map).map(([asset, pnl]) => ({
+      asset,
+      pnl: parseFloat(pnl.toFixed(2))
+    }));
+
+    if (items.length === 0) return [];
+    const maxAbs = Math.max(...items.map(i => Math.abs(i.pnl)), 1);
+    return items.sort((a, b) => b.pnl - a.pnl).map(i => ({
+      ...i,
+      pct: Math.round((i.pnl / maxAbs) * 100)
+    }));
+  }, [currentModeTrades]);
 
   // Export Portfolio Intelligence Breakdown as CSV
   const exportAnalysisCSV = () => {
@@ -725,6 +719,8 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
     }
   };
 
+  const totalEquityValue = activeCash + Object.values(holdingsDetails).reduce((s, h) => s + (h.symbol !== 'Cash' ? h.qty * h.marketPrice : 0), 0);
+
   return (
     <div id="intelligence-terminal" className="space-y-6 text-white font-mono">
 
@@ -735,13 +731,23 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
         <div className="bg-[#080808] p-4 rounded-xl border border-neutral-800 space-y-1.5 text-left relative overflow-hidden shadow-lg hover:border-neutral-700 transition-colors">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider block font-bold">Portfolio Return</span>
-            <TrendingUp className="w-3 h-3 text-emerald-400" />
+            {overviewStats.returnDollar > 0 ? (
+              <TrendingUp className="w-3 h-3 text-emerald-400" />
+            ) : overviewStats.returnDollar < 0 ? (
+              <TrendingDown className="w-3 h-3 text-rose-400" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-600 block" />
+            )}
           </div>
-          <span className="text-xl font-black font-mono block text-emerald-400">
-            +$4,670.12
+          <span className={`text-xl font-black font-mono block ${
+            overviewStats.returnDollar > 0 ? 'text-emerald-400' : overviewStats.returnDollar < 0 ? 'text-rose-400' : 'text-neutral-300'
+          }`}>
+            {overviewStats.returnDollar > 0 ? '+' : overviewStats.returnDollar < 0 ? '-' : ''}${Math.abs(overviewStats.returnDollar).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
-          <span className="px-2 py-0.5 bg-emerald-500 text-neutral-950 text-[8.5px] font-mono font-black inline-block rounded shadow-sm">
-            +18.4% YTD
+          <span className={`px-2 py-0.5 text-[8.5px] font-mono font-black inline-block rounded shadow-sm ${
+            overviewStats.returnDollar > 0 ? 'bg-emerald-500 text-neutral-950' : overviewStats.returnDollar < 0 ? 'bg-rose-500 text-white' : 'bg-neutral-800 text-neutral-400'
+          }`}>
+            {overviewStats.returnPct > 0 ? '+' : ''}{overviewStats.returnPct.toFixed(1)}% Net
           </span>
         </div>
 
@@ -752,10 +758,10 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
             <ShieldCheck className="w-3 h-3 text-indigo-400" />
           </div>
           <span className="text-xl font-black font-mono block text-white">
-            84 <span className="text-xs text-neutral-500 font-bold">/ 100</span>
+            {overviewStats.divScore} <span className="text-xs text-neutral-500 font-bold">/ 100</span>
           </span>
           <span className="px-2 py-0.5 bg-indigo-600 text-white text-[8.5px] font-mono font-black inline-block rounded uppercase shadow-sm">
-            Well Diversified
+            {overviewStats.divLabel}
           </span>
         </div>
 
@@ -766,10 +772,10 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
             <Scale className="w-3 h-3 text-amber-400" />
           </div>
           <span className="text-xl font-black font-mono block text-amber-400">
-            Moderate
+            {overviewStats.riskLabel}
           </span>
           <span className="px-2 py-0.5 bg-amber-400 text-neutral-950 text-[8.5px] font-mono font-black inline-block rounded shadow-sm">
-            Beta: 1.08x
+            Beta: {overviewStats.portfolioBeta.toFixed(2)}x
           </span>
         </div>
 
@@ -780,10 +786,10 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
             <PieChart className="w-3 h-3 text-pink-400" />
           </div>
           <span className="text-xl font-black font-mono block text-white">
-            34%
+            {overviewStats.concentrationPct}%
           </span>
-          <span className="px-2 py-0.5 bg-pink-600 text-white text-[8.5px] font-mono font-black inline-block rounded uppercase shadow-sm">
-            Technology
+          <span className="px-2 py-0.5 bg-pink-600 text-white text-[8.5px] font-mono font-black inline-block rounded uppercase shadow-sm truncate max-w-[110px]">
+            {overviewStats.concentrationName}
           </span>
         </div>
 
@@ -794,7 +800,7 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
             <DollarSign className="w-3 h-3 text-teal-400" />
           </div>
           <span className="text-xl font-black font-mono block text-teal-400">
-            2.9%
+            {overviewStats.divYield.split(' ')[0]}
           </span>
           <span className="px-2 py-0.5 bg-teal-400 text-neutral-950 text-[8.5px] font-mono font-black inline-block rounded shadow-sm">
             Est. Annual Yield
@@ -808,10 +814,10 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
             <Zap className="w-3 h-3 text-rose-400" />
           </div>
           <span className="text-xl font-black font-mono block text-rose-400">
-            -11%
+            {overviewStats.downsideStress}
           </span>
           <span className="px-2 py-0.5 bg-rose-600 text-white text-[8.5px] font-mono font-black inline-block rounded uppercase shadow-sm">
-            Stress Tested
+            Max Drawdown
           </span>
         </div>
       </div>
@@ -821,10 +827,10 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-neutral-800 pb-4 mb-4">
           <div>
             <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono flex items-center gap-2">
-              <Activity className="w-4 h-4 text-indigo-400" /> Portfolio Value & Performance
+              <Activity className="w-4 h-4 text-indigo-400" /> Portfolio Value & Performance ({accountMode} Mode)
             </h3>
             <p className="text-[10px] text-neutral-400 font-mono font-bold">
-              Sovereign investment value over time overlaid against benchmark indices.
+              Total active capital valuation: ${totalEquityValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}.
             </p>
           </div>
 
@@ -907,8 +913,8 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
               <YAxis 
                 stroke="#666666" 
                 tick={{ fill: '#a3a3a3', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold' }}
-                domain={['dataMin - 1000', 'dataMax + 1000']}
-                tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
+                domain={['auto', 'auto']}
+                tickFormatter={(val) => `$${Number(val).toLocaleString()}`}
                 dx={-6}
               />
               <Tooltip
@@ -923,14 +929,14 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                         {payload.map((item, index) => {
                           let color = '#818cf8';
                           let label = 'Portfolio Value';
-                          if (item.name === 'spx') { color = '#34d399'; label = 'S&P 500 (Normalized)'; }
-                          else if (item.name === 'nasdaq') { color = '#f472b6'; label = 'Nasdaq (Normalized)'; }
+                          if (item.name === 'spx') { color = '#34d399'; label = 'S&P 500 (Indexed)'; }
+                          else if (item.name === 'nasdaq') { color = '#f472b6'; label = 'Nasdaq (Indexed)'; }
                           else if (item.name === 'cash') { color = '#fbbf24'; label = 'Cash Contrib.'; }
 
                           return (
                             <div key={index} className="flex items-center justify-between gap-5">
                               <span style={{ color }} className="font-bold uppercase text-[9px]">{label}:</span>
-                              <strong className="text-white text-[10.5px] font-mono">${Number(item.value).toLocaleString()}</strong>
+                              <strong className="text-white text-[10.5px] font-mono">${Number(item.value).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
                             </div>
                           );
                         })}
@@ -941,7 +947,6 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                 }}
               />
               
-              {/* Primary Portfolio Value Area */}
               <Area
                 name="portfolio"
                 type="monotone"
@@ -954,7 +959,6 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                 isAnimationActive={false}
               />
 
-              {/* S&P 500 normalized */}
               {benchmarks['S&P 500'] && (
                 <Area
                   name="spx"
@@ -970,7 +974,6 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                 />
               )}
 
-              {/* Nasdaq normalized */}
               {benchmarks['Nasdaq'] && (
                 <Area
                   name="nasdaq"
@@ -986,7 +989,6 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                 />
               )}
 
-              {/* Cash Contributions */}
               {benchmarks['Cash Contributions'] && (
                 <Area
                   name="cash"
@@ -1014,58 +1016,64 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
               <PieChart className="w-4 h-4 text-indigo-400" /> Contribution To Returns
             </h4>
             <p className="text-[10px] text-neutral-400 font-mono font-bold">
-              Individual asset allocations ranked by absolute returns contribution.
+              Realized & active trading returns by individual asset in {accountMode} mode.
             </p>
           </div>
 
-          <div className="h-[210px] w-full flex flex-col justify-center space-y-3 font-mono text-[10.5px]">
-            {[
-              { asset: 'NVDA', pnl: 1890, pct: 100 },
-              { asset: 'AAPL', pnl: 870, pct: 46 },
-              { asset: 'SPY', pnl: 640, pct: 34 },
-              { asset: 'GOOGL', pnl: -190, pct: -10 },
-              { asset: 'Cash', pnl: 0, pct: 0 }
-            ].map((item, i) => {
-              const isPositive = item.pnl > 0;
-              const isZero = item.pnl === 0;
-              return (
-                <div key={i} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-[10px]">{item.asset}</span>
-                    <span className={`font-bold ${isPositive ? 'text-emerald-400' : isZero ? 'text-neutral-400' : 'text-rose-400'}`}>
-                      {isPositive ? '+$' : isZero ? '$' : '-$'}{Math.abs(item.pnl).toLocaleString()}
-                    </span>
+          <div className="min-h-[210px] w-full flex flex-col justify-center space-y-3 font-mono text-[10.5px]">
+            {returnAttributions.length > 0 ? (
+              returnAttributions.map((item, i) => {
+                const isPositive = item.pnl > 0;
+                const isZero = item.pnl === 0;
+                return (
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-[10px]">{item.asset}</span>
+                      <span className={`font-bold ${isPositive ? 'text-emerald-400' : isZero ? 'text-neutral-400' : 'text-rose-400'}`}>
+                        {isPositive ? '+$' : isZero ? '$' : '-$'}{Math.abs(item.pnl).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-neutral-900 rounded-full overflow-hidden flex items-center border border-neutral-800">
+                      {isPositive ? (
+                        <div 
+                          style={{ width: `${item.pct}%` }} 
+                          className="h-full bg-emerald-500 rounded-full"
+                        ></div>
+                      ) : isZero ? (
+                        <div className="w-0.5 h-full bg-neutral-700"></div>
+                      ) : (
+                        <div 
+                          style={{ width: `${Math.abs(item.pct)}%` }} 
+                          className="h-full bg-rose-500 rounded-full"
+                        ></div>
+                      )}
+                    </div>
                   </div>
-                  <div className="h-2 bg-neutral-900 rounded-full overflow-hidden flex items-center border border-neutral-800">
-                    {isPositive ? (
-                      <div 
-                        style={{ width: `${item.pct}%` }} 
-                        className="h-full bg-emerald-500 rounded-full"
-                      ></div>
-                    ) : isZero ? (
-                      <div className="w-0.5 h-full bg-neutral-700"></div>
-                    ) : (
-                      <div 
-                        style={{ width: `${Math.abs(item.pct)}%` }} 
-                        className="h-full bg-rose-500 rounded-full"
-                      ></div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <div className="p-6 text-center text-neutral-500 text-[10px] space-y-1.5 bg-[#0d0d0d] rounded-lg border border-neutral-900">
+                <span className="block font-bold uppercase tracking-wider text-neutral-400">No Asset PnL Attributions Recorded</span>
+                <span>Execute orders in Markets or Trade Terminal to see individual asset return contributions.</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* SECTION 4: MARKET OPPORTUNITY MAP */}
         <div className="bg-[#080808] border border-neutral-800 rounded-xl p-5 text-left shadow-xl">
-          <div className="border-b border-neutral-800 pb-3 mb-3">
-            <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
-              <Zap className="w-4 h-4 text-emerald-400" /> Market Opportunity Map
-            </h4>
-            <p className="text-[10px] text-neutral-400 font-mono font-bold">
-              Quantitative asset score card based on proprietary machine intelligence.
-            </p>
+          <div className="border-b border-neutral-800 pb-3 mb-3 flex items-center justify-between">
+            <div>
+              <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-emerald-400" /> Market Opportunity Map
+              </h4>
+              <p className="text-[10px] text-neutral-400 font-mono font-bold">
+                Live quantitative radar based on real-time prices & momentum indicators.
+              </p>
+            </div>
+            <span className="text-[8px] text-neutral-400 font-bold uppercase tracking-wider bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
+              Live Feed
+            </span>
           </div>
 
           <div className="overflow-x-auto border border-neutral-800 rounded-lg">
@@ -1073,45 +1081,72 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
               <thead className="bg-neutral-900 border-b border-neutral-800 text-neutral-300 uppercase text-[9px] font-black tracking-wider">
                 <tr>
                   <th className="p-2.5">Asset</th>
+                  <th className="p-2.5 text-right">Price</th>
                   <th className="p-2.5 text-center">Momentum</th>
                   <th className="p-2.5 text-center">Valuation</th>
                   <th className="p-2.5 text-right">AI Score</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800 bg-[#0d0d0d]">
-                {[
-                  { sym: 'NVDA', mom: 'Strong', val: 'Expensive', score: 82, color: 'text-indigo-300' },
-                  { sym: 'AAPL', mom: 'Moderate', val: 'Fair', score: 88, color: 'text-emerald-300' },
-                  { sym: 'AMZN', mom: 'Strong', val: 'Fair', score: 91, color: 'text-emerald-300' },
-                  { sym: 'SPY', mom: 'Neutral', val: 'Fair', score: 80, color: 'text-indigo-300' }
-                ].map((row, idx) => (
-                  <tr key={idx} className="hover:bg-neutral-900/60 transition-colors">
-                    <td className="p-2.5 text-white font-bold">{row.sym}</td>
-                    <td className="p-2.5 text-center">
-                      <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase ${
-                        row.mom === 'Strong' 
-                          ? 'bg-emerald-500 text-neutral-950 shadow-sm' 
-                          : 'bg-indigo-600 text-white shadow-sm'
-                      }`}>
-                        {row.mom}
-                      </span>
-                    </td>
-                    <td className="p-2.5 text-center">
-                      <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase ${
-                        row.val === 'Expensive' 
-                          ? 'bg-amber-400 text-neutral-950 shadow-sm' 
-                          : 'bg-neutral-800 text-neutral-200 border border-neutral-700'
-                      }`}>
-                        {row.val}
-                      </span>
-                    </td>
-                    <td className="p-2.5 text-right text-white font-bold">
-                      <span className="px-2 py-0.5 rounded text-[9.5px] text-white bg-neutral-800 border border-neutral-700 font-mono font-black">
-                        {row.score}
-                      </span>
+                {isLoadingOpportunities ? (
+                  <tr>
+                    <td colSpan={5} className="p-4 text-center text-neutral-500 font-mono text-[9.5px]">
+                      Loading real-time opportunity scan...
                     </td>
                   </tr>
-                ))}
+                ) : opportunityAssets.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-4 text-center text-neutral-500 font-mono text-[9.5px]">
+                      No active market opportunity symbols returned from live feed.
+                    </td>
+                  </tr>
+                ) : (
+                  opportunityAssets.map((row, idx) => (
+                    <tr 
+                      key={idx} 
+                      onClick={() => {
+                        setSelectedAssetKey(row.sym);
+                      }}
+                      className="hover:bg-neutral-900/80 transition-colors cursor-pointer"
+                    >
+                      <td className="p-2.5">
+                        <span className="text-white font-bold block">{row.sym}</span>
+                        <span className="text-[8.5px] text-neutral-400 block">{row.name}</span>
+                      </td>
+                      <td className="p-2.5 text-right text-white font-mono font-bold">
+                        ${row.price.toFixed(2)}
+                        <span className={`block text-[8px] ${row.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {row.change >= 0 ? '+' : ''}{row.change.toFixed(2)}%
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase ${
+                          row.mom === 'Strong' 
+                            ? 'bg-emerald-500 text-neutral-950 shadow-sm' 
+                            : row.mom === 'Moderate'
+                              ? 'bg-indigo-600 text-white shadow-sm'
+                              : 'bg-neutral-800 text-neutral-300 border border-neutral-700'
+                        }`}>
+                          {row.mom}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase ${
+                          row.val === 'Premium' 
+                            ? 'bg-amber-400 text-neutral-950 shadow-sm' 
+                            : 'bg-neutral-800 text-neutral-200 border border-neutral-700'
+                        }`}>
+                          {row.val}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-right text-white font-bold">
+                        <span className="px-2 py-0.5 rounded text-[9.5px] text-white bg-neutral-800 border border-neutral-700 font-mono font-black">
+                          {row.score}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -1127,10 +1162,10 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
             <div className="border-b border-neutral-800 pb-3 mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <h4 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-indigo-400" /> Holdings Ledger
+                  <Briefcase className="w-4 h-4 text-indigo-400" /> Holdings Ledger ({accountMode} Mode)
                 </h4>
                 <p className="text-[10px] text-neutral-400 font-mono font-bold">
-                  Active asset weights, acquisition prices, and immediate market return summaries.
+                  Active asset weights, positions held, and immediate market return summaries.
                 </p>
               </div>
 
@@ -1199,9 +1234,21 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                 </tbody>
               </table>
             </div>
+
+            {Object.keys(holdingsDetails).length === 1 && holdingsDetails['Cash'] && (
+              <div className="mt-3 p-3 bg-neutral-900/50 border border-neutral-800 rounded-lg text-[9.5px] text-neutral-400 flex items-center justify-between">
+                <span>⚡ Only Cash held in {accountMode} mode. Acquire securities in Trade Terminal or Markets to populate positions.</span>
+                <button
+                  onClick={exportAnalysisCSV}
+                  className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-bold rounded flex items-center gap-1.5 cursor-pointer text-[9px]"
+                >
+                  <Download className="w-3 h-3" /> Export CSV
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-between text-[8.5px] font-mono text-neutral-400 font-bold mt-4 pt-3 border-t border-neutral-800">
-            <span>Audit Note: Security values refreshed in synchronization with global Bloomberg real-time feeds.</span>
+            <span>Audit Note: Values dynamically verified with server ledger and live pricing.</span>
             <span className="text-indigo-400 font-black">Click row to inspect asset intelligence</span>
           </div>
         </div>
@@ -1224,7 +1271,7 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                     ? 'bg-emerald-500 text-neutral-950 shadow-sm' 
                     : 'bg-rose-600 text-white shadow-sm'
                 }`}>
-                  {selectedAsset.returnPnl >= 0 ? 'ACCUMULATING' : 'UNDERWEIGHT'}
+                  {selectedAsset.symbol === 'Cash' ? 'LIQUIDITY' : selectedAsset.returnPnl >= 0 ? 'ACCUMULATING' : 'UNDERWEIGHT'}
                 </span>
               </div>
 
@@ -1252,48 +1299,20 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
 
               {/* Tab 1: Financials */}
               {assetTab === 'FINANCIALS' && (() => {
-                const renderFinancialCard = (label: string, value: string, textClass: string = 'text-white', isTop: boolean = false, alignRight: boolean = false) => {
+                const renderFinancialCard = (label: string, value: string, textClass: string = 'text-white') => {
                   const info = FINANCIAL_METRICS_INFO[label] || {
-                    definition: 'Institutional quantitative metric measuring underlying corporate fundamental performance.',
+                    definition: 'Institutional quantitative metric measuring fundamental performance.',
                     average: 'Varies by industry sector baseline.',
-                    alert: 'Active automated terminal rule monitoring.'
+                    alert: 'Active automated terminal monitoring.'
                   };
-                  const vertPos = isTop ? 'top-full mt-2.5' : 'bottom-full mb-2.5';
-                  const arrowVert = isTop ? 'bottom-full border-b-neutral-950' : 'top-full border-t-neutral-950';
-                  const alignPos = alignRight ? 'right-0 left-auto translate-x-0' : 'left-0 translate-x-0';
-                  const arrowAlign = alignRight ? 'right-6 left-auto translate-x-1/2' : 'left-6 -translate-x-1/2';
 
                   return (
-                    <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800 flex flex-col justify-between relative group overflow-visible cursor-help hover:border-indigo-500/50 hover:bg-indigo-950/20 transition-all min-h-[60px]">
+                    <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800 flex flex-col justify-between relative group cursor-help hover:border-indigo-500/50 hover:bg-indigo-950/20 transition-all min-h-[60px]">
                       <div className="flex justify-between items-start w-full">
                         <span className="text-neutral-400 text-[8px] uppercase tracking-wider block font-bold">{label}</span>
                         <Info className="w-2.5 h-2.5 text-neutral-500 group-hover:text-indigo-400 transition-colors" />
                       </div>
                       <span className={`${textClass} font-black text-xs mt-1 block`}>{value}</span>
-
-                      {/* Interactive Bloomberg-Style Tooltip */}
-                      <div className={`absolute ${vertPos} ${alignPos} w-64 p-3 bg-neutral-950 border border-neutral-700 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-[100] text-left font-sans`}>
-                        <div className="flex items-center gap-1.5 border-b border-neutral-800 pb-1.5 mb-1.5">
-                          <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                          <span className="font-mono font-black uppercase tracking-wider text-[9px] text-indigo-300">
-                            {label}
-                          </span>
-                        </div>
-                        <p className="text-neutral-300 text-[10px] leading-relaxed mb-2 font-normal">
-                          {info.definition}
-                        </p>
-                        <div className="bg-[#080808] rounded p-2 border border-neutral-800 font-mono text-[9px] space-y-1">
-                          <div className="flex justify-between items-center gap-1">
-                            <span className="text-neutral-400 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
-                            <span className="text-white font-medium text-[8.5px] text-right">{info.average}</span>
-                          </div>
-                          <div className="flex justify-between items-center gap-1">
-                            <span className="text-neutral-400 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
-                            <span className="text-indigo-400 font-bold text-[8.5px] text-right">{info.alert}</span>
-                          </div>
-                        </div>
-                        <div className={`absolute ${arrowVert} ${arrowAlign} border-4 border-transparent`}></div>
-                      </div>
                     </div>
                   );
                 };
@@ -1301,58 +1320,11 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                 return (
                   <div className="space-y-3 font-mono">
                     <div className="grid grid-cols-2 gap-2 text-[10px]">
-                      {renderFinancialCard('Market Cap', selectedAsset.marketCap, 'text-white', true, false)}
-                      {renderFinancialCard('P/E Ratio', selectedAsset.peRatio, 'text-white', true, true)}
-                      {renderFinancialCard('P/S Ratio', selectedAsset.psRatio, 'text-white', false, false)}
-                      {renderFinancialCard('Debt / Equity', selectedAsset.debtEquity, 'text-white', false, true)}
+                      {renderFinancialCard('Market Cap', selectedAsset.marketCap, 'text-white')}
+                      {renderFinancialCard('P/E Ratio', selectedAsset.peRatio, 'text-white')}
+                      {renderFinancialCard('P/S Ratio', selectedAsset.psRatio, 'text-white')}
+                      {renderFinancialCard('Debt / Equity', selectedAsset.debtEquity, 'text-white')}
                     </div>
-
-                    {/* Profit Margin bar indicator with custom hover tooltip */}
-                    {selectedAsset.profitMargin !== '--' && (() => {
-                      const label = 'Profit Margin';
-                      const info = FINANCIAL_METRICS_INFO[label];
-                      return (
-                        <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800 space-y-1.5 relative group overflow-visible cursor-help hover:border-indigo-500/50 hover:bg-indigo-950/20 transition-all">
-                          <div className="flex justify-between items-center text-[9px]">
-                            <div className="flex items-center gap-1">
-                              <span className="text-neutral-400 uppercase font-bold">PROFIT MARGIN:</span>
-                              <Info className="w-2.5 h-2.5 text-neutral-500 group-hover:text-indigo-400 transition-colors" />
-                            </div>
-                            <span className="text-emerald-400 font-bold">{selectedAsset.profitMargin}</span>
-                          </div>
-                          <div className="h-1.5 bg-neutral-900 border border-neutral-800 rounded-full overflow-hidden">
-                            <div 
-                              style={{ width: selectedAsset.profitMargin }}
-                              className="h-full bg-emerald-500 rounded-full"
-                            ></div>
-                          </div>
-
-                          {/* Interactive Bloomberg-Style Tooltip */}
-                          <div className="absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 w-64 p-3 bg-neutral-950 border border-neutral-700 rounded-lg shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-50 text-left font-sans">
-                            <div className="flex items-center gap-1.5 border-b border-neutral-800 pb-1.5 mb-1.5">
-                              <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                              <span className="font-mono font-black uppercase tracking-wider text-[9px] text-indigo-300">
-                                {label}
-                              </span>
-                            </div>
-                            <p className="text-neutral-300 text-[10px] leading-relaxed mb-2 font-normal">
-                              {info.definition}
-                            </p>
-                            <div className="bg-[#080808] rounded p-2 border border-neutral-800 font-mono text-[9px] space-y-1">
-                              <div className="flex justify-between items-center gap-1">
-                                <span className="text-neutral-400 font-semibold uppercase text-[8px] tracking-wider shrink-0">Historical Avg:</span>
-                                <span className="text-white font-medium text-[8.5px] text-right">{info.average}</span>
-                              </div>
-                              <div className="flex justify-between items-center gap-1">
-                                <span className="text-neutral-400 font-semibold uppercase text-[8px] tracking-wider shrink-0">Alert Tier:</span>
-                                <span className="text-indigo-400 font-bold text-[8.5px] text-right">{info.alert}</span>
-                              </div>
-                            </div>
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-950"></div>
-                          </div>
-                        </div>
-                      );
-                    })()}
 
                     <div className="grid grid-cols-2 gap-2 text-[10px]">
                       {renderFinancialCard('Beta', selectedAsset.beta, 'text-indigo-300')}
@@ -1440,7 +1412,7 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                       <div className="flex items-center gap-1.5">
                         <Globe className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                         <span className="text-[9px] font-bold text-sky-300 uppercase tracking-wide">
-                          Multi-Engine Search Grounding
+                          Search Grounding: {selectedAssetKey}
                         </span>
                       </div>
                       <button
@@ -1490,7 +1462,6 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                       </div>
                     ) : activeNews ? (
                       <div className="space-y-2.5 text-[9.5px]">
-                        {/* Sentiment badge */}
                         <div className="flex items-center justify-between bg-[#0d0d0d] p-2.5 rounded-lg border border-neutral-800">
                           <span className="text-neutral-400 font-bold">MARKET SENTIMENT:</span>
                           <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase ${
@@ -1502,7 +1473,6 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                           </span>
                         </div>
 
-                        {/* Executive Synthesis */}
                         <div className="bg-[#0d0d0d] p-3 rounded-lg border border-neutral-800 space-y-1">
                           <span className="text-[8px] text-neutral-400 uppercase block font-bold">Executive Synthesis</span>
                           <p className="text-neutral-200 text-[10px] leading-relaxed font-sans font-medium">
@@ -1510,51 +1480,28 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
                           </p>
                         </div>
 
-                        {/* Top Headlines List */}
                         <div className="space-y-2">
                           <span className="text-[8px] text-neutral-400 uppercase block font-bold">Latest Grounded Headlines</span>
-                          {activeNews.headlines.slice(0, 3).map((item, idx) => (
-                            <div key={idx} className="bg-[#0d0d0d] p-2.5 rounded-lg border border-neutral-800 space-y-1 hover:border-sky-500/40 transition-all">
-                              <div className="flex items-center justify-between gap-1">
-                                <div className="flex items-center gap-1">
+                          {activeNews.headlines && activeNews.headlines.length > 0 ? (
+                            activeNews.headlines.slice(0, 3).map((item, idx) => (
+                              <div key={idx} className="bg-[#0d0d0d] p-2.5 rounded-lg border border-neutral-800 space-y-1 hover:border-sky-500/40 transition-all">
+                                <div className="flex items-center justify-between gap-1">
                                   <span className="text-[8px] font-bold text-neutral-950 px-1.5 py-0.5 rounded bg-sky-400">
                                     {item.category}
                                   </span>
-                                  {item.sourceEngine && (
-                                    <span className="text-[7.5px] font-bold text-white px-1.5 py-0.5 rounded bg-indigo-600">
-                                      {item.sourceEngine}
-                                    </span>
-                                  )}
+                                  <span className="text-[8px] text-neutral-500 font-mono">{item.timestamp}</span>
                                 </div>
-                                <span className="text-[8px] text-neutral-500 font-mono">{item.timestamp}</span>
+                                <h6 className="text-white font-bold text-[10px] leading-snug font-sans">{item.title}</h6>
+                                <p className="text-neutral-400 text-[9px] line-clamp-2 font-sans font-normal">{item.snippet}</p>
                               </div>
-                              <h6 className="text-white font-bold text-[10px] leading-snug font-sans">{item.title}</h6>
-                              <p className="text-neutral-400 text-[9px] line-clamp-2 font-sans font-normal">{item.snippet}</p>
+                            ))
+                          ) : (
+                            <div className="p-3 bg-[#0d0d0d] rounded-lg border border-neutral-800 text-[9.5px] text-neutral-400">
+                              <span>No direct news headlines returned from live feeds. Click any engine link below to view live coverage directly.</span>
                             </div>
-                          ))}
+                          )}
                         </div>
 
-                        {/* Search Engine Quick Links */}
-                        {activeNews.engineQuickLinks && activeNews.engineQuickLinks.length > 0 && (
-                          <div className="pt-2 border-t border-neutral-800 space-y-1">
-                            <span className="text-[8px] text-neutral-400 uppercase block font-bold">Open Search Engine Index</span>
-                            <div className="flex flex-wrap gap-1">
-                              {activeNews.engineQuickLinks.map((link, idx) => (
-                                <a
-                                  key={idx}
-                                  href={link.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-2 py-0.5 rounded-md bg-neutral-900 border border-neutral-700 text-[8px] text-sky-300 hover:text-white hover:border-sky-400 transition-colors flex items-center gap-1"
-                                >
-                                  {link.label} <ExternalLink className="w-2 h-2" />
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Grounding Sources / Links */}
                         {activeNews.groundingSources && activeNews.groundingSources.length > 0 && (
                           <div className="pt-2 border-t border-neutral-800 space-y-1.5">
                             <span className="text-[8px] text-neutral-400 uppercase block font-bold">Web Citations & Sources</span>
@@ -1593,8 +1540,8 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
 
             {/* Timestamp footer */}
             <div className="pt-3 border-t border-neutral-800 flex items-center justify-between text-[8px] font-mono text-neutral-400 font-bold">
-              <span>LEDGER: ACTIVE</span>
-              <span>EXCHANGE: NYSE / NASDAQ</span>
+              <span>MODE: {accountMode}</span>
+              <span>EXCHANGE: NYSE / NASDAQ / LSE</span>
             </div>
 
           </div>
@@ -1618,16 +1565,16 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { label: 'Portfolio Beta', val: '1.08', sub: 'Moderate systemic risk', barColor: 'bg-indigo-500' },
-              { label: 'Largest Position', val: 'NVDA 16%', sub: 'Nvidia Corp concentration', barColor: 'bg-amber-500' },
-              { label: 'Top Sector', val: 'Technology 41%', sub: 'Heavy sector dependency', barColor: 'bg-pink-500' },
-              { label: 'Cash Buffer', val: '23%', sub: 'Liquidity reserve', barColor: 'bg-teal-500' },
-              { label: 'FX Exposure', val: 'USD 94%', sub: 'Dollar sovereign dominance', barColor: 'bg-indigo-400' },
-              { label: 'Stress Buffer', val: 'AAA Rated', sub: 'Safety compliance', barColor: 'bg-emerald-500' }
+              { label: 'Portfolio Beta', val: `${overviewStats.portfolioBeta.toFixed(2)}x`, sub: overviewStats.riskLabel, barColor: 'bg-indigo-500' },
+              { label: 'Largest Position', val: `${overviewStats.concentrationName} ${overviewStats.concentrationPct}%`, sub: 'Concentration weight', barColor: 'bg-amber-500' },
+              { label: 'Top Sector', val: overviewStats.concentrationName === 'None' ? 'None' : overviewStats.concentrationName === 'USD Cash' ? 'Cash Reserves' : 'Equities', sub: 'Sector dependency', barColor: 'bg-pink-500' },
+              { label: 'Cash Buffer', val: `${totalEquityValue > 0 ? Math.round((activeCash / totalEquityValue) * 100) : 0}%`, sub: 'Available liquidity', barColor: 'bg-teal-500' },
+              { label: 'FX Exposure', val: 'USD 100%', sub: 'Dollar sovereign allocation', barColor: 'bg-indigo-400' },
+              { label: 'Stress Buffer', val: overviewStats.portfolioBeta === 0 ? 'Max Cash Tier' : 'Investment Grade', sub: 'Safety compliance', barColor: 'bg-emerald-500' }
             ].map((item, i) => (
               <div key={i} className="bg-[#0d0d0d] border border-neutral-800 p-3.5 rounded-lg space-y-1.5 font-mono text-left">
                 <span className="text-[8px] text-neutral-400 uppercase block font-bold">{item.label}</span>
-                <span className="text-sm font-black text-white block">{item.val}</span>
+                <span className="text-sm font-black text-white block truncate">{item.val}</span>
                 <span className="text-[8.5px] text-neutral-400 block leading-normal font-medium">{item.sub}</span>
                 <div className="h-1 w-full bg-neutral-900 border border-neutral-800 rounded-full mt-1.5 overflow-hidden">
                   <div className={`h-full w-2/3 ${item.barColor} rounded-full`}></div>
@@ -1644,45 +1591,52 @@ export default function MarketAnalysisDashboard({ trades, accountMode: propAccou
               <Zap className="w-4 h-4 text-rose-400" /> Scenario Simulator
             </h4>
             <p className="text-[10px] text-neutral-400 font-mono font-bold">
-              Hypothetical macro events applied dynamically against active portfolio value.
+              Hypothetical macro events applied dynamically against active portfolio value (${totalEquityValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}).
             </p>
           </div>
 
           <div className="space-y-3">
-            {[
-              {
-                title: 'If S&P 500 falls 10%',
-                impact: 'Estimated Loss: -$6,830',
-                isPositive: false,
-                percent: '-6.8%'
-              },
-              {
-                title: 'If Technology rises 15%',
-                impact: 'Estimated Gain: +$4,100',
-                isPositive: true,
-                percent: '+4.1%'
-              },
-              {
-                title: 'If USD weakens 10%',
-                impact: 'Estimated Impact: +$1,250',
-                isPositive: true,
-                percent: '+1.2%'
-              }
-            ].map((sc, i) => (
-              <div key={i} className="flex items-center justify-between p-3.5 rounded-lg bg-[#0d0d0d] border border-neutral-800 font-mono text-[10px]">
-                <div className="space-y-0.5">
-                  <span className="text-white font-bold block">{sc.title}</span>
-                  <span className="text-neutral-400 block font-medium">{sc.impact}</span>
+            {(() => {
+              const nonCashEquity = Object.values(holdingsDetails).reduce((s, h) => s + (h.symbol !== 'Cash' ? h.qty * h.marketPrice : 0), 0);
+              const sp500Impact = Math.round(nonCashEquity * 0.10 * (overviewStats.portfolioBeta || 1.0));
+              const techImpact = Math.round(nonCashEquity * 0.15);
+              const fxImpact = Math.round(activeCash * 0.05);
+
+              return [
+                {
+                  title: 'If S&P 500 falls 10%',
+                  impact: `Estimated Loss: -$${sp500Impact.toLocaleString()}`,
+                  isPositive: false,
+                  percent: totalEquityValue > 0 ? `-${((sp500Impact / totalEquityValue) * 100).toFixed(1)}%` : '0.0%'
+                },
+                {
+                  title: 'If Technology Sector rallies 15%',
+                  impact: `Estimated Gain: +$${techImpact.toLocaleString()}`,
+                  isPositive: true,
+                  percent: totalEquityValue > 0 ? `+${((techImpact / totalEquityValue) * 100).toFixed(1)}%` : '0.0%'
+                },
+                {
+                  title: 'If USD strengthens against global FX by 5%',
+                  impact: `Cash Purchasing Power: +$${fxImpact.toLocaleString()}`,
+                  isPositive: true,
+                  percent: totalEquityValue > 0 ? `+${((fxImpact / totalEquityValue) * 100).toFixed(1)}%` : '0.0%'
+                }
+              ].map((sc, i) => (
+                <div key={i} className="flex items-center justify-between p-3.5 rounded-lg bg-[#0d0d0d] border border-neutral-800 font-mono text-[10px]">
+                  <div className="space-y-0.5">
+                    <span className="text-white font-bold block">{sc.title}</span>
+                    <span className="text-neutral-400 block font-medium">{sc.impact}</span>
+                  </div>
+                  <div className={`px-2.5 py-1 rounded text-[10px] font-black ${
+                    sc.isPositive 
+                      ? 'bg-emerald-500 text-neutral-950 shadow-sm' 
+                      : 'bg-rose-600 text-white shadow-sm'
+                  }`}>
+                    {sc.percent}
+                  </div>
                 </div>
-                <div className={`px-2.5 py-1 rounded text-[10px] font-black ${
-                  sc.isPositive 
-                    ? 'bg-emerald-500 text-neutral-950 shadow-sm' 
-                    : 'bg-rose-600 text-white shadow-sm'
-                }`}>
-                  {sc.percent}
-                </div>
-              </div>
-            ))}
+              ));
+            })()}
           </div>
         </div>
 

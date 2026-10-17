@@ -291,9 +291,20 @@ export default function Web3ConnectModal({
 
         {/* Error Notification Strip */}
         {errorMsg && (
-          <div className="px-4 py-2 bg-rose-950/40 border-b border-rose-500/30 text-rose-300 text-[9.5px] flex items-center gap-2">
-            <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-            <span className="leading-tight">{errorMsg}</span>
+          <div className="px-4 py-2.5 bg-rose-950/40 border-b border-rose-500/30 text-rose-300 text-[9.5px] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span className="leading-tight">{errorMsg}</span>
+            </div>
+            {errorMsg.toLowerCase().includes('metamask') && (
+              <button
+                type="button"
+                onClick={() => handleConnectProvider('sandbox')}
+                className="px-2.5 py-1 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 rounded text-[8.5px] font-bold uppercase tracking-wider shrink-0 cursor-pointer transition-colors"
+              >
+                Use Hardware Sandbox
+              </button>
+            )}
           </div>
         )}
 

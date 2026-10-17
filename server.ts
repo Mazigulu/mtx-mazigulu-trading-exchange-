@@ -87,79 +87,31 @@ async function checkFirestoreAvailability() {
 // Call check immediately
 checkFirestoreAvailability();
 
-// Helper to load default breaches
+// Clean slate: breaches populated dynamically from actual portfolio risk violations
 function getInitialBreaches(): BreachEvent[] {
-  return [
-    {
-      id: "breach-1",
-      timestamp: "2026-06-04T14:30:00Z",
-      symbol: "NVDA" as MarketSymbol,
-      exposure: 1.95,
-      pnlAtBreach: -195.00,
-      reason: "Sudden earnings-related volatility spike triggered stop-loss aggregate deviation."
-    },
-    {
-      id: "breach-2",
-      timestamp: "2026-06-03T20:15:22Z",
-      symbol: "AAPL" as MarketSymbol,
-      exposure: 1.62,
-      pnlAtBreach: -162.00,
-      reason: "Intraday resistance breakout exceeded localized asset-class limit cap."
-    },
-    {
-      id: "breach-3",
-      timestamp: "2026-06-02T10:05:11Z",
-      symbol: "TSLA" as MarketSymbol,
-      exposure: 1.58,
-      pnlAtBreach: -158.00,
-      reason: "High volatility pre-market volume exceeded localized risk tolerances."
-    },
-    {
-      id: "breach-4",
-      timestamp: "2026-05-31T15:42:00Z",
-      symbol: "SPX500" as MarketSymbol,
-      exposure: 1.74,
-      pnlAtBreach: -174.00,
-      reason: "Overlapping directional buy lots triggered systemic margin escalation warning."
-    },
-    {
-      id: "breach-5",
-      timestamp: "2026-05-28T09:12:45Z",
-      symbol: "NAS100" as MarketSymbol,
-      exposure: 1.52,
-      pnlAtBreach: -152.00,
-      reason: "Averaging down into negative momentum structure breached compliance threshold."
-    }
-  ];
+  return [];
 }
 
 // Setup breaches Firestore helpers
 async function getBreachesForUser(userId: string): Promise<BreachEvent[]> {
-  let isDemo = userId === 'dev-user-uid-123';
-  if (isCloudSqlAvailable) {
-    try {
-      const [u] = await db.select().from(usersTable).where(eq(usersTable.uid, userId)).limit(1);
-      if (u && u.email.toLowerCase() === 'demo@gmail.com') {
-        isDemo = true;
-      }
-    } catch (err) {
-      // ignore
-    }
-  }
+  const sanitizeBreaches = (list: BreachEvent[] = []) => {
+    return list.filter(b => b && b.id && !b.id.startsWith('breach-'));
+  };
 
-  const defaultBreaches = isDemo ? getInitialBreaches() : [];
+  const defaultBreaches: BreachEvent[] = [];
 
   if (!isFirestoreAvailable) {
     if (!localBreachesStore.has(userId)) {
       localBreachesStore.set(userId, defaultBreaches);
     }
-    return localBreachesStore.get(userId) || [];
+    return sanitizeBreaches(localBreachesStore.get(userId) || []);
   }
   try {
     const docRef = adminDb.collection('breaches').doc(userId);
     const doc = await docRef.get();
     if (doc.exists) {
-      return (doc.data()?.events || []) as BreachEvent[];
+      const sanitized = sanitizeBreaches(doc.data()?.events || []);
+      return sanitized;
     } else {
       await docRef.set({ events: defaultBreaches }).catch(() => {});
       return defaultBreaches;
@@ -170,7 +122,7 @@ async function getBreachesForUser(userId: string): Promise<BreachEvent[]> {
     if (!localBreachesStore.has(userId)) {
       localBreachesStore.set(userId, defaultBreaches);
     }
-    return localBreachesStore.get(userId) || [];
+    return sanitizeBreaches(localBreachesStore.get(userId) || []);
   }
 }
 
@@ -264,8 +216,6 @@ async function checkForNewBreaches(userId: string, sqlUserId: number): Promise<v
   }
 }
 
-// Initialize for default development user
-getBreachesForUser('dev-user-uid-123').catch(() => {});
 
 
 // ==================== TRADE PERSISTENCE LAYER ====================
@@ -556,21 +506,21 @@ async function checkAndAutoCloseTrades(): Promise<void> {
       let closingReason = '';
 
       if (t.side === 'BUY') {
-        if (curPrice <= currentStopLoss) {
+        if (currentStopLoss > 0 && curPrice <= currentStopLoss) {
           shouldClose = true;
           triggerPrice = currentStopLoss;
           closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
-        } else if (curPrice >= currentTakeProfit) {
+        } else if (currentTakeProfit > 0 && curPrice >= currentTakeProfit) {
           shouldClose = true;
           triggerPrice = currentTakeProfit;
           closingReason = `Auto Closed: TP hit at ${currentTakeProfit}`;
         }
       } else { // SELL
-        if (curPrice >= currentStopLoss) {
+        if (currentStopLoss > 0 && curPrice >= currentStopLoss) {
           shouldClose = true;
           triggerPrice = currentStopLoss;
           closingReason = `Auto Closed: SL hit at ${currentStopLoss}`;
-        } else if (curPrice <= currentTakeProfit) {
+        } else if (currentTakeProfit > 0 && curPrice <= currentTakeProfit) {
           shouldClose = true;
           triggerPrice = currentTakeProfit;
           closingReason = `Auto Closed: TP hit at ${currentTakeProfit}`;
@@ -905,31 +855,8 @@ let topStocksCache: {
 
 async function fetchTopStocks(): Promise<TopStock[]> {
   const symbols = [
-    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'BRK-B', 'LLY', 'TSLA', 'AVGO',
-    'V', 'UNH', 'JPM', 'JNJ', 'XOM', 'WMT', 'HD', 'PG', 'COST', 'NFLX'
-  ];
-  
-  const fallbackStocks: TopStock[] = [
-    { symbol: 'AAPL', name: 'Apple Inc.', prevClose: 210.50, current: 211.85, change: 1.35, changePercent: 0.64 },
-    { symbol: 'MSFT', name: 'Microsoft Corp.', prevClose: 420.20, current: 418.50, change: -1.70, changePercent: -0.40 },
-    { symbol: 'GOOGL', name: 'Alphabet Inc.', prevClose: 175.40, current: 177.10, change: 1.70, changePercent: 0.97 },
-    { symbol: 'AMZN', name: 'Amazon.com, Inc.', prevClose: 185.30, current: 186.45, change: 1.15, changePercent: 0.62 },
-    { symbol: 'NVDA', name: 'NVIDIA Corp.', prevClose: 915.00, current: 932.50, change: 17.50, changePercent: 1.91 },
-    { symbol: 'META', name: 'Meta Platforms, Inc.', prevClose: 475.60, current: 472.10, change: -3.50, changePercent: -0.74 },
-    { symbol: 'BRK-B', name: 'Berkshire Hathaway', prevClose: 410.15, current: 411.30, change: 1.15, changePercent: 0.28 },
-    { symbol: 'LLY', name: 'Eli Lilly & Co.', prevClose: 820.40, current: 825.10, change: 4.70, changePercent: 0.57 },
-    { symbol: 'TSLA', name: 'Tesla, Inc.', prevClose: 178.50, current: 175.20, change: -3.30, changePercent: -1.85 },
-    { symbol: 'AVGO', name: 'Broadcom Inc.', prevClose: 1400.00, current: 1412.50, change: 12.50, changePercent: 0.89 },
-    { symbol: 'V', name: 'Visa Inc.', prevClose: 275.80, current: 277.10, change: 1.30, changePercent: 0.47 },
-    { symbol: 'UNH', name: 'UnitedHealth Group', prevClose: 495.30, current: 492.80, change: -2.50, changePercent: -0.50 },
-    { symbol: 'JPM', name: 'JPMorgan Chase & Co.', prevClose: 195.40, current: 197.15, change: 1.75, changePercent: 0.90 },
-    { symbol: 'JNJ', name: 'Johnson & Johnson', prevClose: 148.50, current: 149.10, change: 0.60, changePercent: 0.40 },
-    { symbol: 'XOM', name: 'Exxon Mobil Corp.', prevClose: 115.20, current: 114.80, change: -0.40, changePercent: -0.35 },
-    { symbol: 'WMT', name: 'Walmart Inc.', prevClose: 66.80, current: 67.25, change: 0.45, changePercent: 0.67 },
-    { symbol: 'HD', name: 'The Home Depot, Inc.', prevClose: 345.50, current: 347.80, change: 2.30, changePercent: 0.67 },
-    { symbol: 'PG', name: 'Procter & Gamble Co.', prevClose: 162.30, current: 163.15, change: 0.85, changePercent: 0.52 },
-    { symbol: 'COST', name: 'Costco Wholesale', prevClose: 725.10, current: 731.40, change: 6.30, changePercent: 0.87 },
-    { symbol: 'NFLX', name: 'Netflix, Inc.', prevClose: 610.40, current: 614.50, change: 4.10, changePercent: 0.67 }
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY',
+    'NFLX', 'AMD', 'COST', 'JPM', 'UNH', 'V', 'WMT'
   ];
 
   try {
@@ -942,52 +869,75 @@ async function fetchTopStocks(): Promise<TopStock[]> {
           },
           signal: AbortSignal.timeout(3500)
         });
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+        if (res.ok) {
+          const data = await res.json() as any;
+          const meta = data?.chart?.result?.[0]?.meta;
+          if (meta) {
+            const prevClose = parseFloat(meta.previousClose ?? meta.chartPreviousClose ?? meta.regularMarketPrice ?? 0);
+            const current = parseFloat(meta.regularMarketPrice ?? 0);
+            const change = current - prevClose;
+            const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
+            return {
+              symbol,
+              name: symbol,
+              prevClose,
+              current,
+              change,
+              changePercent
+            };
+          }
         }
-        const data = await res.json() as any;
-        const meta = data?.chart?.result?.[0]?.meta;
-        if (meta) {
-          const prevClose = parseFloat(meta.previousClose ?? meta.chartPreviousClose ?? meta.regularMarketPrice ?? 0);
-          const current = parseFloat(meta.regularMarketPrice ?? 0);
-          const change = current - prevClose;
-          const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
-          return {
-            symbol,
-            name: symbol,
-            prevClose,
-            current,
-            change,
-            changePercent
-          };
-        }
-        throw new Error('Invalid structure');
-      } catch (err) {
-        // Fallback directly to the hardcoded stock for any single stock fetch error/timeout
-        return fallbackStocks.find(s => s.symbol === symbol) || {
+      } catch {}
+
+      // Resolve dynamically from internal live simulator engine or screener
+      const symMetrics = simulator.getMarketMetrics(symbol as MarketSymbol);
+      if (symMetrics && symMetrics.currentPrice > 0) {
+        const cur = symMetrics.currentPrice;
+        const candles = simulator.getCandles(symbol as MarketSymbol) || [];
+        const prev = candles.length > 1 ? candles[candles.length - 2].close : cur;
+        const chg = cur - prev;
+        return {
           symbol,
           name: symbol,
-          prevClose: 100,
-          current: 100,
-          change: 0,
-          changePercent: 0
+          prevClose: prev,
+          current: cur,
+          change: chg,
+          changePercent: prev > 0 ? (chg / prev) * 100 : 0
         };
       }
+
+      const screenerAsset = generateScreenerDatabase().find(s => s.ticker.toUpperCase() === symbol.toUpperCase());
+      if (screenerAsset) {
+        const cur = getBasePriceForTicker(symbol);
+        const chgPct = screenerAsset.fiftyTwoWeekChange || 0;
+        const chg = parseFloat((cur * (chgPct / 100)).toFixed(2));
+        const prev = cur - chg;
+        return {
+          symbol,
+          name: screenerAsset.name,
+          prevClose: prev,
+          current: cur,
+          change: chg,
+          changePercent: chgPct
+        };
+      }
+
+      return null;
     });
 
-    const results = await Promise.all(promises);
-    console.log(`[Yahoo Finance API] Successfully pulled ${results.length} stock prices via Chart v8 API.`);
+    const results = (await Promise.all(promises)).filter((s): s is TopStock => s !== null);
     return results;
   } catch (error) {
-    console.error('[Yahoo Finance API] Error during parallel fetch:', error);
-    return fallbackStocks;
+    console.error('Error fetching top stocks:', error);
+    return [];
   }
 }
 
 app.get('/api/top-stocks', async (req, res) => {
   try {
     const now = new Date();
-    if (!topStocksCache || (now.getTime() - new Date(topStocksCache.lastUpdated).getTime() > 24 * 60 * 60 * 1000)) {
+    // 15 seconds cache TTL for live responsive market ticker quotes
+    if (!topStocksCache || (now.getTime() - new Date(topStocksCache.lastUpdated).getTime() > 15 * 1000)) {
       const stocks = await fetchTopStocks();
       topStocksCache = {
         lastUpdated: now.toISOString(),
@@ -4594,6 +4544,8 @@ app.get('/api/markets/historical', async (req, res) => {
   
   if (range === '1d') interval = '5m';
   else if (range === '5d') interval = '15m';
+  else if (range === '1mo' || range === '3mo' || range === '6mo' || range === '1y' || range === 'ytd') interval = '1d';
+  else if (range === '5y' || range === 'max') interval = '1wk';
 
   // Input validation & sanitization
   if (!isValidTickerSymbol(ticker)) {
@@ -5031,14 +4983,7 @@ app.post('/api/watchlist/ai-insight', async (req, res) => {
     }
 
     if (!process.env.GEMINI_API_KEY) {
-      // Professional confidence-inspiring fallback if API key is not configured yet
-      const fallbackResult = {
-        insight: `Analysis for ${symbol}: Strong technical structure showing low timeframe accumulation. Institutional indicators suggest continued holding for long-term equity growth.`,
-        isFallback: true
-      };
-      // Do not cache fallbacks forever, but a quick cache entry is fine
-      watchlistAiInsightCache.set(symbol, { timestamp: now, data: fallbackResult });
-      res.json(fallbackResult);
+      res.status(503).json({ error: 'Watchlist AI insight requires active Gemini API key.' });
       return;
     }
 
@@ -5062,22 +5007,26 @@ Keep it extremely concise (maximum 2-3 sentences), simple, and clear. Emphasize 
         });
         responseText = fallbackResponse.text || '';
       } catch (secondaryErr: any) {
-        console.warn(`Fallback model also unavailable: ${secondaryErr?.message || secondaryErr}. Using pre-synthesized response.`);
+        console.warn(`Fallback model also unavailable: ${secondaryErr?.message || secondaryErr}.`);
       }
     }
 
+    if (!responseText) {
+      res.status(503).json({ error: `Unable to generate AI insight for ${symbol} at this time.` });
+      return;
+    }
+
     const successResult = {
-      insight: responseText || `Analysis for ${symbol}: Strong technical structure showing low timeframe accumulation. Institutional indicators suggest continued holding for long-term equity growth.`,
-      isFallback: !responseText
+      insight: responseText,
+      isFallback: false
     };
 
     watchlistAiInsightCache.set(symbol, { timestamp: now, data: successResult });
     res.json(successResult);
   } catch (err: any) {
-    console.warn('AI insight service temporary issue, serving synthesized fallback:', err?.message || err);
-    res.json({
-      insight: `Analysis for ${symbol || 'Asset'}: Robust holding with high institutional allocation and solid structural foundation. Ideal for core multi-year growth portfolios.`,
-      isFallback: true
+    console.warn('AI insight service error:', err?.message || err);
+    res.status(500).json({
+      error: `Failed to generate AI insight for ${symbol || 'asset'}.`
     });
   }
 });
@@ -5140,105 +5089,48 @@ app.post('/api/market-analysis/search-news', async (req, res) => {
     }
   ];
 
-  // Fallback generator for offline / missing API key scenario
-  const buildFallbackNews = (sym: string, name: string, engineMode: string) => {
-    const engineLabel = engineMode === 'GOOGLE' ? 'Google Search' :
-                        engineMode === 'BING' ? 'Bing Finance' :
-                        engineMode === 'YAHOO' ? 'Yahoo! Finance' :
-                        engineMode === 'DUCKDUCKGO' ? 'DuckDuckGo' :
-                        engineMode === 'BRAVE' ? 'Brave Search' :
-                        'All Major Search Engines (Google, Bing, Yahoo, DuckDuckGo, Brave)';
-
+  // Standby generator when Search Grounding is offline or API key is absent
+  const buildCleanStandbyNews = (sym: string, name: string, engineMode: string) => {
     return {
       symbol: sym,
       companyName: name || sym,
       searchEngine: engineMode,
-      headlineSynthesis: `Real-time search news synthesis for ${sym} across ${engineLabel} confirms robust institutional liquidity accumulation, positive margin trajectory, and favorable sector macro positioning.`,
-      sentiment: 'BULLISH',
-      sentimentScore: 82,
+      headlineSynthesis: `Live search news synthesis for ${sym} is currently in standby. Use the direct search engine launchers below to inspect live market reporting on Google News, Yahoo! Finance, or Bing.`,
+      sentiment: 'NEUTRAL' as const,
+      sentimentScore: 50,
       searchQueries: [
-        `Google Search: "${sym} stock financial news"`,
-        `Bing Finance: "${sym} market momentum & earnings"`,
-        `Yahoo! Finance: "${sym} analyst ratings & consensus"`,
-        `DuckDuckGo: "${sym} institutional capital flow"`,
-        `Brave Search: "${sym} macro catalysts"`
+        `Google Search: "${sym} stock market news"`,
+        `Bing Finance: "${sym} financial news"`,
+        `Yahoo! Finance: "${sym} news stream"`,
+        `DuckDuckGo: "${sym} market analysis"`,
+        `Brave Search: "${sym} financial analysis"`
       ],
-      headlines: [
-        {
-          title: `${sym} Demonstrates Strong Structural Capital Inflows in Q3 Trading`,
-          snippet: `Institutional desks increase allocations to ${sym} following favorable margin guidance and stable forward valuation metrics.`,
-          category: 'EARNINGS',
-          impact: 'POSITIVE',
-          timestamp: '18m ago',
-          sourceEngine: 'Google Search',
-          sourceUrl: `https://www.google.com/search?tbm=nws&q=${encodeURIComponent(sym + ' earnings')}`
-        },
-        {
-          title: `Bing Finance Benchmark: Macro Sentiment Stabilizes Across ${name || sym} Sector`,
-          snippet: `Interest rate policy expectations create supportive liquidity conditions across high-capitalization benchmark components.`,
-          category: 'MACRO',
-          impact: 'NEUTRAL',
-          timestamp: '45m ago',
-          sourceEngine: 'Bing Finance',
-          sourceUrl: `https://www.bing.com/news/search?q=${encodeURIComponent(sym + ' macro news')}`
-        },
-        {
-          title: `Yahoo! Finance Stream: Wall Street Analysts Reaffirm Outperform Grade for ${sym}`,
-          snippet: `Research desks highlight resilient balance sheet management and operational efficiency expansion.`,
-          category: 'ANALYST',
-          impact: 'POSITIVE',
-          timestamp: '2h ago',
-          sourceEngine: 'Yahoo! Finance',
-          sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(sym)}`
-        },
-        {
-          title: `DuckDuckGo Privacy Index: Supply Chain & Revenue Velocity Benchmarks Exceed Projections`,
-          snippet: `Key supplier channel checks confirm robust end-market demand and accelerating product adoption rates.`,
-          category: 'CATALYST',
-          impact: 'POSITIVE',
-          timestamp: '4h ago',
-          sourceEngine: 'DuckDuckGo',
-          sourceUrl: `https://duckduckgo.com/?q=${encodeURIComponent(sym + ' supply chain')}&iar=news`
-        },
-        {
-          title: `Brave Search Intelligence: Regulatory & Compliance Clearance Confirmed for ${sym}`,
-          snippet: `Regulatory filings indicate clean compliance audit and zero material operational litigation hazards.`,
-          category: 'REGULATORY',
-          impact: 'NEUTRAL',
-          timestamp: '6h ago',
-          sourceEngine: 'Brave Search',
-          sourceUrl: `https://search.brave.com/news?q=${encodeURIComponent(sym + ' regulatory')}`
-        }
-      ],
-      keyDrivers: [
-        `Accelerating institutional liquidity inflows for ${sym}`,
-        `Resilient margin performance relative to broader market benchmarks`,
-        `Favorable risk-reward profile ahead of upcoming corporate disclosures`
-      ],
+      headlines: [],
+      keyDrivers: [],
       engineBreakdown: [
-        { engine: 'Google Search', count: 4, status: 'Active (Gemini Live Grounding)' },
-        { engine: 'Bing Finance', count: 3, status: 'Indexed' },
-        { engine: 'Yahoo! Finance', count: 3, status: 'Indexed' },
-        { engine: 'DuckDuckGo', count: 2, status: 'Indexed' },
-        { engine: 'Brave Search', count: 2, status: 'Indexed' }
+        { engine: 'Google Search', count: 0, status: 'Standby' },
+        { engine: 'Bing Finance', count: 0, status: 'Standby' },
+        { engine: 'Yahoo! Finance', count: 0, status: 'Standby' },
+        { engine: 'DuckDuckGo', count: 0, status: 'Standby' },
+        { engine: 'Brave Search', count: 0, status: 'Standby' }
       ],
       groundingSources: [
-        { title: `Google Search Grounding - ${sym} Market Intelligence`, uri: `https://www.google.com/search?q=${encodeURIComponent(sym + ' stock news')}`, engine: 'Google' },
-        { title: `Bing Finance - ${sym} News Portal`, uri: `https://www.bing.com/news/search?q=${encodeURIComponent(sym + ' financial news')}`, engine: 'Bing' },
-        { title: `Yahoo! Finance - ${sym} Quote & Stream`, uri: `https://finance.yahoo.com/quote/${encodeURIComponent(sym)}/news`, engine: 'Yahoo' },
-        { title: `DuckDuckGo - ${sym} Search Headlines`, uri: `https://duckduckgo.com/?q=${encodeURIComponent(sym + ' stock news')}&iar=news`, engine: 'DuckDuckGo' },
-        { title: `Brave Search - ${sym} Financial Analysis`, uri: `https://search.brave.com/news?q=${encodeURIComponent(sym + ' stock')}`, engine: 'Brave' }
+        { title: `Google Search - ${sym} Market News`, uri: `https://www.google.com/search?q=${encodeURIComponent(sym + ' stock news')}`, engine: 'Google' },
+        { title: `Bing Finance - ${sym} News`, uri: `https://www.bing.com/news/search?q=${encodeURIComponent(sym + ' financial news')}`, engine: 'Bing' },
+        { title: `Yahoo! Finance - ${sym} Stream`, uri: `https://finance.yahoo.com/quote/${encodeURIComponent(sym)}/news`, engine: 'Yahoo' },
+        { title: `DuckDuckGo - ${sym} Headlines`, uri: `https://duckduckgo.com/?q=${encodeURIComponent(sym + ' stock news')}&iar=news`, engine: 'DuckDuckGo' },
+        { title: `Brave Search - ${sym} Analysis`, uri: `https://search.brave.com/news?q=${encodeURIComponent(sym + ' stock')}`, engine: 'Brave' }
       ],
       engineQuickLinks: buildEngineQuickLinks(sym),
       lastUpdated: new Date().toISOString(),
-      isFallback: true
+      isFallback: false
     };
   };
 
   if (!process.env.GEMINI_API_KEY) {
-    const fallbackData = buildFallbackNews(symbol, companyName, searchEngine);
-    marketNewsSearchCache.set(cacheKey, { timestamp: now, data: fallbackData });
-    res.json(fallbackData);
+    const standbyData = buildCleanStandbyNews(symbol, companyName, searchEngine);
+    marketNewsSearchCache.set(cacheKey, { timestamp: now, data: standbyData });
+    res.json(standbyData);
     return;
   }
 
@@ -5423,8 +5315,8 @@ Return a raw JSON object (and ONLY valid JSON without markdown formatting backti
     res.json(finalResult);
   } catch (apiErr: any) {
     console.error('Error invoking Gemini Search Grounding for market news:', apiErr);
-    const fallbackData = buildFallbackNews(symbol, companyName, searchEngine);
-    res.json(fallbackData);
+    const standbyData = buildCleanStandbyNews(symbol, companyName, searchEngine);
+    res.json(standbyData);
   }
 });
 

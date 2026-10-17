@@ -79,6 +79,19 @@ interface HistoricalBar {
   volume: number;
 }
 
+export type MarketTimeframe = '1d' | '5d' | '1mo' | '3mo' | '6mo' | 'ytd' | '1y' | '5y';
+
+export const TIMEFRAME_OPTIONS: Array<{ value: MarketTimeframe; label: string }> = [
+  { value: '1d', label: '1D' },
+  { value: '5d', label: '5D' },
+  { value: '1mo', label: '1M' },
+  { value: '3mo', label: '3M' },
+  { value: '6mo', label: '6M' },
+  { value: 'ytd', label: 'YTD' },
+  { value: '1y', label: '1Y' },
+  { value: '5y', label: '5Y' },
+];
+
 interface Fundamentals {
   ticker: string;
   incomeStatement: any[];
@@ -455,10 +468,11 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
       setTicker(initialTicker);
     }
   }, [initialTicker]);
-  const [range, setRange] = useState<'5d' | '1mo' | '3mo' | '1y'>(() => {
+  const [range, setRange] = useState<MarketTimeframe>(() => {
     try {
-      const saved = localStorage.getItem('mtx_markets_range') as '5d' | '1mo' | '3mo' | '1y';
-      return ['5d', '1mo', '3mo', '1y'].includes(saved) ? saved : '1mo';
+      const saved = localStorage.getItem('mtx_markets_range') as MarketTimeframe;
+      const validRanges = TIMEFRAME_OPTIONS.map(o => o.value);
+      return validRanges.includes(saved) ? saved : '1mo';
     } catch {
       return '1mo';
     }
@@ -469,6 +483,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
   const [hoveredBar, setHoveredBar] = useState<any>(null);
   const [hoveredX, setHoveredX] = useState<number | null>(null);
   const [hoveredY, setHoveredY] = useState<number | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [fundamentalData, setFundamentalData] = useState<Fundamentals | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -501,6 +516,23 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
     }
     return bars;
   }, [marketData]);
+
+  // Compute dual-segment chart series for interactive hover scrub effect (gradient on left, dotted grid on right)
+  const chartData = useMemo(() => {
+    if (!displayBars || displayBars.length === 0) return [];
+    if (hoveredIndex === null || hoveredIndex < 0 || hoveredIndex >= displayBars.length) {
+      return displayBars.map(bar => ({
+        ...bar,
+        leftClose: bar.close,
+        rightClose: null
+      }));
+    }
+    return displayBars.map((bar, idx) => ({
+      ...bar,
+      leftClose: idx <= hoveredIndex ? bar.close : null,
+      rightClose: idx >= hoveredIndex ? bar.close : null
+    }));
+  }, [displayBars, hoveredIndex]);
 
   const allApprovedTickers = useMemo(() => {
     const list = new Set<string>();
@@ -1019,7 +1051,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
           )}
 
           {/* Dynamic Non-Translucent Tooltip */}
-          <div className={`absolute ${vertPos} ${posClasses} w-60 sm:w-64 p-3.5 bg-[#080808] border ${themeClasses.tooltipBorder} rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-[100] text-left font-sans`}>
+          <div className={`absolute ${vertPos} ${posClasses} w-60 sm:w-64 p-3.5 bg-[#050505] border ${themeClasses.tooltipBorder} rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-[100] text-left font-sans`}>
             <div className="flex items-center gap-1.5 border-b border-white/10 pb-1.5 mb-2">
               <Info className={`w-3.5 h-3.5 ${themeClasses.iconColor} shrink-0`} />
               <span className={`font-mono font-black uppercase tracking-wider text-[9px] ${themeClasses.tooltipText}`}>
@@ -1615,7 +1647,12 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
         setFundamentalData(null);
         return;
       }
-      setTicker(query);
+      setShowSuggestions(false);
+      if (query === ticker) {
+        loadTickerData();
+      } else {
+        setTicker(query);
+      }
     }
   };
 
@@ -1979,12 +2016,12 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
             >
             
             {/* SEARCH AND CONTROL LINE */}
-            <form onSubmit={handleSearchSubmit} className="flex flex-row items-center gap-1.5 sm:gap-3 bg-[#0a0a0c] p-2 sm:p-3 rounded-lg border border-white/5 w-full overflow-x-auto no-scrollbar flex-nowrap">
-              <div ref={inputContainerRef} className="relative flex-1 min-w-[120px] sm:min-w-[180px]">
-                <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-white/30" />
+            <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 bg-[#050505] p-2.5 sm:p-3 rounded-xl border border-white/5 w-full">
+              <div ref={inputContainerRef} className="relative flex-1 w-full min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400 pointer-events-none z-10" />
                 <input
                   type="text"
-                  placeholder="Ticker (e.g. MSFT)..."
+                  placeholder="Ticker (e.g. MSFT, AAPL, NVDA)..."
                   value={searchInput}
                   onChange={(e) => {
                     setSearchInput(e.target.value);
@@ -1993,8 +2030,11 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                   }}
                   onFocus={() => setShowSuggestions(true)}
                   onKeyDown={handleInputKeyDown}
-                  className="w-full bg-[#040405] border border-indigo-500/40 rounded pl-8 pr-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.25)] focus:shadow-[0_0_16px_rgba(99,102,241,0.45)] font-mono transition-all duration-200"
+                  className="w-full bg-[#050508] border-2 border-[#6366f1] rounded-lg pl-9 pr-9 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#6366f1] shadow-[0_0_14px_rgba(99,102,241,0.35)] focus:shadow-[0_0_22px_rgba(99,102,241,0.55)] font-mono transition-all duration-200"
                 />
+                {loading && (
+                  <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-indigo-400 animate-spin pointer-events-none z-10" />
+                )}
 
                 <AnimatePresence>
                   {showSuggestions && filteredSuggestions.length > 0 && (
@@ -2032,29 +2072,26 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                   )}
                 </AnimatePresence>
               </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-2.5 py-1.5 sm:px-4 sm:py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded text-[10px] sm:text-xs font-mono uppercase tracking-wider font-extrabold cursor-pointer shrink-0"
-                >
-                  {loading ? 'PULLING...' : 'PULL DATA'}
-                </button>
-
-                {/* Range selectors */}
-                <div className="flex bg-[#040405] border border-white/10 p-0.5 rounded text-white/70 shrink-0">
-                  {(['5d', '1mo', '3mo', '1y'] as const).map((r) => (
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap sm:flex-nowrap justify-between sm:justify-start w-full sm:w-auto">
+                {/* Extended Timeframe Selectors */}
+                <div className="flex items-center bg-[#040405] border border-white/10 p-0.5 rounded text-white/70 overflow-x-auto no-scrollbar max-w-full">
+                  <div className="hidden sm:flex items-center gap-1 pl-1.5 pr-1 text-white/40 select-none shrink-0">
+                    <Clock className="w-3 h-3 text-indigo-400/80" />
+                    <span className="text-[8px] font-mono uppercase tracking-wider font-extrabold">TF</span>
+                  </div>
+                  {TIMEFRAME_OPTIONS.map((tf) => (
                     <button
-                      key={r}
+                      key={tf.value}
                       type="button"
-                      onClick={() => setRange(r)}
-                      className={`px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-[8px] sm:text-[9px] font-mono rounded cursor-pointer transition-all select-none ${
-                        range === r 
-                          ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-950/40' 
+                      onClick={() => setRange(tf.value)}
+                      title={`Timeframe: ${tf.label}`}
+                      className={`px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-[8px] sm:text-[9px] font-mono font-extrabold uppercase tracking-wider rounded cursor-pointer transition-all select-none shrink-0 ${
+                        range === tf.value 
+                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/40' 
                           : 'text-white/70 hover:text-white hover:bg-white/5'
                       }`}
                     >
-                      {r.toUpperCase()}
+                      {tf.label}
                     </button>
                   ))}
                 </div>
@@ -2063,10 +2100,10 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                 <button
                   type="button"
                   onClick={() => setActiveSubTab('SCREENER')}
-                  className="px-2 py-1.5 sm:px-4 sm:py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono uppercase tracking-wider font-extrabold text-[10px] sm:text-xs rounded flex items-center gap-1 sm:gap-1.5 transition-all cursor-pointer shrink-0"
+                  className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono uppercase tracking-wider font-extrabold text-[10px] sm:text-xs rounded flex items-center gap-1 sm:gap-1.5 transition-all cursor-pointer shrink-0 ml-auto sm:ml-0"
                   title="Switch to Discover Screener"
                 >
-                  <Filter className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <Filter className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
                   <span>DISCOVER</span>
                 </button>
               </div>
@@ -2080,7 +2117,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                 {/* LEFT COLUMN: widescreen data panels (Chart and AI core analysis) */}
                 <div className="lg:col-span-2 flex-1 flex flex-col lg:h-full min-h-0">
                   {/* Visual Chart Canvas Skeleton */}
-                  <div className="bg-[#080808] border border-white/5 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
+                  <div className="bg-[#050505] border border-white/5 rounded-xl p-5 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
                     
                     {/* Header line mimicking symbol/price/indicators */}
                     <div className="flex flex-row items-center justify-between gap-2 pb-2 border-b border-white/5 w-full">
@@ -2163,7 +2200,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
 
                 {/* RIGHT COLUMN: Order Ticket & Interactive AI Copilot Chat Skeleton */}
                 <div className="lg:col-span-1 flex flex-col lg:h-full h-auto">
-                  <div className="bg-[#080808] border border-white/5 rounded-xl p-5 space-y-5 flex flex-col lg:h-full h-auto">
+                  <div className="bg-[#050505] border border-white/5 rounded-xl p-5 space-y-5 flex flex-col lg:h-full h-auto">
                     
                     {/* Action Tabs Placeholder */}
                     <div className="grid grid-cols-2 bg-[#050505] p-1 rounded-lg border border-white/5">
@@ -2222,183 +2259,207 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                   <div className="lg:col-span-2 flex-1 flex flex-col lg:h-full min-h-0">
                     
                     {/* Visual Chart Canvas */}
-                    <div className="bg-[#080808] border border-white/5 rounded-xl p-4 md:p-6 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
-                      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 pb-3 border-b border-white/5 w-full overflow-x-auto no-scrollbar flex-nowrap">
-                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                          <h4 className="text-base sm:text-xl font-black font-mono tracking-tight text-white flex items-center gap-2">
-                            {marketData.symbol}
-                          </h4>
-                          <span className="text-sm sm:text-lg font-bold font-mono text-indigo-400">
-                            ${(() => {
-                              if (!marketData.regularMarketPrice) return '0.00';
-                              const isForex = marketData.symbol?.endsWith('=X') || marketData.symbol?.includes('USD=') || marketData.symbol?.includes('JPY=');
-                              const isJpy = marketData.symbol?.includes('JPY');
-                              const decimals = isForex ? (isJpy ? 3 : 4) : 2;
-                              return marketData.regularMarketPrice.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-                            })()}
-                          </span>
-                          <span className="text-[9px] sm:text-[10px] text-white/70 font-mono uppercase tracking-wider">
-                            {marketData.currency || 'USD'}
-                          </span>
-                          
-                          <button
-                            type="button"
-                            onClick={handleToggleWatchlist}
-                            className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center ${
-                              isInWatchlist
-                                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
-                                : 'bg-white/[0.02] border-white/10 text-white/40 hover:text-white hover:bg-white/5'
-                            }`}
-                            title={isInWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
-                          >
-                            <Star className={`w-3.5 h-3.5 ${isInWatchlist ? 'fill-indigo-400 text-indigo-400' : ''}`} />
-                          </button>
-                        </div>
-                        {displayBars && displayBars.length > 1 && (
-                          <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
-                            {/* Financials Toggle Button */}
-                            <button
-                              type="button"
-                              onClick={() => setShowFinancialsOverlay(!showFinancialsOverlay)}
-                              className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-2 py-1 rounded shrink-0 text-white shadow-md select-none cursor-pointer active:scale-[0.97] transition-all ${
-                                showFinancialsOverlay
-                                  ? 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-950/50'
-                                  : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/40'
-                              }`}
-                            >
-                              <BarChart3 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white stroke-[2.5]" />
-                              <span>{showFinancialsOverlay ? 'Hide Financials' : 'Financials'}</span>
-                            </button>
+                    <div className="bg-[#050505] border border-white/5 rounded-xl p-4 md:p-6 space-y-4 relative overflow-hidden flex flex-col lg:h-full min-h-0 flex-1">
+                      {(() => {
+                        const isForex = marketData.symbol?.endsWith('=X') || marketData.symbol?.includes('USD=') || marketData.symbol?.includes('JPY=');
+                        const isJpy = marketData.symbol?.includes('JPY');
+                        const decimals = isForex ? (isJpy ? 3 : 4) : 2;
+                        const currentPrice = hoveredBar ? hoveredBar.close : (marketData.regularMarketPrice || 0);
+                        const first = displayBars?.[0]?.close || currentPrice;
+                        const pct = first > 0 ? ((currentPrice - first) / first) * 100 : 0;
+                        const up = pct >= 0;
 
-                            <div>
-                              {(() => {
-                                const first = displayBars[0].close;
-                                const last = displayBars[displayBars.length - 1].close;
-                                const pct = ((last - first) / first) * 100;
-                                const up = pct >= 0;
-                                return (
-                                  <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-2 py-1 rounded shrink-0 text-white shadow-md select-none ${
-                                    up ? 'bg-emerald-600 shadow-emerald-950/40' : 'bg-rose-600 shadow-rose-950/40'
-                                  }`}>
-                                    {up ? <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white stroke-[2.5]" /> : <ArrowDownRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white stroke-[2.5]" />}
-                                    {pct.toFixed(2)}% ({range.toUpperCase()})
-                                  </span>
-                                );
-                              })()}
+                        return (
+                          <>
+                            <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 sm:gap-4 pb-3 border-b border-white/5 w-full">
+                              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                <h4 className="text-base sm:text-xl font-black font-mono tracking-tight text-white flex items-center gap-2">
+                                  {marketData.symbol}
+                                </h4>
+                                <span className="text-sm sm:text-lg font-bold font-mono text-indigo-400">
+                                  ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+                                </span>
+                                <span className="text-[9px] sm:text-[10px] text-white/70 font-mono uppercase tracking-wider">
+                                  {marketData.currency || 'USD'}
+                                </span>
+                                
+                                <button
+                                  type="button"
+                                  onClick={handleToggleWatchlist}
+                                  className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center ${
+                                    isInWatchlist
+                                      ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
+                                      : 'bg-white/[0.02] border-white/10 text-white/40 hover:text-white hover:bg-white/5'
+                                  }`}
+                                  title={isInWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+                                >
+                                  <Star className={`w-3.5 h-3.5 ${isInWatchlist ? 'fill-indigo-400 text-indigo-400' : ''}`} />
+                                </button>
+                              </div>
+                              {displayBars && displayBars.length > 1 && (
+                                <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
+                                  {/* Financials Toggle Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowFinancialsOverlay(!showFinancialsOverlay)}
+                                    className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-2 py-1 rounded shrink-0 text-white shadow-md select-none cursor-pointer active:scale-[0.97] transition-all ${
+                                      showFinancialsOverlay
+                                        ? 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-950/50'
+                                        : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/40'
+                                    }`}
+                                  >
+                                    <BarChart3 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white stroke-[2.5]" />
+                                    <span>{showFinancialsOverlay ? 'Hide Financials' : 'Financials'}</span>
+                                  </button>
+
+                                  <div>
+                                    <span className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-mono font-bold px-2 py-1 rounded shrink-0 text-white shadow-md select-none ${
+                                      up ? 'bg-emerald-600 shadow-emerald-950/40' : 'bg-rose-600 shadow-rose-950/40'
+                                    }`}>
+                                      {up ? <ArrowUpRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white stroke-[2.5]" /> : <ArrowDownRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white stroke-[2.5]" />}
+                                      {pct.toFixed(2)}% ({TIMEFRAME_OPTIONS.find(o => o.value === range)?.label || range.toUpperCase()})
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )}
-                      </div>
 
-                      {/* Recharts Price Area Chart */}
-                      <div className={`flex-1 h-0 relative transition-all duration-300 ease-in-out outline-none focus:outline-none ${
-                        showExecutionDetails ? 'min-h-[160px] lg:min-h-[250px]' : 'min-h-[240px] md:min-h-[480px] lg:min-h-[350px]'
-                      }`}>
-                        <ResponsiveContainer width="100%" height="100%" className="outline-none focus:outline-none">
-                          <AreaChart 
-                            data={displayBars} 
-                            margin={{ top: 12, right: 1.5, left: -15, bottom: 0 }}
-                            className="outline-none focus:outline-none"
-                            onMouseMove={(state: any) => {
-                              if (state && state.activeTooltipIndex !== undefined) {
-                                const bar = state.activePayload?.[0]?.payload;
-                                const coord = state.activeCoordinate;
-                                setHoveredBar(bar || null);
-                                if (coord) {
-                                  setHoveredX(coord.x);
-                                  setHoveredY(coord.y);
-                                }
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              setHoveredBar(null);
-                              setHoveredX(null);
-                              setHoveredY(null);
-                            }}
-                          >
-                            <defs>
-                              <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25} />
-                                <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0} />
-                              </linearGradient>
-                            </defs>
-                            
-                            <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="3 3" />
+                            {/* Recharts Price Area Chart with Hover Scrub Effect */}
+                            <div className={`flex-1 h-0 relative transition-all duration-300 ease-in-out outline-none focus:outline-none ${
+                              showExecutionDetails ? 'min-h-[160px] lg:min-h-[250px]' : 'min-h-[240px] md:min-h-[480px] lg:min-h-[350px]'
+                            }`}>
+                              <ResponsiveContainer width="100%" height="100%" className="outline-none focus:outline-none">
+                                <AreaChart 
+                                  data={chartData} 
+                                  margin={{ top: 12, right: 1.5, left: -15, bottom: 0 }}
+                                  className="outline-none focus:outline-none"
+                                  onMouseMove={(state: any) => {
+                                    if (state && state.activeTooltipIndex !== undefined) {
+                                      const bar = state.activePayload?.[0]?.payload;
+                                      const coord = state.activeCoordinate;
+                                      setHoveredBar(bar || null);
+                                      setHoveredIndex(state.activeTooltipIndex);
+                                      if (coord) {
+                                        setHoveredX(coord.x);
+                                        setHoveredY(coord.y);
+                                      }
+                                    }
+                                  }}
+                                  onMouseLeave={() => {
+                                    setHoveredBar(null);
+                                    setHoveredIndex(null);
+                                    setHoveredX(null);
+                                    setHoveredY(null);
+                                  }}
+                                >
+                                  <defs>
+                                    <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25} />
+                                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0} />
+                                    </linearGradient>
 
-                            <XAxis 
-                              dataKey="timestamp" 
-                              stroke="#ffffff" 
-                              strokeOpacity={0.15} 
-                              tick={{ fill: '#ffffff', fontSize: 9.5, fontFamily: 'monospace' }}
-                              dy={6}
-                              axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                              tickLine={false}
-                              padding={{ left: 0, right: 0 }}
-                              minTickGap={15}
-                              tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
-                            />
-                            <YAxis 
-                              domain={['auto', 'auto']}
-                              stroke="#ffffff" 
-                              strokeOpacity={0.15} 
-                              tick={{ fill: '#ffffff', fontSize: 9.5, fontFamily: 'monospace' }}
-                              dx={-2}
-                              axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                              tickLine={false}
-                              orientation="right"
-                              width={48}
-                              tickFormatter={(val) => {
-                                if (val >= 1000) return `$${(val / 1000).toFixed(0)}k`;
-                                if (val >= 1) return `$${val.toFixed(2)}`;
-                                return `$${val.toFixed(4)}`;
-                              }}
-                            />
-                            <Tooltip
-                              cursor={{ stroke: 'rgba(255, 255, 255, 0.75)', strokeWidth: 1 }}
-                              content={({ active, payload }) => {
-                                if (active && payload && payload.length) {
-                                  const data = payload[0].payload;
-                                  return (
-                                    <div className="bg-[#0c0c0e] border border-white/10 px-3.5 py-2.5 rounded-xl shadow-2xl font-sans text-xs space-y-1 text-left">
-                                      <div className="text-white font-medium text-xs">
-                                        {new Date(data.timestamp).toLocaleString()}
-                                      </div>
-                                      <div className="text-indigo-400 font-medium text-xs">
-                                        Close Price : ${Number(data.close).toFixed(4)}
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              }}
-                            />
-                            <Area 
-                              type="monotone" 
-                              dataKey="close" 
-                              stroke="#6366f1" 
-                              strokeWidth={2.5} 
-                              fillOpacity={1} 
-                              fill="url(#priceGradient)" 
-                              activeDot={{ r: 5, fill: '#6366f1', stroke: '#ffffff', strokeWidth: 2 }}
-                              isAnimationActive={false}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
+                                    {/* Dotted matrix pattern matching original indigo theme */}
+                                    <pattern id="dotPattern" width="7" height="7" patternUnits="userSpaceOnUse">
+                                      <circle cx="3.5" cy="3.5" r="1" fill="#6366f1" fillOpacity={0.3} />
+                                    </pattern>
+                                  </defs>
+                                  
+                                  <CartesianGrid stroke="#ffffff" strokeOpacity={0.03} strokeDasharray="3 3" />
 
-                        {/* Floating Y-Axis Badge for expanded price precision */}
-                        {hoveredY !== null && hoveredBar && (
-                          <div 
-                            className="absolute right-0 bg-indigo-600 text-white font-mono text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded shadow-xl pointer-events-none transform -translate-y-1/2 border border-indigo-400/50 z-20 select-none animate-in fade-in duration-75"
-                            style={{ top: `${hoveredY}px` }}
-                          >
-                            ${hoveredBar.close.toFixed(4)}
-                          </div>
-                        )}
-                      </div>
+                                  <XAxis 
+                                    dataKey="timestamp" 
+                                    stroke="#ffffff" 
+                                    strokeOpacity={0.15} 
+                                    tick={{ fill: '#ffffff', fontSize: 9.5, fontFamily: 'monospace' }}
+                                    dy={6}
+                                    axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+                                    tickLine={false}
+                                    padding={{ left: 0, right: 0 }}
+                                    minTickGap={15}
+                                    tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
+                                  />
+                                  <YAxis 
+                                    domain={['auto', 'auto']}
+                                    stroke="#ffffff" 
+                                    strokeOpacity={0.15} 
+                                    tick={{ fill: '#ffffff', fontSize: 9.5, fontFamily: 'monospace' }}
+                                    dx={-2}
+                                    axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+                                    tickLine={false}
+                                    orientation="right"
+                                    width={48}
+                                    tickFormatter={(val) => {
+                                      if (val >= 1000) return `$${(val / 1000).toFixed(0)}k`;
+                                      if (val >= 1) return `$${val.toFixed(2)}`;
+                                      return `$${val.toFixed(4)}`;
+                                    }}
+                                  />
+                                  <Tooltip
+                                    cursor={{ stroke: 'rgba(255, 255, 255, 0.75)', strokeWidth: 1 }}
+                                    content={({ active, payload }) => {
+                                      if (active && payload && payload.length) {
+                                        const data = payload[0].payload;
+                                        return (
+                                          <div className="bg-[#0c0c0e] border border-white/10 px-3.5 py-2.5 rounded-xl shadow-2xl font-sans text-xs space-y-1 text-left">
+                                            <div className="text-white font-medium text-xs">
+                                              {new Date(data.timestamp).toLocaleString()}
+                                            </div>
+                                            <div className="text-indigo-400 font-medium text-xs">
+                                              Close Price : ${Number(data.close).toFixed(decimals)}
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    }}
+                                  />
+
+                                  {/* Left Area: Solid original gradient up to cursor */}
+                                  <Area 
+                                    type="monotone" 
+                                    dataKey="leftClose" 
+                                    stroke="#6366f1" 
+                                    strokeWidth={2.5} 
+                                    fillOpacity={1} 
+                                    fill="url(#priceGradient)" 
+                                    isAnimationActive={false}
+                                    connectNulls={false}
+                                  />
+
+                                  {/* Right Area: Patterned dotted grid from cursor onward */}
+                                  {hoveredIndex !== null && (
+                                    <Area 
+                                      type="monotone" 
+                                      dataKey="rightClose" 
+                                      stroke="#6366f1" 
+                                      strokeWidth={2.5} 
+                                      fillOpacity={1} 
+                                      fill="url(#dotPattern)" 
+                                      isAnimationActive={false}
+                                      connectNulls={false}
+                                    />
+                                  )}
+                                </AreaChart>
+                              </ResponsiveContainer>
+
+
+                              {/* Floating Y-Axis Badge for expanded price precision */}
+                              {hoveredY !== null && hoveredBar && (
+                                <div 
+                                  className="absolute right-0 bg-indigo-600 text-white font-mono text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded shadow-xl pointer-events-none transform -translate-y-1/2 border border-indigo-400/50 z-20 select-none animate-in fade-in duration-75"
+                                  style={{ top: `${hoveredY}px` }}
+                                >
+                                  ${hoveredBar.close.toFixed(decimals)}
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
 
                       {/* Absolute overlay for Fundamental Financials */}
                       {showFinancialsOverlay && (
-                        <div className="absolute inset-0 bg-[#080808] border border-white/10 rounded-xl z-25 p-5 flex flex-col justify-between overflow-y-auto animate-in fade-in zoom-in-95 duration-150 shadow-2xl">
+                        <div className="absolute inset-0 bg-[#050505] border border-white/10 rounded-xl z-25 p-5 flex flex-col justify-between overflow-y-auto animate-in fade-in zoom-in-95 duration-150 shadow-2xl">
                           <div className="space-y-4">
                             {/* Overlay Header */}
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -2445,11 +2506,11 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                   <div className="lg:col-span-1 flex flex-col lg:h-full h-auto">
 
                      {/* MULTI-ASSET BROKERAGE ORDER TICKET */}
-                    <div ref={executionDeskRef} className={`bg-[#050505] border border-white/10 rounded-xl transition-all duration-300 flex flex-col lg:p-5 lg:space-y-4 lg:h-full lg:flex-1 ${
+                    <div ref={executionDeskRef} className={`bg-[#050505] border border-white/5 rounded-xl transition-all duration-300 flex flex-col lg:p-5 lg:space-y-4 lg:h-full lg:flex-1 ${
                       showExecutionDetails ? 'p-5 space-y-4 h-full flex-1' : 'p-0 space-y-0 h-auto overflow-hidden'
                     }`}>
                       {/* BUY / SELL Action Tabs */}
-                      <div className={`grid grid-cols-2 bg-[#050505] p-0.5 rounded transition-all ${
+                      <div className={`grid grid-cols-2 bg-[#0a0a0e] p-1 rounded-lg transition-all ${
                         showExecutionDetails ? 'border border-white/10' : 'border-0'
                       }`}>
                         <button
@@ -2458,13 +2519,13 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                             setOrderSide('BUY');
                             setShowExecutionDetails(true);
                           }}
-                          className={`py-1.5 text-[10px] font-mono font-bold uppercase rounded transition-all cursor-pointer outline-none focus:outline-none ${
+                          className={`py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer outline-none focus:outline-none ${
                             orderSide === 'BUY'
                               ? 'bg-emerald-600 text-white shadow-md'
-                              : 'text-white/40 hover:text-white/80'
+                              : 'text-white/45 hover:text-white'
                           }`}
                         >
-                          BUY
+                          Buy
                         </button>
                         <button
                           type="button"
@@ -2472,28 +2533,28 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                             setOrderSide('SELL');
                             setShowExecutionDetails(true);
                           }}
-                          className={`py-1.5 text-[10px] font-mono font-bold uppercase rounded transition-all cursor-pointer outline-none focus:outline-none ${
+                          className={`py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer outline-none focus:outline-none ${
                             orderSide === 'SELL'
                               ? 'bg-rose-600 text-white shadow-md'
-                              : 'text-white/40 hover:text-white/80'
+                              : 'text-white/45 hover:text-white'
                           }`}
                         >
-                          SELL
+                          Sell
                         </button>
                       </div>
 
-                      <div className={`space-y-3 font-mono transition-all duration-300 ${
+                      <div className={`space-y-3.5 transition-all duration-300 ${
                         showExecutionDetails ? 'block opacity-100' : 'hidden lg:block lg:opacity-100'
                       }`}>
                         {/* Active asset & price */}
-                        <div className="flex justify-between items-center text-xs bg-[#050505] px-3.5 py-2.5 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
-                          <span className="text-[10px] font-mono text-white/70 uppercase tracking-widest font-semibold">ACTIVE ASSET:</span>
-                          <span className="font-mono font-bold text-white text-xs tracking-wide">{ticker}</span>
+                        <div className="flex justify-between items-center text-xs bg-[#08080c] px-3.5 py-2.5 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
+                          <span className="text-[11px] font-sans text-neutral-400 font-medium">Active Asset</span>
+                          <span className="font-mono font-bold text-white text-xs tracking-wider">{ticker}</span>
                         </div>
                         
-                        <div className="flex justify-between items-center text-xs bg-[#050505] px-3.5 py-2.5 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
-                          <span className="text-[10px] font-mono text-white/70 uppercase tracking-widest font-semibold">MARKET PRICE:</span>
-                          <span className="font-mono font-black text-indigo-300 text-xs tracking-wide">
+                        <div className="flex justify-between items-center text-xs bg-[#08080c] px-3.5 py-2.5 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
+                          <span className="text-[11px] font-sans text-neutral-400 font-medium">Market Price</span>
+                          <span className="font-mono font-bold text-indigo-300 text-xs tracking-tight tabular-nums">
                             ${(() => {
                               if (!marketData?.regularMarketPrice) return '0.00';
                               const sym = marketData.symbol || ticker || '';
@@ -2507,12 +2568,12 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
 
                         {/* Dollar Entry Input */}
                         <div className="space-y-1.5">
-                          <div className="flex justify-between text-[10px] font-mono font-semibold text-white/70 uppercase tracking-wider">
-                            <span>{orderSide === 'BUY' ? 'Amount to Buy ($)' : 'Amount to Sell ($)'}:</span>
-                            <span className="text-white/60 font-normal">Holding: {(brokerHoldings[ticker] || 0).toFixed(6)} shares</span>
+                          <div className="flex justify-between items-baseline text-[11px] font-sans">
+                            <span className="text-neutral-300 font-medium">{orderSide === 'BUY' ? 'Order Amount' : 'Sell Amount'}</span>
+                            <span className="text-neutral-500 font-mono text-[10px] tabular-nums">Holding: {(brokerHoldings[ticker] || 0).toFixed(4)} sh</span>
                           </div>
                           <div className="relative">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/60 font-bold font-mono">$</span>
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400 font-mono font-bold text-sm">$</span>
                             <input
                               type="number"
                               min="0"
@@ -2525,21 +2586,21 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                                 }
                                 setOrderShares(cleaned);
                               }}
-                              className="w-full bg-[#050505] border border-white/10 hover:border-white/20 focus:border-indigo-500/60 rounded-lg pl-8 pr-3.5 py-2.5 text-xs focus:outline-none text-white font-bold font-mono transition-all"
+                              className="w-full bg-[#08080c] border border-white/10 hover:border-white/20 focus:border-indigo-500 rounded-lg pl-8 pr-3.5 py-2.5 text-sm focus:outline-none text-white font-mono font-bold tabular-nums transition-all"
                               placeholder="0.00"
                             />
                           </div>
                           {orderSide === 'BUY' && (
-                            <div className="flex justify-between text-[9px] font-mono text-indigo-400 font-semibold uppercase tracking-wider pt-0.5">
-                              <span>Minimum purchase:</span>
-                              <span>$50.00</span>
+                            <div className="flex justify-between text-[10px] font-sans text-neutral-400 pt-0.5">
+                              <span>Minimum order</span>
+                              <span className="font-mono text-neutral-300 tabular-nums font-medium">$50.00</span>
                             </div>
                           )}
                         </div>
 
                         {/* Order Type */}
                         <div className="space-y-1.5">
-                          <span className="text-[10px] font-mono font-semibold text-white/70 uppercase tracking-wider block">ORDER TYPE:</span>
+                          <span className="text-[11px] font-sans text-neutral-300 font-medium block">Order Type</span>
                           <select
                             value={orderType}
                             onChange={(e) => {
@@ -2548,61 +2609,64 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                                 setOrderLimitPrice(marketData.regularMarketPrice);
                               }
                             }}
-                            className="w-full bg-[#050505] border border-white/10 hover:border-white/20 focus:border-indigo-500/60 rounded-lg px-3.5 py-2.5 text-xs focus:outline-none text-white font-bold font-mono transition-all cursor-pointer"
+                            className="w-full bg-[#08080c] border border-white/10 hover:border-white/20 focus:border-indigo-500 rounded-lg px-3.5 py-2 text-xs focus:outline-none text-white font-sans font-medium transition-all cursor-pointer"
                           >
-                            <option value="MARKET" className="bg-[#050505] text-white">MARKET ORDER (FILL NOW)</option>
-                            <option value="LIMIT" className="bg-[#050505] text-white">LIMIT ORDER</option>
+                            <option value="MARKET" className="bg-[#0c0c10] text-white">Market Order (Instant Fill)</option>
+                            <option value="LIMIT" className="bg-[#0c0c10] text-white">Limit Order</option>
                           </select>
                         </div>
 
                         {/* Limit price input */}
                         {orderType === 'LIMIT' && (
                           <div className="space-y-1.5">
-                            <span className="text-[10px] font-mono font-semibold text-white/70 uppercase tracking-wider block">LIMIT PRICE ($):</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={orderLimitPrice}
-                              onChange={(e) => setOrderLimitPrice(Math.max(0.01, parseFloat(e.target.value) || 0))}
-                              className="w-full bg-[#050505] border border-white/10 hover:border-white/20 focus:border-indigo-500/60 rounded-lg px-3.5 py-2.5 text-xs focus:outline-none text-white font-bold font-mono transition-all"
-                            />
+                            <span className="text-[11px] font-sans text-neutral-300 font-medium block">Limit Price</span>
+                            <div className="relative">
+                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400 font-mono font-bold text-xs">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={orderLimitPrice}
+                                onChange={(e) => setOrderLimitPrice(Math.max(0.01, parseFloat(e.target.value) || 0))}
+                                className="w-full bg-[#08080c] border border-white/10 hover:border-white/20 focus:border-indigo-500 rounded-lg pl-8 pr-3.5 py-2 text-xs focus:outline-none text-white font-mono font-bold tabular-nums transition-all"
+                              />
+                            </div>
                           </div>
                         )}
 
                         {/* Bracket Protection Toggle */}
                         <div className="space-y-2 border-t border-white/5 pt-3">
-                          <label className="flex items-center gap-2 text-[10px] font-mono text-white/70 cursor-pointer uppercase tracking-wider select-none">
+                          <label className="flex items-center gap-2 text-xs font-sans text-neutral-300 font-medium cursor-pointer select-none">
                             <input
                               type="checkbox"
                               checked={useBracketProtection}
                               onChange={(e) => setUseBracketProtection(e.target.checked)}
-                              className="rounded accent-indigo-500"
+                              className="w-3.5 h-3.5 rounded accent-indigo-500 cursor-pointer"
                             />
-                            <span>Add Bracket Protection (SL/TP)</span>
+                            <span>Bracket Protection (Stop Loss / Take Profit)</span>
                           </label>
 
                           {useBracketProtection && (
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-2 pt-1">
                               <div>
-                                <span className="text-[8px] font-mono text-rose-400 block mb-1 uppercase tracking-wider">Stop Loss (%):</span>
+                                <span className="text-[10px] font-sans text-rose-400/90 block mb-1 font-medium">Stop Loss (%)</span>
                                 <input
                                   type="number"
                                   min="1"
                                   max="50"
                                   value={stopLossPct}
                                   onChange={(e) => setStopLossPct(Math.max(1, parseInt(e.target.value) || 1))}
-                                  className="w-full bg-[#050505] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-rose-300 font-bold font-mono focus:outline-none focus:border-rose-500"
+                                  className="w-full bg-[#08080c] border border-rose-500/30 rounded-lg px-2.5 py-1.5 text-xs text-rose-300 font-bold font-mono tabular-nums focus:outline-none focus:border-rose-500"
                                 />
                               </div>
                               <div>
-                                <span className="text-[8px] font-mono text-emerald-400 block mb-1 uppercase tracking-wider">Take Profit (%):</span>
+                                <span className="text-[10px] font-sans text-emerald-400/90 block mb-1 font-medium">Take Profit (%)</span>
                                 <input
                                   type="number"
                                   min="1"
                                   max="200"
                                   value={takeProfitPct}
                                   onChange={(e) => setTakeProfitPct(Math.max(1, parseInt(e.target.value) || 1))}
-                                  className="w-full bg-[#050505] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-emerald-300 font-bold font-mono focus:outline-none focus:border-emerald-500"
+                                  className="w-full bg-[#08080c] border border-emerald-500/30 rounded-lg px-2.5 py-1.5 text-xs text-emerald-300 font-bold font-mono tabular-nums focus:outline-none focus:border-emerald-500"
                                 />
                               </div>
                             </div>
@@ -2610,27 +2674,27 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                         </div>
 
                         {/* Cost estimate */}
-                        <div className="flex justify-between items-center text-xs font-bold font-mono border-t border-white/5 pt-3 pb-1">
-                          <span className="text-white/70 uppercase tracking-wider text-[10px]">EST. TOTAL:</span>
-                          <span className="text-white font-mono font-black">
+                        <div className="flex justify-between items-baseline border-t border-white/5 pt-3">
+                          <span className="text-neutral-400 text-xs font-sans font-medium">Estimated Total</span>
+                          <span className="text-white font-mono font-bold text-sm sm:text-base tabular-nums">
                             ${(parseFloat(orderShares) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                           </span>
                         </div>
-                        <div className="flex justify-between items-center text-[10px] text-indigo-400 font-mono">
-                          <span className="uppercase tracking-wider">Est. Shares:</span>
-                          <span className="font-bold">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <span className="text-neutral-500 font-sans">Estimated Shares</span>
+                          <span className="font-mono text-indigo-300 font-semibold text-xs tabular-nums">
                             {((parseFloat(orderShares) || 0) / (orderType === 'LIMIT' ? orderLimitPrice : marketData?.regularMarketPrice || 1)).toFixed(6)} shares
                           </span>
                         </div>
                         {orderSide === 'BUY' && (parseFloat(orderShares) || 0) < 50 && (
-                          <div className="text-rose-400 text-[9px] font-mono font-bold text-center mt-1 uppercase tracking-wider">
-                            ⚠️ Minimum purchase is $50.00
+                          <div className="text-rose-400 text-[10px] font-sans text-center mt-1 font-medium">
+                            Minimum purchase is $50.00
                           </div>
                         )}
 
                         {/* Feedback Message */}
                         {orderStatus && (
-                          <div className={`p-2.5 rounded-lg text-[10px] font-mono border ${
+                          <div className={`p-2.5 rounded-lg text-xs font-sans border ${
                             orderStatus.type === 'success'
                               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                               : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
@@ -2644,7 +2708,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                           type="button"
                           disabled={isExecutingOrder || !marketData?.regularMarketPrice || (orderSide === 'BUY' && (parseFloat(orderShares) || 0) < 50)}
                           onClick={handleOpenOrderConfirmation}
-                          className={`w-full py-3 rounded-lg font-mono font-black text-xs uppercase tracking-wider text-white transition-all cursor-pointer outline-none focus:outline-none ${
+                          className={`w-full py-3 rounded-lg font-sans font-bold text-xs uppercase tracking-wider text-white transition-all cursor-pointer outline-none focus:outline-none ${
                             orderSide === 'BUY'
                               ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-950/40'
                               : 'bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-950/40'
@@ -2656,7 +2720,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                               <span>Routing Order...</span>
                             </>
                           ) : (
-                            <span>ROUTE SIMULATED {orderSide === 'BUY' ? 'BUY' : 'SELL'}</span>
+                            <span>Route Simulated {orderSide === 'BUY' ? 'Buy' : 'Sell'}</span>
                           )}
                         </button>
                       </div>
@@ -2668,7 +2732,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
               </>
             ) : (
               <div className="text-center py-16 bg-[#050505] border border-white/5 rounded-xl text-white/30 text-xs font-mono">
-                Provide a valid ticker above and press 'Pull Data' to view interactive terminal diagnostics.
+                Select a valid ticker or timeframe above to view interactive terminal diagnostics.
               </div>
             )}
             </motion.div>
@@ -2692,17 +2756,16 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {/* Left Column: Search & Sector */}
                 <div className="space-y-4">
-                  {/* Search Bar */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-mono text-white/70 block uppercase">Search Ticker/Company</label>
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-white/60" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-indigo-400 pointer-events-none" />
                       <input
                         type="text"
                         value={screenerSearch}
                         onChange={(e) => setScreenerSearch(e.target.value)}
                         placeholder="Search AAPL, Microsoft..."
-                        className="w-full bg-[#050505] border border-white/10 focus:border-indigo-500/50 rounded pl-8 pr-2.5 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none font-mono"
+                        className="w-full bg-[#050508] border-2 border-[#6366f1] focus:border-[#6366f1] rounded-lg pl-9 pr-8 py-2 text-xs text-white placeholder-white/40 focus:outline-none shadow-[0_0_12px_rgba(99,102,241,0.3)] font-mono transition-all"
                       />
                       {screenerSearch && (
                         <button 
@@ -2857,7 +2920,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
               <motion.div 
                 whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                className="bg-[#080808] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
+                className="bg-[#050505] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
               >
                 <span className="text-[10px] font-mono text-white/70 block uppercase tracking-wider">MATCHING ASSETS</span>
                 <span className="text-2xl font-bold font-mono text-white block mt-1">{sortedScreenerData.length}</span>
@@ -2866,7 +2929,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
               <motion.div 
                 whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                className="bg-[#080808] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
+                className="bg-[#050505] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
               >
                 <span className="text-[10px] font-mono text-white/70 block uppercase tracking-wider">AVG P/E RATIO</span>
                 <span className="text-2xl font-bold font-mono text-indigo-400 block mt-1">
@@ -2881,7 +2944,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
               <motion.div 
                 whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                className="bg-[#080808] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
+                className="bg-[#050505] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
               >
                 <span className="text-[10px] font-mono text-white/70 block uppercase tracking-wider">AVG RETURN ON EQUITY</span>
                 <span className="text-2xl font-bold font-mono text-emerald-400 block mt-1">
@@ -2896,7 +2959,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
               <motion.div 
                 whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                className="bg-[#080808] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
+                className="bg-[#050505] p-4 rounded-xl border border-white/5 space-y-2 transition-colors duration-200"
               >
                 <span className="text-[10px] font-mono text-white/70 block uppercase tracking-wider">AVG 52W CHANGE</span>
                 <span className="text-2xl font-bold font-mono text-white block mt-1">
@@ -2917,7 +2980,7 @@ export default function MarketsTerminal({ initialTicker, initialSubTab, accountM
                 <span className="text-xs text-white/70 font-mono uppercase tracking-widest">Iterating tickers via Pandas fundamentals loop...</span>
               </div>
             ) : (
-              <div className="bg-[#080808] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
+              <div className="bg-[#050505] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
                 <div className="p-4 border-b border-white/5 bg-white/[0.01] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-400">Filtered DataFrame: {sortedScreenerData.length} entries</span>

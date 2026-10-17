@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PaymentModals } from './PaymentModals';
 import DemoCapitalModal from './DemoCapitalModal';
+import { Erc3643ArchitectureModal } from './Erc3643ArchitectureModal';
 import { 
   Wallet, 
   ArrowLeftRight, 
@@ -89,6 +90,7 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
   const [showConnectionsModal, setShowConnectionsModal] = useState(false);
   const [modalStep, setModalStep] = useState<'view' | 'add' | 'success'>('view');
   const [isDemoCapitalModalOpen, setIsDemoCapitalModalOpen] = useState(false);
+  const [isArchitectureModalOpen, setIsArchitectureModalOpen] = useState(false);
   
   // Base cash balance state (synchronized with USD balance for DEMO / REAL mode)
   const [cashBalance, setCashBalance] = useState<number>(() => {
@@ -306,8 +308,8 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
           id.startsWith('fund-3') ||
           id.startsWith('fund-4') ||
           id.startsWith('fund-pnl-') ||
-          id.startsWith('act_1') ||
           id.includes('seed') ||
+          id.includes('mock') ||
           method.includes('trade profit settle') ||
           method.includes('trade loss settle')
         );
@@ -340,8 +342,8 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
           id.startsWith('fund-3') ||
           id.startsWith('fund-4') ||
           id.startsWith('fund-pnl-') ||
-          id.startsWith('act_1') ||
           id.includes('seed') ||
+          id.includes('mock') ||
           method.includes('trade profit settle') ||
           method.includes('trade loss settle')
         );
@@ -741,7 +743,7 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
           whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           id="wallet-balance-portfolio-card" 
-          className="bg-[#080808] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1 transition-colors duration-200"
+          className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1 transition-colors duration-200"
         >
           <div className="flex justify-between items-start">
             <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black">LIQUID PORTFOLIO VALUE (USD)</span>
@@ -785,7 +787,7 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
           whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           id="wallet-blockchain-details-card" 
-          className="bg-[#080808] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1 transition-colors duration-200"
+          className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1 transition-colors duration-200"
         >
           <div className="flex justify-between items-start mb-2">
             <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black">ON-CHAIN IDENTIFIERS</span>
@@ -845,6 +847,21 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
                 </button>
               </div>
             </div>
+
+            {/* ERC-3643 Tokenization Architecture Trigger */}
+            <div className="pt-2 border-t border-neutral-800/80">
+              <button
+                type="button"
+                onClick={() => setIsArchitectureModalOpen(true)}
+                className="w-full py-1.5 px-2.5 rounded-lg bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 text-[9px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-between shadow-sm"
+              >
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>T-REX ERC-3643 UML Architecture</span>
+                </div>
+                <span className="text-[8px] bg-indigo-500/20 px-1.5 py-0.5 rounded font-black text-indigo-300">1:1 Backed</span>
+              </button>
+            </div>
           </div>
         </motion.div>
 
@@ -853,7 +870,7 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
           whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           id="wallet-fiat-routing-card" 
-          className="bg-[#080808] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1 transition-colors duration-200"
+          className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between lg:col-span-1 transition-colors duration-200"
         >
           <div className="flex justify-between items-start">
             <span className="text-[10px] text-white/70 font-mono uppercase tracking-widest font-black">CUSTODY FIAT ROUTING</span>
@@ -898,7 +915,7 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
 
         {/* SECTION 2: Assets Ledger Matrix (Left Column) */}
         <div className="lg:col-span-3 space-y-4 order-2 lg:order-1">
-          <div className="bg-[#080808] border border-neutral-800/80 rounded-xl p-5 font-mono">
+          <div className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 font-mono">
             <div className="flex items-center justify-between border-b border-neutral-800/80 pb-3 mb-4">
               <div>
                 <h4 className="text-xs font-black text-white uppercase tracking-wider">Multi-Currency Liquidity Map</h4>
@@ -1010,7 +1027,7 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
 
         {/* SECTION 3: Deposit/Withdraw Terminal Form (Right Column) */}
         <div className="lg:col-span-2 space-y-4 order-1 lg:order-2">
-          <div className="bg-[#080808] border border-neutral-800/80 rounded-xl p-5 space-y-4 font-mono relative overflow-hidden">
+          <div className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 space-y-4 font-mono relative overflow-hidden">
             
             {/* Simulation Broadcast Overlay */}
             <AnimatePresence>
@@ -1370,7 +1387,7 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
       </div>
 
       {/* SECTION 4: Audited Ledger Logs */}
-      <div className="bg-[#080808] border border-neutral-800/80 rounded-xl p-5 font-mono">
+      <div className="bg-[#050505] border border-neutral-800/80 rounded-xl p-5 font-mono">
         <div className="border-b border-neutral-800/80 pb-3 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -2030,6 +2047,12 @@ export default function FundingDesk({ accountMode = (typeof window !== 'undefine
           window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: amount, mode: 'DEMO' } }));
           window.dispatchEvent(new Event('storage'));
         }}
+      />
+
+      {/* T-REX ERC-3643 Architecture & UML Modal */}
+      <Erc3643ArchitectureModal
+        isOpen={isArchitectureModalOpen}
+        onClose={() => setIsArchitectureModalOpen(false)}
       />
 
     </div>

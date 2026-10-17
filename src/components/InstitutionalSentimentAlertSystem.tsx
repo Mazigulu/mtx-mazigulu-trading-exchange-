@@ -134,34 +134,7 @@ export default function InstitutionalSentimentAlertSystem({ bannerOnly = false }
       }
 
       if (!data || !data.sentiment) {
-        const symbols: MarketSymbol[] = [
-          'US30', 'NAS100', 'GER40', 'SPX500', 'UK100', 'JPN225',
-          'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD',
-          'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
-          'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'GOLD/USD', 'SILVER/USD', 'BRENT'
-        ];
-        const simulatedSentiment: Record<string, any> = {};
-        symbols.forEach((sym) => {
-          const isBullishTrend = Math.random() > 0.5;
-          const trend = isBullishTrend ? 'BULLISH' : 'BEARISH';
-          const isDivergent = Math.random() > 0.8;
-          let score = isBullishTrend ? 62 : 38;
-          if (isDivergent) {
-            score = isBullishTrend ? 12 : 88;
-          }
-
-          simulatedSentiment[sym] = {
-            symbol: sym,
-            overallScore: score,
-            technicalScore: isBullishTrend ? 70 : 30,
-            newsScore: Math.floor(Math.random() * 40) + 30,
-            state: Math.random() > 0.6 ? 'Volatile' : 'Trending',
-            currentPrice: sym === 'NAS100' ? 18550.00 : sym === 'AAPL' ? 188.30 : sym === 'SPX500' ? 5300.00 : 400.00,
-            rsi: isBullishTrend ? 60 : 40,
-            trend,
-          };
-        });
-        data = { sentiment: simulatedSentiment };
+        return;
       }
 
       const detectedList: SentimentDivergence[] = [];
@@ -225,6 +198,25 @@ export default function InstitutionalSentimentAlertSystem({ bannerOnly = false }
           setActiveNotification(newest);
           playSoftChime(newest.type);
 
+          // Dispatch real-time market divergence to the global in-app notification center
+          try {
+            window.dispatchEvent(new CustomEvent('mtx_system_notification', {
+              detail: {
+                category: 'MARKET',
+                severity: newest.type === 'BEARISH_DIVERGENCE' ? 'WARNING' : 'INFO',
+                title: `${newest.type === 'BEARISH_DIVERGENCE' ? 'Bearish' : 'Bullish'} Sentiment Divergence: ${newest.symbol}`,
+                message: `Dynamic divergence detected on ${newest.symbol} @ $${newest.price}. Trend: ${newest.trend}, Sentiment: ${newest.overallScore}%.`,
+                symbol: newest.symbol,
+                actionTab: 'ANALYSIS',
+                actionLabel: 'Inspect Analysis',
+                metadata: {
+                  price: newest.price,
+                  tag: 'SENTIMENT DIVERGENCE'
+                }
+              }
+            }));
+          } catch (e) {}
+
           // Clear banner notification automatically after 10 seconds
           const timer = setTimeout(() => {
             setActiveNotification(prev => prev?.symbol === newest.symbol && prev?.type === newest.type ? null : prev);
@@ -242,26 +234,6 @@ export default function InstitutionalSentimentAlertSystem({ bannerOnly = false }
     const timer = setInterval(checkSentimentDivergences, 4000);
     return () => clearInterval(timer);
   }, [divergenceThreshold]);
-
-  // Ability to trigger a test simulation so the developer / user can observe it immediately
-  const triggerMockTest = (type: 'BULLISH' | 'BEARISH') => {
-    const symbol: MarketSymbol = type === 'BULLISH' ? 'NAS100' : 'SPX500';
-    const mockAlert: SentimentDivergence = {
-      symbol,
-      type: type === 'BULLISH' ? 'BULLISH_DIVERGENCE' : 'BEARISH_DIVERGENCE',
-      timestamp: new Date().toLocaleTimeString(),
-      price: type === 'BULLISH' ? 18500.00 : 5200.00,
-      overallScore: type === 'BULLISH' ? 84 : 16,
-      newsScore: type === 'BULLISH' ? 88 : 12,
-      technicalScore: type === 'BULLISH' ? 81 : 19,
-      rsi: type === 'BULLISH' ? 24 : 76,  // Overbought rsi but bearish trend, or oversold trend but bullish sentiment
-      trend: type === 'BULLISH' ? 'BEARISH' : 'BULLISH',
-      state: 'Volatile'
-    };
-
-    setActiveNotification(mockAlert);
-    playSoftChime(mockAlert.type);
-  };
 
   if (bannerOnly) {
     return (
@@ -619,29 +591,15 @@ export default function InstitutionalSentimentAlertSystem({ bannerOnly = false }
           )}
         </div>
 
-        {/* Preview Trigger Buttons so user can test sound & motion banner immediately */}
+        {/* Live Engine Status Footnote */}
         <div className="mt-3.5 pt-3.5 border-t border-white/5 flex items-center justify-between text-[9px] font-sans text-white/30">
           <span className="flex items-center gap-1">
             <Info className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Developer Sandbox Trigger Controls:</span>
+            <span>Real-Time Sentiment Monitoring Engine:</span>
           </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => triggerMockTest('BEARISH')}
-              className="px-2.5 py-1 border border-rose-500/20 hover:border-rose-500/50 bg-rose-500/5 rounded font-mono text-[9px] text-rose-400 font-bold tracking-tight hover:bg-rose-500/10 transition-all flex items-center gap-1"
-              title="Test standard warning playbell and slide banner layout for Bearish Divergences"
-            >
-              <Play className="w-2.5 h-2.5" />
-              <span>Test Bearish</span>
-            </button>
-            <button
-              onClick={() => triggerMockTest('BULLISH')}
-              className="px-2.5 py-1 border border-emerald-500/20 hover:border-emerald-500/50 bg-emerald-500/5 rounded font-mono text-[9px] text-emerald-400 font-bold tracking-tight hover:bg-emerald-500/10 transition-all flex items-center gap-1"
-              title="Test standard warning playbell and slide banner layout for Bullish Divergences"
-            >
-              <Play className="w-2.5 h-2.5" />
-              <span>Test Bullish</span>
-            </button>
+          <div className="flex items-center gap-2 font-mono text-[9px] text-emerald-400">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Live Sentiment Stream Online</span>
           </div>
         </div>
 

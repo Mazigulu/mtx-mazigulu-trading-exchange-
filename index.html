@@ -2,6 +2,60 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Global Browser Extension & Web3 Defensive Shield -->
+    <script>
+      (function() {
+        function shouldSuppress(msg, url, err) {
+          var str = (String(msg || '') + ' ' + String(url || '') + ' ' + String((err && (err.stack || err.message)) || '')).toLowerCase();
+          return (
+            str.indexOf('metamask') !== -1 ||
+            str.indexOf('failed to connect') !== -1 ||
+            str.indexOf('chrome-extension://') !== -1 ||
+            str.indexOf('moz-extension://') !== -1 ||
+            str.indexOf('inpage.js') !== -1 ||
+            str.indexOf('aborterror') !== -1 ||
+            str.indexOf('the user aborted a request') !== -1 ||
+            str.indexOf('signal is aborted') !== -1 ||
+            str.indexOf('user rejected') !== -1 ||
+            str.indexOf('ethereum') !== -1 ||
+            str.indexOf('web3') !== -1
+          );
+        }
+
+        var prevOnError = window.onerror;
+        window.onerror = function(msg, url, lineNo, colNo, error) {
+          if (shouldSuppress(msg, url, error)) {
+            console.warn('[Web3 Shield] Handled extension signal safely:', msg || error);
+            return true;
+          }
+          if (typeof prevOnError === 'function') {
+            return prevOnError.apply(this, arguments);
+          }
+          return false;
+        };
+
+        window.addEventListener('error', function(event) {
+          if (!event) return;
+          if (shouldSuppress(event.message, event.filename, event.error) || (event.error && shouldSuppress('', '', event.error))) {
+            try {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+            } catch (e) {}
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (!event) return;
+          var reason = event.reason;
+          if (shouldSuppress('', '', reason) || (reason && shouldSuppress(reason.message, '', reason))) {
+            try {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+            } catch (e) {}
+          }
+        }, true);
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>mtxcapital | Institutional Fractional Trading Platform | Stocks, Bonds &amp; Treasuries</title>
     

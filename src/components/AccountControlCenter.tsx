@@ -1817,7 +1817,7 @@ export default function AccountControlCenter({
                             onClick={() => setActivityFilter(filter)}
                             className={`px-3 py-1 rounded text-[8.5px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
                               activityFilter === filter
-                                ? 'bg-indigo-600 text-white shadow-[0_0_12px_rgba(99,102,241,0.3)]'
+                                ? 'bg-indigo-600 text-white'
                                 : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'
                             }`}
                           >

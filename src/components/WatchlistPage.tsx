@@ -554,13 +554,10 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab, accountMode
             }
           } catch {}
           
-          // Fallback simulation
-          const randFactor = 1 + (Math.random() - 0.49) * 0.015;
-          const currentPrice = parseFloat((asset.defaultPrice * randFactor).toFixed(2));
-          const mockChange = parseFloat(((randFactor - 1) * 100).toFixed(2));
+          // Set verified baseline asset price
           newPrices[asset.symbol] = {
-            price: currentPrice,
-            change: mockChange
+            price: asset.defaultPrice,
+            change: 0.0
           };
         })
       );
@@ -837,6 +834,15 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab, accountMode
         alert(result.error || 'Purchase failed.');
       } else {
         setBrokerCash(result.newCash);
+        if (result.updatedHoldings) {
+          setHoldings(result.updatedHoldings);
+          try {
+            localStorage.setItem(holdingsStorageKey, JSON.stringify(result.updatedHoldings));
+            if (isDemo) {
+              localStorage.setItem('broker_holdings', JSON.stringify(result.updatedHoldings));
+            }
+          } catch {}
+        }
         setBuySuccess(true);
       }
     } catch (err: any) {
@@ -877,7 +883,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab, accountMode
         <motion.div 
           whileHover={{ y: -2, borderColor: 'rgba(99, 102, 241, 0.25)', boxShadow: '0 4px 20px -2px rgba(99, 102, 241, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="p-4 bg-[#080808] border border-neutral-800/80 rounded-xl relative overflow-hidden group transition-colors duration-200"
+          className="p-4 bg-[#050505] border border-neutral-800/80 rounded-xl relative overflow-hidden group transition-colors duration-200"
         >
           <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block">Monitored Assets</span>
           <div className="flex items-baseline space-x-2 mt-2">
@@ -893,7 +899,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab, accountMode
         <motion.div 
           whileHover={{ y: -2, borderColor: 'rgba(16, 185, 129, 0.25)', boxShadow: '0 4px 20px -2px rgba(16, 185, 129, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="p-4 bg-[#080808] border border-neutral-800/80 rounded-xl relative overflow-hidden group transition-colors duration-200"
+          className="p-4 bg-[#050505] border border-neutral-800/80 rounded-xl relative overflow-hidden group transition-colors duration-200"
         >
           <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block">Average Daily Change</span>
           <div className="flex items-baseline space-x-2 mt-2">
@@ -911,7 +917,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab, accountMode
         <motion.div 
           whileHover={{ y: -2, borderColor: 'rgba(245, 158, 11, 0.25)', boxShadow: '0 4px 20px -2px rgba(245, 158, 11, 0.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="p-4 bg-[#080808] border border-neutral-800/80 rounded-xl relative overflow-hidden group transition-colors duration-200"
+          className="p-4 bg-[#050505] border border-neutral-800/80 rounded-xl relative overflow-hidden group transition-colors duration-200"
         >
           <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider block">Average Dividend Yield</span>
           <div className="flex items-baseline space-x-2 mt-2">
@@ -926,17 +932,17 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab, accountMode
       </div>
 
       {/* 3. Search, Sort, and Filtering toolbar */}
-      <div className="p-4 bg-[#080808] border border-neutral-800/80 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="p-4 bg-[#050505] border border-neutral-800/80 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
         
         {/* Search input */}
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-white/60 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-indigo-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             placeholder="Search watched companies..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#0d0d12] border border-white/10 hover:border-white/25 focus:border-indigo-500/50 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-white/40 focus:outline-none transition-all font-mono"
+            className="w-full bg-[#050508] border-2 border-[#6366f1] focus:border-[#6366f1] rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-white/40 focus:outline-none shadow-[0_0_12px_rgba(99,102,241,0.3)] transition-all font-mono"
           />
         </div>
 
@@ -1131,7 +1137,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab, accountMode
                   onDragLeave={(e) => handleDragLeave(e, index)}
                   onDragEnd={handleDragEnd}
                   onDrop={(e) => handleDrop(e, index)}
-                  className={`relative bg-[#080808] border rounded-xl hover:scale-[1.01] hover:-translate-y-1 hover:shadow-[0_12px_24px_-8px_rgba(99,102,241,0.15)] transition-all duration-300 ease-out overflow-hidden flex flex-col justify-between ${
+                  className={`relative bg-[#050505] border rounded-xl hover:scale-[1.01] hover:-translate-y-1 hover:shadow-[0_12px_24px_-8px_rgba(99,102,241,0.15)] transition-all duration-300 ease-out overflow-hidden flex flex-col justify-between ${
                     draggedIndex === index 
                       ? 'border-indigo-500 bg-indigo-500/10 opacity-40 scale-95' 
                       : dragOverIndex === index
@@ -1204,7 +1210,7 @@ export default function WatchlistPage({ onSelectSymbol, onSelectTab, accountMode
                   <div className="mt-3.5">
                     <div className="flex items-center justify-between text-[8px] font-mono text-white/30 uppercase tracking-widest mb-1">
                       <span>52W Low: ${min.toLocaleString(undefined, { minimumFractionDigits: asset.symbol?.endsWith('=X') || asset.symbol?.includes('USD=') ? 4 : 2, maximumFractionDigits: asset.symbol?.endsWith('=X') || asset.symbol?.includes('USD=') ? 4 : 2 })}</span>
-                      <span className="font-bold text-white/45">Price relative to 52W Range</span>
+                      <span className="font-bold text-white/45 hidden sm:inline">Price relative to 52W Range</span>
                       <span>52W High: ${max.toLocaleString(undefined, { minimumFractionDigits: asset.symbol?.endsWith('=X') || asset.symbol?.includes('USD=') ? 4 : 2, maximumFractionDigits: asset.symbol?.endsWith('=X') || asset.symbol?.includes('USD=') ? 4 : 2 })}</span>
                     </div>
                     <div className="relative h-1 bg-black/40 border border-white/5 rounded-full">

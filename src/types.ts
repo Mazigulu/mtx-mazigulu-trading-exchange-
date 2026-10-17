@@ -84,6 +84,7 @@ export interface Trade {
   lavTslAtrMultiplier?: number;
   lavTslLiquidityActive?: boolean;
   lavTslTighteningActive?: boolean;
+  accountMode?: 'DEMO' | 'REAL';
 }
 
 export interface NewsEvent {

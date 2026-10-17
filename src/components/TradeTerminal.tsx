@@ -1364,7 +1364,7 @@ export default function TradeTerminal({
             onClick={() => setActiveTab('calculator')}
             className={`px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider rounded transition-all flex items-center gap-2 border cursor-pointer ${
               activeTab === 'calculator'
-                ? 'bg-indigo-600/25 border-indigo-500/40 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.15)] font-black'
+                ? 'bg-indigo-600/25 border-indigo-500/40 text-indigo-300 font-black'
                 : 'bg-transparent border-transparent text-white/40 hover:text-white/80'
             }`}
           >
@@ -1378,7 +1378,7 @@ export default function TradeTerminal({
             onClick={() => setActiveTab('ledger')}
             className={`px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider rounded transition-all flex items-center gap-2 border cursor-pointer ${
               activeTab === 'ledger'
-                ? 'bg-indigo-600/25 border-indigo-500/40 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.15)] font-black'
+                ? 'bg-indigo-600/25 border-indigo-500/40 text-indigo-300 font-black'
                 : 'bg-transparent border-transparent text-white/40 hover:text-white/80'
             }`}
           >

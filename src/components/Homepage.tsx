@@ -336,26 +336,11 @@ function generateMockBars(ticker: string, range: string, basePrice: number): { t
   const bars: { timestamp: string; close: number }[] = [];
   const now = new Date();
   
-  let currentPrice = basePrice;
-  const isPositive = ticker === 'AAPL' || ticker === 'NVDA';
-  const overallTrend = isPositive ? 0.08 : -0.05;
-  
-  const pricesReversed: number[] = [basePrice];
-  for (let i = 1; i < barsCount; i++) {
-    const trendEffect = overallTrend * basePrice * (1 / barsCount);
-    const wave = Math.sin(i * 0.4) * (basePrice * 0.015);
-    const noise = Math.cos(i * 0.95) * (basePrice * 0.006);
-    currentPrice = currentPrice - trendEffect + wave + noise;
-    pricesReversed.push(currentPrice);
-  }
-  
-  const prices = pricesReversed.reverse();
-  
   for (let i = 0; i < barsCount; i++) {
     const d = new Date(now.getTime() - (barsCount - 1 - i) * 24 * 60 * 60 * 1000);
     bars.push({
       timestamp: d.toISOString(),
-      close: parseFloat(prices[i].toFixed(2))
+      close: parseFloat(basePrice.toFixed(2))
     });
   }
   

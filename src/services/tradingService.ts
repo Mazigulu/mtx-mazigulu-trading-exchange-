@@ -431,7 +431,7 @@ export async function executeRootOrder(params: RootOrderParams): Promise<RootOrd
       title: `${isBuy ? 'Buy' : 'Sell'} Filled: ${calculatedQty.toFixed(4)} ${symbol} @ $${effectivePrice.toFixed(2)}`,
       message: `Executed ${side} order of $${notionalAmount.toFixed(2)} via ${paymentMethodLabel}. Balance: $${newCash.toFixed(2)} USD.`,
       actionTab: 'PORTFOLIO',
-      timestamp: dateStr
+      timestamp: now.toISOString()
     }
   }));
 

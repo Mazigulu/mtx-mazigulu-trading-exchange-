@@ -25,6 +25,7 @@ import ScreenerDesk from './components/ScreenerDesk';
 import SupportModal from './components/SupportModal';
 import LegalModal from './components/LegalModal';
 import { InteractiveSitemapModal } from './components/InteractiveSitemapModal';
+import { Erc3643ArchitectureModal } from './components/Erc3643ArchitectureModal';
 import { useSeoMetadata, WorkspaceSeoKey } from './hooks/useSeoMetadata';
 import DemoCapitalModal from './components/DemoCapitalModal';
 import { AccountMode } from './types';
@@ -83,7 +84,7 @@ import {
 } from 'lucide-react';
 
 const TerminalWorkspaceLoader = () => (
-  <div className="flex flex-col items-center justify-center min-h-[400px] border border-white/5 rounded-lg bg-[#070709]/80 p-8 space-y-4 font-mono w-full">
+  <div className="flex flex-col items-center justify-center min-h-[400px] border border-white/5 rounded-lg bg-[#050505] p-8 space-y-4 font-mono w-full">
     <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
       <RefreshCw className="w-5 h-5 text-indigo-400 animate-spin" />
     </div>
@@ -100,7 +101,7 @@ const MTXcapitalLogo = ({ size = 40 }: { size?: number }) => {
   return (
     <div 
       style={{ width: size, height: size }} 
-      className="rounded bg-gradient-to-br from-[#0c0c1e] to-[#07070f] border border-indigo-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.25)] relative overflow-hidden shrink-0"
+      className="rounded bg-gradient-to-br from-[#0c0c1e] to-[#07070f] border border-indigo-500/30 flex items-center justify-center relative overflow-hidden shrink-0"
     >
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.2),transparent)] pointer-events-none"></div>
       
@@ -254,26 +255,31 @@ export default function App() {
 
     const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       try {
-        const user = auth.currentUser;
-        init = init || {};
-        const headers = new Headers(init.headers || {});
-        if (user) {
-          const token = await user.getIdToken();
-          if (!headers.has('Authorization')) {
-            headers.set('Authorization', `Bearer ${token}`);
+        const urlStr = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input instanceof Request ? input.url : ''));
+        if (urlStr.startsWith('/api/') || (typeof window !== 'undefined' && urlStr.startsWith(window.location.origin + '/api/'))) {
+          const user = auth.currentUser;
+          init = init || {};
+          const headers = new Headers(init.headers || {});
+          if (user) {
+            try {
+              const token = await user.getIdToken();
+              if (!headers.has('Authorization')) {
+                headers.set('Authorization', `Bearer ${token}`);
+              }
+            } catch {}
+          } else {
+            // Check if we have a locally logged in trader email
+            const localEmail = localStorage.getItem('apex_trader_email');
+            if (localEmail && !headers.has('Authorization')) {
+              headers.set('Authorization', `Bearer sandbox:${localEmail}`);
+            }
           }
-        } else {
-          // Check if we have a locally logged in trader email
-          const localEmail = localStorage.getItem('apex_trader_email');
-          if (localEmail && !headers.has('Authorization')) {
-            headers.set('Authorization', `Bearer sandbox:${localEmail}`);
-          }
+          init.headers = headers;
         }
-        init.headers = headers;
       } catch (err) {
-        console.error('Error attaching identity token to request:', err);
+        console.warn('Error attaching identity token to request:', err);
       }
-      return originalFetch(input, init);
+      return originalFetch.call(window, input, init);
     };
 
     // Attempt 1: Standard direct assignment
@@ -693,7 +699,7 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const [prevTab, setPrevTab] = useState<'MARKETS' | 'DISCOVER' | 'SCREENER' | 'PORTFOLIO' | 'WATCHLIST' | 'ACTIVITY' | 'ANALYSIS'>(activeTab);
+  const [prevTab, setPrevTab] = useState<'MARKETS' | 'DISCOVER' | 'SCREENER' | 'PORTFOLIO' | 'WALLET' | 'WATCHLIST' | 'ACTIVITY' | 'ANALYSIS'>(activeTab);
 
   useEffect(() => {
     if (activeTab !== prevTab) {
@@ -701,7 +707,7 @@ export default function App() {
     }
   }, [activeTab, prevTab]);
 
-  const TABS_ORDER = ['MARKETS', 'DISCOVER', 'SCREENER', 'PORTFOLIO', 'WATCHLIST', 'ACTIVITY', 'ANALYSIS'];
+  const TABS_ORDER = ['MARKETS', 'DISCOVER', 'SCREENER', 'PORTFOLIO', 'WALLET', 'WATCHLIST', 'ACTIVITY', 'ANALYSIS'];
   const tabIndex = TABS_ORDER.indexOf(activeTab);
   const prevTabIndex = TABS_ORDER.indexOf(prevTab);
   const slideDirection = tabIndex >= prevTabIndex ? 1 : -1;
@@ -915,6 +921,7 @@ export default function App() {
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
   const [isSitemapModalOpen, setIsSitemapModalOpen] = useState(false);
+  const [isErc3643ModalOpen, setIsErc3643ModalOpen] = useState(false);
 
   const handleSitemapNavigate = (path: string) => {
     setIsSitemapModalOpen(false);
@@ -3000,7 +3007,7 @@ export default function App() {
       {/* Retractable Left-Hand Side Menu Navigation - Hidden on mobile screens */}
       <aside
         id="reproducible-side-nav"
-        className={`fixed inset-y-0 left-0 z-[600] bg-[#080808]/95 backdrop-blur-xl border-r border-white/10 flex-col justify-between transition-[width,box-shadow] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hidden md:flex select-none ${
+        className={`fixed inset-y-0 left-0 z-[600] bg-[#050505]/95 backdrop-blur-xl border-r border-white/10 flex-col justify-between transition-[width,box-shadow] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hidden md:flex select-none ${
           isSidebarExpanded ? 'w-52 shadow-[12px_0_35px_rgba(0,0,0,0.85)]' : 'w-16 shadow-none'
         }`}
         onMouseEnter={handleSidebarMouseEnter}
@@ -3073,13 +3080,13 @@ export default function App() {
                     onClick={() => setActiveTab(item.id as any)}
                     className={`w-full py-2.5 px-2.5 rounded-lg text-xs font-mono uppercase transition-colors duration-200 flex items-center gap-3 cursor-pointer overflow-hidden group ${
                       active
-                        ? 'bg-indigo-600/30 text-white border border-indigo-400/80 shadow-[0_0_16px_rgba(99,102,241,0.3)] font-black'
-                        : 'text-white/70 hover:text-white hover:bg-white/10 border border-transparent font-bold'
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white font-black'
+                        : 'text-white/70 hover:text-white hover:bg-white/10 font-bold'
                     }`}
                     title={item.label}
                   >
                     <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                      <Icon className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${active ? 'text-indigo-300 stroke-[2.5px]' : 'text-white/75'}`} />
+                      <Icon className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${active ? 'text-white stroke-[2.5px]' : 'text-white/75'}`} />
                     </div>
                     <span
                       className={`whitespace-nowrap transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] font-mono font-black overflow-hidden ${
@@ -3122,7 +3129,7 @@ export default function App() {
         className="flex-1 flex flex-col min-w-0 min-h-screen transition-all duration-300 ease-in-out justify-between pl-0 pb-16 md:pb-0 md:pl-16"
       >
         {/* Top Status Header Bar */}
-        <header className="border-b border-white/10 bg-[#080808]/90 backdrop-blur-md sticky top-0 z-[500] shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+        <header className="border-b border-white/10 bg-[#050505]/90 backdrop-blur-md sticky top-0 z-[500] shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
           <div className="max-w-[1400px] mx-auto px-3 md:px-6 py-3 flex items-center justify-between gap-4">
             
             {/* Mobile Brand Logo & Active Sub-Workspace Label Badge */}
@@ -3248,7 +3255,7 @@ export default function App() {
                       clearTimeout(profileTooltipTimeoutRef.current);
                     }
                   }}
-                  className="relative h-8 w-8 rounded-full flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.25)] hover:shadow-[0_0_16px_rgba(99,102,241,0.45)] transition-all duration-200 cursor-pointer select-none font-sans overflow-hidden group"
+                  className="relative h-8 w-8 rounded-full flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-white border border-white/10 transition-all duration-200 cursor-pointer select-none font-sans overflow-hidden group"
                 >
                   <span className="text-[10px] font-black text-white tracking-tighter uppercase">
                     {traderEmail ? (traderEmail.startsWith('demo') ? 'DM' : traderEmail.substring(0, 2).toUpperCase()) : 'TR'}
@@ -3493,7 +3500,7 @@ export default function App() {
       </main>
 
       {/* Footer Info strip */}
-      <footer className="hidden lg:block border-t border-white/10 bg-[#080808] py-6 mt-12 font-mono">
+      <footer className="hidden lg:block border-t border-white/10 bg-[#050505] py-6 mt-12 font-mono">
         <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-white/30">
           <div className="flex items-center space-x-3 text-[10px]">
             <span className="text-white text-sm font-black tracking-tight lowercase mr-1">
@@ -3513,6 +3520,13 @@ export default function App() {
             >
               legal
             </button>
+            <span className="text-white/10">|</span>
+            <button
+              onClick={() => setIsErc3643ModalOpen(true)}
+              className="hover:text-indigo-400 text-white/40 transition-colors cursor-pointer hover:underline lowercase font-bold"
+            >
+              erc-3643 architecture
+            </button>
           </div>
           <div className="text-center sm:text-right select-none text-[9.5px]">
             <span>MTXcapital Terminal &copy; 2026. MTXcapital is a registered trademark of MTXcapital Ltd.</span>
@@ -3520,18 +3534,16 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Sleek, translucent bottom navigation bar for mobile screens */}
-      <nav id="mobile-floating-tabbar" className="fixed bottom-0 left-0 right-0 z-[290] md:hidden bg-[#08080c]/90 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 px-2 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
+      {/* Sleek, translucent bottom navigation bar for mobile screens (5 core options) */}
+      <nav id="mobile-floating-tabbar" className="fixed bottom-0 left-0 right-0 z-[290] md:hidden bg-[#050505]/95 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 px-1 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
         {[
           { id: 'MARKETS', label: 'Markets', icon: TrendingUp },
-          { id: 'DISCOVER', label: 'Discover', icon: Compass },
-          { id: 'SCREENER', label: 'Screener', icon: Sliders },
           { id: 'PORTFOLIO', label: 'Portfolio', icon: Briefcase },
           { id: 'WALLET', label: 'Wallet', icon: Wallet },
           { id: 'WATCHLIST', label: 'Watchlist', icon: Star },
           { id: 'ACTIVITY', label: 'Activity', icon: History }
         ].map((item) => {
-          const active = activeTab === item.id;
+          const active = activeTab === item.id || (item.id === 'MARKETS' && (activeTab === 'DISCOVER' || activeTab === 'SCREENER' || activeTab === 'ANALYSIS'));
           const Icon = item.icon;
           return (
             <button
@@ -3541,8 +3553,8 @@ export default function App() {
                 active ? 'text-indigo-400 font-black scale-105' : 'text-neutral-400 hover:text-white font-bold'
               }`}
             >
-              <Icon className={`w-4.5 h-4.5 ${active ? 'stroke-[2.5px]' : 'stroke-[2px]'}`} />
-              <span className="text-[8.5px] font-mono font-bold uppercase tracking-wider scale-90">
+              <Icon className={`w-5 h-5 ${active ? 'stroke-[2.5px]' : 'stroke-[2px]'}`} />
+              <span className="text-[9px] font-mono font-bold uppercase tracking-wider">
                 {item.label}
               </span>
             </button>
@@ -3570,7 +3582,7 @@ export default function App() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ ease: 'easeOut', duration: 0.25 }}
-              className="relative w-full max-w-2xl bg-[#0a0a0c] border border-white/10 rounded-xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] max-h-[85vh] flex flex-col z-10"
+              className="relative w-full max-w-2xl bg-[#050505] border border-white/10 rounded-xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] max-h-[85vh] flex flex-col z-10"
             >
               {/* Header */}
               <div className="px-6 py-5 border-b border-white/5 bg-[#0e0e11] flex items-center justify-between">
@@ -3841,7 +3853,7 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-64 max-w-xs h-full bg-[#080808]/85 backdrop-blur-xl border-r border-white/10 flex flex-col justify-between py-6 px-4 z-10"
+              className="relative w-64 max-w-xs h-full bg-[#050505]/95 backdrop-blur-xl border-r border-white/10 flex flex-col justify-between py-6 px-4 z-10"
             >
               <div>
                 {/* Brand Ident and close trigger */}
@@ -3892,11 +3904,11 @@ export default function App() {
                         }}
                         className={`w-full py-3 px-3.5 rounded-lg text-xs font-mono font-black uppercase transition-all flex items-center gap-3 cursor-pointer ${
                           active
-                            ? 'bg-indigo-600/30 text-white border border-indigo-400/80 shadow-[0_0_16px_rgba(99,102,241,0.3)] font-black'
-                            : 'text-white/80 hover:text-white hover:bg-white/10 border border-transparent font-bold'
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white font-black'
+                            : 'text-white/80 hover:text-white hover:bg-white/10 font-bold'
                         }`}
                       >
-                        <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-indigo-300 stroke-[2.5px]' : 'text-white/75'}`} />
+                        <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-white stroke-[2.5px]' : 'text-white/75'}`} />
                         <span>{item.label}</span>
                       </button>
                     );
@@ -4053,6 +4065,12 @@ export default function App() {
           setAccountMode('DEMO');
           window.dispatchEvent(new CustomEvent('broker_cash_updated', { detail: { cash: amount, mode: 'DEMO' } }));
         }}
+      />
+
+      {/* ERC-3643 Architecture & UML Modal */}
+      <Erc3643ArchitectureModal
+        isOpen={isErc3643ModalOpen}
+        onClose={() => setIsErc3643ModalOpen(false)}
       />
 
     </div>

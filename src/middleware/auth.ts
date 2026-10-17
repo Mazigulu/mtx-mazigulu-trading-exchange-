@@ -15,16 +15,8 @@ export const requireAuth = async (
 ) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.warn('Missing Bearer token on requireAuth, falling back to default test user of dev/sandbox environment.');
-    const mockUid = 'dev-user-uid-123';
-    const mockEmail = 'demo@gmail.com';
-    req.user = { uid: mockUid, email: mockEmail };
-    try {
-      req.dbUser = await getOrCreateUser(mockUid, mockEmail);
-    } catch (dbErr) {
-      console.error('Error creating local fallback DB user:', dbErr);
-    }
-    return next();
+    res.status(401).json({ error: 'Authentication required. Missing Bearer authorization token.' });
+    return;
   }
 
   const token = authHeader.split('Bearer ')[1];
@@ -56,12 +48,12 @@ export const requireAuth = async (
       req.dbUser = dbUser;
     }
 
-    // Guarantee dbUser exists
-    if (!req.dbUser) {
+    // Guarantee dbUser exists with authenticated user's credentials
+    if (!req.dbUser && decodedToken.uid) {
       req.dbUser = {
-        id: 1,
-        uid: decodedToken.uid || 'dev-user-uid-123',
-        email: decodedToken.email || 'demo@gmail.com',
+        id: 0,
+        uid: decodedToken.uid,
+        email: decodedToken.email || '',
         createdAt: new Date()
       };
     }
@@ -76,7 +68,7 @@ export const requireAuth = async (
         const payloadJson = Buffer.from(parts[1], 'base64').toString('utf-8');
         const payload = JSON.parse(payloadJson);
         const uid = payload.user_id || payload.sub || payload.uid;
-        const email = payload.email || (uid ? `${uid}@institution.capital` : 'demo@gmail.com');
+        const email = payload.email || (uid ? `${uid}@institution.capital` : '');
         if (uid) {
           req.user = { 
             uid, 
@@ -91,24 +83,7 @@ export const requireAuth = async (
       console.warn('JWT payload parse failure:', parseErr);
     }
 
-    // Only if token is completely unparseable do we fallback to demo user
-    const mockUid = 'dev-user-uid-123';
-    const mockEmail = 'demo@gmail.com';
-    req.user = { uid: mockUid, email: mockEmail };
-    try {
-      req.dbUser = await getOrCreateUser(mockUid, mockEmail);
-    } catch (dbErr) {
-      console.error('Error creating fallback database user on token failure:', dbErr);
-    }
-    
-    if (!req.dbUser) {
-      req.dbUser = {
-        id: 1,
-        uid: mockUid,
-        email: mockEmail,
-        createdAt: new Date()
-      };
-    }
-    return next();
+    res.status(401).json({ error: 'Unauthorized: Invalid authentication credentials.' });
+    return;
   }
 };

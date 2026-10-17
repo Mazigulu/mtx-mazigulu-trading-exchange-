@@ -198,6 +198,10 @@ export async function connectWeb3Wallet(providerType: 'injected' | 'metamask' | 
     if (err && err.code === 4001) {
       throw new Error('Connection request declined in wallet.');
     }
+    const errStr = (String(err?.message || '') + ' ' + String(err?.stack || '') + ' ' + String(err || '')).toLowerCase();
+    if (errStr.includes('metamask') || errStr.includes('failed to connect') || errStr.includes('inpage.js')) {
+      throw new Error('MetaMask browser extension is unresponsive or locked. Please unlock MetaMask, reload, or select Institutional Hardware Node.');
+    }
     throw new Error(err?.message || 'Failed to connect Web3 wallet.');
   }
 }

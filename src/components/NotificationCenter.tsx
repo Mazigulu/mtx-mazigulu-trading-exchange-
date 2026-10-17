@@ -39,23 +39,6 @@ interface NotificationCenterProps {
 
 const STORAGE_KEY = 'apex_system_notifications_v1';
 
-const INITIAL_NOTIFICATIONS: SystemNotification[] = [
-  {
-    id: 'sys-init-ready',
-    category: 'ALERTS',
-    severity: 'INFO',
-    title: 'Identity Gateway Initialized',
-    message: 'Apex Multi-Asset Execution Desk online. Real-time market tick streams, order execution ledger, and risk safety gates active.',
-    timestamp: new Date().toISOString(),
-    read: false,
-    actionTab: 'MARKETS',
-    actionLabel: 'Open Markets Terminal',
-    metadata: {
-      tag: 'SYSTEM ACTIVE'
-    }
-  }
-];
-
 export default function NotificationCenter({
   activeTab,
   onNavigateTab,
@@ -69,20 +52,21 @@ export default function NotificationCenter({
   const popoverRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Notifications State
+  // Notifications State - purely dynamic, no seeded or mock notifications
   const [notifications, setNotifications] = useState<SystemNotification[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+        if (Array.isArray(parsed)) {
+          // Strip out any legacy pre-seeded initial mock notifications
+          return parsed.filter((n: any) => n && n.id && n.id !== 'sys-init-ready' && !String(n.id).startsWith('mock-'));
         }
       }
     } catch (e) {
       console.warn('Failed to load notifications from storage:', e);
     }
-    return INITIAL_NOTIFICATIONS;
+    return [];
   });
 
   // Keep notifications synced to localStorage
@@ -151,27 +135,50 @@ export default function NotificationCenter({
     };
   }, [addNotification]);
 
-  // Track previous trades to emit reactive execution events
+  // Track previous trades to emit reactive execution events exclusively for live session orders
+  const isInitialTradesSyncRef = useRef<boolean>(true);
   const prevTradesCountRef = useRef<number>(trades.length);
+  const notifiedTradeIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
+    // On initial mount/fetch, record existing trade IDs without triggering false historical alerts
+    if (isInitialTradesSyncRef.current) {
+      if (trades.length > 0) {
+        trades.forEach(t => {
+          if (t?.id) notifiedTradeIdsRef.current.add(t.id);
+        });
+        prevTradesCountRef.current = trades.length;
+        isInitialTradesSyncRef.current = false;
+      }
+      return;
+    }
+
     if (trades.length > prevTradesCountRef.current) {
       const latestTrade = trades[trades.length - 1];
-      if (latestTrade) {
-        addNotification({
-          category: 'TRADES',
-          severity: 'INFO',
-          title: `Stock Order Executed: ${latestTrade.side} ${latestTrade.symbol}`,
-          message: `Filled ${latestTrade.size} shares of ${latestTrade.symbol} @ $${latestTrade.entryPrice}. TP: ${latestTrade.takeProfit ? '$' + latestTrade.takeProfit : 'None'}, SL: ${latestTrade.stopLoss ? '$' + latestTrade.stopLoss : 'None'}.`,
-          symbol: latestTrade.symbol,
-          actionTab: 'ACTIVITY',
-          actionLabel: 'View in Activity',
-          metadata: {
-            price: latestTrade.entryPrice,
-            shares: latestTrade.size,
-            tradeId: latestTrade.id,
-            tag: `${latestTrade.side} FILL`
-          }
-        });
+      if (latestTrade && latestTrade.id && !notifiedTradeIdsRef.current.has(latestTrade.id)) {
+        notifiedTradeIdsRef.current.add(latestTrade.id);
+
+        // Only announce if order was executed during the current active session (within last 60s)
+        const tradeTime = latestTrade.timestamp ? new Date(latestTrade.timestamp).getTime() : 0;
+        const isRecent = tradeTime > 0 ? (Date.now() - tradeTime < 60000) : false;
+
+        if (isRecent) {
+          addNotification({
+            category: 'TRADES',
+            severity: 'INFO',
+            title: `Stock Order Executed: ${latestTrade.side} ${latestTrade.symbol}`,
+            message: `Filled ${latestTrade.size} shares of ${latestTrade.symbol} @ $${latestTrade.entryPrice}. TP: ${latestTrade.takeProfit ? '$' + latestTrade.takeProfit : 'None'}, SL: ${latestTrade.stopLoss ? '$' + latestTrade.stopLoss : 'None'}.`,
+            symbol: latestTrade.symbol,
+            actionTab: 'ACTIVITY',
+            actionLabel: 'View in Activity',
+            metadata: {
+              price: latestTrade.entryPrice,
+              shares: latestTrade.size,
+              tradeId: latestTrade.id,
+              tag: `${latestTrade.side} FILL`
+            }
+          });
+        }
       }
     }
     prevTradesCountRef.current = trades.length;
@@ -227,14 +234,20 @@ export default function NotificationCenter({
   const formatRelativeTime = (isoString: string) => {
     try {
       const now = Date.now();
-      const past = new Date(isoString).getTime();
-      const diffMs = now - past;
+      // Handle legacy space-separated UTC strings e.g. "2026-10-12 18:30:00"
+      let normalized = isoString;
+      if (typeof normalized === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(normalized)) {
+        normalized = normalized.replace(' ', 'T') + 'Z';
+      }
+      const parsedTime = new Date(normalized).getTime();
+      if (isNaN(parsedTime)) return 'Just now';
+      const diffMs = now - parsedTime;
       const diffSec = Math.floor(diffMs / 1000);
       const diffMin = Math.floor(diffSec / 60);
       const diffHr = Math.floor(diffMin / 60);
       const diffDay = Math.floor(diffHr / 24);
 
-      if (diffSec < 45) return 'Just now';
+      if (diffSec < 45 || diffMs < 0) return 'Just now';
       if (diffMin < 60) return `${diffMin}m ago`;
       if (diffHr < 24) return `${diffHr}h ago`;
       return `${diffDay}d ago`;

@@ -101,8 +101,8 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
             id.startsWith('fund-3') ||
             id.startsWith('fund-4') ||
             id.startsWith('fund-pnl-') ||
-            id.startsWith('act_1') ||
             id.includes('seed') ||
+            id.includes('mock') ||
             method.includes('trade profit settle') ||
             method.includes('trade loss settle')
           );
@@ -135,6 +135,66 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
         } catch (e) {
           console.warn('Error reading cached trade activities:', e);
         }
+
+        // 1b. Fetch server trades from backend API
+        let serverTradeActivities: ActivityEvent[] = [];
+        try {
+          const rTrades = await fetch('/api/trades');
+          if (rTrades.ok && isMounted) {
+            const data = await rTrades.json();
+            if (Array.isArray(data)) {
+              const filteredTrades = data.filter((t: any) => {
+                if (isMockOrSeeded(t)) return false;
+                const tradeMode = t.accountMode || (t.marketNote?.includes('[REAL]') ? 'REAL' : 'DEMO');
+                return currentMode === 'REAL' ? tradeMode === 'REAL' : tradeMode !== 'REAL';
+              });
+
+              serverTradeActivities = filteredTrades.map((t: any) => {
+                const notional = (t.size || 0) * (t.entryPrice || 0);
+                const isBuy = t.side === 'BUY';
+                const timeStr = t.timestamp ? (t.timestamp.includes('T') ? t.timestamp.substring(11, 19) : t.timestamp) : '12:00:00';
+
+                return {
+                  id: t.id,
+                  timestamp: t.timestamp ? (t.timestamp.length === 16 ? `${t.timestamp}:00` : t.timestamp) : new Date().toISOString(),
+                  type: (isBuy ? (t.size < 1 ? 'FRACTIONAL_BUY' : 'BUY') : 'SELL') as any,
+                  category: 'investment' as const,
+                  eventName: isBuy ? `Purchased ${t.symbol}` : `Sold ${t.symbol}`,
+                  asset: t.symbol,
+                  methodOrDetail: t.marketNote || 'Terminal Execution',
+                  amount: `$${notional.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                  amountUSDValue: notional,
+                  status: (t.status === 'OPEN' || t.status === 'CLOSED' ? 'Completed' : 'Pending') as any,
+                  refId: t.id,
+                  quantity: `${t.size < 1 ? t.size.toFixed(4) : t.size.toFixed(2)} Shares`,
+                  price: `$${t.entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`,
+                  network: ['BTC', 'ETH', 'SOL'].some(c => t.symbol?.includes(c)) ? 'Crypto Clearing Rails' : 'Prime Clearing Rails',
+                  settlementRail: 'Apex DTC Instant Settlement',
+                  fees: '$0.00 (0% Commission Tier)',
+                  timeline: [
+                    { label: 'Order Dispatched', timestamp: timeStr, description: `${t.side} market execution routed` },
+                    { label: 'Treasury Clearance', timestamp: timeStr, description: `Securities ledger credited: ${t.symbol}` },
+                    { label: 'Settlement Finalized', timestamp: timeStr, description: `Executed at $${t.entryPrice}. Status: ${t.status}` }
+                  ]
+                };
+              });
+            }
+          }
+        } catch (tradeFetchErr) {
+          console.warn('Trades fetch warning in ActivityDesk:', tradeFetchErr);
+        }
+
+        // Combine local cached trade activities and server trade activities, deduplicating by ID
+        const tradesMap = new Map<string, ActivityEvent>();
+        for (const act of localTradeActivities) {
+          tradesMap.set(act.id, act);
+        }
+        for (const act of serverTradeActivities) {
+          if (!tradesMap.has(act.id)) {
+            tradesMap.set(act.id, act);
+          }
+        }
+        const combinedTradeActivities = Array.from(tradesMap.values());
 
         let walletTxs: any[] = [];
         const isDemoAccount = currentMode !== 'REAL';
@@ -251,8 +311,12 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
 
         // Set exclusively dynamic real operations without mock seed retention
         if (isMounted) {
-          const allDynamic = [...localTradeActivities, ...mappedWalletActivities];
-          allDynamic.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          const allDynamic = [...combinedTradeActivities, ...mappedWalletActivities];
+          allDynamic.sort((a, b) => {
+            const timeA = new Date(String(a.timestamp).includes('T') ? a.timestamp : String(a.timestamp).replace(' ', 'T') + 'Z').getTime() || 0;
+            const timeB = new Date(String(b.timestamp).includes('T') ? b.timestamp : String(b.timestamp).replace(' ', 'T') + 'Z').getTime() || 0;
+            return timeB - timeA;
+          });
           setActivities(allDynamic);
         }
       } catch (err) {
@@ -297,10 +361,15 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
 
   // Operations metrics calculations based on recorded activity ledger
   const operationsMetrics = useMemo(() => {
-    const todayStr = new Date().toISOString().substring(0, 10);
+    const now = new Date();
+    const todayStr = now.toISOString().substring(0, 10);
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayStr = yesterday.toISOString().substring(0, 10);
     
     // Today's Activity Events
     const todaysEvents = activities.filter(a => a.timestamp.startsWith(todayStr));
+    const yesterdaysEvents = activities.filter(a => a.timestamp.startsWith(yesterdayStr));
+    const deltaSinceYesterday = todaysEvents.length - yesterdaysEvents.length;
 
     // Pending Actions Count
     const pendingActions = activities.filter(a => a.status === 'Pending' || a.status === 'Processing');
@@ -319,6 +388,8 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
 
     return {
       todaysEventsCount: todaysEvents.length,
+      totalEventsCount: activities.length,
+      deltaSinceYesterday,
       pendingCount: pendingActions.length,
       pendingWithdrawals: pendingWithdrawalCount,
       pendingInvestments: pendingInvestmentCount,
@@ -436,23 +507,40 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
         <motion.div 
           whileHover={{ y: -2 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] border border-neutral-800 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group"
+          className="bg-[#050505] border border-neutral-800 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group"
         >
           <span className="text-neutral-400 text-[8.5px] font-black uppercase tracking-widest block">Today's Activity</span>
           <span className="text-2xl font-black text-white block mt-1.5">
             {operationsMetrics.todaysEventsCount} Events
           </span>
-          <span className="text-[10px] text-emerald-400 font-bold block mt-2 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-            +3 Since Yesterday
-          </span>
+          {operationsMetrics.totalEventsCount === 0 ? (
+            <span className="text-[10px] text-neutral-500 font-bold block mt-2 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
+              Clean Slate (0 Total)
+            </span>
+          ) : operationsMetrics.deltaSinceYesterday > 0 ? (
+            <span className="text-[10px] text-emerald-400 font-bold block mt-2 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              +{operationsMetrics.deltaSinceYesterday} Since Yesterday
+            </span>
+          ) : operationsMetrics.deltaSinceYesterday < 0 ? (
+            <span className="text-[10px] text-rose-400 font-bold block mt-2 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+              {operationsMetrics.deltaSinceYesterday} Since Yesterday
+            </span>
+          ) : (
+            <span className="text-[10px] text-neutral-400 font-bold block mt-2 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
+              Equal to Yesterday ({operationsMetrics.todaysEventsCount})
+            </span>
+          )}
         </motion.div>
 
         {/* Card 2: Pending Actions */}
         <motion.div 
           whileHover={{ y: -2 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] border border-neutral-800 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group"
+          className="bg-[#050505] border border-neutral-800 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group"
         >
           <span className="text-neutral-400 text-[8.5px] font-black uppercase tracking-widest block">Pending Actions</span>
           <span className="text-2xl font-black text-amber-400 block mt-1.5">
@@ -474,7 +562,7 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
         <motion.div 
           whileHover={{ y: -2 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] border border-neutral-800 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group"
+          className="bg-[#050505] border border-neutral-800 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group"
         >
           <span className="text-neutral-400 text-[8.5px] font-black uppercase tracking-widest block">Settled Transactions</span>
           <span className="text-2xl font-black text-white block mt-1.5">
@@ -490,7 +578,7 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
         <motion.div 
           whileHover={{ y: -2 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="bg-[#080808] border border-neutral-800 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group"
+          className="bg-[#050505] border border-neutral-800 rounded-xl p-4 shadow-xl text-left relative overflow-hidden group"
         >
           <span className="text-neutral-400 text-[8.5px] font-black uppercase tracking-widest block">Total Transaction Volume</span>
           <span className="text-2xl font-black text-indigo-300 block mt-1.5">
@@ -504,7 +592,7 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
       </div>
 
       {/* ──────────────────── SEARCH & FILTERS SECTION ──────────────────── */}
-      <div className="bg-[#080808] border border-neutral-800 rounded-xl p-5 space-y-4 shadow-lg text-left">
+      <div className="bg-[#050505] border border-neutral-800 rounded-xl p-5 space-y-4 shadow-lg text-left">
         
         {/* Core Inputs Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -649,7 +737,7 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
 
       {/* ──────────────────── MAIN RESULTS BLOTTER LIST ──────────────────── */}
       {filteredActivities.length === 0 ? (
-        <div className="border border-dashed border-neutral-800 bg-[#080808] rounded-xl p-16 text-center space-y-4 shadow-lg">
+        <div className="border border-dashed border-neutral-800 bg-[#050505] rounded-xl p-16 text-center space-y-4 shadow-lg">
           <div className="p-3 bg-neutral-900 border border-neutral-800 rounded-full w-12 h-12 flex items-center justify-center mx-auto text-neutral-400">
             <History className="w-6 h-6 animate-pulse" />
           </div>
@@ -664,7 +752,7 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
         viewMode === 'TABLE' ? (
           
           /* TABLE VIEW: Institutional Trade Blotter */
-          <div className="bg-[#080808] border border-neutral-800 rounded-xl overflow-hidden shadow-2xl">
+          <div className="bg-[#050505] border border-neutral-800 rounded-xl overflow-hidden shadow-2xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -774,7 +862,7 @@ export default function ActivityDesk({ accountMode: propAccountMode }: ActivityD
                 <div 
                   key={activity.id}
                   onClick={() => setSelectedActivity(activity)}
-                  className="relative group cursor-pointer bg-[#080808] border border-neutral-800 hover:border-neutral-700 rounded-xl p-4 shadow-md transition-all active:scale-[0.99] max-w-3xl"
+                  className="relative group cursor-pointer bg-[#050505] border border-neutral-800 hover:border-neutral-700 rounded-xl p-4 shadow-md transition-all active:scale-[0.99] max-w-3xl"
                 >
                   {/* Outer circle marker on timeline */}
                   <div className="absolute -left-[27px] md:-left-[35px] top-4.5 w-4 h-4 rounded-full bg-neutral-900 border-2 border-neutral-700 flex items-center justify-center group-hover:border-indigo-400 transition-colors shadow-sm">

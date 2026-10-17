@@ -775,42 +775,21 @@ export default function EmailNotificationSystem({ traderEmail }: EmailNotificati
     `;
   };
 
-  // 3. Simulated Inbox Store with seeds
+  // 3. Dynamic Inbox Store (No mock or seeded placeholder messages)
   const [inboxEmails, setInboxEmails] = useState<EmailItem[]>(() => {
     try {
       const saved = localStorage.getItem('mtx_simulated_inbox');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          return parsed.filter(item => item && item.id && !item.id.startsWith('msg_seed_'));
         }
       }
     } catch (e) {
       console.error(e);
     }
 
-    const initialVars = {
-      traderName: 'Mazi Guluj',
-      clearanceLevel: 'Level 3 (Premium Institutional)',
-      filingId: 'SEC-KYC-990-281a',
-      limit: '50,000,000.00',
-      taxResidency: 'Kenya (W-8BEN Certified)',
-      timestamp: '2026-07-05 11:24:06 UTC'
-    };
-    
-    // Seed inbox with initial compliance approval email
-    return [
-      {
-        id: 'msg_seed_1',
-        subject: '[COMPLIANCE] Regulatory Status Updated: Approved SEC Level 3 for Mazi Guluj',
-        type: 'kyc_status',
-        timestamp: '1 Day ago',
-        sender: 'compliance@mtxcapital.ai.studio',
-        htmlContent: '', // dynamically built on request
-        isUnread: true,
-        variables: initialVars
-      }
-    ];
+    return [];
   });
 
   const [selectedInboxEmail, setSelectedInboxEmail] = useState<EmailItem | null>(null);
